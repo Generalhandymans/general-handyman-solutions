@@ -412,9 +412,31 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
         <button type="button" class="pill" data-wskill="Landscaping / yard">Landscaping / yard</button>
       </div>
 
+      <div class="label">What do you have? <small>Tap all that apply</small></div>
+      <div class="pills" id="workerGear">
+        <button type="button" class="pill" data-wgear="Basic hand tools">Basic hand tools</button>
+        <button type="button" class="pill" data-wgear="Power tools">Power tools</button>
+        <button type="button" class="pill" data-wgear="Drill / driver">Drill / driver</button>
+        <button type="button" class="pill" data-wgear="Saws">Saws</button>
+        <button type="button" class="pill" data-wgear="Ladder">Ladder</button>
+        <button type="button" class="pill" data-wgear="Truck bed / toolbox">Truck bed / toolbox</button>
+        <button type="button" class="pill" data-wgear="Trailer">Trailer</button>
+        <button type="button" class="pill" data-wgear="PPE / safety gear">PPE / safety gear</button>
+      </div>
+
       <div class="grid2" style="margin-top:16px">
         <div><label class="label" for="wExp" style="margin-top:0">Experience</label><select class="field" id="wExp"><option value="">Pick one</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>5+ years</option></select></div>
-        <div><label class="label" for="wTools" style="margin-top:0">Tools</label><select class="field" id="wTools"><option value="">Pick one</option><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
+        <div><label class="label" for="wTools" style="margin-top:0">Tools level</label><select class="field" id="wTools"><option value="">Pick one</option><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="label" for="wVehicle" style="margin-top:0">Vehicle style</label><select class="field" id="wVehicle"><option value="">Pick one</option><option>Pickup truck</option><option>Work van</option><option>SUV</option><option>Sedan / hatchback</option><option>E-bike</option><option>No vehicle / need a ride</option><option>Other</option></select></div>
+        <div><label class="label" for="wHaul" style="margin-top:0">Can your vehicle haul materials?</label><select class="field" id="wHaul"><option value="">Pick one</option><option>Yes — truck/van/trailer loads</option><option>Small materials only</option><option>No hauling</option><option>Not applicable</option></select></div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="label" for="wLicense" style="margin-top:0">License / ID</label><select class="field" id="wLicense"><option value="">Pick one</option><option>Driver license</option><option>State ID only</option><option>Working on it</option></select></div>
+        <div><label class="label" for="wInsurance" style="margin-top:0">Insurance</label><select class="field" id="wInsurance"><option value="">Pick one</option><option>Has general liability insurance</option><option>No insurance yet</option><option>Not sure</option></select></div>
       </div>
 
       <div class="grid2" style="margin-top:10px">
@@ -574,8 +596,11 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   });
 
   // Worker signup
-  var workerRole='Skilled subcontractor', workerSkills=new Set(), workerAck=false;
+  var workerRole='Skilled subcontractor', workerSkills=new Set(), workerGear=new Set(), workerAck=false;
   wire('workerRolePills','data-wrole', function(v){ workerRole=v; });
+
+  var wg=document.getElementById('workerGear');
+  if(wg){ wg.addEventListener('click', function(e){ var btn=e.target.closest('[data-wgear]'); if(!btn) return; var v=btn.getAttribute('data-wgear'); if(workerGear.has(v)){ workerGear.delete(v); btn.classList.remove('sel'); } else { workerGear.add(v); btn.classList.add('sel'); } }); }
   var ws=document.getElementById('workerSkills');
   if(ws){ ws.addEventListener('click', function(e){ var btn=e.target.closest('[data-wskill]'); if(!btn) return; var v=btn.getAttribute('data-wskill'); if(workerSkills.has(v)){ workerSkills.delete(v); btn.classList.remove('sel'); } else { workerSkills.add(v); btn.classList.add('sel'); } }); }
   var wAckBtn=document.getElementById('wAckBtn'), wAckBox=document.getElementById('wAckBox');
@@ -591,6 +616,10 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     var wExp=document.getElementById('wExp').value;
     var wTools=document.getElementById('wTools').value;
     var wTransport=document.getElementById('wTransport').value;
+    var wVehicle=document.getElementById('wVehicle').value;
+    var wHaul=document.getElementById('wHaul').value;
+    var wLicense=document.getElementById('wLicense').value;
+    var wInsurance=document.getElementById('wInsurance').value;
     var wAvail=document.getElementById('wAvail').value.trim();
     var wMsg=document.getElementById('wMsg').value.trim();
     var problems=[];
@@ -601,6 +630,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     if(!wExp) problems.push('pick your experience');
     if(!wTools) problems.push('pick your tools');
     if(!wTransport) problems.push('pick your transportation');
+    if(!wVehicle) problems.push('pick your vehicle style');
+    if(!wHaul) problems.push('pick if your vehicle can haul materials');
     if(!workerAck) problems.push('confirm Gabriel reviews workers first');
     if(problems.length){ werr.textContent='Almost there — please '+problems.join(', ')+'.'; werr.classList.add('show'); werr.scrollIntoView({behavior:'smooth', block:'center'}); return; }
     var wid='WORKER-'+Math.random().toString(36).slice(2,7).toUpperCase();
@@ -614,7 +645,12 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       'Can work: '+(wArea||'—'),
       'Skills: '+skillsTxt,
       'Experience: '+wExp,
-      'Tools: '+wTools,
+      'Tools level: '+wTools,
+      'Has: '+(Array.from(workerGear).join(', ')||'—'),
+      'Vehicle style: '+wVehicle,
+      'Hauling: '+wHaul,
+      'License / ID: '+(wLicense||'—'),
+      'Insurance: '+(wInsurance||'—'),
       'Transportation: '+wTransport,
       'Availability: '+(wAvail||'—'),
       'Notes: '+(wMsg||'—'),
@@ -638,7 +674,12 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           can_work:wArea,
           skills:skillsTxt,
           experience:wExp,
-          tools:wTools,
+          tools_level:wTools,
+          has_gear:Array.from(workerGear).join(', '),
+          vehicle_style:wVehicle,
+          hauling:wHaul,
+          license_id:wLicense,
+          insurance:wInsurance,
           transportation:wTransport,
           availability:wAvail,
           notes:wMsg,
