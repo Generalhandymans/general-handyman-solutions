@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: general-handyman-solutions-app
+    runtime: node
+    plan: free
+    buildCommand: ""
+    startCommand: node server.js
+    envVars:
+      - key: SETUP_CODE
+        sync: false
