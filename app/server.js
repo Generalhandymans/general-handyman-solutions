@@ -195,6 +195,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker'], res)) return;
     if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    if (user.role === 'worker') return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)) });
     return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
   }
   const claimMatch = p.match(/^\/api\/jobs\/([\w-]+)\/claim$/);
