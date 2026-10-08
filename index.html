@@ -317,11 +317,11 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
         <div class="error" id="formError"></div>
         <button class="btn btn-red request-btn" id="submitBtn" type="submit">Request service — $75 estimate →</button>
-        <p class="fine">Submitting creates your request summary to send to Gabriel. Gabriel reviews every request personally and replies with the next step and labor quote. No payment is taken on this page.</p>
+        <p class="fine">Submitting sends your request straight to Gabriel. He reviews every request personally and replies with the next step and labor quote. Estimate/membership payment links are added after you send the request.</p>
 
         <div class="success" id="successBox">
-          <h3>Request ready ✓</h3>
-          <p>Copy this and send it to Gabriel on Instagram DM <b>@generalhandymans</b> — or keep it for your call/text. Your request ID is below.</p>
+          <h3 id="successTitle">Request sent ✓</h3>
+          <p id="successMsg">Gabriel got your request. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.</p>
           <pre id="requestText"></pre>
           <div class="row">
             <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
@@ -436,7 +436,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     ack=!ack; ackBtn.classList.toggle('sel', ack); ackBtn.setAttribute('aria-pressed', ack?'true':'false'); ackBox.textContent=ack?'✓':'';
   });
   var form=document.getElementById('reqForm'), err=document.getElementById('formError'), success=document.getElementById('successBox'), reqText=document.getElementById('requestText');
-  form.addEventListener('submit', function(e){
+  form.addEventListener('submit', async function(e){
     e.preventDefault(); err.classList.remove('show'); err.textContent='';
     var details=document.getElementById('details').value.trim();
     var address=document.getElementById('address').value.trim();
@@ -466,6 +466,40 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       'Confirmed by customer: '+estimateMap[memberStatus].line+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
     ];
     reqText.textContent=lines.join('\n');
+    var submitBtn=document.getElementById('submitBtn');
+    var originalBtn=submitBtn.textContent;
+    submitBtn.disabled=true; submitBtn.textContent='Sending request…';
+    var whereTxt=((selectedCity||'')+(address? (selectedCity?' — ':'')+address:''));
+    var memberTxt=(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate'));
+    try{
+      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({
+          _subject:'New GHS lead '+id+' — '+selectedService,
+          _template:'table',
+          request_id:id,
+          service:selectedService,
+          job_details:details,
+          where:whereTxt,
+          when:whenTxt,
+          customer_name:name,
+          customer_phone:phone,
+          homecare_status:memberTxt,
+          estimate_due:estimateMap[memberStatus].line,
+          confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
+          request_text:lines.join('\n')
+        })
+      });
+      if(!res.ok) throw new Error('lead send failed');
+      document.getElementById('successTitle').textContent='Request sent ✓';
+      document.getElementById('successMsg').innerHTML='Gabriel got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
+    }catch(sendErr){
+      document.getElementById('successTitle').textContent='Request ready — one more tap';
+      document.getElementById('successMsg').innerHTML='The automatic send did not go through. Copy the summary below and DM it to <b>@generalhandymans</b> so Gabriel still gets your lead.';
+    }finally{
+      submitBtn.disabled=false; submitBtn.textContent=originalBtn;
+    }
     success.classList.add('show');
     success.scrollIntoView({behavior:'smooth', block:'center'});
   });
