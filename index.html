@@ -215,7 +215,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       </figure>
 
       <div class="quick" aria-label="Popular requests">
-        <span>In-person estimate — $75 flat</span><span>HomeCare $49/mo • First estimate free</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
+        <span>Free photo estimate</span><span>In-person estimate — $75 flat</span><span>HomeCare $49/mo • First estimate free</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
       </div>
 
       <div class="section" style="padding-top:34px">
@@ -252,6 +252,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
         <label class="label" for="details">Describe the job <small>Photos help Gabriel quote faster</small></label>
         <textarea class="field" id="details" placeholder="e.g. Mount a 65&quot; TV in living room, install 2 floating shelves, paint one wall…"></textarea>
+
+        <div class="label">Estimate type</div>
+        <div class="pills" id="estimatePills">
+          <button type="button" class="pill" data-estimate="photo">Free photo estimate</button>
+          <button type="button" class="pill sel" data-estimate="inperson">In-person estimate</button>
+        </div>
+        <div id="photoWrap" style="display:none;margin-top:10px">
+          <label class="label" for="photos" style="margin-top:0">Add job pictures <small>Free first look</small></label>
+          <input class="field" type="file" id="photos" accept="image/*" multiple>
+          <p class="fine" style="text-align:left;margin-left:0">Pick the pictures here so Gabriel knows what’s coming. After you send the request, DM the same pictures to @generalhandymans for the free photo estimate.</p>
+          <div id="photoList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+        </div>
 
         <div class="label">Where is the job?</div>
         <div class="chips" id="cityChips">
@@ -415,7 +427,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
 <script>
 (function(){
-  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none';
+  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[];
   var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
   var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
   function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; }
@@ -429,7 +441,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     document.getElementById('sumEstimate').textContent=m.due;
     document.getElementById('submitBtn').textContent=m.btn;
     var sr=document.getElementById('successReminder'); if(sr){ sr.innerHTML = memberStatus==='new' ? 'Reminder: new HomeCare members get <b>one free estimate in the first month</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : (memberStatus==='member' ? 'Reminder: HomeCare member estimate visits are <b>$60</b> after the first-month free estimate. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : 'Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.'); }
+    if(estimateType==='photo'){
+      document.getElementById('feeAmount').textContent='FREE';
+      document.getElementById('feeTitle').textContent='Free photo estimate — send pictures for a first quote';
+      document.getElementById('feeDesc').textContent='Send clear pictures of the job for a free first look. If Gabriel needs to see it in person, the in-person estimate is $75 (or your member rate).';
+      document.getElementById('feeDueLine').innerHTML='<b>FREE photo estimate.</b> Pick your job pictures above, send the request, then DM the same pictures to @generalhandymans.';
+      document.getElementById('ackText').textContent='I understand: free photo estimate + labor-only (I buy materials/parts)';
+      document.getElementById('sumEstimate').textContent='FREE photo estimate';
+      document.getElementById('submitBtn').textContent='Request free photo estimate →';
+      if(sr){ sr.innerHTML='Reminder: this is a <b>free photo estimate</b>. DM your job pictures to @generalhandymans after sending. In-person visits are $75 or member rate.'; }
+    }
   }
+  function updateEstimate(){ updateMember(); }
   function wire(id, attr, cb){
     var el=document.getElementById(id); if(!el) return;
     el.addEventListener('click', function(e){
@@ -441,6 +464,16 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   wire('svcGrid','data-service', function(v){ selectedService=v; update(); });
   wire('cityChips','data-city', function(v){ selectedCity=v; update(); });
   wire('memberPills','data-member', function(v){ memberStatus=v; updateMember(); });
+  wire('estimatePills','data-estimate', function(v){ estimateType=v; document.getElementById('photoWrap').style.display = v==='photo' ? 'block' : 'none'; updateEstimate(); });
+  var photoInput=document.getElementById('photos');
+  if(photoInput){ photoInput.addEventListener('change', function(e){
+    selectedPhotoNames=Array.from(e.target.files||[]).map(function(f){return f.name});
+    var list=document.getElementById('photoList'); list.innerHTML='';
+    Array.from(e.target.files||[]).slice(0,6).forEach(function(f){
+      var img=document.createElement('img'); img.src=URL.createObjectURL(f); img.alt=f.name; img.style.width='74px'; img.style.height='74px'; img.style.objectFit='cover'; img.style.borderRadius='10px'; img.style.border='1px solid var(--line)'; list.appendChild(img);
+    });
+    if(selectedPhotoNames.length){ var note=document.createElement('span'); note.className='fine'; note.style.textAlign='left'; note.textContent=selectedPhotoNames.length+' picture(s) selected — DM these to @generalhandymans after sending.'; list.appendChild(note); }
+  }); }
   wire('whenPills','data-when', function(v, btn){
     selectedWhen=v;
     var dw=document.getElementById('dateWrap');
@@ -480,8 +513,10 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       'Name: '+name,
       'Phone: '+phone,
       'HomeCare status: '+(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate')),
+      'Estimate type: '+(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+      'Pictures selected: '+(selectedPhotoNames.length ? selectedPhotoNames.length+' — '+selectedPhotoNames.join(', ')+' (customer will DM the pictures to @generalhandymans)' : 'None selected'),
       '—',
-      'Confirmed by customer: '+estimateMap[memberStatus].line+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
+      'Confirmed by customer: '+(estimateType==='photo'?'FREE photo estimate':estimateMap[memberStatus].line)+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
     ];
     reqText.textContent=lines.join('\n');
     var submitBtn=document.getElementById('submitBtn');
@@ -504,6 +539,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           customer_name:name,
           customer_phone:phone,
           homecare_status:memberTxt,
+          estimate_type:(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+          pictures_selected:selectedPhotoNames.join(', '),
           estimate_due:estimateMap[memberStatus].line,
           confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
           request_text:lines.join('\n')
@@ -511,7 +548,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       });
       if(!res.ok) throw new Error('lead send failed');
       document.getElementById('successTitle').textContent='Request sent ✓';
-      document.getElementById('successMsg').innerHTML='Gabriel got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
+      document.getElementById('successMsg').innerHTML = estimateType==='photo' ? 'Gabriel got your request by email. Now DM your job pictures to <b>@generalhandymans</b> for the free photo estimate.' : 'Gabriel got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
     }catch(sendErr){
       document.getElementById('successTitle').textContent='Request ready — one more tap';
       document.getElementById('successMsg').innerHTML='The automatic send did not go through. Copy the summary below and DM it to <b>@generalhandymans</b> so Gabriel still gets your lead.';
