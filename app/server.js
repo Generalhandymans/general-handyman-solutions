@@ -80,9 +80,9 @@ const server = http.createServer(async (req, res) => {
     const email = (b.email || '').toLowerCase();
     if (!email || !b.password || !b.name) return send(res, 400, { error: 'name, email and password required' });
     if (db.users.some(u => u.email === email)) return send(res, 409, { error: 'email already registered' });
-    // Workers auto-activate on signup (Gabriel 2026-10-07); admin can still set review/notfit later.
+    // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
     const role = b.role === 'worker' ? 'worker' : 'customer';
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: 'active', skills: b.skills || [], vehicle: b.vehicle || '', pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: b.skills || [], vehicle: b.vehicle || '', pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -167,7 +167,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker'], res)) return;
-    if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — Gabriel must approve your account first' });
+    if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
     return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
   }
   const claimMatch = p.match(/^\/api\/jobs\/([\w-]+)\/claim$/);
