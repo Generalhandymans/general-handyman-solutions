@@ -44,7 +44,7 @@ const sessions = new Map(); // token -> userId
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', createdAt: u.createdAt }; }
+function pubUser(u) { return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -108,7 +108,8 @@ const server = http.createServer(async (req, res) => {
     if (db.users.some(u => u.email === email)) return send(res, 409, { error: 'email already registered' });
     // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
     const role = b.role === 'worker' ? 'worker' : 'customer';
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: b.skills || [], vehicle: b.vehicle || '', pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const prof = (b.profile && typeof b.profile === 'object') ? b.profile : {};
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
