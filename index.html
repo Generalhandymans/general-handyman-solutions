@@ -321,6 +321,15 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <div><label class="label" for="phone" style="margin-top:0">Phone</label><input class="field" id="phone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
         </div>
 
+        <div id="accountWrap" style="margin-top:14px;border:1px dashed var(--line2);border-radius:14px;padding:12px">
+          <div class="label" style="margin-top:0">Create your customer account <small id="accountWhy">Required for the $75 / membership estimate — free photo estimates do NOT need an account</small></div>
+          <div class="grid2">
+            <div><label class="label" for="custEmail" style="margin-top:0">Email</label><input class="field" id="custEmail" type="email" autocomplete="email" placeholder="you@email.com"></div>
+            <div><label class="label" for="custPass" style="margin-top:0">Password</label><input class="field" id="custPass" type="password" autocomplete="new-password" placeholder="Pick a password"></div>
+          </div>
+          <p class="fine" style="text-align:left;margin:6px 0 0">Your account lets you track the request, receive the quote here, and message the Team back and forth. Already have an account? Use Customer login at the top — then send this request from inside your account.</p>
+        </div>
+
         <div class="summary" id="summary" aria-live="polite">
           <div><span>Service</span><b id="sumService">Not selected yet</b></div>
           <div><span>Area</span><b id="sumCity">—</b></div>
@@ -562,6 +571,7 @@ window.__ghsWired=true;
   function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; var ur=document.getElementById('urgencyRow'); if(ur){ ur.style.display=isUrgent()?'flex':'none'; } updateMember(); }
   function updateMember(){
     var m=estimateMap[memberStatus];
+    var aw=document.getElementById('accountWrap'); if(aw){ aw.style.display = estimateType==='photo' ? 'none' : 'block'; }
     document.getElementById('feeAmount').textContent=m.amount;
     document.getElementById('feeTitle').textContent=m.title;
     document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking. Please add job pictures if you have them.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate. Please add job pictures if you have them.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. Please add job pictures if you have them. No surprises after you submit.');
@@ -648,6 +658,13 @@ window.__ghsWired=true;
     if(!ack) problems.push('confirm the estimate + labor-only rule (tap the box in the estimate section)');
     if(!name) problems.push('add your name');
     if(!phone) problems.push('add your phone number');
+    var custEmail='', custPass='';
+    if(estimateType!=='photo'){
+      custEmail=document.getElementById('custEmail').value.trim();
+      custPass=document.getElementById('custPass').value;
+      if(!custEmail || custEmail.indexOf('@')<1) problems.push('add your email to create your account (free photo estimates do not need one)');
+      if(!custPass || custPass.length<6) problems.push('pick an account password (6+ characters)');
+    }
     if(problems.length){ err.textContent='Almost there — please '+problems.join(', ')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'}); return; }
     var id='GHS-'+Math.random().toString(36).slice(2,7).toUpperCase();
     var whenTxt=selectedWhen;
@@ -672,6 +689,21 @@ window.__ghsWired=true;
     submitBtn.disabled=true; submitBtn.textContent='Sending request…';
     var whereTxt=((selectedCity||'')+(address? (selectedCity?' — ':'')+address:''));
     var memberTxt=(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate'));
+    var accountCreated=false, appRequestId='';
+    if(estimateType!=='photo'){
+      try{
+        var su=await fetch('https://general-handyman-solutions-app.onrender.com/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
+        var sud=await su.json().catch(function(){return {}});
+        if(!su.ok) throw new Error(sud.error==='email already registered' ? 'That email already has an account — use Customer login at the top, then send this request from inside your account.' : (sud.error||'account creation failed'));
+        var ar=await fetch('https://general-handyman-solutions-app.onrender.com/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sud.token||'')}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:'inperson'})});
+        var ard=await ar.json().catch(function(){return {}});
+        if(!ar.ok) throw new Error(ard.error||'request could not be saved to your account');
+        accountCreated=true; appRequestId=ard.request && ard.request.id ? ard.request.id : '';
+      }catch(acctErr){
+        err.textContent=acctErr.message; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'});
+        submitBtn.disabled=false; submitBtn.textContent=originalBtn; return;
+      }
+    }
     try{
       var res;
       if(estimateType==='photo' && selectedPhotoFiles.length){
@@ -718,7 +750,7 @@ window.__ghsWired=true;
       }
       if(!res.ok) throw new Error('lead send failed');
       document.getElementById('successTitle').textContent='Request sent ✓';
-      document.getElementById('successMsg').innerHTML = estimateType==='photo' ? 'The Team got your request. If your pictures were selected above, they were sent with the lead; you can also DM or WhatsApp them to the Team for the free photo estimate.' : 'The Team got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
+      document.getElementById('successMsg').innerHTML = estimateType==='photo' ? 'The Team got your request — <b>no account needed</b> for the free photo estimate. If your pictures were selected above, they were sent with the lead; you can also DM or WhatsApp them to the Team.' : (accountCreated ? 'Account created ✓ and request sent ✓'+(appRequestId?' ('+appRequestId+')':'')+'. Log in anytime with <b>Customer login</b> (top of page) to track it, get your quote, and message the Team back and forth.' : 'The Team got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.');
     }catch(sendErr){
       document.getElementById('successTitle').textContent='Request ready — one more tap';
       document.getElementById('successMsg').innerHTML='The automatic send did not go through. Copy the summary below and DM it to <b>@generalhandymans</b> so the Team still gets your lead.';
