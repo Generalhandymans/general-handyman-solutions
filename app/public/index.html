@@ -52,7 +52,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <label>Vehicle</label><input id="aVehicle" placeholder="Pickup truck">
     </div>
     <button id="authBtn" onclick="doAuth()">Log in</button>
-    <p class="mut" id="authHint">Customers: sign up to send requests and track them. Workers: sign up, then Gabriel activates your account before you can claim jobs.</p>
+    <p class="mut" id="authHint">Customers: sign up to send requests and track them. Workers: sign up, then the Team activates your account before you can claim jobs.</p>
   </div>
 
   <!-- CUSTOMER -->
@@ -83,7 +83,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
-    <h2>Gabriel — control center</h2>
+    <h2>Team — control center</h2>
     <h3>Customer requests (send quotes)</h3>
     <div id="adminRequests"></div>
     <h3>Workers (activate after review)</h3>
@@ -142,16 +142,16 @@ function render(){
 }
 async function sendRequest(){
   try{ await api('/api/requests',{method:'POST', body:JSON.stringify({service:document.getElementById('rService').value, description:document.getElementById('rDesc').value, city:document.getElementById('rCity').value, address:document.getElementById('rAddr').value, when:document.getElementById('rWhen').value, estimateType:document.getElementById('rEst').value})});
-    document.getElementById('rMsg').textContent='Request sent. Gabriel will review and send your quote here.'; loadRequests();
+    document.getElementById('rMsg').textContent='Request sent. The Team will review and send your quote here.'; loadRequests();
   }catch(e){ document.getElementById('rMsg').textContent=e.message; }
 }
 async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for Gabriel\'s quote.</span>')+'</div>').join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+'</div>').join('') || '<p class="mut">No requests yet.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 async function loadJobs(){
-  document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — you can claim open jobs.' : 'Your account is "'+me.status+'" — Gabriel must activate you before you can claim jobs.';
+  document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — you can claim open jobs.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Claim this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+'</div>').join('') || '<p class="mut">No jobs posted yet.</p>');
 }
