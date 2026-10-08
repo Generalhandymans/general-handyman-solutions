@@ -474,6 +474,25 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     </form>
   </section>
 
+  <section class="section" id="jobboard">
+    <h2>Worker <em>job board</em></h2>
+    <p class="sub">For <b>active workers only</b> — approved by Gabriel after review. Gabriel posts open jobs with the pay offer. First active worker to claim a job gets it.</p>
+    <div class="how">
+      <article><div class="num">1</div><h3>Gabriel posts the job</h3><p>Service, city, what the job is, when it’s needed, and the <b>pay offer</b> — for example “TV mount • Fairfield • Today • <b>$75</b>”. Customer address is never posted here.</p></article>
+      <article><div class="num">2</div><h3>You claim it</h3><p>Enter the Job ID below and tap Claim. Gabriel confirms if you got it — first come, first served among active workers.</p></article>
+      <article><div class="num">3</div><h3>Details unlock</h3><p>After Gabriel confirms your claim, he sends you the customer’s full address and phone. Finish the job, send completion photos, get paid your offer.</p></article>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:16px;margin-top:16px">
+      <div class="label" style="margin-top:0">Claim a job</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <input class="field" id="claimJobId" placeholder="Job ID — example JOB-1024" style="flex:1;min-width:200px">
+        <input class="field" id="claimName" placeholder="Your name" style="flex:1;min-width:160px">
+        <a class="btn btn-red" id="claimBtn" href="#" style="padding:12px 18px;font-size:14.5px">Claim this job →</a>
+      </div>
+      <p class="fine" style="text-align:left">Claiming opens WhatsApp to Gabriel with your Job ID. The job is yours only after Gabriel confirms back. Not active yet? <a href="#workers">Apply above</a> first.</p>
+    </div>
+  </section>
+
   <div class="cta-band">
     <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Members: first estimate free • Labor-only • 50% deposit to start work</p></div>
     <a class="btn" href="#book" style="background:var(--red);color:#fff;padding:15px 20px;font-size:15px">Start a request →</a>
@@ -775,6 +794,15 @@ window.__ghsWired=true;
       document.getElementById('workerSuccessMsg').innerHTML='The automatic send did not go through. Copy the application below and DM it to <b>@generalhandymans</b>.';
     }finally{ wbtn.disabled=false; wbtn.textContent=worig; }
     var wsuccess=document.getElementById('workerSuccess'); wsuccess.classList.add('show'); wsuccess.scrollIntoView({behavior:'smooth', block:'center'});
+  }); }
+
+  var claimBtn=document.getElementById('claimBtn');
+  if(claimBtn){ claimBtn.addEventListener('click', function(e){
+    e.preventDefault();
+    var jid=(document.getElementById('claimJobId').value||'').trim()||'JOB-ID';
+    var wn=(document.getElementById('claimName').value||'').trim();
+    var msg='I want to claim Job '+jid+(wn ? ' — '+wn : '')+'. I am an active General Handyman Solutions worker.';
+    window.open('https://wa.me/17078623773?text='+encodeURIComponent(msg),'_blank');
   }); }
 
   update(); updateMember();
