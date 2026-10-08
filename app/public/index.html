@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>General Handyman Solutions — App</title>
+<style>
+:root{--red:#e10600;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#0b0b0b;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+header b{font-size:20px;letter-spacing:.02em;text-transform:uppercase} header b em{color:var(--red);font-style:normal}
+.wrap{max-width:880px;margin:0 auto;padding:18px}
+.card{border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px;font:inherit;margin:5px 0 10px;background:#fff}
+label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+button{background:var(--red);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:700;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button.black{background:#0b0b0b}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:700}
+.st{color:var(--red);font-weight:800}
+.mut{color:var(--muted);font-size:13.5px;line-height:1.45}
+.err{background:#fff1f0;border:1px solid #f3b3ae;color:#8b0f08;padding:10px;border-radius:10px;display:none;margin:8px 0}
+.err.show{display:block}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line)} .tabs button.on{background:#0b0b0b;color:#fff}
+h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
+</style>
+</head>
+<body>
+<header>
+  <b>General <em>Handyman</em> Solutions</b>
+  <span id="who" class="mut" style="color:#ccc"></span>
+</header>
+
+<div class="wrap">
+  <!-- AUTH -->
+  <div id="authBox" class="card">
+    <h3>Log in / Sign up</h3>
+    <div class="tabs">
+      <button id="tabLogin" class="on" onclick="mode('login')">Log in</button>
+      <button id="tabCustomer" onclick="mode('customer')">New customer</button>
+      <button id="tabWorker" onclick="mode('worker')">New worker</button>
+    </div>
+    <div id="authErr" class="err"></div>
+    <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
+    <label>Email</label><input id="aEmail" placeholder="you@email.com">
+    <label>Phone</label><input id="aPhone" placeholder="(707) 555-0123">
+    <label>Password</label><input id="aPass" type="password" placeholder="Password">
+    <div id="workerExtra" style="display:none">
+      <label>Skills (comma separated)</label><input id="aSkills" placeholder="Carpentry, Plumbing help">
+      <label>Vehicle</label><input id="aVehicle" placeholder="Pickup truck">
+    </div>
+    <button id="authBtn" onclick="doAuth()">Log in</button>
+    <p class="mut" id="authHint">Customers: sign up to send requests and track them. Workers: sign up, then Gabriel activates your account before you can claim jobs.</p>
+  </div>
+
+  <!-- CUSTOMER -->
+  <div id="customerBox" style="display:none">
+    <h2>Request a handyman</h2>
+    <p class="mut">In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
+    <div class="card">
+      <label>Service</label>
+      <select id="rService"><option>TV Mounting & Installs</option><option>Repairs & Fixes</option><option>Painting & Walls</option><option>Carpentry</option><option>Plumbing Help</option><option>Electrical Swaps</option><option>Mobile Mechanic</option><option>Assembly & Other</option></select>
+      <label>Describe the job</label><textarea id="rDesc" placeholder="What do you need done?"></textarea>
+      <div class="row"><div><label>City</label><input id="rCity" placeholder="Fairfield"></div><div><label>When</label><input id="rWhen" placeholder="Today / tomorrow / date"></div></div>
+      <label>Full address</label><input id="rAddr" placeholder="Street address">
+      <label>Estimate type</label>
+      <select id="rEst"><option value="inperson">In-person estimate — $75</option><option value="photo">Free photo estimate</option></select>
+      <button onclick="sendRequest()">Send request</button>
+      <div id="rMsg" class="mut"></div>
+    </div>
+    <h2>My requests</h2>
+    <div id="myRequests"></div>
+  </div>
+
+  <!-- WORKER -->
+  <div id="workerBox" style="display:none">
+    <h2>Job board</h2>
+    <p class="mut" id="workerStatus"></p>
+    <div id="jobList"></div>
+  </div>
+
+  <!-- ADMIN -->
+  <div id="adminBox" style="display:none">
+    <h2>Gabriel — control center</h2>
+    <h3>Customer requests (send quotes)</h3>
+    <div id="adminRequests"></div>
+    <h3>Workers (activate after review)</h3>
+    <div id="adminWorkers"></div>
+    <h3>Create a job / work order</h3>
+    <div class="card">
+      <div class="row"><div><label>Service</label><input id="jService" placeholder="TV Mounting & Installs"></div><div><label>City</label><input id="jCity" placeholder="Fairfield"></div><div><label>When</label><input id="jWhen" placeholder="Today"></div></div>
+      <label>Public job description (no address)</label><textarea id="jDesc"></textarea>
+      <div class="row"><div><label>Pay offer to worker $</label><input id="jPay" placeholder="75"></div><div><label>Customer price $</label><input id="jCustPrice" placeholder="150"></div></div>
+      <div class="row"><div><label>Customer name</label><input id="jName"></div><div><label>Customer phone</label><input id="jPhone"></div></div>
+      <label>Full address (private)</label><input id="jAddr">
+      <label>Private notes</label><input id="jNotes">
+      <button onclick="createJob()">Post job to board</button>
+      <div id="jMsg" class="mut"></div>
+    </div>
+    <h3>Jobs</h3>
+    <div id="adminJobs"></div>
+  </div>
+
+  <p><button class="ghost" onclick="logout()">Log out</button></p>
+</div>
+
+<script>
+let me=null, curMode='login';
+function mode(m){ curMode=m;
+  document.getElementById('tabLogin').classList.toggle('on', m==='login');
+  document.getElementById('tabCustomer').classList.toggle('on', m==='customer');
+  document.getElementById('tabWorker').classList.toggle('on', m==='worker');
+  document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
+  document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
+  document.getElementById('authBtn').textContent = m==='login' ? 'Log in' : 'Create account';
+}
+mode('login');
+async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Something failed'); return d; }
+function showErr(t){ const e=document.getElementById('authErr'); e.textContent=t; e.classList.add('show'); }
+async function doAuth(){
+  const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
+  try{
+    if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
+    else { const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:curMode, skills:(document.getElementById('aSkills').value||'').split(',').map(s=>s.trim()).filter(Boolean), vehicle:document.getElementById('aVehicle').value.trim()})});
+      const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; }
+    render();
+  }catch(e){ showErr(e.message); }
+}
+async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
+async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
+function render(){
+  document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
+  document.getElementById('authBox').style.display = me ? 'none':'block';
+  document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
+  document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
+  document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
+  if(me && me.role==='customer') loadRequests();
+  if(me && me.role==='worker') loadJobs();
+  if(me && me.role==='admin'){ loadAdmin(); }
+}
+async function sendRequest(){
+  try{ await api('/api/requests',{method:'POST', body:JSON.stringify({service:document.getElementById('rService').value, description:document.getElementById('rDesc').value, city:document.getElementById('rCity').value, address:document.getElementById('rAddr').value, when:document.getElementById('rWhen').value, estimateType:document.getElementById('rEst').value})});
+    document.getElementById('rMsg').textContent='Request sent. Gabriel will review and send your quote here.'; loadRequests();
+  }catch(e){ document.getElementById('rMsg').textContent=e.message; }
+}
+async function loadRequests(){
+  const d=await api('/api/requests').catch(()=>({requests:[]}));
+  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for Gabriel\'s quote.</span>')+'</div>').join('') || '<p class="mut">No requests yet.</p>';
+}
+async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
+async function loadJobs(){
+  document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — you can claim open jobs.' : 'Your account is "'+me.status+'" — Gabriel must activate you before you can claim jobs.';
+  const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
+  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Claim this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+'</div>').join('') || '<p class="mut">No jobs posted yet.</p>');
+}
+async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
+async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
+async function loadAdmin(){
+  const rq=await api('/api/requests').catch(()=>({requests:[]}));
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.description+' • '+r.city+' • '+r.address+' • '+r.when+'</span><br><span class="mut">Quote $</span> <input id="q-'+r.id+'" type="number" style="width:120px" value="'+(r.quote||'')+'"> <button onclick="sendQuote(\''+r.id+'\')">Send quote</button></div>').join('') || '<p class="mut">No requests yet.</p>';
+  const wk=await api('/api/workers').catch(()=>({workers:[]}));
+  document.getElementById('adminWorkers').innerHTML = wk.workers.map(w=>'<div class="card"><b>'+w.name+'</b> ('+w.email+') <span class="pill">'+w.status+'</span><br><span class="mut">'+(w.skills||[]).join(', ')+' • '+(w.vehicle||'')+'</span><br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button></div>').join('') || '<p class="mut">No workers yet.</p>';
+  const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span></div>').join('') || '<p class="mut">No jobs yet.</p>';
+}
+async function sendQuote(idv){ const v=document.getElementById('q-'+idv).value; await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({quote:Number(v)})}); loadAdmin(); }
+async function setWorker(idv, status){ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); loadAdmin(); }
+async function createJob(){
+  try{ await api('/api/jobs',{method:'POST', body:JSON.stringify({service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value})});
+    document.getElementById('jMsg').textContent='Job posted. Active workers can claim it now.'; loadAdmin();
+  }catch(e){ document.getElementById('jMsg').textContent=e.message; }
+}
+loadMe();
+</script>
+</body>
+</html>
