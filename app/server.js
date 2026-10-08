@@ -8,7 +8,7 @@ const crypto = require('crypto');
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
-const SETUP_CODE = process.env.SETUP_CODE || ''; // required once to create the first admin
+const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootstrap is one-time while no admin exists
 
 let db = { users: [], requests: [], jobs: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
@@ -52,9 +52,13 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/health') return send(res, 200, { ok: true, app: 'ghs-app' });
 
   // ---------- auth ----------
+  if (p === '/setup' && req.method === 'GET') {
+    if (db.users.some(u => u.role === 'admin')) return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:24px"><h2>Admin already set up</h2><p>The Team admin account already exists. <a href="/">Go to the app login</a>.</p></body>');
+    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up Team admin</title><body style="font-family:system-ui;padding:24px;max-width:520px;margin:0 auto"><h2>Set up the Team admin (one time)</h2><p>Create the General Handyman Solutions Team admin login. Use an email you control and a strong password only you know.</p><label>Display name</label><input id="n" style="width:100%;padding:10px;margin:4px 0 10px" value="General Handyman Solutions Team"><label>Email</label><input id="e" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="generalhandymans@gmail.com"><label>Password</label><input id="pw" type="password" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="Choose a strong password"><button id="b" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:12px 20px;font-weight:700">Create admin</button><p id="m"></p><script>document.getElementById("b").onclick=async()=>{const r=await fetch("/api/setup-admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("n").value,email:document.getElementById("e").value,password:document.getElementById("pw").value})});const d=await r.json();document.getElementById("m").textContent=r.ok?"Admin created. Go to the app and log in.":"Error: "+(d.error||"failed");if(r.ok)setTimeout(()=>location.href="/",1200);};</scr'+'ipt></body>');
+  }
   if (p === '/api/setup-admin' && req.method === 'POST') {
     const b = await readBody(req);
-    if (!SETUP_CODE || b.setupCode !== SETUP_CODE) return send(res, 403, { error: 'valid setup code required' });
+    // One-time bootstrap: only works while no admin exists yet. After the first admin is created this endpoint closes (409).
     if (db.users.some(u => u.role === 'admin')) return send(res, 409, { error: 'admin already exists' });
     const u = { id: id('USR'), name: b.name || 'Gabriel', email: (b.email || '').toLowerCase(), phone: b.phone || '', role: 'admin', status: 'active', pw: hashPw(b.password || ''), createdAt: new Date().toISOString() };
     if (!u.email || !b.password) return send(res, 400, { error: 'email and password required' });
