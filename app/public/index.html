@@ -132,7 +132,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 
   <!-- WORKER -->
   <div id="workerBox" style="display:none">
-    <h2>Job board</h2>
+    <h2>Open job offers</h2>
     <p class="mut" id="workerStatus"></p>
     <div id="jobList"></div>
   </div>
@@ -144,7 +144,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="adminRequests"></div>
     <h3>Workers (activate after review)</h3>
     <div id="adminWorkers"></div>
-    <h3>Create a job / work order</h3>
+    <h3>Create a job — admin only</h3>
     <div class="card">
       <div class="row"><div><label>Service</label><input id="jService" placeholder="TV Mounting & Installs"></div><div><label>City</label><input id="jCity" placeholder="Fairfield"></div><div><label>When</label><input id="jWhen" placeholder="Today"></div></div>
       <label>Public job description (no address)</label><textarea id="jDesc"></textarea>
@@ -155,7 +155,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <button onclick="createJob()">Post job to board</button>
       <div id="jMsg" class="mut"></div>
     </div>
-    <h3>Jobs</h3>
+    <h3>My job offers</h3>
     <div id="adminJobs"></div>
   </div>
 
@@ -254,9 +254,9 @@ async function loadRequests(){
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 async function loadJobs(){
-  document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — you can claim open jobs.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
+  document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — these are the open job offers from the Team. Pick the ones you want: first pick wins, then the customer details unlock for you.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
-  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Claim this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+'</div>').join('') || '<p class="mut">No jobs posted yet.</p>');
+  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Pick this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
 }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
