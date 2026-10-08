@@ -278,7 +278,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
         <div class="label">When do you need it?</div>
         <div class="pills" id="whenPills">
-          <button type="button" class="pill" data-when="ASAP">ASAP</button>
+          <button type="button" class="pill" data-when="ASAP / Emergency">ASAP / Emergency</button>
           <button type="button" class="pill" data-when="Today">Today</button>
           <button type="button" class="pill" data-when="Tomorrow">Tomorrow</button>
           <button type="button" class="pill" data-when="This week">This week</button>
@@ -307,6 +307,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
             <li><span id="feeDueLine"><b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).</span></li>
             <li><span><b>Labor-only — you buy materials &amp; parts.</b> Paint, tile, fixtures, mounts, parts, etc. are yours to purchase so you control cost and brand. Gabriel brings the labor and tools.</span></li>
             <li><span><b>50% deposit locks the work in</b> once you approve the labor quote. Balance on completion.</span></li>
+            <li><span><b>ASAP / Emergency adds 25%.</b> If you pick ASAP / Emergency, the estimate visit and labor quote are priced with a 25% urgency charge.</span></li>
           </ul>
           <button type="button" class="ack" id="ackBtn" aria-pressed="false">
             <span class="box" id="ackBox"></span>
@@ -323,6 +324,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <div><span>Service</span><b id="sumService">Not selected yet</b></div>
           <div><span>Area</span><b id="sumCity">—</b></div>
           <div><span>When</span><b id="sumWhen">—</b></div>
+          <div id="urgencyRow" style="display:none"><span>Urgency</span><b style="color:var(--red)">+25% ASAP/Emergency</b></div>
           <div class="total"><span>Estimate visit — due to book</span><b id="sumEstimate" style="color:var(--red)">$75 flat</b></div>
           <div><span>Materials / parts</span><b>You purchase</b></div>
         </div>
@@ -431,7 +433,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[], selectedPhotoFiles=[];
   var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
   var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
-  function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; }
+  function isUrgent(){ return selectedWhen==='ASAP / Emergency'; }
+  function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; var ur=document.getElementById('urgencyRow'); if(ur){ ur.style.display=isUrgent()?'flex':'none'; } updateMember(); }
   function updateMember(){
     var m=estimateMap[memberStatus];
     document.getElementById('feeAmount').textContent=m.amount;
@@ -442,6 +445,23 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     document.getElementById('sumEstimate').textContent=m.due;
     document.getElementById('submitBtn').textContent=m.btn;
     var sr=document.getElementById('successReminder'); if(sr){ sr.innerHTML = memberStatus==='new' ? 'Reminder: new HomeCare members get <b>one free estimate in the first month</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : (memberStatus==='member' ? 'Reminder: HomeCare member estimate visits are <b>$60</b> after the first-month free estimate. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : 'Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.'); }
+    if(isUrgent() && estimateType!=='photo'){
+      var base = memberStatus==='member' ? 60 : 75;
+      if(memberStatus==='new'){
+        document.getElementById('feeDesc').textContent='ASAP / Emergency selected. Your first HomeCare estimate is still free in month one; the 25% urgency charge applies to the labor quote if you book the work.';
+        document.getElementById('feeDueLine').innerHTML='<b>ASAP / Emergency:</b> first estimate free for new members; labor quote includes the 25% urgency charge.';
+      } else {
+        var urgentPrice = base * 1.25;
+        var urgentTxt = '$' + (urgentPrice % 1 ? urgentPrice.toFixed(2) : urgentPrice);
+        document.getElementById('feeAmount').textContent=urgentTxt;
+        document.getElementById('feeTitle').textContent='ASAP / Emergency estimate — '+urgentTxt;
+        document.getElementById('feeDesc').textContent='ASAP / Emergency adds 25% to the estimate visit and labor quote. Please add job pictures if you have them.';
+        document.getElementById('feeDueLine').innerHTML='<b>'+urgentTxt+' — due to book the ASAP/Emergency visit.</b> That is the regular estimate plus the 25% urgency charge. Final labor is quoted after Gabriel sees the job (or from clear photos).';
+        document.getElementById('ackText').textContent='I understand: '+urgentTxt+' ASAP/Emergency estimate (+25%) + labor-only (I buy materials/parts)';
+        document.getElementById('sumEstimate').textContent=urgentTxt+' incl. +25%';
+        document.getElementById('submitBtn').textContent='Request ASAP/Emergency — '+urgentTxt+' estimate →';
+      }
+    }
     if(estimateType==='photo'){
       document.getElementById('feeAmount').textContent='FREE';
       document.getElementById('feeTitle').textContent='Free photo estimate — send pictures for a first quote';
@@ -516,6 +536,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       'Phone: '+phone,
       'HomeCare status: '+(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate')),
       'Estimate type: '+(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+      'Urgency: '+(isUrgent()?'ASAP / Emergency — +25% urgency charge':'Standard timing'),
       'Pictures selected: '+(selectedPhotoNames.length ? selectedPhotoNames.length+' — '+selectedPhotoNames.join(', ')+' (customer will DM the pictures to @generalhandymans)' : 'None selected'),
       '—',
       'Confirmed by customer: '+(estimateType==='photo'?'FREE photo estimate':estimateMap[memberStatus].line)+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
@@ -562,6 +583,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           customer_phone:phone,
           homecare_status:memberTxt,
           estimate_type:(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+          urgency:(isUrgent()?'ASAP / Emergency +25%':'Standard'),
           pictures_selected:selectedPhotoNames.join(', '),
           estimate_due:estimateMap[memberStatus].line,
           confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
