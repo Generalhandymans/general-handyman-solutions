@@ -26,11 +26,14 @@ function send(res, code, obj, headers) {
 }
 function readBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { r(JSON.parse(b || '{}')); } catch (e) { r({}); } }); }); }
 function auth(req) {
+  const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (bearer) { const uid = sessions.get(bearer); if (uid) return db.users.find(u => u.id === uid) || null; }
   const cookie = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith('ghs_session='));
   if (!cookie) return null;
   const uid = sessions.get(cookie.slice('ghs_session='.length));
   return db.users.find(u => u.id === uid) || null;
 }
+function newSession(u) { const token = crypto.randomBytes(24).toString('hex'); sessions.set(token, u.id); return token; }
 function requireRole(user, roles, res) { if (!user) { send(res, 401, { error: 'login required' }); return false; } if (!roles.includes(user.role)) { send(res, 403, { error: 'not allowed' }); return false; } return true; }
 function publicJob(j, viewer) {
   const assigned = viewer && (viewer.role === 'admin' || j.assignedWorkerId === viewer.id);
@@ -40,9 +43,17 @@ function publicJob(j, viewer) {
   return base; // workers who have not claimed see NO customer details
 }
 
+const ALLOWED_ORIGINS = ['https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+  }
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const user = auth(req);
 
   // ---------- static ----------
@@ -72,15 +83,14 @@ const server = http.createServer(async (req, res) => {
     // Workers auto-activate on signup (Gabriel 2026-10-07); admin can still set review/notfit later.
     const role = b.role === 'worker' ? 'worker' : 'customer';
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: 'active', skills: b.skills || [], vehicle: b.vehicle || '', pw: hashPw(b.password), createdAt: new Date().toISOString() };
-    db.users.push(u); save(); return send(res, 201, { user: pubUser(u) });
+    db.users.push(u); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
     const u = db.users.find(x => x.email === (b.email || '').toLowerCase());
     if (!u || !checkPw(b.password || '', u.pw)) return send(res, 401, { error: 'wrong email or password' });
-    const token = crypto.randomBytes(24).toString('hex');
-    sessions.set(token, u.id);
-    return send(res, 200, { user: pubUser(u) }, { 'Set-Cookie': 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' });
+    const token = newSession(u);
+    return send(res, 200, { user: pubUser(u), token }, { 'Set-Cookie': 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' });
   }
   if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; Max-Age=0' }); }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
