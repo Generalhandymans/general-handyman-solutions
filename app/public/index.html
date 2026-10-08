@@ -28,6 +28,10 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .pick{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px}
 .pick button{background:#fff;color:var(--ink);border:1px solid var(--line);padding:8px 12px;font-size:13.5px;font-weight:600}
 .pick button.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.thread{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;display:grid;gap:8px}
+.msg{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:14px;line-height:1.4}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.thumb{width:92px;height:92px;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+.reply{display:flex;gap:8px;margin-top:10px}.reply input{flex:1;margin:0}.reply button{white-space:nowrap}
 </style>
 </head>
 <body>
@@ -248,6 +252,19 @@ async function sendRequest(){
     await api('/api/requests',{method:'POST', body:JSON.stringify({service:st.service, description:document.getElementById('rDesc').value, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:st.member, photos})});
     msg.textContent='Request sent'+(photos.length?' with '+photos.length+' photo(s)':'')+'. The Team will review and send your quote right here — check back in this thread.'; document.getElementById('rPhotos').value=''; loadRequests();
   }catch(e){ msg.textContent=e.message; }
+}
+function escHtml(v){ return (''+(v==null?'':v)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function threadHtml(r){
+  const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||'Customer'); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
+  const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="Job photo">'; }).join('');
+  const canPost = !!me && (me.role==='admin' || r.customerId===me.id);
+  return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<span class="mut">No messages yet.</span>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="Message the '+(me.role==='admin'?'customer':'Team')+'..."><button onclick="sendMsg(\''+r.id+'\')">Send</button></div>':'');
+}
+async function sendMsg(idv){
+  const inp=document.getElementById('m-'+idv); if(!inp) return;
+  const text=inp.value.trim(); if(!text) return;
+  try{ await api('/api/requests/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me && me.role==='admin') loadAdmin(); else loadRequests(); }
+  catch(e){ alert(e.message); }
 }
 async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
