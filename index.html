@@ -486,62 +486,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     </form>
   </section>
 
-  <section class="section" id="postjob">
-    <h2>Create a <em>job</em></h2>
-    <p class="sub">The Team’s work-order maker. Build a job from any customer order — office, phone, DM, anywhere — set the worker pay, and get a clean work order you can post and forward.</p>
-    <form id="postJobForm" novalidate style="border:1px solid var(--line);border-radius:18px;background:var(--surface);overflow:hidden">
-      <div style="background:#0b0b0b;color:#fff;padding:16px">
-        <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0">New work order</h3>
-        <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Fields marked private stay between you and the assigned worker — they are not in the public job post.</p>
-      </div>
-      <div style="padding:16px">
-        <div class="grid2">
-          <div><label class="label" for="pjService">Service</label><select class="field" id="pjService"><option value="">Choose…</option><option>TV Mounting &amp; Installs</option><option>Repairs &amp; Fixes</option><option>Painting &amp; Walls</option><option>Carpentry</option><option>Plumbing Help</option><option>Electrical Swaps</option><option>Mobile Mechanic</option><option>Assembly &amp; Other</option></select></div>
-          <div><label class="label" for="pjCity">City / area</label><input class="field" id="pjCity" placeholder="Fairfield"></div>
-          <div><label class="label" for="pjWhen">When</label><input class="field" id="pjWhen" placeholder="Today, tomorrow, Sat 10 AM…"></div>
-          <div><label class="label" for="pjPay">Pay offer to worker ($)</label><input class="field" id="pjPay" inputmode="numeric" placeholder="75"></div>
-          <div><label class="label" for="pjCustPrice">Customer price — private ($)</label><input class="field" id="pjCustPrice" inputmode="numeric" placeholder="Your quote to the customer"></div>
-          <div><label class="label" for="pjName">Customer name — private</label><input class="field" id="pjName" placeholder="Customer name"></div>
-          <div><label class="label" for="pjPhone">Customer phone — private</label><input class="field" id="pjPhone" inputmode="tel" placeholder="(707) 555-0123"></div>
-          <div><label class="label" for="pjAddress">Full address — private</label><input class="field" id="pjAddress" placeholder="Street address — released after claim"></div>
-        </div>
-        <label class="label" for="pjDesc">Public job description</label>
-        <textarea class="field" id="pjDesc" placeholder="What the work is — tools needed, size, anything the worker should know before claiming. No address here."></textarea>
-        <label class="label" for="pjNotes">Your notes — private</label>
-        <textarea class="field" id="pjNotes" placeholder="Gate code, materials on site, office/customer order notes…"></textarea>
-
-        <div class="error" id="pjError"></div>
-        <button class="btn btn-red request-btn" id="pjSubmitBtn" type="submit" style="margin-top:14px">Create work order →</button>
-        <p class="fine">Creates a Job ID and emails the work order to the Team. Copy the public version below to forward to your active workers.</p>
-
-        <div class="success" id="pjSuccess">
-          <h3 id="pjSuccessTitle">Work order created ✓</h3>
-          <p id="pjSuccessMsg">Sent to the Team’s email. Copy the public job post and forward it to your active workers.</p>
-          <div class="label">Public job post — safe to forward (no address)</div>
-          <pre id="pjPublicText"></pre>
-          <div class="label">Private work order — Team + assigned worker only</div>
-          <pre id="pjPrivateText"></pre>
-        </div>
-      </div>
-    </form>
-  </section>
-
   <section class="section" id="jobboard">
     <h2>Worker <em>job board</em></h2>
     <p class="sub">For <b>active workers only</b> — approved by the Team after review. The Team posts open jobs with the pay offer. First active worker to claim a job gets it.</p>
     <div class="how">
       <article><div class="num">1</div><h3>The Team posts the job</h3><p>Service, city, what the job is, when it’s needed, and the <b>pay offer</b> — for example “TV mount • Fairfield • Today • <b>$75</b>”. Customer address is never posted here.</p></article>
-      <article><div class="num">2</div><h3>You claim it</h3><p>Enter the Job ID below and tap Claim. The Team confirms if you got it — first come, first served among active workers.</p></article>
+      <article><div class="num">2</div><h3>You claim it</h3><p>Log in with your worker account and claim it there. First come, first served among active workers.</p></article>
       <article><div class="num">3</div><h3>Details unlock</h3><p>After the Team confirms your claim, they send you the customer’s full address and phone. Finish the job, send completion photos, get paid your offer.</p></article>
     </div>
     <div style="border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:16px;margin-top:16px">
-      <div class="label" style="margin-top:0">Claim a job</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px">
-        <input class="field" id="claimJobId" placeholder="Job ID — example JOB-1024" style="flex:1;min-width:200px">
-        <input class="field" id="claimName" placeholder="Your name" style="flex:1;min-width:160px">
-        <a class="btn btn-red" id="claimBtn" href="#" style="padding:12px 18px;font-size:14.5px">Claim this job →</a>
-      </div>
-      <p class="fine" style="text-align:left">Claiming opens WhatsApp to the Team with your Job ID. The job is yours only after the Team confirms back. Not active yet? <a href="#workers">Apply above</a> first.</p>
+      <div class="label" style="margin-top:0">Claim jobs inside your worker account</div>
+      <p class="fine" style="text-align:left;margin:6px 0 12px">The real job board lives in your worker account — only active workers see open jobs, and customer details unlock for the worker who claims. Log in to see what is open.</p>
+      <a class="btn btn-red" style="padding:12px 18px;font-size:14.5px" href="https://general-handyman-solutions-app.onrender.com/" target="_blank" rel="noopener">Worker login → see open jobs</a>
     </div>
   </section>
 
@@ -869,46 +825,6 @@ window.__ghsWired=true;
       document.getElementById('workerSuccessMsg').innerHTML='The automatic send did not go through. Copy the application below and DM it to <b>@generalhandymans</b>.';
     }finally{ wbtn.disabled=false; wbtn.textContent=worig; }
     var wsuccess=document.getElementById('workerSuccess'); wsuccess.classList.add('show'); wsuccess.scrollIntoView({behavior:'smooth', block:'center'});
-  }); }
-
-  var postJobForm=document.getElementById('postJobForm');
-  if(postJobForm){ postJobForm.addEventListener('submit', async function(e){
-    e.preventDefault();
-    var perr=document.getElementById('pjError'); perr.classList.remove('show'); perr.textContent='';
-    function gv(id){ return document.getElementById(id).value.trim(); }
-    var svc=gv('pjService'), city=gv('pjCity'), when=gv('pjWhen'), pay=gv('pjPay'), custPrice=gv('pjCustPrice'), cname=gv('pjName'), cphone=gv('pjPhone'), caddr=gv('pjAddress'), desc=gv('pjDesc'), notes=gv('pjNotes');
-    var probs=[];
-    if(!svc) probs.push('pick the service');
-    if(!city) probs.push('add the city / area');
-    if(!when) probs.push('add when it is needed');
-    if(!pay) probs.push('set the pay offer to the worker');
-    if(!desc) probs.push('write the public job description');
-    if(probs.length){ perr.textContent='Almost there — please '+probs.join(', ')+'.'; perr.classList.add('show'); perr.scrollIntoView({behavior:'smooth', block:'center'}); return; }
-    var jobId='JOB-'+Math.random().toString(36).slice(2,6).toUpperCase();
-    var pubLines=['NEW JOB '+jobId+' — '+svc, 'Where: '+city, 'When: '+when, 'Job: '+desc, 'Pay offer: $'+pay, '—', 'Active General Handyman Solutions workers: claim with Job ID '+jobId+' on the job board or reply here. Address is released after the Team confirms your claim.'];
-    var privLines=['WORK ORDER '+jobId+' — General Handyman Solutions', 'Service: '+svc, 'City: '+city, 'When: '+when, 'Public job: '+desc, 'Pay offer to worker: $'+pay, 'Customer price: '+(custPrice ? '$'+custPrice : '—'), 'Customer: '+(cname||'—'), 'Phone: '+(cphone||'—'), 'Address: '+(caddr||'—'), 'Team notes: '+(notes||'—'), 'Status: Open — unassigned'];
-    document.getElementById('pjPublicText').textContent=pubLines.join('\n');
-    document.getElementById('pjPrivateText').textContent=privLines.join('\n');
-    var pbtn=document.getElementById('pjSubmitBtn'); var porig=pbtn.textContent; pbtn.disabled=true; pbtn.textContent='Creating work order…';
-    try{
-      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify({_subject:'New work order '+jobId+' — '+svc+' ('+city+')', _template:'table', job_id:jobId, status:'Open', service:svc, city:city, when_needed:when, public_job_description:desc, pay_offer_to_worker:'$'+pay, customer_price:custPrice ? '$'+custPrice : '', customer_name:cname, customer_phone:cphone, full_address_private:caddr, gabriel_notes:notes, public_post:pubLines.join('\n'), private_work_order:privLines.join('\n')})});
-      if(!res.ok) throw new Error('work order send failed');
-      document.getElementById('pjSuccessTitle').textContent='Work order created ✓';
-      document.getElementById('pjSuccessMsg').textContent='Sent to the Team’s email. Copy the public job post below and forward it to your active workers.';
-    }catch(pjErr){
-      document.getElementById('pjSuccessTitle').textContent='Work order ready — one more tap';
-      document.getElementById('pjSuccessMsg').textContent='The automatic email did not go through. Copy the work order below so you still have it.';
-    }finally{ pbtn.disabled=false; pbtn.textContent=porig; }
-    var ps=document.getElementById('pjSuccess'); ps.classList.add('show'); ps.scrollIntoView({behavior:'smooth', block:'center'});
-  }); }
-
-  var claimBtn=document.getElementById('claimBtn');
-  if(claimBtn){ claimBtn.addEventListener('click', function(e){
-    e.preventDefault();
-    var jid=(document.getElementById('claimJobId').value||'').trim()||'JOB-ID';
-    var wn=(document.getElementById('claimName').value||'').trim();
-    var msg='I want to claim Job '+jid+(wn ? ' — '+wn : '')+'. I am an active General Handyman Solutions worker.';
-    window.open('https://wa.me/17078623773?text='+encodeURIComponent(msg),'_blank');
   }); }
 
   update(); updateMember();
