@@ -89,19 +89,41 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
     <h2>Request a handyman</h2>
-    <p class="mut">In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
+    <p class="mut">Pick a service, add pictures, choose when — same as the main page, now inside your account so you can track it and chat with the Team. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
-      <label>Service</label>
-      <select id="rService"><option>TV Mounting & Installs</option><option>Repairs & Fixes</option><option>Painting & Walls</option><option>Carpentry</option><option>Plumbing Help</option><option>Electrical Swaps</option><option>Mobile Mechanic</option><option>Assembly & Other</option></select>
+      <label>What do you need?</label>
+      <div class="pick" id="cService">
+        <button type="button" data-v="TV Mounting & Installs">TV Mounting &amp; Installs</button><button type="button" data-v="Repairs & Fixes">Repairs &amp; Fixes</button><button type="button" data-v="Painting & Walls">Painting &amp; Walls</button><button type="button" data-v="Carpentry">Carpentry</button><button type="button" data-v="Plumbing Help">Plumbing Help</button><button type="button" data-v="Electrical Swaps">Electrical Swaps</button><button type="button" data-v="Mobile Mechanic">Mobile Mechanic</button><button type="button" data-v="Assembly & Other">Assembly &amp; Other</button>
+      </div>
       <label>Describe the job</label><textarea id="rDesc" placeholder="What do you need done?"></textarea>
-      <div class="row"><div><label>City</label><input id="rCity" placeholder="Fairfield"></div><div><label>When</label><input id="rWhen" placeholder="Today / tomorrow / date"></div></div>
-      <label>Full address</label><input id="rAddr" placeholder="Street address">
       <label>Estimate type</label>
-      <select id="rEst"><option value="inperson">In-person estimate — $75</option><option value="photo">Free photo estimate</option></select>
+      <div class="pick" id="cEst">
+        <button type="button" data-v="photo">Free photo estimate — pictures required</button><button type="button" data-v="inperson" class="sel">In-person estimate — $75</button>
+      </div>
       <label>Photos of the job (up to 6) — the Team quotes faster with pictures</label>
       <input id="rPhotos" type="file" accept="image/*" multiple>
       <div id="rPhotoNames" class="mut"></div>
-      <button onclick="sendRequest()">Send request</button>
+      <label>Where is the job?</label>
+      <div class="pick" id="cCity">
+        <button type="button" data-v="Fairfield">Fairfield</button><button type="button" data-v="Vacaville">Vacaville</button><button type="button" data-v="Vallejo">Vallejo</button><button type="button" data-v="Suisun City">Suisun City</button><button type="button" data-v="Napa area">Napa area</button><button type="button" data-v="Other nearby">Other nearby</button>
+      </div>
+      <label>Full home address (required)</label><input id="rAddr" placeholder="Street address">
+      <label>When do you need it?</label>
+      <div class="pick" id="cWhen">
+        <button type="button" data-v="ASAP / Emergency">ASAP / Emergency (+25%)</button><button type="button" data-v="Today">Today</button><button type="button" data-v="Tomorrow">Tomorrow</button><button type="button" data-v="This week">This week</button><button type="button" data-v="Pick a date">Pick a date</button>
+      </div>
+      <input id="rDate" type="date" style="display:none">
+      <label>HomeCare membership — $49/mo</label>
+      <div class="pick" id="cMember">
+        <button type="button" data-v="none" class="sel">Not a member — $75</button><button type="button" data-v="new">New member — first estimate FREE</button><button type="button" data-v="member">Member — $60 estimate</button>
+      </div>
+      <div class="card" style="background:#faf9f7;margin:10px 0">
+        <b id="cFeeTitle">In-person estimate — $75 flat</b>
+        <p class="mut" id="cFeeDesc" style="margin:4px 0">Due to book the visit. Final labor is quoted after the Team sees the job (or from clear photos). Labor-only — you buy materials/parts. 50% deposit locks approved work. ASAP / Emergency adds 25%.</p>
+        <button type="button" id="cAck" class="ghost" style="width:100%;text-align:left">☐ I understand the estimate charge + labor-only (I buy materials/parts)</button>
+      </div>
+      <div id="cSummary" class="mut" style="margin:8px 0"></div>
+      <button id="cSendBtn" onclick="sendRequest()">Send request</button>
       <div id="rMsg" class="mut"></div>
     </div>
     <h2>My requests</h2>
@@ -180,7 +202,7 @@ function render(){
   document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
-  if(me && me.role==='customer') loadRequests();
+  if(me && me.role==='customer'){ loadRequests(); custSummary(); }
   if(me && me.role==='worker') loadJobs();
   if(me && me.role==='admin'){ loadAdmin(); }
 }
@@ -188,22 +210,44 @@ function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const img=n
   img.onload=()=>{ const max=1200; let w=img.width,h=img.height; const sc=Math.min(1, max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
     const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg',0.78)); };
   img.onerror=reject; img.src=url; }); }
+let custAck=false;
+document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e10600':''; });
+['cService','cEst','cCity','cWhen','cMember'].forEach(function(gid){ const g=document.getElementById(gid); if(g) g.addEventListener('click', custSummary); });
+document.getElementById('rDate').addEventListener('change', custSummary);
+function custState(){
+  const est=pickOne('cEst')||'inperson', member=pickOne('cMember')||'none', when=(pickOne('cWhen')==='Pick a date' && document.getElementById('rDate').value) ? 'On '+document.getElementById('rDate').value : (pickOne('cWhen')||'');
+  document.getElementById('rDate').style.display = pickOne('cWhen')==='Pick a date' ? 'block':'none';
+  return { service:pickOne('cService'), est, member, city:pickOne('cCity'), when };
+}
+function custFee(){
+  const st=custState();
+  if(st.est==='photo') return {label:'FREE photo estimate', due:0};
+  let base = st.member==='new'?0:(st.member==='member'?60:75);
+  let urgent = st.when==='ASAP / Emergency';
+  let due = urgent && base>0 ? Math.round(base*1.25*100)/100 : base;
+  return {label:(st.member==='new'?'FREE first HomeCare estimate':(st.member==='member'?'$60 member estimate':'$75 flat'))+(urgent&&base>0?' + 25% ASAP/Emergency = $'+due:''), due};
+}
+function custSummary(){
+  const st=custState(); const f=custFee();
+  document.getElementById('cFeeTitle').textContent = st.est==='photo' ? 'Free photo estimate' : ('In-person estimate — '+f.label);
+  document.getElementById('cSummary').innerHTML = 'Service: <b>'+(st.service||'pick one')+'</b> • Where: <b>'+(st.city||'—')+'</b> • When: <b>'+(st.when||'—')+'</b> • Estimate: <b>'+f.label+'</b>';
+  document.getElementById('cSendBtn').textContent = st.est==='photo' ? 'Request free photo estimate' : 'Send request — '+f.label;
+}
 async function sendRequest(){
+  const st=custState(); const f=custFee();
+  const msg=document.getElementById('rMsg');
+  if(!st.service){ msg.textContent='Pick a service first.'; return; }
+  if(!document.getElementById('rAddr').value.trim()){ msg.textContent='Add the home address.'; return; }
+  if(!st.when){ msg.textContent='Choose when you need it.'; return; }
+  if(!document.getElementById('rDesc').value.trim()){ msg.textContent='Describe the job in a sentence or two.'; return; }
+  if(!custAck){ msg.textContent='Tap the confirm box (estimate + labor-only) before sending.'; return; }
   try{ const files=[...document.getElementById('rPhotos').files].slice(0,6); const photos=[];
-    for(const f of files){ photos.push(await fileToDataUrl(f)); }
-    await api('/api/requests',{method:'POST', body:JSON.stringify({service:document.getElementById('rService').value, description:document.getElementById('rDesc').value, city:document.getElementById('rCity').value, address:document.getElementById('rAddr').value, when:document.getElementById('rWhen').value, estimateType:document.getElementById('rEst').value, photos})});
-    document.getElementById('rMsg').textContent='Request sent with '+photos.length+' photo(s). The Team will review and send your quote right here — check back in this thread.'; document.getElementById('rPhotos').value=''; loadRequests();
-  }catch(e){ document.getElementById('rMsg').textContent=e.message; }
+    for(const fl of files){ photos.push(await fileToDataUrl(fl)); }
+    if(st.est==='photo' && !photos.length){ msg.textContent='Free photo estimates need at least one picture.'; return; }
+    await api('/api/requests',{method:'POST', body:JSON.stringify({service:st.service, description:document.getElementById('rDesc').value, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:st.member, photos})});
+    msg.textContent='Request sent'+(photos.length?' with '+photos.length+' photo(s)':'')+'. The Team will review and send your quote right here — check back in this thread.'; document.getElementById('rPhotos').value=''; loadRequests();
+  }catch(e){ msg.textContent=e.message; }
 }
-function threadHtml(r){
-  const msgs=(r.messages||[]).map(m=>'<div style="margin:8px 0;padding:9px 11px;border-radius:11px;background:'+(m.from==='team'?'#fdf0ef':'#f4f2ee')+'"><b>'+(m.from==='team'?'Team':(me&&me.role==='admin'?(m.name||'Customer'):'You'))+':</b> '+m.text.replace(/</g,'&lt;')+'<br><span class="mut">'+new Date(m.at).toLocaleString()+'</span></div>').join('');
-  const photos=(r.photos||[]).map(src=>'<img src="'+src+'" style="width:96px;height:96px;object-fit:cover;border-radius:9px;border:1px solid #e6e2dc;margin:3px">').join('');
-  return (photos?'<div>'+photos+'</div>':'')+'<div style="margin-top:8px">'+msgs+'</div>'
-    +'<div class="row"><div><input id="reply-'+r.id+'" placeholder="Message the Team..."></div><button class="black" onclick="sendReply(\''+r.id+'\')">Send</button></div>';
-}
-async function sendReply(idv){ const el=document.getElementById('reply-'+idv); const text=el.value.trim(); if(!text) return;
-  await api('/api/requests/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})});
-  if(me.role==='admin') loadAdmin(); else loadRequests(); }
 async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+threadHtml(r)+'</div>').join('') || '<p class="mut">No requests yet.</p>';
