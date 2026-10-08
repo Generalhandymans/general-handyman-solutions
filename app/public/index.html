@@ -25,6 +25,9 @@ button.black{background:#0b0b0b}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .tabs button{background:#fff;color:var(--ink);border:1px solid var(--line)} .tabs button.on{background:#0b0b0b;color:#fff}
 h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
+.pick{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px}
+.pick button{background:#fff;color:var(--ink);border:1px solid var(--line);padding:8px 12px;font-size:13.5px;font-weight:600}
+.pick button.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
 </style>
 </head>
 <body>
@@ -48,8 +51,35 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="workerExtra" style="display:none">
-      <label>Skills (comma separated)</label><input id="aSkills" placeholder="Carpentry, Plumbing help">
-      <label>Vehicle</label><input id="aVehicle" placeholder="Pickup truck">
+      <label>Applying as</label>
+      <div class="pick" id="wRole"><button type="button" data-v="Skilled subcontractor">Skilled subcontractor</button><button type="button" data-v="Helper">Helper</button></div>
+      <label>City you live in</label><input id="wCity" placeholder="Fairfield">
+      <label>Areas you can work</label><input id="wAreas" placeholder="Fairfield, Vacaville, Vallejo...">
+      <label>Skills — tap all that apply</label>
+      <div class="pick multi" id="wSkills">
+        <button type="button" data-v="General handyman">General handyman</button><button type="button" data-v="Carpentry">Carpentry</button><button type="button" data-v="Paint & drywall">Paint &amp; drywall</button><button type="button" data-v="Electrical swaps">Electrical swaps</button><button type="button" data-v="Plumbing help">Plumbing help</button><button type="button" data-v="Mobile mechanic">Mobile mechanic</button><button type="button" data-v="Installs & assembly">Installs &amp; assembly</button><button type="button" data-v="Landscaping / yard">Landscaping / yard</button>
+      </div>
+      <label>What do you have? — tap all that apply</label>
+      <div class="pick multi" id="wGear">
+        <button type="button" data-v="Basic hand tools">Basic hand tools</button><button type="button" data-v="Power tools">Power tools</button><button type="button" data-v="Drill/driver">Drill/driver</button><button type="button" data-v="Saws">Saws</button><button type="button" data-v="Ladder">Ladder</button><button type="button" data-v="Truck bed/toolbox">Truck bed/toolbox</button><button type="button" data-v="Trailer">Trailer</button><button type="button" data-v="PPE/safety gear">PPE/safety gear</button><button type="button" data-v="No tools yet">No tools yet</button>
+      </div>
+      <div class="row">
+        <div><label>Experience</label><select id="wExp"><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>5+ years</option></select></div>
+        <div><label>Tools level</label><select id="wTools"><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Vehicle style</label><select id="wVehicle"><option>Pickup truck</option><option>Work van</option><option>SUV</option><option>Sedan/hatchback</option><option>E-bike</option><option>No vehicle / need a ride</option><option>Other</option></select></div>
+        <div><label>Can your vehicle haul materials?</label><select id="wHaul"><option>Yes — truck/van/trailer loads</option><option>Small materials only</option><option>No hauling</option><option>Not applicable</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Transportation</label><select id="wTransport"><option>Own truck/car</option><option>E-bike / rideshare</option><option>Need a ride</option></select></div>
+        <div><label>License / ID</label><select id="wLicense"><option>Driver license</option><option>State ID only</option><option>Working on it</option></select></div>
+      </div>
+      <div class="row">
+        <div><label>Insurance</label><select id="wInsurance"><option>Has general liability</option><option>No insurance yet</option><option>Not sure</option></select></div>
+        <div><label>Availability</label><input id="wAvail" placeholder="Weekdays / weekends / anytime"></div>
+      </div>
+      <label>Anything the Team should know?</label><textarea id="wNotes" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
@@ -124,11 +154,20 @@ function mode(m){ curMode=m;
 mode('login');
 async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Something failed'); return d; }
 function showErr(t){ const e=document.getElementById('authErr'); e.textContent=t; e.classList.add('show'); }
+document.querySelectorAll('.pick').forEach(function(g){
+  g.addEventListener('click', function(e){ const b=e.target.closest('button'); if(!b) return;
+    if(g.classList.contains('multi')) b.classList.toggle('sel');
+    else { g.querySelectorAll('button').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); }
+  });
+});
+function pickVals(idv){ return [...document.querySelectorAll('#'+idv+' button.sel')].map(b=>b.dataset.v); }
+function pickOne(idv){ const b=document.querySelector('#'+idv+' button.sel'); return b?b.dataset.v:''; }
 async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
-    else { const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:curMode, skills:(document.getElementById('aSkills').value||'').split(',').map(s=>s.trim()).filter(Boolean), vehicle:document.getElementById('aVehicle').value.trim()})});
+    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim() } : {};
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:curMode, profile})});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; }
     render();
   }catch(e){ showErr(e.message); }
@@ -181,7 +220,15 @@ async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('adminRequests').innerHTML = rq.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+((r.customerName||'Customer'))+' • '+r.description+' • '+r.city+' • '+r.address+' • '+r.when+'</span>'+threadHtml(r)+'<br><span class="mut">Quote $</span> <input id="q-'+r.id+'" type="number" style="width:120px" value="'+(r.quote||'')+'"> <input id="qn-'+r.id+'" placeholder="Note with quote (scheduling, deposit...)" style="width:260px"> <button onclick="sendQuote(\''+r.id+'\')">Send quote to customer</button></div>').join('') || '<p class="mut">No requests yet.</p>';
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
-  document.getElementById('adminWorkers').innerHTML = wk.workers.map(w=>'<div class="card"><b>'+w.name+'</b> ('+w.email+') <span class="pill">'+w.status+'</span><br><span class="mut">'+(w.skills||[]).join(', ')+' • '+(w.vehicle||'')+'</span><br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button></div>').join('') || '<p class="mut">No workers yet.</p>';
+  document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
+    function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
+    return '<div class="card"><b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span>'
+    + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
+    + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
+    + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
+    + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
+    + row('Availability', pf.availability) + row('Notes', pf.notes)
+    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span></div>').join('') || '<p class="mut">No jobs yet.</p>';
 }
