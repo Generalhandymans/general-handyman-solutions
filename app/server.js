@@ -88,7 +88,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/requests' && req.method === 'POST') {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
     const b = await readBody(req);
-    const r = { id: id('GHS'), customerId: user.id, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', estimateDue: b.estimateType === 'photo' ? 0 : 75, status: 'New', quote: null, createdAt: new Date().toISOString() };
+    const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
+    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', estimateDue: b.estimateType === 'photo' ? 0 : 75, status: 'New', quote: null, quoteNote: '', photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     db.requests.push(r); save(); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {
@@ -102,13 +103,33 @@ const server = http.createServer(async (req, res) => {
     if (!r) return send(res, 404, { error: 'request not found' });
     const b = await readBody(req);
     if (user && user.role === 'admin') {
-      if (typeof b.quote === 'number') { r.quote = b.quote; r.status = 'Quoted'; }
+      if (typeof b.quote === 'number') {
+        r.quote = b.quote; r.status = 'Quoted'; r.quoteNote = b.note || '';
+        r.messages = r.messages || [];
+        r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Quote: $' + b.quote + ' labor (you buy materials/parts).' + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
+      }
       if (b.status) r.status = b.status;
     } else if (user && user.role === 'customer' && r.customerId === user.id) {
-      if (b.action === 'approve') r.status = 'Approved';
-      if (b.action === 'decline') r.status = 'Declined';
+      r.messages = r.messages || [];
+      if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); }
+      if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); }
     } else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { request: r });
+  }
+
+  const msgMatch = p.match(/^\/api\/requests\/([\w-]+)\/messages$/);
+  if (msgMatch && req.method === 'POST') {
+    const r = db.requests.find(x => x.id === msgMatch[1]);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    const isOwner = user && user.role === 'customer' && r.customerId === user.id;
+    const isTeam = user && user.role === 'admin';
+    if (!isOwner && !isTeam) return send(res, 403, { error: 'not allowed' });
+    const b = await readBody(req);
+    const text = (b.text || '').toString().slice(0, 2000).trim();
+    if (!text) return send(res, 400, { error: 'message required' });
+    r.messages = r.messages || [];
+    r.messages.push({ from: isTeam ? 'team' : 'customer', name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
+    save(); return send(res, 201, { request: r });
   }
 
   // ---------- workers (admin) ----------
