@@ -429,6 +429,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 </div>
 
 <script>
+window.__ghsWired=true;
 (function(){
   var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[], selectedPhotoFiles=[];
   var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
@@ -715,6 +716,22 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   }); }
 
   update(); updateMember();
+})();
+</script>
+<script>
+// Fallback wiring: only runs if the main script failed to load/execute.
+(function(){
+  if(window.__ghsWired) return;
+  function group(btn){
+    var p=btn.parentElement; if(!p) return;
+    p.querySelectorAll('.sel').forEach(function(b){ if(b!==btn) b.classList.remove('sel'); });
+    btn.classList.add('sel');
+  }
+  document.addEventListener('click', function(e){
+    var t=e.target.closest('.svc,.chip,.pill'); if(t){ group(t); }
+    var ack=e.target.closest('#ackBtn');
+    if(ack){ ack.classList.toggle('sel'); var box=document.getElementById('ackBox'); if(box) box.textContent=ack.classList.contains('sel')?'✓':''; }
+  });
 })();
 </script>
 </body>
