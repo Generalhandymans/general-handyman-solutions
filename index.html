@@ -326,6 +326,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <div class="row">
             <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
             <a class="btn btn-ghost" style="font-size:14px" href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">DM @generalhandymans</a>
+            <a class="btn btn-ghost" style="font-size:14px" href="https://docs.google.com/forms/d/e/1FAIpQLSepjlGsA8gBBdnEpEbWGuzAmTNvFcYVaxzcyKU0UbX4PF06hA/viewform" target="_blank" rel="noopener">Customer database form</a>
           </div>
           <p style="margin-top:10px" id="successReminder">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
         </div>
@@ -382,86 +383,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
   <section class="section" id="workers">
     <h2>Worker <em>signup</em></h2>
-    <p class="sub">Want work with General Handyman Solutions? Apply here. Gabriel reviews every worker personally — approved, put on review, or not a fit yet. You are not hired until Gabriel confirms you directly.</p>
-    <form class="book-body" id="workerForm" style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px" novalidate>
-      <div class="label">I am applying as</div>
-      <div class="pills" id="workerRolePills">
-        <button type="button" class="pill sel" data-wrole="Skilled subcontractor">Skilled subcontractor</button>
-        <button type="button" class="pill" data-wrole="Helper">Helper</button>
+    <p class="sub">Want work with General Handyman Solutions? Apply in the official database application below. Gabriel reviews every worker personally — approved, put on review, or not a fit yet. You are not hired until Gabriel confirms you directly.</p>
+    <div style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px;overflow:hidden">
+      <div style="padding:16px">
+        <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0 0 6px">Official worker application</h3>
+        <p class="fine" style="text-align:left;margin:0">This application goes into Gabriel’s worker database for review. Pick your skills, what tools/gear you have, your vehicle style, hauling, license/ID, insurance, and availability.</p>
+        <div class="row" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+          <a class="btn btn-red" style="padding:12px 16px;font-size:14px" href="https://docs.google.com/forms/d/e/1FAIpQLSeETqsTqB2kSSpjUpKZ9OrwbqDbkcxFLDJ5SKbaVtTmAitJsg/viewform" target="_blank" rel="noopener">Open worker application →</a>
+          <a class="btn btn-ghost" style="padding:12px 16px;font-size:14px" href="https://docs.google.com/forms/d/e/1FAIpQLSepjlGsA8gBBdnEpEbWGuzAmTNvFcYVaxzcyKU0UbX4PF06hA/viewform" target="_blank" rel="noopener">Customer lead form</a>
+        </div>
       </div>
-
-      <div class="grid2" style="margin-top:16px">
-        <div><label class="label" for="wName" style="margin-top:0">Full name</label><input class="field" id="wName" autocomplete="name" placeholder="First & last name"></div>
-        <div><label class="label" for="wPhone" style="margin-top:0">Phone</label><input class="field" id="wPhone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
-      </div>
-
-      <div class="grid2" style="margin-top:10px">
-        <div><label class="label" for="wCity" style="margin-top:0">City you live in</label><input class="field" id="wCity" placeholder="Fairfield, Vacaville, Vallejo…"></div>
-        <div><label class="label" for="wArea" style="margin-top:0">Areas you can work</label><input class="field" id="wArea" placeholder="Fairfield / Vacaville / Vallejo / Napa…"></div>
-      </div>
-
-      <div class="label">Skills <small>Tap all that apply</small></div>
-      <div class="pills" id="workerSkills">
-        <button type="button" class="pill" data-wskill="General handyman">General handyman</button>
-        <button type="button" class="pill" data-wskill="Carpentry">Carpentry</button>
-        <button type="button" class="pill" data-wskill="Paint & drywall">Paint & drywall</button>
-        <button type="button" class="pill" data-wskill="Electrical swaps">Electrical swaps</button>
-        <button type="button" class="pill" data-wskill="Plumbing help">Plumbing help</button>
-        <button type="button" class="pill" data-wskill="Mobile mechanic">Mobile mechanic</button>
-        <button type="button" class="pill" data-wskill="Installs & assembly">Installs & assembly</button>
-        <button type="button" class="pill" data-wskill="Landscaping / yard">Landscaping / yard</button>
-      </div>
-
-      <div class="label">What do you have? <small>Tap all that apply</small></div>
-      <div class="pills" id="workerGear">
-        <button type="button" class="pill" data-wgear="Basic hand tools">Basic hand tools</button>
-        <button type="button" class="pill" data-wgear="Power tools">Power tools</button>
-        <button type="button" class="pill" data-wgear="Drill / driver">Drill / driver</button>
-        <button type="button" class="pill" data-wgear="Saws">Saws</button>
-        <button type="button" class="pill" data-wgear="Ladder">Ladder</button>
-        <button type="button" class="pill" data-wgear="Truck bed / toolbox">Truck bed / toolbox</button>
-        <button type="button" class="pill" data-wgear="Trailer">Trailer</button>
-        <button type="button" class="pill" data-wgear="PPE / safety gear">PPE / safety gear</button>
-      </div>
-
-      <div class="grid2" style="margin-top:16px">
-        <div><label class="label" for="wExp" style="margin-top:0">Experience</label><select class="field" id="wExp"><option value="">Pick one</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>5+ years</option></select></div>
-        <div><label class="label" for="wTools" style="margin-top:0">Tools level</label><select class="field" id="wTools"><option value="">Pick one</option><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
-      </div>
-
-      <div class="grid2" style="margin-top:10px">
-        <div><label class="label" for="wVehicle" style="margin-top:0">Vehicle style</label><select class="field" id="wVehicle"><option value="">Pick one</option><option>Pickup truck</option><option>Work van</option><option>SUV</option><option>Sedan / hatchback</option><option>E-bike</option><option>No vehicle / need a ride</option><option>Other</option></select></div>
-        <div><label class="label" for="wHaul" style="margin-top:0">Can your vehicle haul materials?</label><select class="field" id="wHaul"><option value="">Pick one</option><option>Yes — truck/van/trailer loads</option><option>Small materials only</option><option>No hauling</option><option>Not applicable</option></select></div>
-      </div>
-
-      <div class="grid2" style="margin-top:10px">
-        <div><label class="label" for="wLicense" style="margin-top:0">License / ID</label><select class="field" id="wLicense"><option value="">Pick one</option><option>Driver license</option><option>State ID only</option><option>Working on it</option></select></div>
-        <div><label class="label" for="wInsurance" style="margin-top:0">Insurance</label><select class="field" id="wInsurance"><option value="">Pick one</option><option>Has general liability insurance</option><option>No insurance yet</option><option>Not sure</option></select></div>
-      </div>
-
-      <div class="grid2" style="margin-top:10px">
-        <div><label class="label" for="wTransport" style="margin-top:0">Transportation</label><select class="field" id="wTransport"><option value="">Pick one</option><option>Own truck/car</option><option>E-bike / rideshare</option><option>Need a ride</option></select></div>
-        <div><label class="label" for="wAvail" style="margin-top:0">Availability</label><input class="field" id="wAvail" placeholder="Weekdays, weekends, ASAP calls…"></div>
-      </div>
-
-      <label class="label" for="wMsg">Anything Gabriel should know?</label>
-      <textarea class="field" id="wMsg" placeholder="Licenses, insurance, past work, limits, languages, pay expectations…"></textarea>
-
-      <button type="button" class="ack" id="wAckBtn" aria-pressed="false" style="margin:16px 0 0;width:100%">
-        <span class="box" id="wAckBox"></span>
-        <span><b>I understand Gabriel reviews workers before any job is offered</b><span>Approved / on review / not a fit is Gabriel’s call. No job is promised by applying.</span></span>
-      </button>
-
-      <div class="error" id="workerError"></div>
-      <button class="btn btn-red request-btn" id="workerSubmitBtn" type="submit">Apply as a worker →</button>
-      <p class="fine">Applications go straight to Gabriel for review. If you’re a fit, he’ll reach out directly.</p>
-
-      <div class="success" id="workerSuccess">
-        <h3 id="workerSuccessTitle">Application sent ✓</h3>
-        <p id="workerSuccessMsg">Gabriel got your worker application and will review it.</p>
-        <pre id="workerText"></pre>
-      </div>
-    </form>
+      <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSeETqsTqB2kSSpjUpKZ9OrwbqDbkcxFLDJ5SKbaVtTmAitJsg/viewform?embedded=true" style="width:100%;height:980px;border:0" loading="lazy" title="General Handyman Solutions worker application">Loading worker application…</iframe>
+    </div>
   </section>
 
   <div class="cta-band">
