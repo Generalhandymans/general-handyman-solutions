@@ -232,6 +232,7 @@ function custSummary(){
   document.getElementById('cFeeTitle').textContent = st.est==='photo' ? 'Free photo estimate' : ('In-person estimate — '+f.label);
   document.getElementById('cSummary').innerHTML = 'Service: <b>'+(st.service||'pick one')+'</b> • Where: <b>'+(st.city||'—')+'</b> • When: <b>'+(st.when||'—')+'</b> • Estimate: <b>'+f.label+'</b>';
   document.getElementById('cSendBtn').textContent = st.est==='photo' ? 'Request free photo estimate' : 'Send request — '+f.label;
+  if(st.est!=='photo' && f.due>0) document.getElementById('cSummary').innerHTML += '<br><b>Approve the same day? Your estimate fee comes off your final cost.</b>';
 }
 async function sendRequest(){
   const st=custState(); const f=custFee();
