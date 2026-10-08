@@ -67,6 +67,9 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <label>Full address</label><input id="rAddr" placeholder="Street address">
       <label>Estimate type</label>
       <select id="rEst"><option value="inperson">In-person estimate — $75</option><option value="photo">Free photo estimate</option></select>
+      <label>Photos of the job (up to 6) — the Team quotes faster with pictures</label>
+      <input id="rPhotos" type="file" accept="image/*" multiple>
+      <div id="rPhotoNames" class="mut"></div>
       <button onclick="sendRequest()">Send request</button>
       <div id="rMsg" class="mut"></div>
     </div>
@@ -140,14 +143,29 @@ function render(){
   if(me && me.role==='worker') loadJobs();
   if(me && me.role==='admin'){ loadAdmin(); }
 }
+function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const img=new Image(); const url=URL.createObjectURL(file);
+  img.onload=()=>{ const max=1200; let w=img.width,h=img.height; const sc=Math.min(1, max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
+    const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg',0.78)); };
+  img.onerror=reject; img.src=url; }); }
 async function sendRequest(){
-  try{ await api('/api/requests',{method:'POST', body:JSON.stringify({service:document.getElementById('rService').value, description:document.getElementById('rDesc').value, city:document.getElementById('rCity').value, address:document.getElementById('rAddr').value, when:document.getElementById('rWhen').value, estimateType:document.getElementById('rEst').value})});
-    document.getElementById('rMsg').textContent='Request sent. The Team will review and send your quote here.'; loadRequests();
+  try{ const files=[...document.getElementById('rPhotos').files].slice(0,6); const photos=[];
+    for(const f of files){ photos.push(await fileToDataUrl(f)); }
+    await api('/api/requests',{method:'POST', body:JSON.stringify({service:document.getElementById('rService').value, description:document.getElementById('rDesc').value, city:document.getElementById('rCity').value, address:document.getElementById('rAddr').value, when:document.getElementById('rWhen').value, estimateType:document.getElementById('rEst').value, photos})});
+    document.getElementById('rMsg').textContent='Request sent with '+photos.length+' photo(s). The Team will review and send your quote right here — check back in this thread.'; document.getElementById('rPhotos').value=''; loadRequests();
   }catch(e){ document.getElementById('rMsg').textContent=e.message; }
 }
+function threadHtml(r){
+  const msgs=(r.messages||[]).map(m=>'<div style="margin:8px 0;padding:9px 11px;border-radius:11px;background:'+(m.from==='team'?'#fdf0ef':'#f4f2ee')+'"><b>'+(m.from==='team'?'Team':(me&&me.role==='admin'?(m.name||'Customer'):'You'))+':</b> '+m.text.replace(/</g,'&lt;')+'<br><span class="mut">'+new Date(m.at).toLocaleString()+'</span></div>').join('');
+  const photos=(r.photos||[]).map(src=>'<img src="'+src+'" style="width:96px;height:96px;object-fit:cover;border-radius:9px;border:1px solid #e6e2dc;margin:3px">').join('');
+  return (photos?'<div>'+photos+'</div>':'')+'<div style="margin-top:8px">'+msgs+'</div>'
+    +'<div class="row"><div><input id="reply-'+r.id+'" placeholder="Message the Team..."></div><button class="black" onclick="sendReply(\''+r.id+'\')">Send</button></div>';
+}
+async function sendReply(idv){ const el=document.getElementById('reply-'+idv); const text=el.value.trim(); if(!text) return;
+  await api('/api/requests/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})});
+  if(me.role==='admin') loadAdmin(); else loadRequests(); }
 async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+'</div>').join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+threadHtml(r)+'</div>').join('') || '<p class="mut">No requests yet.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 async function loadJobs(){
@@ -159,13 +177,13 @@ async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
 async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.description+' • '+r.city+' • '+r.address+' • '+r.when+'</span><br><span class="mut">Quote $</span> <input id="q-'+r.id+'" type="number" style="width:120px" value="'+(r.quote||'')+'"> <button onclick="sendQuote(\''+r.id+'\')">Send quote</button></div>').join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+((r.customerName||'Customer'))+' • '+r.description+' • '+r.city+' • '+r.address+' • '+r.when+'</span>'+threadHtml(r)+'<br><span class="mut">Quote $</span> <input id="q-'+r.id+'" type="number" style="width:120px" value="'+(r.quote||'')+'"> <input id="qn-'+r.id+'" placeholder="Note with quote (scheduling, deposit...)" style="width:260px"> <button onclick="sendQuote(\''+r.id+'\')">Send quote to customer</button></div>').join('') || '<p class="mut">No requests yet.</p>';
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(w=>'<div class="card"><b>'+w.name+'</b> ('+w.email+') <span class="pill">'+w.status+'</span><br><span class="mut">'+(w.skills||[]).join(', ')+' • '+(w.vehicle||'')+'</span><br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button></div>').join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span></div>').join('') || '<p class="mut">No jobs yet.</p>';
 }
-async function sendQuote(idv){ const v=document.getElementById('q-'+idv).value; await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({quote:Number(v)})}); loadAdmin(); }
+async function sendQuote(idv){ const v=document.getElementById('q-'+idv).value; const note=document.getElementById('qn-'+idv).value; await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({quote:Number(v), note})}); loadAdmin(); }
 async function setWorker(idv, status){ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); loadAdmin(); }
 async function createJob(){
   try{ await api('/api/jobs',{method:'POST', body:JSON.stringify({service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value})});
