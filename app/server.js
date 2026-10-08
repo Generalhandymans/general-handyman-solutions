@@ -12,7 +12,33 @@ const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootst
 
 let db = { users: [], requests: [], jobs: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
-function save() { fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)); }
+// Permanent storage: when SUPABASE_URL + SUPABASE_SERVICE_KEY are set (Render),
+// the whole app state lives in Supabase table ghs_state (key 'app'), so accounts,
+// requests and jobs survive redeploys and restarts. Local file is the fallback.
+const SB_URL = process.env.SUPABASE_URL || '';
+const SB_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+let sbQueue = Promise.resolve();
+function save() {
+  if (SB_URL && SB_KEY) {
+    const payload = JSON.stringify(db);
+    sbQueue = sbQueue.then(() => fetch(SB_URL + '/rest/v1/ghs_state', {
+      method: 'POST',
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify([{ key: 'app', value: JSON.parse(payload), updated_at: new Date().toISOString() }])
+    }).catch(e => console.error('supabase save failed', e.message)));
+    return;
+  }
+  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+}
+async function loadFromSupabase() {
+  if (!SB_URL || !SB_KEY) return;
+  try {
+    const r = await fetch(SB_URL + '/rest/v1/ghs_state?key=eq.app&select=value', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } });
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
+    console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
+  } catch (e) { console.error('supabase load failed', e.message); }
+}
 const sessions = new Map(); // token -> userId
 
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
@@ -65,7 +91,7 @@ const server = http.createServer(async (req, res) => {
   // ---------- auth ----------
   if (p === '/setup' && req.method === 'GET') {
     if (db.users.some(u => u.role === 'admin')) return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;padding:24px"><h2>Admin already set up</h2><p>The Team admin account already exists. <a href="/">Go to the app login</a>.</p></body>');
-    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up Team admin</title><body style="font-family:system-ui;padding:24px;max-width:520px;margin:0 auto"><h2>Set up the Team admin (one time)</h2><p>Create the General Handyman Solutions Team admin login. Use an email you control and a strong password only you know.</p><label>Display name</label><input id="n" style="width:100%;padding:10px;margin:4px 0 10px" value="General Handyman Solutions Team"><label>Email</label><input id="e" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="generalhandymans@gmail.com"><label>Password</label><input id="pw" type="password" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="Choose a strong password"><button id="b" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:12px 20px;font-weight:700">Create admin</button><p id="m"></p><script>document.getElementById("b").onclick=async()=>{const r=await fetch("/api/setup-admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("n").value,email:document.getElementById("e").value,password:document.getElementById("pw").value})});const d=await r.json();document.getElementById("m").textContent=r.ok?"Admin created. Go to the app and log in.":"Error: "+(d.error||"failed");if(r.ok)setTimeout(()=>location.href="/",1200);};</scr'+'ipt></body>');
+    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Set up Team admin</title><body style="font-family:system-ui;padding:24px;max-width:520px;margin:0 auto"><h2>Set up the Team admin (one time)</h2><p>Create the General Handyman Solutions Team admin login. Use an email you control and a strong password only you know.</p><label>Display name</label><input id="n" style="width:100%;padding:10px;margin:4px 0 10px" value="General Handyman Solutions Team"><label>Email</label><input id="e" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="generalhandymans@gmail.com"><label>Phone number</label><input id="ph" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="(707) 555-0123"><label>Password</label><input id="pw" type="password" style="width:100%;padding:10px;margin:4px 0 10px" placeholder="Choose a strong password"><button id="b" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:12px 20px;font-weight:700">Create admin</button><p id="m"></p><script>document.getElementById("b").onclick=async()=>{const r=await fetch("/api/setup-admin",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("n").value,email:document.getElementById("e").value,phone:document.getElementById("ph").value,password:document.getElementById("pw").value})});const d=await r.json();document.getElementById("m").textContent=r.ok?"Admin created. Go to the app and log in.":"Error: "+(d.error||"failed");if(r.ok)setTimeout(()=>location.href="/",1200);};</scr'+'ipt></body>');
   }
   if (p === '/api/setup-admin' && req.method === 'POST') {
     const b = await readBody(req);
@@ -194,4 +220,4 @@ const server = http.createServer(async (req, res) => {
   return send(res, 404, { error: 'not found' });
 });
 
-server.listen(PORT, () => console.log('GHS app running on port ' + PORT));
+loadFromSupabase().then(() => server.listen(PORT, () => console.log('GHS app running on port ' + PORT)));
