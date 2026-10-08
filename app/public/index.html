@@ -45,13 +45,14 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="authErr" class="err"></div>
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
-    <label>Phone</label><input id="aPhone" placeholder="(707) 555-0123">
+    <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="workerExtra" style="display:none">
       <label>Skills (comma separated)</label><input id="aSkills" placeholder="Carpentry, Plumbing help">
       <label>Vehicle</label><input id="aVehicle" placeholder="Pickup truck">
     </div>
     <button id="authBtn" onclick="doAuth()">Log in</button>
+    <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: sign up to send requests, send photos, and get quotes here. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
   </div>
 
@@ -116,6 +117,7 @@ function mode(m){ curMode=m;
   document.getElementById('tabCustomer').classList.toggle('on', m==='customer');
   document.getElementById('tabWorker').classList.toggle('on', m==='worker');
   document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
+  document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   document.getElementById('authBtn').textContent = m==='login' ? 'Log in' : 'Create account';
 }
