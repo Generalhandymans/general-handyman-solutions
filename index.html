@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="data:,">
 <title>General Handyman Solutions — On-Demand Handyman in Fairfield, Vacaville & Vallejo</title>
-<meta name="description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Pick a service, describe the job, choose timing. In-person estimate is a flat $75. Labor-only — you buy materials.">
+<meta name="description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Pick a service, describe the job, choose timing. In-person estimate is a flat $75; HomeCare members get one free estimate in the first month. Labor-only — you buy materials.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -58,6 +58,8 @@ button,input,textarea,select{font:inherit}
 .kicker{display:inline-flex;align-items:center;gap:8px;background:var(--black);color:#fff;padding:7px 11px;border-radius:999px;font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
 @media(prefers-color-scheme:dark){.kicker{background:#fff;color:#0b0b0b}}
 .kicker i{width:7px;height:7px;border-radius:50%;background:var(--red);display:block}
+.logo-banner{margin-top:16px;background:#050505;border:1px solid var(--line);border-radius:18px;padding:10px;box-shadow:var(--shadow)}
+.logo-banner img{width:100%;height:auto;border-radius:12px}
 .hero h1{font-family:var(--display);font-size:clamp(44px,6vw,74px);line-height:.88;letter-spacing:-.01em;text-transform:uppercase;margin:16px 0 12px;font-weight:800}
 .hero h1 em{font-style:normal;color:var(--red)}
 .hero p.lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:52ch;margin:0}
@@ -203,6 +205,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   <section class="hero">
     <div>
       <span class="kicker"><i></i> On-demand handyman • Like booking a ride, for repairs</span>
+      <div class="logo-banner"><img src="data:image/webp;base64,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" alt="General Handyman Solutions logo"></div>
       <h1>Need a hand?<br>Get it <em>handled.</em></h1>
       <p class="lede">Pick a service, describe the job, choose when you need it. Gabriel reviews every request personally and replies with a clear labor quote — no guessing, no runaround.</p>
 
@@ -212,14 +215,14 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       </figure>
 
       <div class="quick" aria-label="Popular requests">
-        <span>In-person estimate — $75 flat</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
+        <span>In-person estimate — $75 flat</span><span>HomeCare $49/mo • First estimate free</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
       </div>
 
       <div class="section" style="padding-top:34px">
         <h2>How it <em>works</em></h2>
         <div class="how">
           <article><div class="num">1</div><h3>Request in under a minute</h3><p>Choose the service, add photos/details if you can, pick ASAP, today, or a day that works.</p></article>
-          <article><div class="num">2</div><h3>$75 estimate, then a labor quote</h3><p>The in-person estimate visit is a flat $75. After Gabriel sees the job, you get a labor-only price — you buy the materials/parts, so you control the brand and cost.</p></article>
+          <article><div class="num">2</div><h3>$75 estimate, then a labor quote</h3><p>The in-person estimate visit is a flat $75. HomeCare members get one free estimate in the first month, then $60 member estimates. After Gabriel sees the job, you get a labor-only price — you buy the materials/parts, so you control the brand and cost.</p></article>
           <article><div class="num">3</div><h3>Lock it in &amp; get it done</h3><p>50% deposit locks the job in. Remainder on completion. That’s it.</p></article>
         </div>
       </div>
@@ -230,7 +233,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       <div class="book-head">
         <h2>Request a<br>handyman</h2>
         <p>Fairfield • Vacaville • Vallejo &amp; nearby Solano</p>
-        <div class="price-tag"><span>Estimate visit</span><b>$75</b><span>flat charge</span></div>
+        <div class="price-tag"><span>Estimate visit</span><b>$75</b><span>flat • members save</span></div>
       </div>
       <div class="steps" aria-hidden="true"><span class="on">1 Service</span><span>2 Details</span><span>3 When</span><span>4 Confirm</span></div>
 
@@ -271,23 +274,31 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
         </div>
         <div class="date-wrap" id="dateWrap"><input type="date" class="field" id="jobDate"></div>
 
+        <div class="label">HomeCare membership <small>$49/mo</small></div>
+        <div class="pills" id="memberPills">
+          <button type="button" class="pill sel" data-member="none">Not a member — $75</button>
+          <button type="button" class="pill" data-member="new">New member — first estimate FREE</button>
+          <button type="button" class="pill" data-member="member">Member — $60 estimate</button>
+        </div>
+        <p class="fine" style="margin-top:8px">HomeCare is $49/month: one free estimate in your first month, $60 member estimates after that, 20% off labor on jobs under $1000, and priority scheduling. Membership must be active before the free/member estimate is booked.</p>
+
         <!-- $75 + LABOR-ONLY : must be seen before submit -->
         <div class="fee-box" role="note" aria-label="Estimate charge and labor-only policy">
           <div class="fee-top">
-            <div class="fee-amount">$75</div>
+            <div class="fee-amount" id="feeAmount">$75</div>
             <div>
-              <b>In-person estimate / service visit — $75 flat</b>
-              <p>That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.</p>
+              <b id="feeTitle">In-person estimate / service visit — $75 flat</b>
+              <p id="feeDesc">That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.</p>
             </div>
           </div>
           <ul class="fee-list">
-            <li><span><b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).</span></li>
+            <li><span id="feeDueLine"><b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).</span></li>
             <li><span><b>Labor-only — you buy materials &amp; parts.</b> Paint, tile, fixtures, mounts, parts, etc. are yours to purchase so you control cost and brand. Gabriel brings the labor and tools.</span></li>
             <li><span><b>50% deposit locks the work in</b> once you approve the labor quote. Balance on completion.</span></li>
           </ul>
           <button type="button" class="ack" id="ackBtn" aria-pressed="false">
             <span class="box" id="ackBox"></span>
-            <span><b>I understand: $75 flat estimate visit + labor-only (I buy materials/parts)</b><span>Tap to confirm before you send the request.</span></span>
+            <span><b id="ackText">I understand: $75 flat estimate visit + labor-only (I buy materials/parts)</b><span>Tap to confirm before you send the request.</span></span>
           </button>
         </div>
 
@@ -300,12 +311,12 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <div><span>Service</span><b id="sumService">Not selected yet</b></div>
           <div><span>Area</span><b id="sumCity">—</b></div>
           <div><span>When</span><b id="sumWhen">—</b></div>
-          <div class="total"><span>Estimate visit — due to book</span><b style="color:var(--red)">$75 flat</b></div>
+          <div class="total"><span>Estimate visit — due to book</span><b id="sumEstimate" style="color:var(--red)">$75 flat</b></div>
           <div><span>Materials / parts</span><b>You purchase</b></div>
         </div>
 
         <div class="error" id="formError"></div>
-        <button class="btn btn-red request-btn" type="submit">Request service — $75 estimate →</button>
+        <button class="btn btn-red request-btn" id="submitBtn" type="submit">Request service — $75 estimate →</button>
         <p class="fine">Submitting creates your request summary to send to Gabriel. Gabriel reviews every request personally and replies with the next step and labor quote. No payment is taken on this page.</p>
 
         <div class="success" id="successBox">
@@ -316,7 +327,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
             <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
             <a class="btn btn-ghost" style="font-size:14px" href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">DM @generalhandymans</a>
           </div>
-          <p style="margin-top:10px">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
+          <p style="margin-top:10px" id="successReminder">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
         </div>
       </form>
     </section>
@@ -354,14 +365,28 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     </div>
   </section>
 
+  <section class="section" id="membership">
+    <h2>HomeCare <em>membership</em></h2>
+    <p class="sub">For homeowners, landlords, and property managers who call more than once. Join before you book and your first estimate is free.</p>
+    <div class="jobs">
+      <div><b>$49/month</b><span>Cancel anytime. No hidden fees.</span></div>
+      <div><b>First estimate FREE</b><span>One free in-person estimate during your first month of membership.</span></div>
+      <div><b>$60 member estimates</b><span>After the first-month free estimate, member estimate visits are $60 instead of $75.</span></div>
+      <div><b>20% off labor under $1000</b><span>Member discount applies to labor on qualifying jobs under $1000.</span></div>
+      <div><b>Priority scheduling</b><span>Members jump ahead of non-member requests when the schedule fills up.</span></div>
+      <div><b>Labor-only stays simple</b><span>You buy materials/parts; Gabriel brings labor and tools.</span></div>
+    </div>
+    <p class="fine">Membership must be active before booking the free or member-priced estimate. One free estimate per new membership. Core service area only; outside-area travel can still apply.</p>
+  </section>
+
   <div class="cta-band">
-    <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Labor-only • 50% deposit to start work</p></div>
+    <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Members: first estimate free • Labor-only • 50% deposit to start work</p></div>
     <a class="btn" href="#book" style="background:var(--red);color:#fff;padding:15px 20px;font-size:15px">Start a request →</a>
   </div>
 
   <footer>
     <b style="color:var(--ink)">General Handyman Solutions</b> — Gabriel Mendoza • Fairfield, Vacaville, Vallejo &amp; Solano County<br>
-    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate/service visit is a flat $75.
+    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate is $75 flat; HomeCare members ($49/mo) get one free estimate in the first month, then $60 member estimates.
   </footer>
 </main>
 
@@ -372,9 +397,21 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
 <script>
 (function(){
-  var selectedService='', selectedCity='', selectedWhen='', ack=false;
+  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none';
+  var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
   var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
   function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; }
+  function updateMember(){
+    var m=estimateMap[memberStatus];
+    document.getElementById('feeAmount').textContent=m.amount;
+    document.getElementById('feeTitle').textContent=m.title;
+    document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.');
+    document.getElementById('feeDueLine').innerHTML = memberStatus==='new' ? '<b>FREE first estimate — new HomeCare members.</b> One free estimate in your first month. Final labor is quoted after Gabriel sees the job (or from clear photos).' : (memberStatus==='member' ? '<b>$60 member estimate — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).' : '<b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).');
+    document.getElementById('ackText').textContent='I understand: '+m.ack+' + labor-only (I buy materials/parts)';
+    document.getElementById('sumEstimate').textContent=m.due;
+    document.getElementById('submitBtn').textContent=m.btn;
+    var sr=document.getElementById('successReminder'); if(sr){ sr.innerHTML = memberStatus==='new' ? 'Reminder: new HomeCare members get <b>one free estimate in the first month</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : (memberStatus==='member' ? 'Reminder: HomeCare member estimate visits are <b>$60</b> after the first-month free estimate. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : 'Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.'); }
+  }
   function wire(id, attr, cb){
     var el=document.getElementById(id); if(!el) return;
     el.addEventListener('click', function(e){
@@ -385,6 +422,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   }
   wire('svcGrid','data-service', function(v){ selectedService=v; update(); });
   wire('cityChips','data-city', function(v){ selectedCity=v; update(); });
+  wire('memberPills','data-member', function(v){ memberStatus=v; updateMember(); });
   wire('whenPills','data-when', function(v, btn){
     selectedWhen=v;
     var dw=document.getElementById('dateWrap');
@@ -409,7 +447,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     if(!selectedCity && !address) problems.push('pick your city or add an address');
     if(!selectedWhen) problems.push('choose when you need it');
     if(!details) problems.push('describe the job in a sentence or two');
-    if(!ack) problems.push('confirm the $75 estimate + labor-only rule (tap the box in the red $75 section)');
+    if(!ack) problems.push('confirm the estimate + labor-only rule (tap the box in the estimate section)');
     if(!name) problems.push('add your name');
     if(!phone) problems.push('add your phone number');
     if(problems.length){ err.textContent='Almost there — please '+problems.join(', ')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'}); return; }
@@ -423,8 +461,9 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       'When: '+whenTxt,
       'Name: '+name,
       'Phone: '+phone,
+      'HomeCare status: '+(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate')),
       '—',
-      'Confirmed by customer: $75 flat in-person estimate/service visit. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
+      'Confirmed by customer: '+estimateMap[memberStatus].line+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
     ];
     reqText.textContent=lines.join('\n');
     success.classList.add('show');
@@ -436,7 +475,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(); }); } else fallback();
     function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); }
   });
-  update();
+  update(); updateMember();
 })();
 </script>
 </body>
