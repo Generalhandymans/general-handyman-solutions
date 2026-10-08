@@ -677,27 +677,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     document.getElementById('workerText').textContent=lines.join('\n');
     var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
     try{
-      var res;
-      if(estimateType==='photo' && selectedPhotoFiles.length){
-        var fd=new FormData();
-        fd.append('_subject','New GHS lead '+id+' — '+selectedService);
-        fd.append('_template','table');
-        fd.append('request_id',id);
-        fd.append('service',selectedService);
-        fd.append('job_details',details);
-        fd.append('where',whereTxt);
-        fd.append('when',whenTxt);
-        fd.append('customer_name',name);
-        fd.append('customer_phone',phone);
-        fd.append('homecare_status',memberTxt);
-        fd.append('estimate_type','FREE photo estimate');
-        fd.append('pictures_selected',selectedPhotoNames.join(', '));
-        fd.append('confirmed','FREE photo estimate. Labor-only — customer buys materials/parts. 50% deposit locks approved work.');
-        fd.append('request_text',lines.join('\n'));
-        selectedPhotoFiles.slice(0,6).forEach(function(f){ fd.append('attachment', f, f.name); });
-        res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {method:'POST', headers:{'Accept':'application/json'}, body: fd});
-      } else {
-      res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body: JSON.stringify({
