@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>General Handyman Solutions — On-Demand Handyman in Fairfield, Vacaville & Vallejo</title>
+<meta name="description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Pick a service, describe the job, choose timing. In-person estimate is a flat $75. Labor-only — you buy materials.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#ffffff; --bg2:#f6f5f3; --surface:#ffffff; --surface2:#faf9f7;
+  --ink:#0b0b0b; --muted:#6b6762; --faint:#9a968f;
+  --line:#e9e6e1; --line2:#ddd9d3;
+  --red:#e10600; --red-dark:#b80500; --red-soft:#fff1f0;
+  --black:#0b0b0b; --radius:18px; --radius-s:12px;
+  --shadow:0 18px 40px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
+  --font:'Barlow',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --display:'Barlow Condensed','Barlow',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0a0a0a; --bg2:#101010; --surface:#141414; --surface2:#1a1a1a;
+    --ink:#f7f4f0; --muted:#a8a29e; --faint:#78716c;
+    --line:#262626; --line2:#333; --red:#ff2b1f; --red-dark:#e10600; --red-soft:#2a0f0e;
+    --shadow:0 18px 40px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+img{display:block;max-width:100%}
+button,input,textarea,select{font:inherit}
+/* topbar */
+.topbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 92%, transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1180px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+.mark{width:38px;height:38px;background:var(--black);color:#fff;border-radius:9px;display:grid;place-items:center;font-family:var(--display);font-weight:800;letter-spacing:.04em;font-size:15px;line-height:1;border:2px solid var(--red)}
+@media(prefers-color-scheme:dark){.mark{background:#fff;color:#0b0b0b}}
+.brand b{font-family:var(--display);font-size:19px;letter-spacing:.03em;line-height:.95;text-transform:uppercase}
+.brand span{display:block;font-family:var(--font);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:1px}
+.top-actions{display:flex;align-items:center;gap:10px}
+.live{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18)}
+.btn{appearance:none;border:0;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;border-radius:999px;transition:.15s}
+.btn-red{background:var(--red);color:#fff;padding:11px 18px;font-size:14.5px}
+.btn-red:hover{background:var(--red-dark)}
+.btn-black{background:var(--ink);color:var(--bg);padding:12px 20px}
+.btn-ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line2);padding:11px 16px}
+.btn:active{transform:scale(.985)}
+/* hero layout */
+.shell{max-width:1180px;margin:0 auto;padding:0 18px}
+.hero{padding:28px 0 10px;display:grid;grid-template-columns:1.05fr .95fr;gap:28px;align-items:start}
+.kicker{display:inline-flex;align-items:center;gap:8px;background:var(--black);color:#fff;padding:7px 11px;border-radius:999px;font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
+@media(prefers-color-scheme:dark){.kicker{background:#fff;color:#0b0b0b}}
+.kicker i{width:7px;height:7px;border-radius:50%;background:var(--red);display:block}
+.hero h1{font-family:var(--display);font-size:clamp(44px,6vw,74px);line-height:.88;letter-spacing:-.01em;text-transform:uppercase;margin:16px 0 12px;font-weight:800}
+.hero h1 em{font-style:normal;color:var(--red)}
+.hero p.lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:52ch;margin:0}
+.hero-img{margin-top:22px;border-radius:18px;overflow:hidden;border:1px solid var(--line);position:relative;background:var(--bg2)}
+.hero-img img{width:100%;height:300px;object-fit:cover}
+.hero-img figcaption{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.82);color:#fff;padding:8px 11px;border-radius:999px;font-size:12.5px;font-weight:600;display:flex;gap:8px;align-items:center}
+.hero-img figcaption b{color:#ff4d42}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.quick span{border:1px solid var(--line2);background:var(--surface);padding:8px 11px;border-radius:999px;font-size:13px;font-weight:600}
+/* booking card */
+.book{position:sticky;top:76px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}
+.book-head{background:#0b0b0b;color:#fff;padding:18px 18px 14px;position:relative}
+@media(prefers-color-scheme:dark){.book-head{background:#fff;color:#0b0b0b}}
+.book-head h2{font-family:var(--display);font-size:28px;line-height:.95;text-transform:uppercase;margin:0;letter-spacing:.02em}
+.book-head p{margin:6px 0 0;font-size:13.5px;opacity:.75;line-height:1.4}
+.book-head .price-tag{position:absolute;right:16px;top:16px;text-align:right}
+.book-head .price-tag b{display:block;font-family:var(--display);font-size:30px;line-height:1;color:var(--red)}
+.book-head .price-tag span{font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;opacity:.7}
+.steps{display:flex;gap:6px;padding:12px 16px 0}
+.steps span{flex:1;text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--faint);padding:8px 4px;border-bottom:3px solid var(--line)}
+.steps span.on{color:var(--ink);border-color:var(--red)}
+.book-body{padding:16px}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;margin:18px 0 9px;display:flex;justify-content:space-between;align-items:center}
+.label:first-child{margin-top:2px}
+.label small{letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted);font-size:12.5px}
+.svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.svc{border:1px solid var(--line2);background:var(--surface2);border-radius:14px;padding:12px;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.svc:hover{border-color:var(--ink)}
+.svc.sel{border-color:var(--red);background:var(--red-soft);box-shadow:0 0 0 1px var(--red) inset}
+.svc svg{width:22px;height:22px;flex:none;color:var(--red);margin-top:1px}
+.svc b{font-size:14.5px;line-height:1.1;display:block}
+.svc span{font-size:12.5px;color:var(--muted);line-height:1.3;display:block;margin-top:2px}
+.field{width:100%;border:1px solid var(--line2);background:var(--surface);color:var(--ink);border-radius:12px;padding:12px 13px;font-size:15px}
+.field::placeholder{color:var(--faint)}
+textarea.field{min-height:86px;resize:vertical;line-height:1.45}
+.field:focus,.svc:focus-visible,.chip:focus-visible,.pill:focus-visible{outline:2px solid var(--red);outline-offset:1px}
+.chips,.pills{display:flex;flex-wrap:wrap;gap:7px}
+.chip,.pill{border:1px solid var(--line2);background:var(--surface);color:var(--ink);padding:9px 12px;border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer}
+.chip.sel,.pill.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+@media(prefers-color-scheme:dark){.chip.sel,.pill.sel{background:#fff;color:#0b0b0b;border-color:#fff}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.date-wrap{display:none;margin-top:9px}.date-wrap.show{display:block}
+/* $75 box */
+.fee-box{margin-top:18px;border:2px solid var(--red);border-radius:16px;overflow:hidden;background:var(--surface)}
+.fee-top{display:flex;gap:12px;padding:14px 14px 12px;background:var(--red-soft);border-bottom:1px solid color-mix(in srgb,var(--red) 22%, var(--line))}
+.fee-amount{font-family:var(--display);font-size:42px;line-height:.9;font-weight:800;color:var(--red);white-space:nowrap}
+.fee-top b{font-size:15.5px;line-height:1.2;display:block}
+.fee-top p{margin:4px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
+.fee-list{list-style:none;margin:0;padding:12px 14px;display:grid;gap:9px}
+.fee-list li{display:flex;gap:9px;font-size:13.5px;line-height:1.45}
+.fee-list li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--red);flex:none;margin-top:6px}
+.fee-list b{font-weight:700}
+.ack{width:100%;margin:0 14px 14px;width:calc(100% - 28px);border:1px solid var(--line2);background:var(--surface);border-radius:12px;padding:12px;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.ack .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line2);flex:none;display:grid;place-items:center;font-weight:800;color:#fff;margin-top:1px}
+.ack.sel{border-color:var(--red);background:var(--red-soft)}
+.ack.sel .box{background:var(--red);border-color:var(--red)}
+.ack b{font-size:13.5px;line-height:1.3;display:block}
+.ack span{font-size:12.5px;color:var(--muted);line-height:1.35;display:block;margin-top:1px}
+.summary{margin-top:14px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px 13px;font-size:13.5px;line-height:1.5}
+.summary div{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.summary div span:first-child{color:var(--muted)}
+.summary div b{text-align:right}
+.summary .total{border-top:1px dashed var(--line2);margin-top:7px;padding-top:9px;font-size:14.5px}
+.request-btn{width:100%;margin-top:12px;padding:16px;border-radius:14px;font-size:16px}
+.fine{font-size:12px;color:var(--muted);line-height:1.5;text-align:center;margin:10px 4px 2px}
+.error{display:none;background:#fff1f0;border:1px solid #f3b3ae;color:#8b0f08;padding:10px 12px;border-radius:12px;font-size:13.5px;margin-top:10px;line-height:1.4}
+@media(prefers-color-scheme:dark){.error{background:#2a0f0e;color:#ffb4ae;border-color:#5a1d19}}
+.error.show{display:block}
+.success{display:none;margin-top:14px;border:1px solid #bfe8c8;background:#f0fdf3;border-radius:16px;padding:16px}
+@media(prefers-color-scheme:dark){.success{background:#0f2415;border-color:#234d2e;color:#e7f7ea}}
+.success.show{display:block}
+.success h3{font-family:var(--display);text-transform:uppercase;font-size:22px;margin:0 0 6px;letter-spacing:.02em}
+.success p{font-size:13.5px;line-height:1.5;margin:0;color:inherit;opacity:.85}
+.success pre{white-space:pre-wrap;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12.5px;line-height:1.55;margin:12px 0;overflow:auto}
+.success .row{display:flex;flex-wrap:wrap;gap:8px}
+/* sections */
+.section{padding:42px 0 8px}
+.section h2{font-family:var(--display);font-size:clamp(30px,4vw,44px);line-height:.92;text-transform:uppercase;margin:0 0 8px;font-weight:800}
+.section h2 em{font-style:normal;color:var(--red)}
+.section .sub{color:var(--muted);font-size:16px;line-height:1.5;max-width:62ch;margin:0}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px}
+.card{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--surface)}
+.card img{width:100%;height:170px;object-fit:cover}
+.card div{padding:14px}
+.card h3{font-family:var(--display);font-size:20px;text-transform:uppercase;margin:0 0 5px;letter-spacing:.02em}
+.card p{font-size:13.5px;line-height:1.5;color:var(--muted);margin:0}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+.how article{border:1px solid var(--line);border-radius:18px;padding:18px;background:var(--surface)}
+.how .num{width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:800;margin-bottom:12px}
+.how h3{margin:0 0 6px;font-size:16px}
+.how p{margin:0;color:var(--muted);font-size:14px;line-height:1.55}
+.area{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.area span{padding:10px 13px;border-radius:999px;border:1px solid var(--line2);font-weight:600;font-size:14px;background:var(--surface)}
+.area span.primary{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+@media(prefers-color-scheme:dark){.area span.primary{background:#fff;color:#0b0b0b;border-color:#fff}}
+.jobs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.jobs div{border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:var(--surface);font-size:14px;line-height:1.45}
+.jobs b{display:block;font-size:14.5px}
+.jobs span{color:var(--muted);font-size:13px}
+.cta-band{margin:34px 0 90px;background:#0b0b0b;color:#fff;border-radius:20px;padding:26px;display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap}
+@media(prefers-color-scheme:dark){.cta-band{background:#fff;color:#0b0b0b}}
+.cta-band h2{font-family:var(--display);font-size:32px;text-transform:uppercase;line-height:.95;margin:0}
+.cta-band p{margin:6px 0 0;opacity:.75;font-size:14.5px}
+footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);font-size:13px;line-height:1.6}
+.sticky{position:fixed;left:12px;right:12px;bottom:12px;z-index:40;background:#0b0b0b;color:#fff;border-radius:16px;padding:10px;display:none;align-items:center;gap:10px;box-shadow:0 16px 34px rgba(0,0,0,.28)}
+@media(prefers-color-scheme:dark){.sticky{background:#fff;color:#0b0b0b}}
+.sticky div{flex:1;padding-left:6px}.sticky b{font-size:13.5px;display:block;line-height:1.1}.sticky span{font-size:12px;opacity:.75}
+.sticky a{background:var(--red);color:#fff;text-decoration:none;padding:12px 14px;border-radius:11px;font-weight:800;font-size:14px;white-space:nowrap}
+@media(max-width:900px){
+  .hero{grid-template-columns:1fr;padding-top:18px}
+  .book{position:relative;top:auto}
+  .cards{grid-template-columns:1fr 1fr}
+  .how{grid-template-columns:1fr}
+  .jobs{grid-template-columns:1fr}
+  .sticky{display:flex}
+  .top-actions .live{display:none}
+  .hero-img img{height:220px}
+}
+@media(max-width:520px){
+  .svc-grid,.grid2,.cards{grid-template-columns:1fr}
+  .book-head .price-tag{position:static;text-align:left;margin-top:10px}
+  .steps span{font-size:10px}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#top" aria-label="General Handyman Solutions home">
+      <span class="mark">GHS</span>
+      <span><b>General Handyman<br>Solutions</b><span>Fairfield • On-demand</span></span>
+    </a>
+    <div class="top-actions">
+      <span class="live"><span class="dot"></span> Taking requests — Fairfield area</span>
+      <a class="btn btn-red" href="#book">Request service</a>
+    </div>
+  </div>
+</header>
+
+<main id="top" class="shell">
+
+  <section class="hero">
+    <div>
+      <span class="kicker"><i></i> On-demand handyman • Like booking a ride, for repairs</span>
+      <h1>Need a hand?<br>Get it <em>handled.</em></h1>
+      <p class="lede">Pick a service, describe the job, choose when you need it. Gabriel reviews every request personally and replies with a clear labor quote — no guessing, no runaround.</p>
+
+      <figure class="hero-img">
+        <img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%271200%27%20height%3D%27800%27%20viewBox%3D%270%200%201200%20800%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23111%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%237a0d12%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%23e21b23%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%271200%27%20height%3D%27800%27%20fill%3D%27url%28%23g%29%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%27700%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2754%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3EFireplace%20wall%20install%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%27750%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2730%27%20fill%3D%27%23ffd7d7%27%3EGeneral%20Handyman%20Solutions%3C/text%3E%3C/svg%3E" alt="Handyman installing floating shelves with LED lighting on a tiled fireplace wall">
+        <figcaption><b>●</b> Fireplace walls • Shelves • Tile • Paint</figcaption>
+      </figure>
+
+      <div class="quick" aria-label="Popular requests">
+        <span>In-person estimate — $75 flat</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
+      </div>
+
+      <div class="section" style="padding-top:34px">
+        <h2>How it <em>works</em></h2>
+        <div class="how">
+          <article><div class="num">1</div><h3>Request in under a minute</h3><p>Choose the service, add photos/details if you can, pick ASAP, today, or a day that works.</p></article>
+          <article><div class="num">2</div><h3>$75 estimate, then a labor quote</h3><p>The in-person estimate visit is a flat $75. After Gabriel sees the job, you get a labor-only price — you buy the materials/parts, so you control the brand and cost.</p></article>
+          <article><div class="num">3</div><h3>Lock it in &amp; get it done</h3><p>50% deposit locks the job in. Remainder on completion. That’s it.</p></article>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOOKING CARD -->
+    <section class="book" id="book" aria-label="Request a handyman">
+      <div class="book-head">
+        <h2>Request a<br>handyman</h2>
+        <p>Fairfield • Vacaville • Vallejo &amp; nearby Solano</p>
+        <div class="price-tag"><span>Estimate visit</span><b>$75</b><span>flat charge</span></div>
+      </div>
+      <div class="steps" aria-hidden="true"><span class="on">1 Service</span><span>2 Details</span><span>3 When</span><span>4 Confirm</span></div>
+
+      <form class="book-body" id="reqForm" novalidate>
+        <div class="label">What do you need? <small>Tap one</small></div>
+        <div class="svc-grid" id="svcGrid">
+          <button type="button" class="svc" data-service="TV Mounting & Installs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/></svg><span><b>TV Mounting &amp; Installs</b><span>TVs, shelves, mounts, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Repairs & Fixes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4L14 13l-3-3 3.7-3.7Z"/></svg><span><b>Repairs &amp; Fixes</b><span>Doors, drywall, hardware, odd jobs</span></span></button>
+          <button type="button" class="svc" data-service="Painting & Walls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="13" height="8" rx="1"/><path d="M17 8h3v4h-7v3M10 15v6M7 21h6"/></svg><span><b>Painting &amp; Walls</b><span>Rooms, garages, panels, touch-ups</span></span></button>
+          <button type="button" class="svc" data-service="Carpentry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20L20 4M7 17l-2 2M14 7l3 3"/></svg><span><b>Carpentry</b><span>Trim, shelves, framing, wood repair</span></span></button>
+          <button type="button" class="svc" data-service="Plumbing Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3v6a3 3 0 0 0 6 0V3M9 3v18"/></svg><span><b>Plumbing Help</b><span>Clogs, leaks, hookups, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Electrical Swaps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8Z"/></svg><span><b>Electrical Swaps</b><span>Lights, sconces, outlets, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Mobile Mechanic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 16l1.5-5A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 1.5L19 16M5 16h14M5 16v4M19 16v4M7.5 13h.01M16.5 13h.01"/></svg><span><b>Mobile Mechanic</b><span>At your home — starters, brakes &amp; more</span></span></button>
+          <button type="button" class="svc" data-service="Assembly & Other"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span><b>Assembly &amp; Other</b><span>Furniture, appliances, not sure? Ask</span></span></button>
+        </div>
+
+        <label class="label" for="details">Describe the job <small>Photos help Gabriel quote faster</small></label>
+        <textarea class="field" id="details" placeholder="e.g. Mount a 65&quot; TV in living room, install 2 floating shelves, paint one wall…"></textarea>
+
+        <div class="label">Where is the job?</div>
+        <div class="chips" id="cityChips">
+          <button type="button" class="chip" data-city="Fairfield">Fairfield</button>
+          <button type="button" class="chip" data-city="Vacaville">Vacaville</button>
+          <button type="button" class="chip" data-city="Vallejo">Vallejo</button>
+          <button type="button" class="chip" data-city="Suisun City">Suisun City</button>
+          <button type="button" class="chip" data-city="Napa area">Napa area</button>
+          <button type="button" class="chip" data-city="Other nearby">Other nearby</button>
+        </div>
+        <input class="field" id="address" style="margin-top:9px" placeholder="Street address or cross streets (optional for quote)">
+
+        <div class="label">When do you need it?</div>
+        <div class="pills" id="whenPills">
+          <button type="button" class="pill" data-when="ASAP">ASAP</button>
+          <button type="button" class="pill" data-when="Today">Today</button>
+          <button type="button" class="pill" data-when="Tomorrow">Tomorrow</button>
+          <button type="button" class="pill" data-when="This week">This week</button>
+          <button type="button" class="pill" data-when="Pick a date">Pick a date</button>
+        </div>
+        <div class="date-wrap" id="dateWrap"><input type="date" class="field" id="jobDate"></div>
+
+        <!-- $75 + LABOR-ONLY : must be seen before submit -->
+        <div class="fee-box" role="note" aria-label="Estimate charge and labor-only policy">
+          <div class="fee-top">
+            <div class="fee-amount">$75</div>
+            <div>
+              <b>In-person estimate / service visit — $75 flat</b>
+              <p>That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.</p>
+            </div>
+          </div>
+          <ul class="fee-list">
+            <li><span><b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).</span></li>
+            <li><span><b>Labor-only — you buy materials &amp; parts.</b> Paint, tile, fixtures, mounts, parts, etc. are yours to purchase so you control cost and brand. Gabriel brings the labor and tools.</span></li>
+            <li><span><b>50% deposit locks the work in</b> once you approve the labor quote. Balance on completion.</span></li>
+          </ul>
+          <button type="button" class="ack" id="ackBtn" aria-pressed="false">
+            <span class="box" id="ackBox"></span>
+            <span><b>I understand: $75 flat estimate visit + labor-only (I buy materials/parts)</b><span>Tap to confirm before you send the request.</span></span>
+          </button>
+        </div>
+
+        <div class="grid2" style="margin-top:16px">
+          <div><label class="label" for="name" style="margin-top:0">Your name</label><input class="field" id="name" autocomplete="name" placeholder="First &amp; last name"></div>
+          <div><label class="label" for="phone" style="margin-top:0">Phone</label><input class="field" id="phone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
+        </div>
+
+        <div class="summary" id="summary" aria-live="polite">
+          <div><span>Service</span><b id="sumService">Not selected yet</b></div>
+          <div><span>Area</span><b id="sumCity">—</b></div>
+          <div><span>When</span><b id="sumWhen">—</b></div>
+          <div class="total"><span>Estimate visit — due to book</span><b style="color:var(--red)">$75 flat</b></div>
+          <div><span>Materials / parts</span><b>You purchase</b></div>
+        </div>
+
+        <div class="error" id="formError"></div>
+        <button class="btn btn-red request-btn" type="submit">Request service — $75 estimate →</button>
+        <p class="fine">Submitting creates your request summary to send to Gabriel. Gabriel reviews every request personally and replies with the next step and labor quote. No payment is taken on this page.</p>
+
+        <div class="success" id="successBox">
+          <h3>Request ready ✓</h3>
+          <p>Copy this and send it to Gabriel on Instagram DM <b>@generalhandymans</b> — or keep it for your call/text. Your request ID is below.</p>
+          <pre id="requestText"></pre>
+          <div class="row">
+            <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
+            <a class="btn btn-ghost" style="font-size:14px" href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">DM @generalhandymans</a>
+          </div>
+          <p style="margin-top:10px">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
+        </div>
+      </form>
+    </section>
+  </section>
+
+  <section class="section">
+    <h2>Services on <em>demand</em></h2>
+    <p class="sub">Tap a service above to start a request. Every job is quoted labor-only — you buy materials, Gabriel handles the work.</p>
+    <div class="cards">
+      <article class="card"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%271200%27%20height%3D%27800%27%20viewBox%3D%270%200%201200%20800%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23111%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%237a0d12%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%23e21b23%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%271200%27%20height%3D%27800%27%20fill%3D%27url%28%23g%29%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%27700%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2754%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3ETV%20mounting%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%27750%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2730%27%20fill%3D%27%23ffd7d7%27%3EGeneral%20Handyman%20Solutions%3C/text%3E%3C/svg%3E" alt="Handyman mounting a large TV on a living room wall with a level"><div><h3>Installs &amp; Mounting</h3><p>TVs, iPad/tablet mounts, floating shelves, fixtures, tub/shower doors, assembly.</p></div></article>
+      <article class="card"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%271200%27%20height%3D%27800%27%20viewBox%3D%270%200%201200%20800%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23111%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%237a0d12%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%23e21b23%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%271200%27%20height%3D%27800%27%20fill%3D%27url%28%23g%29%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%27700%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2754%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3ETile%20%2B%20shelves%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%27750%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2730%27%20fill%3D%27%23ffd7d7%27%3EGeneral%20Handyman%20Solutions%3C/text%3E%3C/svg%3E" alt="Fireplace wall with tile and floating shelves being installed"><div><h3>Walls &amp; Fireplaces</h3><p>Fireplace walls, tile, panels, trim removal, floating shelves with LED, paint.</p></div></article>
+      <article class="card"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%271200%27%20height%3D%27800%27%20viewBox%3D%270%200%201200%20800%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23111%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%237a0d12%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%23e21b23%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%271200%27%20height%3D%27800%27%20fill%3D%27url%28%23g%29%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%27700%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2754%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3EPaint%20%2B%20carpentry%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%27750%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2730%27%20fill%3D%27%23ffd7d7%27%3EGeneral%20Handyman%20Solutions%3C/text%3E%3C/svg%3E" alt="Worker painting an interior garage wall with wood panels nearby"><div><h3>Paint &amp; Carpentry</h3><p>Interior/garage paint, wall panels, sconce prep, wood repair and patching.</p></div></article>
+      <article class="card"><img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20width%3D%271200%27%20height%3D%27800%27%20viewBox%3D%270%200%201200%20800%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20offset%3D%270%27%20stop-color%3D%27%23111%27/%3E%3Cstop%20offset%3D%27.55%27%20stop-color%3D%27%237a0d12%27/%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%23e21b23%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%271200%27%20height%3D%27800%27%20fill%3D%27url%28%23g%29%27/%3E%3Ctext%20x%3D%2760%27%20y%3D%27700%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2754%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3EMobile%20mechanic%3C/text%3E%3Ctext%20x%3D%2760%27%20y%3D%27750%27%20font-family%3D%27Arial%2C%20sans-serif%27%20font-size%3D%2730%27%20fill%3D%27%23ffd7d7%27%3EGeneral%20Handyman%20Solutions%3C/text%3E%3C/svg%3E" alt="Mobile mechanic working on a car engine in a driveway"><div><h3>Mobile Mechanic</h3><p>I come to you: starters, fuel pumps, buttons/controls, diagnostics help and installs.</p></div></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Recent job <em>types</em></h2>
+    <p class="sub">Real kinds of work Gabriel takes around Solano County. Your job doesn’t have to match exactly — describe it in the request.</p>
+    <div class="jobs">
+      <div><b>Fireplace &amp; living-room walls</b><span>Tile, floating shelves + LED, panels, sconces, paint</span></div>
+      <div><b>Garage &amp; interior repaint</b><span>Walls + ceiling, single color, fixture swaps</span></div>
+      <div><b>Washer / dryer relocation</b><span>240V outlet, vent through wall, plumbing tie-in, patch</span></div>
+      <div><b>Mounts &amp; commercial installs</b><span>iPad wall mounts, door hardware, outlet/cover repairs</span></div>
+      <div><b>Tub / shower door installs</b><span>Measured installs — you supply the door kit</span></div>
+      <div><b>Mobile mechanic jobs</b><span>Starter replacement, fuel pump, steering controls &amp; more</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Service <em>area</em></h2>
+    <p class="sub">Hyperlocal and mobile — based around Fairfield. If you’re just outside this ring, add your city in the request and ask.</p>
+    <div class="area">
+      <span class="primary">Fairfield — home base</span><span>Vacaville</span><span>Vallejo</span><span>Suisun City</span><span>Napa</span><span>Solano County</span><span>El Sobrante / nearby on request</span>
+    </div>
+  </section>
+
+  <div class="cta-band">
+    <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Labor-only • 50% deposit to start work</p></div>
+    <a class="btn" href="#book" style="background:var(--red);color:#fff;padding:15px 20px;font-size:15px">Start a request →</a>
+  </div>
+
+  <footer>
+    <b style="color:var(--ink)">General Handyman Solutions</b> — Gabriel Mendoza • Fairfield, Vacaville, Vallejo &amp; Solano County<br>
+    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate/service visit is a flat $75.
+  </footer>
+</main>
+
+<div class="sticky" aria-hidden="false">
+  <div><b>$75 estimate visit</b><span>Labor-only • You buy materials</span></div>
+  <a href="#book">Request →</a>
+</div>
+
+<script>
+(function(){
+  var selectedService='', selectedCity='', selectedWhen='', ack=false;
+  var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
+  function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; }
+  function wire(id, attr, cb){
+    var el=document.getElementById(id); if(!el) return;
+    el.addEventListener('click', function(e){
+      var btn=e.target.closest('['+attr+']'); if(!btn) return;
+      el.querySelectorAll('['+attr+']').forEach(function(b){b.classList.remove('sel')});
+      btn.classList.add('sel'); cb(btn.getAttribute(attr), btn);
+    });
+  }
+  wire('svcGrid','data-service', function(v){ selectedService=v; update(); });
+  wire('cityChips','data-city', function(v){ selectedCity=v; update(); });
+  wire('whenPills','data-when', function(v, btn){
+    selectedWhen=v;
+    var dw=document.getElementById('dateWrap');
+    if(v==='Pick a date'){ dw.classList.add('show'); } else { dw.classList.remove('show'); }
+    update();
+  });
+  document.getElementById('jobDate').addEventListener('change', function(e){ if(e.target.value){ selectedWhen='On '+e.target.value; update(); }});
+  document.getElementById('address').addEventListener('input', function(e){ /* city stays from chips unless typed */ });
+  var ackBtn=document.getElementById('ackBtn'), ackBox=document.getElementById('ackBox');
+  ackBtn.addEventListener('click', function(){
+    ack=!ack; ackBtn.classList.toggle('sel', ack); ackBtn.setAttribute('aria-pressed', ack?'true':'false'); ackBox.textContent=ack?'✓':'';
+  });
+  var form=document.getElementById('reqForm'), err=document.getElementById('formError'), success=document.getElementById('successBox'), reqText=document.getElementById('requestText');
+  form.addEventListener('submit', function(e){
+    e.preventDefault(); err.classList.remove('show'); err.textContent='';
+    var details=document.getElementById('details').value.trim();
+    var address=document.getElementById('address').value.trim();
+    var name=document.getElementById('name').value.trim();
+    var phone=document.getElementById('phone').value.trim();
+    var problems=[];
+    if(!selectedService) problems.push('pick a service');
+    if(!selectedCity && !address) problems.push('pick your city or add an address');
+    if(!selectedWhen) problems.push('choose when you need it');
+    if(!details) problems.push('describe the job in a sentence or two');
+    if(!ack) problems.push('confirm the $75 estimate + labor-only rule (tap the box in the red $75 section)');
+    if(!name) problems.push('add your name');
+    if(!phone) problems.push('add your phone number');
+    if(problems.length){ err.textContent='Almost there — please '+problems.join(', ')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    var id='GHS-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    var whenTxt=selectedWhen;
+    var lines=[
+      'NEW REQUEST — General Handyman Solutions ('+id+')',
+      'Service: '+selectedService,
+      'Job: '+details,
+      'Where: '+((selectedCity||'')+(address? (selectedCity?' — ':'')+address:'')),
+      'When: '+whenTxt,
+      'Name: '+name,
+      'Phone: '+phone,
+      '—',
+      'Confirmed by customer: $75 flat in-person estimate/service visit. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
+    ];
+    reqText.textContent=lines.join('\n');
+    success.classList.add('show');
+    success.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    var txt=reqText.textContent; var btn=this;
+    function done(){ btn.textContent='Copied ✓'; setTimeout(function(){btn.textContent='Copy request'},1800); }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(); }); } else fallback();
+    function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); }
+  });
+  update();
+})();
+</script>
+</body>
+</html>
