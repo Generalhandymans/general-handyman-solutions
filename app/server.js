@@ -145,7 +145,7 @@ const server = http.createServer(async (req, res) => {
         r.quote = b.quote; r.status = 'Quoted'; r.quoteNote = b.note || '';
         r.messages = r.messages || [];
         let quoteText = 'Quote: $' + b.quote + ' labor (you buy materials/parts).';
-        if (r.estimateType === 'inperson' && r.estimateDue > 0) { const fc = Math.max(b.quote - r.estimateDue, 0); quoteText += ' Your $' + r.estimateDue + ' estimate credit (same-day approval): -$' + r.estimateDue + ' \u2192 Final cost: $' + fc + '.'; }
+        if (r.estimateType === 'inperson' && r.estimateDue > 0) { const fc = Math.max(b.quote - r.estimateDue, 0); quoteText += ' Your $' + r.estimateDue + ' appointment credit (same-day approval): -$' + r.estimateDue + ' \u2192 Final cost: $' + fc + '.'; }
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: quoteText + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
       }
       if (b.status) r.status = b.status;
