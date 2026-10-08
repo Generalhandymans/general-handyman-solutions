@@ -7,6 +7,8 @@
 <link rel="icon" href="data:,">
 <title>General Handyman Solutions — On-Demand Handyman in Fairfield, Vacaville & Vallejo</title>
 <meta name="description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Pick a service, describe the job, choose timing. In-person estimate is a flat $75; HomeCare members get one free estimate in the first month. Labor-only — you buy materials.">
+<link rel="canonical" href="https://generalhandymans.app/">
+<meta property="og:url" content="https://generalhandymans.app/">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -194,8 +196,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     </a>
     <div class="top-actions">
       <span class="live"><span class="dot"></span> Taking requests — Fairfield area</span>
-      <a class="btn btn-ghost" href="https://general-handyman-solutions-app.onrender.com/" target="_blank" rel="noopener">Customer login</a>
-      <a class="btn btn-ghost" href="https://general-handyman-solutions-app.onrender.com/" target="_blank" rel="noopener">Worker login</a>
+      <a class="btn btn-ghost" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Customer login</a>
+      <a class="btn btn-ghost" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Worker login</a>
       <a class="btn btn-red" href="#book">Request service</a>
     </div>
   </div>
@@ -414,7 +416,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       <div style="background:#0b0b0b;color:#fff;padding:16px">
         <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0">Worker application</h3>
         <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Takes about a minute. Your account is created automatically — pick a password. Jobs unlock after the Team reviews and activates you.</p>
-        <a class="btn btn-red" style="margin-top:10px;font-size:14px" href="https://general-handyman-solutions-app.onrender.com/" target="_blank" rel="noopener">Create worker account (with password) →</a>
+        <a class="btn btn-red" style="margin-top:10px;font-size:14px" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Create worker account (with password) →</a>
       </div>
       <div style="padding:16px">
         <div class="label" style="margin-top:0">Applying as</div>
@@ -498,7 +500,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     <div style="border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:16px;margin-top:16px">
       <div class="label" style="margin-top:0">Your jobs wait inside your account</div>
       <p class="fine" style="text-align:left;margin:6px 0 12px">That is the whole system: account → one review → pick your jobs. Active workers see open jobs with the pay offer, and customer details unlock for the worker who picks the job.</p>
-      <a class="btn btn-red" style="padding:12px 18px;font-size:14.5px" href="https://general-handyman-solutions-app.onrender.com/" target="_blank" rel="noopener">Worker login → see open jobs</a>
+      <a class="btn btn-red" style="padding:12px 18px;font-size:14.5px" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Worker login → see open jobs</a>
     </div>
   </section>
 
@@ -650,10 +652,10 @@ window.__ghsWired=true;
     var accountCreated=false, appRequestId='';
     if(estimateType!=='photo'){
       try{
-        var su=await fetch('https://general-handyman-solutions-app.onrender.com/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
+        var su=await fetch('https://app.generalhandymans.app/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
         var sud=await su.json().catch(function(){return {}});
         if(!su.ok) throw new Error(sud.error==='email already registered' ? 'That email already has an account — use Customer login at the top, then send this request from inside your account.' : (sud.error||'account creation failed'));
-        var ar=await fetch('https://general-handyman-solutions-app.onrender.com/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sud.token||'')}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:'inperson'})});
+        var ar=await fetch('https://app.generalhandymans.app/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sud.token||'')}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:'inperson'})});
         var ard=await ar.json().catch(function(){return {}});
         if(!ar.ok) throw new Error(ard.error||'request could not be saved to your account');
         accountCreated=true; appRequestId=ard.request && ard.request.id ? ard.request.id : '';
