@@ -338,6 +338,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <div class="row">
             <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
             <a class="btn btn-ghost" style="font-size:14px" href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">DM @generalhandymans</a>
+            <a class="btn btn-ghost" id="whatsBtn" style="font-size:14px;display:none" href="#" target="_blank" rel="noopener">WhatsApp the pictures</a>
             <a class="btn btn-ghost" style="font-size:14px" href="https://docs.google.com/forms/d/e/1FAIpQLSepjlGsA8gBBdnEpEbWGuzAmTNvFcYVaxzcyKU0UbX4PF06hA/viewform" target="_blank" rel="noopener">Customer database form</a>
           </div>
           <p style="margin-top:10px" id="successReminder">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
@@ -427,7 +428,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
 <script>
 (function(){
-  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[];
+  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[], selectedPhotoFiles=[];
   var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
   var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
   function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; }
@@ -467,9 +468,9 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   wire('estimatePills','data-estimate', function(v){ estimateType=v; document.getElementById('photoWrap').style.display = v==='photo' ? 'block' : 'none'; updateEstimate(); });
   var photoInput=document.getElementById('photos');
   if(photoInput){ photoInput.addEventListener('change', function(e){
-    selectedPhotoNames=Array.from(e.target.files||[]).map(function(f){return f.name});
+    selectedPhotoFiles=Array.from(e.target.files||[]); selectedPhotoNames=selectedPhotoFiles.map(function(f){return f.name});
     var list=document.getElementById('photoList'); list.innerHTML='';
-    Array.from(e.target.files||[]).slice(0,6).forEach(function(f){
+    selectedPhotoFiles.slice(0,6).forEach(function(f){
       var img=document.createElement('img'); img.src=URL.createObjectURL(f); img.alt=f.name; img.style.width='74px'; img.style.height='74px'; img.style.objectFit='cover'; img.style.borderRadius='10px'; img.style.border='1px solid var(--line)'; list.appendChild(img);
     });
     if(selectedPhotoNames.length){ var note=document.createElement('span'); note.className='fine'; note.style.textAlign='left'; note.textContent=selectedPhotoNames.length+' picture(s) selected — DM these to @generalhandymans after sending.'; list.appendChild(note); }
@@ -525,7 +526,27 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     var whereTxt=((selectedCity||'')+(address? (selectedCity?' — ':'')+address:''));
     var memberTxt=(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate'));
     try{
-      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+      var res;
+      if(estimateType==='photo' && selectedPhotoFiles.length){
+        var fd=new FormData();
+        fd.append('_subject','New GHS lead '+id+' — '+selectedService);
+        fd.append('_template','table');
+        fd.append('request_id',id);
+        fd.append('service',selectedService);
+        fd.append('job_details',details);
+        fd.append('where',whereTxt);
+        fd.append('when',whenTxt);
+        fd.append('customer_name',name);
+        fd.append('customer_phone',phone);
+        fd.append('homecare_status',memberTxt);
+        fd.append('estimate_type','FREE photo estimate');
+        fd.append('pictures_selected',selectedPhotoNames.join(', '));
+        fd.append('confirmed','FREE photo estimate. Labor-only — customer buys materials/parts. 50% deposit locks approved work.');
+        fd.append('request_text',lines.join('\n'));
+        selectedPhotoFiles.slice(0,6).forEach(function(f){ fd.append('attachment', f, f.name); });
+        res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {method:'POST', headers:{'Accept':'application/json'}, body: fd});
+      } else {
+      res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body: JSON.stringify({
@@ -546,15 +567,18 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           request_text:lines.join('\n')
         })
       });
+      }
       if(!res.ok) throw new Error('lead send failed');
       document.getElementById('successTitle').textContent='Request sent ✓';
-      document.getElementById('successMsg').innerHTML = estimateType==='photo' ? 'Gabriel got your request by email. Now DM your job pictures to <b>@generalhandymans</b> for the free photo estimate.' : 'Gabriel got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
+      document.getElementById('successMsg').innerHTML = estimateType==='photo' ? 'Gabriel got your request. If your pictures were selected above, they were sent with the lead; you can also DM or WhatsApp them to Gabriel for the free photo estimate.' : 'Gabriel got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
     }catch(sendErr){
       document.getElementById('successTitle').textContent='Request ready — one more tap';
       document.getElementById('successMsg').innerHTML='The automatic send did not go through. Copy the summary below and DM it to <b>@generalhandymans</b> so Gabriel still gets your lead.';
     }finally{
       submitBtn.disabled=false; submitBtn.textContent=originalBtn;
     }
+    var whatsBtn=document.getElementById('whatsBtn');
+    if(whatsBtn){ if(estimateType==='photo'){ whatsBtn.style.display='inline-flex'; whatsBtn.href='https://wa.me/17078623773?text='+encodeURIComponent(lines.join('\n')+'\n\nI will send the job pictures here for the free photo estimate.'); } else { whatsBtn.style.display='none'; } }
     success.classList.add('show');
     success.scrollIntoView({behavior:'smooth', block:'center'});
   });
@@ -630,7 +654,27 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     document.getElementById('workerText').textContent=lines.join('\n');
     var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
     try{
-      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+      var res;
+      if(estimateType==='photo' && selectedPhotoFiles.length){
+        var fd=new FormData();
+        fd.append('_subject','New GHS lead '+id+' — '+selectedService);
+        fd.append('_template','table');
+        fd.append('request_id',id);
+        fd.append('service',selectedService);
+        fd.append('job_details',details);
+        fd.append('where',whereTxt);
+        fd.append('when',whenTxt);
+        fd.append('customer_name',name);
+        fd.append('customer_phone',phone);
+        fd.append('homecare_status',memberTxt);
+        fd.append('estimate_type','FREE photo estimate');
+        fd.append('pictures_selected',selectedPhotoNames.join(', '));
+        fd.append('confirmed','FREE photo estimate. Labor-only — customer buys materials/parts. 50% deposit locks approved work.');
+        fd.append('request_text',lines.join('\n'));
+        selectedPhotoFiles.slice(0,6).forEach(function(f){ fd.append('attachment', f, f.name); });
+        res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {method:'POST', headers:{'Accept':'application/json'}, body: fd});
+      } else {
+      res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body: JSON.stringify({
