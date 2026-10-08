@@ -31,3 +31,5 @@ Then log in as admin.
 - v1 stores data in a JSON file (`data.json`, or `DATA_FILE`). On free hosting the file can reset on redeploy — fine for launch/testing; move to a hosted database for production.
 - Passwords are hashed (scrypt). Sessions are httpOnly cookies.
 - The marketing page stays on GitHub Pages; this app is the login system behind it. Point "Customer login / Worker login" buttons on the page to this app's URL when it is live.
+
+- Storage: Supabase (permanent) when SUPABASE_URL/SUPABASE_SERVICE_KEY are set; local JSON file otherwise.
