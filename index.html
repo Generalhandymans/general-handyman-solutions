@@ -255,13 +255,13 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
         <div class="label">Estimate type</div>
         <div class="pills" id="estimatePills">
-          <button type="button" class="pill" data-estimate="photo">Free photo estimate</button>
-          <button type="button" class="pill sel" data-estimate="inperson">In-person estimate</button>
+          <button type="button" class="pill" data-estimate="photo">Free photo estimate — pictures required</button>
+          <button type="button" class="pill sel" data-estimate="inperson">In-person estimate — pictures requested</button>
         </div>
-        <div id="photoWrap" style="display:none;margin-top:10px">
-          <label class="label" for="photos" style="margin-top:0">Add job pictures <small>Free first look</small></label>
+        <div id="photoWrap" style="margin-top:10px">
+          <label class="label" for="photos" style="margin-top:0">Add job pictures <small id="photoHint">Please add pictures if you have them</small></label>
           <input class="field" type="file" id="photos" accept="image/*" multiple>
-          <p class="fine" style="text-align:left;margin-left:0">Pick the pictures here so Gabriel knows what’s coming. After you send the request, DM the same pictures to @generalhandymans for the free photo estimate.</p>
+          <p class="fine" style="text-align:left;margin-left:0">Add pictures for every estimate if you can. Free photo estimates require pictures; in-person estimates are faster with pictures too. You can also DM or WhatsApp the same pictures to Gabriel after sending.</p>
           <div id="photoList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
         </div>
 
@@ -274,7 +274,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
           <button type="button" class="chip" data-city="Napa area">Napa area</button>
           <button type="button" class="chip" data-city="Other nearby">Other nearby</button>
         </div>
-        <input class="field" id="address" style="margin-top:9px" placeholder="Street address or cross streets (optional for quote)">
+        <input class="field" id="address" style="margin-top:9px" placeholder="Home address (required)">
 
         <div class="label">When do you need it?</div>
         <div class="pills" id="whenPills">
@@ -436,7 +436,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     var m=estimateMap[memberStatus];
     document.getElementById('feeAmount').textContent=m.amount;
     document.getElementById('feeTitle').textContent=m.title;
-    document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.');
+    document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking. Please add job pictures if you have them.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate. Please add job pictures if you have them.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. Please add job pictures if you have them. No surprises after you submit.');
     document.getElementById('feeDueLine').innerHTML = memberStatus==='new' ? '<b>FREE first estimate — new HomeCare members.</b> One free estimate in your first month. Final labor is quoted after Gabriel sees the job (or from clear photos).' : (memberStatus==='member' ? '<b>$60 member estimate — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).' : '<b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after Gabriel sees the job (or from clear photos).');
     document.getElementById('ackText').textContent='I understand: '+m.ack+' + labor-only (I buy materials/parts)';
     document.getElementById('sumEstimate').textContent=m.due;
@@ -465,7 +465,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
   wire('svcGrid','data-service', function(v){ selectedService=v; update(); });
   wire('cityChips','data-city', function(v){ selectedCity=v; update(); });
   wire('memberPills','data-member', function(v){ memberStatus=v; updateMember(); });
-  wire('estimatePills','data-estimate', function(v){ estimateType=v; document.getElementById('photoWrap').style.display = v==='photo' ? 'block' : 'none'; updateEstimate(); });
+  wire('estimatePills','data-estimate', function(v){ estimateType=v; var hint=document.getElementById('photoHint'); if(hint){ hint.textContent = v==='photo' ? 'Required for the free photo estimate' : 'Please add pictures if you have them'; } updateEstimate(); });
   var photoInput=document.getElementById('photos');
   if(photoInput){ photoInput.addEventListener('change', function(e){
     selectedPhotoFiles=Array.from(e.target.files||[]); selectedPhotoNames=selectedPhotoFiles.map(function(f){return f.name});
@@ -496,7 +496,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     var phone=document.getElementById('phone').value.trim();
     var problems=[];
     if(!selectedService) problems.push('pick a service');
-    if(!selectedCity && !address) problems.push('pick your city or add an address');
+    if(!address) problems.push('add the home address');
+    if(estimateType==='photo' && !selectedPhotoFiles.length) problems.push('add at least one job picture for the free photo estimate');
     if(!selectedWhen) problems.push('choose when you need it');
     if(!details) problems.push('describe the job in a sentence or two');
     if(!ack) problems.push('confirm the estimate + labor-only rule (tap the box in the estimate section)');
