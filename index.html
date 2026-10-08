@@ -379,6 +379,69 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     <p class="fine">Membership must be active before booking the free or member-priced estimate. One free estimate per new membership. Core service area only; outside-area travel can still apply.</p>
   </section>
 
+
+  <section class="section" id="workers">
+    <h2>Worker <em>signup</em></h2>
+    <p class="sub">Want work with General Handyman Solutions? Apply here. Gabriel reviews every worker personally — approved, put on review, or not a fit yet. You are not hired until Gabriel confirms you directly.</p>
+    <form class="book-body" id="workerForm" style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px" novalidate>
+      <div class="label">I am applying as</div>
+      <div class="pills" id="workerRolePills">
+        <button type="button" class="pill sel" data-wrole="Skilled subcontractor">Skilled subcontractor</button>
+        <button type="button" class="pill" data-wrole="Helper">Helper</button>
+      </div>
+
+      <div class="grid2" style="margin-top:16px">
+        <div><label class="label" for="wName" style="margin-top:0">Full name</label><input class="field" id="wName" autocomplete="name" placeholder="First & last name"></div>
+        <div><label class="label" for="wPhone" style="margin-top:0">Phone</label><input class="field" id="wPhone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="label" for="wCity" style="margin-top:0">City you live in</label><input class="field" id="wCity" placeholder="Fairfield, Vacaville, Vallejo…"></div>
+        <div><label class="label" for="wArea" style="margin-top:0">Areas you can work</label><input class="field" id="wArea" placeholder="Fairfield / Vacaville / Vallejo / Napa…"></div>
+      </div>
+
+      <div class="label">Skills <small>Tap all that apply</small></div>
+      <div class="pills" id="workerSkills">
+        <button type="button" class="pill" data-wskill="General handyman">General handyman</button>
+        <button type="button" class="pill" data-wskill="Carpentry">Carpentry</button>
+        <button type="button" class="pill" data-wskill="Paint & drywall">Paint & drywall</button>
+        <button type="button" class="pill" data-wskill="Electrical swaps">Electrical swaps</button>
+        <button type="button" class="pill" data-wskill="Plumbing help">Plumbing help</button>
+        <button type="button" class="pill" data-wskill="Mobile mechanic">Mobile mechanic</button>
+        <button type="button" class="pill" data-wskill="Installs & assembly">Installs & assembly</button>
+        <button type="button" class="pill" data-wskill="Landscaping / yard">Landscaping / yard</button>
+      </div>
+
+      <div class="grid2" style="margin-top:16px">
+        <div><label class="label" for="wExp" style="margin-top:0">Experience</label><select class="field" id="wExp"><option value="">Pick one</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>5+ years</option></select></div>
+        <div><label class="label" for="wTools" style="margin-top:0">Tools</label><select class="field" id="wTools"><option value="">Pick one</option><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
+      </div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div><label class="label" for="wTransport" style="margin-top:0">Transportation</label><select class="field" id="wTransport"><option value="">Pick one</option><option>Own truck/car</option><option>E-bike / rideshare</option><option>Need a ride</option></select></div>
+        <div><label class="label" for="wAvail" style="margin-top:0">Availability</label><input class="field" id="wAvail" placeholder="Weekdays, weekends, ASAP calls…"></div>
+      </div>
+
+      <label class="label" for="wMsg">Anything Gabriel should know?</label>
+      <textarea class="field" id="wMsg" placeholder="Licenses, insurance, past work, limits, languages, pay expectations…"></textarea>
+
+      <button type="button" class="ack" id="wAckBtn" aria-pressed="false" style="margin:16px 0 0;width:100%">
+        <span class="box" id="wAckBox"></span>
+        <span><b>I understand Gabriel reviews workers before any job is offered</b><span>Approved / on review / not a fit is Gabriel’s call. No job is promised by applying.</span></span>
+      </button>
+
+      <div class="error" id="workerError"></div>
+      <button class="btn btn-red request-btn" id="workerSubmitBtn" type="submit">Apply as a worker →</button>
+      <p class="fine">Applications go straight to Gabriel for review. If you’re a fit, he’ll reach out directly.</p>
+
+      <div class="success" id="workerSuccess">
+        <h3 id="workerSuccessTitle">Application sent ✓</h3>
+        <p id="workerSuccessMsg">Gabriel got your worker application and will review it.</p>
+        <pre id="workerText"></pre>
+      </div>
+    </form>
+  </section>
+
   <div class="cta-band">
     <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Members: first estimate free • Labor-only • 50% deposit to start work</p></div>
     <a class="btn" href="#book" style="background:var(--red);color:#fff;padding:15px 20px;font-size:15px">Start a request →</a>
@@ -386,7 +449,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
 
   <footer>
     <b style="color:var(--ink)">General Handyman Solutions</b> — Gabriel Mendoza • Fairfield, Vacaville, Vallejo &amp; Solano County<br>
-    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate is $75 flat; HomeCare members ($49/mo) get one free estimate in the first month, then $60 member estimates.
+    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • <a href="#workers">Worker signup</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate is $75 flat; HomeCare members ($49/mo) get one free estimate in the first month, then $60 member estimates.
   </footer>
 </main>
 
@@ -509,6 +572,90 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(); }); } else fallback();
     function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); }
   });
+
+  // Worker signup
+  var workerRole='Skilled subcontractor', workerSkills=new Set(), workerAck=false;
+  wire('workerRolePills','data-wrole', function(v){ workerRole=v; });
+  var ws=document.getElementById('workerSkills');
+  if(ws){ ws.addEventListener('click', function(e){ var btn=e.target.closest('[data-wskill]'); if(!btn) return; var v=btn.getAttribute('data-wskill'); if(workerSkills.has(v)){ workerSkills.delete(v); btn.classList.remove('sel'); } else { workerSkills.add(v); btn.classList.add('sel'); } }); }
+  var wAckBtn=document.getElementById('wAckBtn'), wAckBox=document.getElementById('wAckBox');
+  if(wAckBtn){ wAckBtn.addEventListener('click', function(){ workerAck=!workerAck; wAckBtn.classList.toggle('sel', workerAck); wAckBtn.setAttribute('aria-pressed', workerAck?'true':'false'); wAckBox.textContent=workerAck?'✓':''; }); }
+  var workerForm=document.getElementById('workerForm');
+  if(workerForm){ workerForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    var werr=document.getElementById('workerError'); werr.classList.remove('show'); werr.textContent='';
+    var wName=document.getElementById('wName').value.trim();
+    var wPhone=document.getElementById('wPhone').value.trim();
+    var wCity=document.getElementById('wCity').value.trim();
+    var wArea=document.getElementById('wArea').value.trim();
+    var wExp=document.getElementById('wExp').value;
+    var wTools=document.getElementById('wTools').value;
+    var wTransport=document.getElementById('wTransport').value;
+    var wAvail=document.getElementById('wAvail').value.trim();
+    var wMsg=document.getElementById('wMsg').value.trim();
+    var problems=[];
+    if(!wName) problems.push('add your full name');
+    if(!wPhone) problems.push('add your phone number');
+    if(!wCity) problems.push('add the city you live in');
+    if(!workerSkills.size) problems.push('tap at least one skill');
+    if(!wExp) problems.push('pick your experience');
+    if(!wTools) problems.push('pick your tools');
+    if(!wTransport) problems.push('pick your transportation');
+    if(!workerAck) problems.push('confirm Gabriel reviews workers first');
+    if(problems.length){ werr.textContent='Almost there — please '+problems.join(', ')+'.'; werr.classList.add('show'); werr.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    var wid='WORKER-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    var skillsTxt=Array.from(workerSkills).join(', ');
+    var lines=[
+      'NEW WORKER APPLICATION — General Handyman Solutions ('+wid+')',
+      'Applying as: '+workerRole,
+      'Name: '+wName,
+      'Phone: '+wPhone,
+      'Lives in: '+wCity,
+      'Can work: '+(wArea||'—'),
+      'Skills: '+skillsTxt,
+      'Experience: '+wExp,
+      'Tools: '+wTools,
+      'Transportation: '+wTransport,
+      'Availability: '+(wAvail||'—'),
+      'Notes: '+(wMsg||'—'),
+      '—',
+      'Review status: Needs Gabriel review (approve / on review / not a fit).'
+    ];
+    document.getElementById('workerText').textContent=lines.join('\n');
+    var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
+    try{
+      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({
+          _subject:'New worker application '+wid+' — '+workerRole,
+          _template:'table',
+          application_id:wid,
+          applying_as:workerRole,
+          worker_name:wName,
+          worker_phone:wPhone,
+          lives_in:wCity,
+          can_work:wArea,
+          skills:skillsTxt,
+          experience:wExp,
+          tools:wTools,
+          transportation:wTransport,
+          availability:wAvail,
+          notes:wMsg,
+          review_status:'Needs Gabriel review — approve / on review / not a fit',
+          application_text:lines.join('\n')
+        })
+      });
+      if(!res.ok) throw new Error('worker send failed');
+      document.getElementById('workerSuccessTitle').textContent='Application sent ✓';
+      document.getElementById('workerSuccessMsg').textContent='Gabriel got your worker application and will review it.';
+    }catch(wsendErr){
+      document.getElementById('workerSuccessTitle').textContent='Application ready — one more tap';
+      document.getElementById('workerSuccessMsg').innerHTML='The automatic send did not go through. Copy the application below and DM it to <b>@generalhandymans</b>.';
+    }finally{ wbtn.disabled=false; wbtn.textContent=worig; }
+    var wsuccess=document.getElementById('workerSuccess'); wsuccess.classList.add('show'); wsuccess.scrollIntoView({behavior:'smooth', block:'center'});
+  }); }
+
   update(); updateMember();
 })();
 </script>
