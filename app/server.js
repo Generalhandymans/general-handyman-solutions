@@ -77,7 +77,7 @@ const server = http.createServer(async (req, res) => {
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   }
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const user = auth(req);
@@ -156,6 +156,13 @@ const server = http.createServer(async (req, res) => {
     } else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { request: r });
   }
+  if (reqMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const idx = db.requests.findIndex(x => x.id === reqMatch[1]);
+    if (idx === -1) return send(res, 404, { error: 'request not found' });
+    const removed = db.requests.splice(idx, 1)[0];
+    save(); return send(res, 200, { ok: true, deleted: removed.id });
+  }
 
   const msgMatch = p.match(/^\/api\/requests\/([\w-]+)\/messages$/);
   if (msgMatch && req.method === 'POST') {
@@ -185,6 +192,16 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     if (['active', 'review', 'notfit'].includes(b.status)) w.status = b.status;
     save(); return send(res, 200, { worker: pubUser(w) });
+  }
+  if (workerMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const idx = db.users.findIndex(u => u.id === workerMatch[1] && u.role === 'worker');
+    if (idx === -1) return send(res, 404, { error: 'worker not found' });
+    const removed = db.users.splice(idx, 1)[0];
+    // Free any jobs this worker had claimed so they go back to the open board.
+    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; } });
+    for (const [token, uid] of sessions) { if (uid === removed.id) sessions.delete(token); }
+    save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
 
   // ---------- jobs / marketplace ----------
