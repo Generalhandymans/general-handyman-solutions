@@ -169,7 +169,8 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
-    const list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
+    let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
+    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '' }); });
     return send(res, 200, { requests: list });
   }
   const reqMatch = p.match(/^\/api\/requests\/([\w-]+)$/);
@@ -200,6 +201,25 @@ const server = http.createServer(async (req, res) => {
     if (idx === -1) return send(res, 404, { error: 'request not found' });
     const removed = db.requests.splice(idx, 1)[0];
     save(); return send(res, 200, { ok: true, deleted: removed.id });
+  }
+
+  const createJobMatch = p.match(/^\/api\/requests\/([\w-]+)\/create-job$/);
+  if (createJobMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const r = db.requests.find(x => x.id === createJobMatch[1]);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    const b = await readBody(req);
+    const cust = db.users.find(u => u.id === r.customerId);
+    const payOffer = Number(b.payOffer);
+    if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
+    const j = { id: id('JOB'), status: 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
+    db.jobs.push(j);
+    r.status = 'Job posted'; r.jobId = j.id;
+    r.messages = r.messages || [];
+    r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
+    notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.');
+    notifyWorkersForJob(j);
+    save(); return send(res, 201, { job: publicJob(j, user), request: r });
   }
 
   const msgMatch = p.match(/^\/api\/requests\/([\w-]+)\/messages$/);
