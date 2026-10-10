@@ -38,6 +38,19 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .msg{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:14px;line-height:1.4}
 .photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.thumb{width:92px;height:92px;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
 .reply{display:flex;gap:8px;margin-top:10px}.reply input{flex:1;margin:0}.reply button{white-space:nowrap}
+.estimate{border:2px solid var(--ink);border-radius:14px;overflow:hidden;margin:12px 0;background:#fff;text-align:left}
+.estimate-head{background:#0b0b0b;color:#fff;padding:12px 14px;border-bottom:4px solid var(--red)}
+.estimate-head b{font-size:17px;text-transform:uppercase}.estimate-head span{color:var(--red)}
+.estimate-meta{font-size:12px;opacity:.85;margin-top:3px;line-height:1.45}
+.estimate-body{padding:12px 14px}.estimate table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.estimate th{background:#111;color:#fff;text-align:left;padding:7px}.estimate td{padding:7px;border-bottom:1px solid var(--line)}
+.estimate .num{text-align:right}.estimate-total{background:#111!important;color:#fff;font-weight:900}.estimate-total td{border-bottom:0}
+.est-row{display:grid;grid-template-columns:minmax(150px,2fr) 72px 105px 38px;gap:6px;align-items:end;margin:6px 0}
+.est-row input{margin:0}.est-row button{padding:9px 10px}.est-x{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.est-grid{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px}.est-grid label{text-transform:none;letter-spacing:0;font-size:13px}.est-grid input{margin-top:3px}
+.est-summary{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;font-size:14px;line-height:1.5}
+.est-actions{display:flex;gap:8px;flex-wrap:wrap}.est-actions button{flex:1;min-width:190px}
+@media(max-width:620px){.est-row{grid-template-columns:minmax(120px,1fr) 58px 86px 34px}.est-grid{grid-template-columns:1fr}.estimate th,.estimate td{padding:6px 4px}}
 </style>
 </head>
 <body>
@@ -272,6 +285,54 @@ async function sendRequest(){
   }catch(e){ msg.textContent=e.message; }
 }
 function escHtml(v){ return (''+(v==null?'':v)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+function moneyFmt(v){ const n=Number(v)||0; return '$'+n.toFixed(2); }
+function estimateHtml(r, isCustomer){
+  const e=r && r.estimate;
+  if(!e || !Array.isArray(e.items) || !e.items.length) return '';
+  const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
+  let adj='';
+  if(e.asapAmount) adj+='<tr><td colspan="3">ASAP / Emergency (+25%)</td><td class="num">'+moneyFmt(e.asapAmount)+'</td></tr>';
+  if(e.discountAmount) adj+='<tr><td colspan="3">Discount ('+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
+  if(e.credit) adj+='<tr><td colspan="3">Appointment credit (approved same day)</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
+  return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • app.generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">Labor only — customer buys materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
+}
+function estimateBuilderHtml(r){
+  const e=r.estimate || null;
+  const items=(e && e.items && e.items.length) ? e.items : [{description:(r.service||'Labor')+' — labor only', qty:1, unitPrice:''}];
+  const credit=e && e.credit!=null ? e.credit : (r.estimateType==='inperson' ? (r.estimateDue||0) : 0);
+  const booking=e && e.bookingDue!=null ? e.bookingDue : '';
+  return '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px"><h3 style="margin-top:0">Professional estimate builder</h3><p class="mut" style="margin-top:0">Customer email: <b>'+escHtml(r.customerEmail||'not on file')+'</b> • Customer total never goes to workers.</p><div id="estRows-'+r.id+'">'+items.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\')">+ Add line</button><div class="est-grid" style="margin-top:10px"><label><input type="checkbox" id="estAsap-'+r.id+'" '+(e&&e.asap?'checked':'')+' onchange="updateEstimateSummary(\''+r.id+'\')"> ASAP / Emergency (+25%)</label><label>Discount %<input type="number" min="0" max="90" step="0.5" id="estDiscount-'+r.id+'" value="'+(e?e.discountPct||0:0)+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Appointment credit $<input type="number" min="0" step="0.01" id="estCredit-'+r.id+'" value="'+credit+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Due to book $ <span class="mut">(editable)</span><input type="number" min="0" step="0.01" id="estBooking-'+r.id+'" value="'+booking+'" placeholder="Auto" oninput="updateEstimateSummary(\''+r.id+'\')"></label></div><label style="margin-top:8px">Note on estimate</label><input id="qn-'+r.id+'" placeholder="Scheduling, deposit, scope notes..." value="'+escHtml(r.quoteNote||'')+'"><div class="est-summary" id="estSummary-'+r.id+'">Add the lines to see the total.</div><div class="est-actions"><button type="button" onclick="sendEstimate(\''+r.id+'\',false)">Save estimate in app</button><button type="button" class="black" onclick="sendEstimate(\''+r.id+'\',true)">Send estimate + Gmail email</button></div><p class="mut">“Send estimate + Gmail email” saves it in the app and asks Google to email it from generalhandymans@gmail.com. You confirm the total before anything is sent.</p></div>';
+}
+function estimateItemRowHtml(reqId,it){
+  it=it||{description:'',qty:1,unitPrice:''};
+  return '<div class="est-row" data-est-row="'+reqId+'"><input data-est-desc placeholder="Labor / service line" value="'+escHtml(it.description||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><input data-est-qty type="number" min="0" step="0.25" value="'+escHtml(it.qty||1)+'" oninput="updateEstimateSummary(\''+reqId+'\')"><input data-est-price type="number" min="0" step="0.01" placeholder="$" value="'+escHtml(it.unitPrice||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><button type="button" class="est-x" onclick="removeEstimateItem(this,\''+reqId+'\')" title="Remove line">×</button></div>';
+}
+function addEstimateItem(idv){ const box=document.getElementById('estRows-'+idv); if(box) box.insertAdjacentHTML('beforeend', estimateItemRowHtml(idv)); updateEstimateSummary(idv); }
+function removeEstimateItem(btn,idv){ const row=btn.closest('.est-row'); if(row) row.remove(); if(!document.querySelectorAll('#estRows-'+idv+' .est-row').length) addEstimateItem(idv); updateEstimateSummary(idv); }
+function readEstimate(idv){
+  const items=[...document.querySelectorAll('#estRows-'+idv+' .est-row')].map(function(row){ return { description:row.querySelector('[data-est-desc]').value.trim(), qty:Number(row.querySelector('[data-est-qty]').value)||0, unitPrice:Number(row.querySelector('[data-est-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
+  const asap=document.getElementById('estAsap-'+idv).checked;
+  const discountPct=Number(document.getElementById('estDiscount-'+idv).value)||0;
+  const credit=Number(document.getElementById('estCredit-'+idv).value)||0;
+  const bookingRaw=document.getElementById('estBooking-'+idv).value;
+  const subtotal=items.reduce((s,it)=>s+it.qty*it.unitPrice,0);
+  const asapAmount=asap?subtotal*0.25:0;
+  const discountAmount=subtotal*Math.max(0,Math.min(90,discountPct))/100;
+  const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
+  const bookingDue=bookingRaw===''? (credit>0?Math.min(75,total):Math.round(total/2*100)/100) : Math.min(Number(bookingRaw)||0,total);
+  return { items, asap, discountPct, credit, bookingDue, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total, balanceDue:Math.round((total-bookingDue)*100)/100 };
+}
+function updateEstimateSummary(idv){ const el=document.getElementById('estSummary-'+idv); if(!el) return; const e=readEstimate(idv); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(e.subtotal)+(e.asapAmount?' • <b>ASAP:</b> '+moneyFmt(e.asapAmount):'')+(e.discountAmount?' • <b>Discount:</b> −'+moneyFmt(e.discountAmount):'')+(e.credit?' • <b>Credit:</b> −'+moneyFmt(e.credit):'')+'<br><b>Total for customer:</b> <span class="st">'+moneyFmt(e.total)+'</span> • Due to book: '+moneyFmt(e.bookingDue)+' • Balance: '+moneyFmt(e.balanceDue); }
+async function sendEstimate(idv, sendEmail){
+  const est=readEstimate(idv); const note=document.getElementById('qn-'+idv).value;
+  if(!est.items.length || est.total<=0){ alert('Add at least one priced line first.'); return; }
+  const action=sendEmail?'Save this estimate and email it from generalhandymans@gmail.com?':'Save this estimate in the app only?';
+  if(!confirm(action+'\n\nCustomer total: '+moneyFmt(est.total)+'\nDue to book: '+moneyFmt(est.bookingDue)+'\nBalance: '+moneyFmt(est.balanceDue))) return;
+  try{ const d=await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({estimate:est, note, sendEmail:!!sendEmail})});
+    if(sendEmail && d.automation && !d.automation.sent) alert('Estimate saved in the app. Gmail automation is not connected yet, so no email was sent. Reason: '+(d.automation.reason||'not configured'));
+    loadAdmin();
+  }catch(e){ alert(e.message); }
+}
 function threadHtml(r){
   const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||'Customer'); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
   const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="Job photo">'; }).join('');
@@ -286,7 +347,11 @@ async function sendMsg(idv){
 }
 async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+threadHtml(r)+'</div>').join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('myRequests').innerHTML = d.requests.map(function(r){
+    const est=estimateHtml(r,true);
+    const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
+    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+threadHtml(r)+'</div>';
+  }).join('') || '<p class="mut">No requests yet.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 function jobChatHtml(j){
@@ -313,7 +378,8 @@ async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
 async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+((r.customerName||'Customer'))+' • '+r.description+' • '+r.city+' • '+r.address+' • '+r.when+'</span>'+threadHtml(r)+'<br><span class="mut">Quote $</span> <input id="q-'+r.id+'" type="number" style="width:120px" value="'+(r.quote||'')+'"> <input id="qn-'+r.id+'" placeholder="Note with quote (scheduling, deposit...)" style="width:260px"> <button onclick="sendQuote(\''+r.id+'\')">Send quote to customer</button> <button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote</button>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>').join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
+  rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
@@ -327,7 +393,7 @@ async function loadAdmin(){
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
 }
-async function sendQuote(idv){ const v=document.getElementById('q-'+idv).value; const note=document.getElementById('qn-'+idv).value; await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({quote:Number(v), note})}); loadAdmin(); }
+async function sendQuote(idv){ return sendEstimate(idv,false); }
 async function postFromRequest(idv, custPrice){
   const pay=document.getElementById('jp-'+idv).value;
   const extra=document.getElementById('jn-'+idv).value;
