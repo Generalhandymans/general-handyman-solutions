@@ -77,11 +77,8 @@ function workerAreas(w) {
   return list.map(s => String(s).toLowerCase().trim()).filter(Boolean);
 }
 function notifyWorkersForJob(j) {
-  const city = (j.city || '').toLowerCase();
-  db.users.filter(u => u.role === 'worker' && u.status === 'active').forEach(w => {
-    const areas = workerAreas(w);
-    const match = !city || areas.some(a => a === 'any' || a.includes(city) || city.includes(a) || (a.includes('solano') && ['fairfield', 'vacaville', 'vallejo', 'suisun city', 'napa', 'dixon', 'benicia'].includes(city)));
-    if (match) notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.');
+  matchedWorkersForJob(j).forEach(w => {
+    notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.');
   });
 }
 function publicJob(j, viewer) {
@@ -90,6 +87,89 @@ function publicJob(j, viewer) {
   if (viewer && viewer.role === 'admin') return Object.assign({}, j);
   if (assigned) return Object.assign(base, { customerName: j.customerName, customerPhone: j.customerPhone, address: j.address, notes: j.notes || '', messages: j.messages || [] });
   return base; // workers who have not claimed see NO customer details
+}
+
+// ---------- Gmail/Google automation ----------
+// The app does not hold Gabriel's Gmail password. It sends structured events to
+// a Google Apps Script web app that runs under his Google account. That script
+// sends from generalhandymans@gmail.com, logs estimates in Sheets and files PDFs
+// in Drive. GOOGLE_AUTOMATION_SECRET must match the script property.
+const GOOGLE_AUTOMATION_URL = process.env.GOOGLE_AUTOMATION_WEBHOOK_URL || '';
+const GOOGLE_AUTOMATION_SECRET = process.env.GOOGLE_AUTOMATION_SECRET || '';
+const BUSINESS_EMAIL = process.env.BUSINESS_EMAIL || 'generalhandymans@gmail.com';
+const APP_URL = process.env.APP_URL || 'https://app.generalhandymans.app/';
+function money(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0; }
+function clampMoney(v) { return Math.max(0, money(v)); }
+function cleanText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 500); }
+function normalizeEstimate(input, request) {
+  const raw = input && typeof input === 'object' ? input : {};
+  const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
+    const qty = Math.max(0, Math.min(999, Number(it && it.qty) || 0));
+    const unitPrice = clampMoney(it && it.unitPrice);
+    const description = cleanText(it && (it.description || it.desc || it.name), 180);
+    return { description, qty, unitPrice, lineTotal: money(qty * unitPrice) };
+  }).filter(it => it.description && it.qty > 0);
+  if (!items.length && typeof raw.total === 'number') {
+    const total = clampMoney(raw.total);
+    items.push({ description: 'Labor', qty: 1, unitPrice: total, lineTotal: total });
+  }
+  const subtotal = money(items.reduce((sum, it) => sum + it.lineTotal, 0));
+  const asap = !!raw.asap;
+  const asapRate = asap ? 0.25 : 0;
+  const asapAmount = money(subtotal * asapRate);
+  const discountPct = Math.max(0, Math.min(90, Number(raw.discountPct) || 0));
+  const discountAmount = money(subtotal * discountPct / 100);
+  const defaultCredit = request && request.estimateType === 'inperson' ? (Number(request.estimateDue) || 0) : 0;
+  const credit = Math.min(clampMoney(raw.credit == null ? defaultCredit : raw.credit), money(subtotal + asapAmount - discountAmount));
+  const total = Math.max(0, money(subtotal + asapAmount - discountAmount - credit));
+  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? (credit > 0 ? Math.min(75, total) : money(total / 2)) : clampMoney(raw.bookingDue);
+  bookingDue = Math.min(bookingDue, total);
+  return { items, subtotal, asap, asapRate, asapAmount, discountPct, discountAmount, credit, total, bookingDue, balanceDue: money(total - bookingDue), currency: 'USD', updatedAt: new Date().toISOString() };
+}
+function automationReady() { return !!(GOOGLE_AUTOMATION_URL && GOOGLE_AUTOMATION_SECRET); }
+async function googleAutomation(type, payload) {
+  if (!automationReady()) return { attempted: false, sent: false, reason: 'Google Gmail automation is not connected yet' };
+  try {
+    const r = await fetch(GOOGLE_AUTOMATION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: GOOGLE_AUTOMATION_SECRET, type, payload: payload || {}, sentAt: new Date().toISOString() }),
+      signal: AbortSignal.timeout(15000)
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || data.ok === false) return { attempted: true, sent: false, reason: data.error || ('Google automation returned ' + r.status) };
+    return { attempted: true, sent: true, result: data };
+  } catch (e) {
+    console.error('google automation failed', type, e.message);
+    return { attempted: true, sent: false, reason: e.message };
+  }
+}
+function fireGoogleAutomation(type, payload) { googleAutomation(type, payload).catch(() => {}); }
+function adminEmails() { return db.users.filter(u => u.role === 'admin' && u.email).map(u => u.email); }
+function matchedWorkersForJob(j) {
+  const city = (j.city || '').toLowerCase();
+  return db.users.filter(u => u.role === 'worker' && u.status === 'active').filter(w => {
+    const areas = workerAreas(w);
+    return !city || areas.some(a => a === 'any' || a.includes(city) || city.includes(a) || (a.includes('solano') && ['fairfield', 'vacaville', 'vallejo', 'suisun city', 'napa', 'dixon', 'benicia'].includes(city)));
+  });
+}
+function requestAutomationPayload(r) {
+  const cust = db.users.find(u => u.id === r.customerId);
+  return {
+    appUrl: APP_URL,
+    businessEmail: BUSINESS_EMAIL,
+    request: { id: r.id, customerName: r.customerName || (cust ? cust.name : ''), customerEmail: cust ? cust.email : '', customerPhone: cust ? (cust.phone || '') : '', service: r.service || '', description: r.description || '', city: r.city || '', address: r.address || '', when: r.when || '', estimateType: r.estimateType || '', membership: r.membership || '', status: r.status || '', quote: r.quote, quoteNote: r.quoteNote || '', estimate: r.estimate || null, createdAt: r.createdAt || '' },
+    adminEmails: adminEmails()
+  };
+}
+function jobWorkerAutomationPayload(j) {
+  return {
+    appUrl: APP_URL,
+    businessEmail: BUSINESS_EMAIL,
+    job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0, createdAt: j.createdAt || '' },
+    workers: matchedWorkersForJob(j).map(w => ({ name: w.name, email: w.email })),
+    adminEmails: adminEmails()
+  };
 }
 
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
@@ -147,7 +227,7 @@ const server = http.createServer(async (req, res) => {
     const role = b.role === 'worker' ? 'worker' : 'customer';
     const prof = (b.profile && typeof b.profile === 'object') ? b.profile : {};
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
-    db.users.push(u); if (role === 'worker') notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
+    db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireGoogleAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
@@ -164,8 +244,8 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
     const b = await readBody(req);
     const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
-    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: b.membership || 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.membership === 'new' ? 0 : (b.membership === 'member' ? 60 : 75)), status: 'New', quote: null, quoteNote: '', photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
-    db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); return send(res, 201, { request: r });
+    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: b.membership || 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.membership === 'new' ? 0 : (b.membership === 'member' ? 60 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); fireGoogleAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
@@ -178,22 +258,34 @@ const server = http.createServer(async (req, res) => {
     const r = db.requests.find(x => x.id === reqMatch[1]);
     if (!r) return send(res, 404, { error: 'request not found' });
     const b = await readBody(req);
+    let automation = { attempted: false, sent: false };
     if (user && user.role === 'admin') {
-      if (typeof b.quote === 'number') {
-        r.quote = b.quote; r.status = 'Quoted'; r.quoteNote = b.note || '';
+      if (b.estimate || typeof b.quote === 'number') {
+        const est = normalizeEstimate(b.estimate || { total: b.quote, credit: 0, bookingDue: null }, r);
+        r.estimate = est; r.quote = est.total; r.status = 'Quoted'; r.quoteNote = b.note || '';
         r.messages = r.messages || [];
-        let quoteText = 'Quote: $' + b.quote + ' labor (you buy materials/parts).';
-        if (r.estimateType === 'inperson' && r.estimateDue > 0) { const fc = Math.max(b.quote - r.estimateDue, 0); quoteText += ' Your $' + r.estimateDue + ' appointment credit — goes credited towards your repair when approved the same day: -$' + r.estimateDue + ' \u2192 Final cost: $' + fc + '.'; }
+        const totalText = '$' + est.total.toFixed(2);
+        let quoteText = 'Professional estimate sent: ' + totalText + ' total after the adjustments shown in your estimate (labor only — you buy materials/parts).';
+        if (est.credit > 0) quoteText += ' Appointment credit applied: -$' + est.credit.toFixed(2) + '.';
+        if (est.bookingDue > 0) quoteText += ' Due to book: $' + est.bookingDue.toFixed(2) + '; balance at completion: $' + est.balanceDue.toFixed(2) + '.';
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: quoteText + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
-        notify(r.customerId, 'quote', 'You received a quote for request ' + r.id + ': $' + b.quote + ' labor. Open your request to approve or message us.');
+        notify(r.customerId, 'quote', 'You received a professional estimate for request ' + r.id + ': ' + totalText + '. Open your request to review it and approve.');
+        if (b.sendEmail) {
+          save();
+          automation = await googleAutomation('estimate_sent', requestAutomationPayload(r));
+          if (automation.sent) {
+            r.estimateEmailSentAt = new Date().toISOString();
+            r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We also emailed this estimate to you from ' + BUSINESS_EMAIL + '.', at: new Date().toISOString() });
+          }
+        }
       }
       if (b.status) r.status = b.status;
     } else if (user && user.role === 'customer' && r.customerId === user.id) {
       r.messages = r.messages || [];
-      if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); }
-      if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); }
+      if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); fireGoogleAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' })); }
+      if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); fireGoogleAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' })); }
     } else return send(res, 403, { error: 'not allowed' });
-    save(); return send(res, 200, { request: r });
+    save(); return send(res, 200, { request: r, automation });
   }
   if (reqMatch && req.method === 'DELETE') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -219,6 +311,7 @@ const server = http.createServer(async (req, res) => {
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
     notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.');
     notifyWorkersForJob(j);
+    fireGoogleAutomation('job_posted', jobWorkerAutomationPayload(j));
     save(); return send(res, 201, { job: publicJob(j, user), request: r });
   }
 
@@ -250,7 +343,7 @@ const server = http.createServer(async (req, res) => {
     const w = db.users.find(u => u.id === workerMatch[1] && u.role === 'worker');
     if (!w) return send(res, 404, { error: 'worker not found' });
     const b = await readBody(req);
-    if (['active', 'review', 'notfit'].includes(b.status)) { const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); }
+    if (['active', 'review', 'notfit'].includes(b.status)) { const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); fireGoogleAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); } }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -269,7 +362,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
     const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
-    db.jobs.push(j); notifyWorkersForJob(j); save(); return send(res, 201, { job: publicJob(j, user) });
+    db.jobs.push(j); notifyWorkersForJob(j); fireGoogleAutomation('job_posted', jobWorkerAutomationPayload(j)); save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
@@ -292,6 +385,7 @@ const server = http.createServer(async (req, res) => {
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
     if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.');
+    fireGoogleAutomation('job_claimed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), customer: cust ? { name: cust.name, email: cust.email } : null, worker: { name: user.name, email: user.email }, job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', when: j.when || '', payOffer: j.payOffer || 0 } });
     save(); return send(res, 200, { job: publicJob(j, user) });
   }
   const jobMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
