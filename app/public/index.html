@@ -43,8 +43,12 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 <body>
 <header>
   <b>General <em>Handyman</em> Solutions</b>
-  <span id="who" class="mut" style="color:#ccc"></span>
+  <span style="display:flex;align-items:center;gap:10px">
+    <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e10600;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
+    <span id="who" class="mut" style="color:#ccc"></span>
+  </span>
 </header>
+<div id="notifPanel" class="card" style="display:none;max-width:880px;margin:10px auto"></div>
 
 <div class="wrap">
   <!-- AUTH -->
@@ -206,8 +210,14 @@ async function doAuth(){
 }
 async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
+let notifs=[]; let lastUnread=-1;
+async function loadNotifs(){ if(!me) return; try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
+function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(n=>'<div style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+'"><div>'+n.text+'</div><div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>').join(''):'<p class="mut">No notifications yet.</p>'); }
+async function toggleNotifs(){ const p=document.getElementById('notifPanel'); const open=p.style.display==='block'; p.style.display=open?'none':'block'; if(!open){ renderNotifs(); try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); setTimeout(loadNotifs,600); }catch(e){} } }
+setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
+  document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   document.getElementById('authBox').style.display = me ? 'none':'block';
   document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
@@ -315,6 +325,7 @@ loadMe();
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 }
+if (window.Notification && Notification.permission === 'default') { Notification.requestPermission().catch(() => {}); }
 </script>
 </body>
 </html>
