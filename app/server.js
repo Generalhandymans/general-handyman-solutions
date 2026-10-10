@@ -37,6 +37,7 @@ async function loadFromSupabase() {
     const rows = await r.json();
     if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
     if (!Array.isArray(db.notifications)) db.notifications = [];
+    if (!db.settings || typeof db.settings !== 'object') db.settings = {};
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
 }
@@ -45,7 +46,7 @@ const sessions = new Map(); // token -> userId
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, createdAt: u.createdAt }; }
+function pubUser(u) { return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -149,7 +150,7 @@ function estimateEmailHtml(rq) {
   (e.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
   let adj = '';
   if (e.asapAmount > 0) adj += '<p>ASAP / Emergency (+25%): <b>' + usd(e.asapAmount) + '</b></p>';
-  if (e.discountAmount > 0) adj += '<p>Discount (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
+  if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
   if (e.credit > 0) adj += '<p>Appointment credit: <b>-' + usd(e.credit) + '</b></p>';
   const inner = '<p>Hi ' + escMail(rq.customerName || 'there') + ', here is your estimate for <b>' + escMail(rq.service || 'your job') + '</b>' + (rq.city ? ' in <b>' + escMail(rq.city) + '</b>' : '') + '.</p>'
     + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Work</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
@@ -166,7 +167,7 @@ function estimateEmailText(rq) {
   (e.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
   lines.push('', 'Subtotal: ' + usd(e.subtotal));
   if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
-  if (e.discountAmount > 0) lines.push('Discount (' + e.discountPct + '%): -' + usd(e.discountAmount));
+  if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
   if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
   lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue), '', 'Approve in the app: ' + APP_URL, 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
   return lines.join('\n');
@@ -180,7 +181,7 @@ function buildEstimatePdf(rq) {
   (e.items || []).forEach(it => { lines.push(it.description + '  x' + it.qty + '  @ ' + usd(it.unitPrice) + '  = ' + usd(it.lineTotal)); });
   lines.push('', 'Subtotal: ' + usd(e.subtotal));
   if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
-  if (e.discountAmount > 0) lines.push('Discount (' + e.discountPct + '%): -' + usd(e.discountAmount));
+  if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
   if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
   lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + '    Balance at completion: ' + usd(e.balanceDue), '', 'Labor only - you buy materials/parts unless agreed otherwise.', 'Approve in the app: ' + APP_URL);
   let content = 'BT /F1 13 Tf 50 750 Td ';
@@ -216,6 +217,9 @@ async function resendAutomation(type, payload) {
   if (type === 'job_posted') { const j = p.job || {}; const ws = (p.workers || []).filter(w => w.email); if (!ws.length) return { attempted: true, sent: false, reason: 'no matching worker emails' }; let sentCount = 0; for (const w of ws) { const r = await sendMail({ to: [w.email], subject: 'New job posted: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('New job in your area', ['Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app to claim it - first active worker to claim gets it.'], WORKER_FOOTER), text: 'New job pays ' + usd(j.payOffer) }); if (r.sent) sentCount++; } return { attempted: true, sent: sentCount > 0, via: 'resend', emailed: sentCount }; }
   if (type === 'job_claimed') { const j = p.job || {}; const to = owner.slice(); if (p.customer && p.customer.email) to.push(p.customer.email); return sendMail({ to: to, subject: 'Job claimed: ' + (j.service || '') + (j.city ? ' - ' + j.city : ''), html: eventEmail('A worker claimed the job', ['Job: ' + (j.service || '') + ' in ' + (j.city || ''), 'Worker: ' + ((p.worker || {}).name || ''), 'Status: ' + (j.status || 'Claimed'), 'Open the app for the job chat with the Team and your worker.']), text: 'Job claimed.' }); }
   if (type === 'quote_decision') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'Customer ' + (p.decision || 'answered') + ' the quote on ' + rq.id, html: eventEmail('Quote ' + (p.decision || ''), ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Service: ' + (rq.service || '') + ' ' + (rq.city || ''), 'Quote: ' + usd(rq.quote || (rq.estimate && rq.estimate.total) || 0)], OWNER_FOOTER), text: 'Quote ' + (p.decision || '') }); }
+  if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
+  if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($49/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $60 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($49/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
+  if (type === 'homecare_cancelled') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'HomeCare membership cancelled', html: eventEmail('HomeCare cancelled', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership has been cancelled.', 'You can rejoin anytime from your dashboard — we would love to have you back.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Your HomeCare membership has been cancelled. Rejoin anytime from your dashboard.' }); }
   return { attempted: false, sent: false, reason: 'no email template for ' + type };
 }
 async function sendAutomation(type, payload) {
@@ -224,6 +228,150 @@ async function sendAutomation(type, payload) {
   return { attempted: false, sent: false, reason: 'email automation is not connected yet' };
 }
 function fireAutomation(type, payload) { sendAutomation(type, payload).catch(() => {}); }
+
+// ---------- Stripe payments (added 2026-10-10) ----------
+// Env: STRIPE_SECRET_KEY (required for payments), STRIPE_WEBHOOK_SECRET (verifies
+// /api/stripe/webhook signatures), STRIPE_PRICE_HOMECARE (optional; when absent and
+// the secret key is set, a $49/mo HomeCare price is auto-created once via the API
+// and its id is saved in db.settings so it is reused instead of duplicated).
+// Estimate payments use dynamic price_data (exact "due to book" amount), so no
+// per-amount price ids are needed. Everything degrades gracefully when keys are
+// absent: /api/stripe/config reports configured:false and checkout endpoints
+// return 400 "payments not connected" instead of crashing.
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+const STRIPE_API = 'https://api.stripe.com/v1';
+const HOMECARE_MONTHLY_CENTS = 4900;
+function stripeReady() { return !!STRIPE_SECRET_KEY; }
+async function stripeApi(path, params) {
+  const body = new URLSearchParams();
+  Object.keys(params || {}).forEach(k => { if (params[k] !== undefined && params[k] !== null) body.append(k, String(params[k])); });
+  const r = await fetch(STRIPE_API + path, { method: 'POST', headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(), signal: AbortSignal.timeout(20000) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('stripe: ' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)));
+  return data;
+}
+async function homeCarePriceId() {
+  if (process.env.STRIPE_PRICE_HOMECARE) return process.env.STRIPE_PRICE_HOMECARE;
+  db.settings = db.settings || {};
+  if (db.settings.stripeHomeCarePrice) return db.settings.stripeHomeCarePrice;
+  console.log('stripe: creating HomeCare $49/mo product + price (set STRIPE_PRICE_HOMECARE to skip this)');
+  const product = await stripeApi('/products', { name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $60 member estimates after, 20% off labor under $1,000, priority scheduling.' });
+  const price = await stripeApi('/prices', { product: product.id, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
+  db.settings.stripeHomeCarePrice = price.id;
+  console.log('stripe: HomeCare price created: ' + price.id + ' — save it as STRIPE_PRICE_HOMECARE in Render env');
+  save();
+  return price.id;
+}
+function appBase() { return APP_URL.replace(/\/$/, ''); }
+async function createCheckoutSession(kind, user, opts) {
+  opts = opts || {};
+  const params = {
+    success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
+    cancel_url: appBase() + '/payment/cancelled',
+    customer_email: user.email,
+    'metadata[userId]': user.id,
+    'metadata[kind]': kind
+  };
+  if (kind === 'homecare') {
+    params.mode = 'subscription';
+    params['line_items[0][price]'] = await homeCarePriceId();
+    params['line_items[0][quantity]'] = '1';
+    params['subscription_data[metadata][userId]'] = user.id;
+    params['subscription_data[metadata][kind]'] = 'homecare';
+  } else if (kind === 'estimate' || kind === 'member-estimate') {
+    // 'member-estimate' is a fixed $60 one-time payment for active members;
+    // the session is a normal one-time payment, the kind is kept in metadata.
+    params.mode = 'payment';
+    params['line_items[0][price_data][currency]'] = 'usd';
+    params['line_items[0][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[0][price_data][product_data][name]'] = opts.label || 'In-person estimate — General Handyman Solutions';
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[requestId]'] = opts.requestId || '';
+  } else {
+    throw new Error('unknown checkout kind');
+  }
+  return stripeApi('/checkout/sessions', params);
+}
+function readRawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
+function verifyStripeSig(payload, header) {
+  if (!STRIPE_WEBHOOK_SECRET) return false;
+  const m = /t=(\d+).*v1=([a-f0-9]+)/.exec(header || '');
+  if (!m) return false;
+  if (Math.abs(Date.now() / 1000 - Number(m[1])) > 300) return false; // stale signature
+  const expected = crypto.createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(m[1] + '.' + payload, 'utf8').digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(m[2], 'hex')); } catch (e) { return false; }
+}
+async function handleStripeEvent(event) {
+  const type = event && event.type;
+  const obj = event && event.data && event.data.object;
+  if (!obj) return;
+  if (type === 'checkout.session.completed') {
+    const kind = obj.metadata && obj.metadata.kind;
+    const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
+    if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
+    if (kind === 'homecare') {
+      u.homeCareStatus = 'active';
+      u.homeCareSince = new Date().toISOString();
+      u.homeCareCancelAt = null;
+      u.freeEstimateUsed = false; // fresh membership gets its free first estimate
+      u.stripeCustomerId = obj.customer || u.stripeCustomerId || '';
+      u.stripeSubscriptionId = obj.subscription || u.stripeSubscriptionId || '';
+      notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
+      fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    } else if (kind === 'estimate' || kind === 'member-estimate') {
+      const r = db.requests.find(x => x.id === (obj.metadata && obj.metadata.requestId));
+      const amount = Math.round(Number(obj.amount_total) || 0) / 100;
+      if (r) {
+        r.estimatePaid = { sessionId: obj.id, amount: amount, at: new Date().toISOString() };
+        r.messages = r.messages || [];
+        r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: $' + amount.toFixed(2) + ' towards your estimate. Your appointment is secured — the Team will confirm your time here.', at: new Date().toISOString() });
+        notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.');
+        fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: amount }));
+      }
+      notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ')' + (r ? ' on request ' + r.id : '') + '.');
+    }
+  } else if (type === 'customer.subscription.deleted') {
+    const u = db.users.find(x => x.stripeSubscriptionId === obj.id);
+    if (u) {
+      u.homeCareStatus = 'cancelled';
+      u.homeCareCancelAt = new Date().toISOString();
+      notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare.');
+      fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    }
+  } else if (type === 'customer.subscription.updated') {
+    const u = db.users.find(x => x.stripeSubscriptionId === obj.id);
+    if (u && obj.cancel_at_period_end) {
+      u.homeCareCancelAt = new Date(Number(obj.cancel_at) * 1000).toISOString();
+      notify(u.id, 'membership', 'HomeCare cancellation noted — your membership stays active until ' + new Date(Number(obj.cancel_at) * 1000).toLocaleDateString('en-US') + '.');
+    }
+  } else if (type === 'invoice.payment_failed') {
+    // Stripe is the single source of truth: a failed subscription payment means
+    // the customer loses member status until payment succeeds again.
+    const u = db.users.find(x => x.stripeCustomerId === obj.customer);
+    if (u && u.homeCareStatus === 'active') {
+      u.homeCareStatus = 'cancelled';
+      u.homeCareCancelAt = new Date().toISOString();
+      notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.');
+      notifyAdmins('payment', 'HomeCare payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
+      fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    }
+  } else if (type === 'invoice.payment_succeeded') {
+    // Payment recovered (e.g. after a retry or a rejoin): restore member status.
+    const subId = obj.subscription;
+    const u = db.users.find(x => x.stripeSubscriptionId === subId || x.stripeCustomerId === obj.customer);
+    if (u && u.homeCareStatus !== 'active') {
+      u.homeCareStatus = 'active';
+      if (!u.homeCareSince) u.homeCareSince = new Date().toISOString();
+      u.homeCareCancelAt = null;
+      if (subId) u.stripeSubscriptionId = subId;
+      notify(u.id, 'membership', 'Your HomeCare payment went through — your membership is active again with all member benefits.');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') HomeCare payment succeeded — membership active.');
+    }
+  }
+}
 function money(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0; }
 function clampMoney(v) { return Math.max(0, money(v)); }
 function cleanText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 500); }
@@ -248,9 +396,29 @@ function normalizeEstimate(input, request) {
   const defaultCredit = request && request.estimateType === 'inperson' ? (Number(request.estimateDue) || 0) : 0;
   const credit = Math.min(clampMoney(raw.credit == null ? defaultCredit : raw.credit), money(subtotal + asapAmount - discountAmount));
   const total = Math.max(0, money(subtotal + asapAmount - discountAmount - credit));
-  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? (credit > 0 ? Math.min(75, total) : money(total / 2)) : clampMoney(raw.bookingDue);
+  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? (credit > 0 ? Math.min(credit || 75, total) : money(total / 2)) : clampMoney(raw.bookingDue);
   bookingDue = Math.min(bookingDue, total);
-  return { items, subtotal, asap, asapRate, asapAmount, discountPct, discountAmount, credit, total, bookingDue, balanceDue: money(total - bookingDue), currency: 'USD', updatedAt: new Date().toISOString() };
+  return { items, subtotal, asap, asapRate, asapAmount, discountPct, discountAmount, credit, total, bookingDue, balanceDue: money(total - bookingDue), bookingAuto: raw.bookingDue == null || raw.bookingDue === '', currency: 'USD', updatedAt: new Date().toISOString() };
+}
+// HomeCare benefit (2026-10-10 refinement): ONLY active members get the 20% labor
+// discount on jobs under $1,000. Non-members always see normal pricing. Applied
+// automatically when the admin builds the estimate unless the admin set their own
+// discount — the admin's manual choice always wins.
+function applyMemberDiscount(est, request, customer) {
+  const subtotal = est.subtotal || 0;
+  const isMember = customer && customer.homeCareStatus === 'active';
+  if (!isMember || subtotal <= 0 || subtotal >= 1000) return est;
+  if (est.discountPct > 0) return est; // admin set their own discount — respect it
+  const d = Math.round(subtotal * 0.20 * 100) / 100;
+  est.discountPct = 20;
+  est.discountAmount = d;
+  est.memberDiscount = true;
+  const credit = est.credit || 0;
+  est.total = Math.max(0, Math.round((subtotal + (est.asapAmount || 0) - d - credit) * 100) / 100);
+  if (est.bookingAuto) est.bookingDue = est.credit > 0 ? Math.min(est.credit, est.total) : money(est.total / 2);
+  else est.bookingDue = Math.min(est.bookingDue, est.total);
+  est.balanceDue = Math.round((est.total - est.bookingDue) * 100) / 100;
+  return est;
 }
 function automationReady() { return mailReady() || googleReady(); }
 async function googleAutomation(type, payload) {
@@ -369,13 +537,27 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
     const b = await readBody(req);
     const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
-    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: b.membership || 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.membership === 'new' ? 0 : (b.membership === 'member' ? 60 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    // Estimate pricing is authoritative from Stripe-verified membership, NOT from
+    // what the customer picked in the form: active members get $60 (or $0 for
+    // their one free estimate, applied below), everyone else pays $75.
+    const hcActive = user.role === 'customer' && user.homeCareStatus === 'active';
+    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: hcActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (hcActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    // HomeCare free estimate (one per membership): first in-person request from an
+    // active member with the freebie unused consumes it automatically.
+    if (user.role === 'customer' && user.homeCareStatus === 'active' && !user.freeEstimateUsed && r.estimateType === 'inperson') {
+      user.freeEstimateUsed = true;
+      r.membership = 'member';
+      r.estimateDue = 0;
+      r.freeEstimateClaim = true;
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your FREE HomeCare estimate was applied to this request. No estimate charge — just approve the work when the quote arrives.', at: new Date().toISOString() });
+      notify(user.id, 'membership', 'Your free HomeCare estimate was applied to request ' + r.id + '.');
+    }
     db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
     let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
-    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '' }); });
+    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '', customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none' }); });
     return send(res, 200, { requests: list });
   }
   const reqMatch = p.match(/^\/api\/requests\/([\w-]+)$/);
@@ -386,7 +568,7 @@ const server = http.createServer(async (req, res) => {
     let automation = { attempted: false, sent: false };
     if (user && user.role === 'admin') {
       if (b.estimate || typeof b.quote === 'number') {
-        const est = normalizeEstimate(b.estimate || { total: b.quote, credit: 0, bookingDue: null }, r);
+        const est = applyMemberDiscount(normalizeEstimate(b.estimate || { total: b.quote, credit: 0, bookingDue: null }, r), r, db.users.find(u => u.id === r.customerId));
         r.estimate = est; r.quote = est.total; r.status = 'Quoted'; r.quoteNote = b.note || '';
         r.messages = r.messages || [];
         const totalText = '$' + est.total.toFixed(2);
@@ -549,6 +731,96 @@ const server = http.createServer(async (req, res) => {
     if (!isWorker && j.assignedWorkerId) notify(j.assignedWorkerId, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the Team' : user.name) + '.');
     if (!isCust && cust) notify(cust.id, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the General Handyman Solutions Team' : user.name) + '.');
     save(); return send(res, 201, { job: publicJob(j, user) });
+  }
+
+  // ---------- Stripe payments ----------
+  if (p === '/api/stripe/config' && req.method === 'GET') {
+    return send(res, 200, { configured: stripeReady(), homeCareMonthly: HOMECARE_MONTHLY_CENTS / 100 });
+  }
+  if (p === '/api/stripe/checkout' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    const b = await readBody(req);
+    try {
+      if (b.kind === 'homecare') {
+        if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
+        if (user.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
+        const s = await createCheckoutSession('homecare', user);
+        return send(res, 200, { url: s.url });
+      }
+      if (b.kind === 'estimate' || b.kind === 'member-estimate') {
+        const r = db.requests.find(x => x.id === b.requestId);
+        if (!r) return send(res, 404, { error: 'request not found' });
+        const owns = user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id);
+        if (!owns) return send(res, 403, { error: 'not allowed' });
+        if (!r.estimate || !(r.estimate.bookingDue > 0)) return send(res, 400, { error: 'this request has nothing due to book' });
+        if (r.estimatePaid) return send(res, 400, { error: 'already paid' });
+        // $60 member estimate: only for ACTIVE HomeCare members, and only when the
+        // amount due really is the $60 member rate — otherwise use the normal pay button.
+        let amountCents, kind = 'estimate', label = 'In-person estimate payment — request ' + r.id + ' — General Handyman Solutions';
+        if (b.kind === 'member-estimate') {
+          if (user.homeCareStatus !== 'active') return send(res, 403, { error: 'the $60 member estimate is only for active HomeCare members' });
+          if (Math.abs(r.estimate.bookingDue - 60) > 0.01) return send(res, 400, { error: 'use the normal pay button for this amount' });
+          amountCents = 6000; kind = 'member-estimate'; label = 'HomeCare member estimate — $60 — request ' + r.id;
+        } else {
+          amountCents = Math.round(r.estimate.bookingDue * 100);
+        }
+        const s = await createCheckoutSession(kind, user, { amountCents, requestId: r.id, label });
+        return send(res, 200, { url: s.url, amount: amountCents / 100 });
+      }
+      return send(res, 400, { error: 'unknown checkout kind' });
+    } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/stripe/portal' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    if (!user.stripeCustomerId) return send(res, 400, { error: 'no Stripe billing yet — join HomeCare first' });
+    try {
+      const s = await stripeApi('/billing_portal/sessions', { customer: user.stripeCustomerId, return_url: appBase() + '/' });
+      return send(res, 200, { url: s.url });
+    } catch (e) { console.error('stripe portal failed', e.message); return send(res, 502, { error: 'billing portal unavailable — try again in a minute' }); }
+  }
+  if (p === '/api/stripe/webhook' && req.method === 'POST') {
+    const raw = await readRawBody(req);
+    if (!verifyStripeSig(raw, req.headers['stripe-signature'] || '')) return send(res, 400, { error: 'bad signature' });
+    try {
+      const event = JSON.parse(raw);
+      await handleStripeEvent(event);
+      save();
+      return send(res, 200, { received: true });
+    } catch (e) { console.error('stripe webhook failed', e.message); return send(res, 500, { error: 'webhook handler failed' }); }
+  }
+  if (p === '/payment/success' && req.method === 'GET') {
+    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment received</title><body style="font-family:system-ui;max-width:560px;margin:0 auto;padding:32px 20px;text-align:center"><h1 style="color:#0b0b0b">Payment <span style="color:#e10600">received</span> ✅</h1><p>Thank you — your payment went through. If you joined <b>HomeCare</b>, your first in-person estimate is <b>FREE</b>: log in and request it from your dashboard. If you paid an estimate, your appointment is <b>secured</b> — the Team will confirm your time with you.</p><p><a href="/" style="background:#e10600;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700">Open my dashboard</a></p><p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p></body>');
+  }
+  if (p === '/payment/cancelled' && req.method === 'GET') {
+    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment cancelled</title><body style="font-family:system-ui;max-width:560px;margin:0 auto;padding:32px 20px;text-align:center"><h1>Payment <span style="color:#e10600">cancelled</span></h1><p>No charge was made. You can come back and try again anytime — your request is still saved in the app.</p><p><a href="/" style="background:#0b0b0b;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700">Back to the app</a></p><p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p></body>');
+  }
+
+  // ---------- memberships (admin) ----------
+  if (p === '/api/customers' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const customers = db.users.filter(u => u.role === 'customer').map(u => {
+      const reqs = db.requests.filter(r => r.customerId === u.id).length;
+      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
+    });
+    return send(res, 200, { customers });
+  }
+  const custMatch = p.match(/^\/api\/customers\/([\w-]+)$/);
+  if (custMatch && req.method === 'PATCH') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = db.users.find(u => u.id === custMatch[1] && u.role === 'customer');
+    if (!c) return send(res, 404, { error: 'customer not found' });
+    const b = await readBody(req);
+    // Membership status is Stripe-only (2026-10-10): the webhook is the single
+    // source of truth — paid subscription = active member, cancelled/failed =
+    // not a member. The admin CANNOT flip membership by hand; they can only
+    // reset the one-free-estimate flag (e.g. goodwill re-grant).
+    if (b.freeEstimateUsed !== undefined) {
+      c.freeEstimateUsed = !!b.freeEstimateUsed;
+      if (!c.freeEstimateUsed) notify(c.id, 'membership', 'The Team re-granted your free HomeCare estimate — request it from your dashboard.');
+    }
+    save(); return send(res, 200, { customer: { id: c.id, name: c.name, email: c.email, homeCareStatus: c.homeCareStatus || 'none', homeCareSince: c.homeCareSince || null, homeCareCancelAt: c.homeCareCancelAt || null, freeEstimateUsed: !!c.freeEstimateUsed } });
   }
 
   // ---------- notifications ----------
