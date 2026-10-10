@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootstrap is one-time while no admin exists
 
-let db = { users: [], requests: [], jobs: [] };
+let db = { users: [], requests: [], jobs: [], notifications: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
 // Permanent storage: when SUPABASE_URL + SUPABASE_SERVICE_KEY are set (Render),
 // the whole app state lives in Supabase table ghs_state (key 'app'), so accounts,
@@ -36,6 +36,7 @@ async function loadFromSupabase() {
     const r = await fetch(SB_URL + '/rest/v1/ghs_state?key=eq.app&select=value', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } });
     const rows = await r.json();
     if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
+    if (!Array.isArray(db.notifications)) db.notifications = [];
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
 }
@@ -61,6 +62,28 @@ function auth(req) {
 }
 function newSession(u) { const token = crypto.randomBytes(24).toString('hex'); sessions.set(token, u.id); return token; }
 function requireRole(user, roles, res) { if (!user) { send(res, 401, { error: 'login required' }); return false; } if (!roles.includes(user.role)) { send(res, 403, { error: 'not allowed' }); return false; } return true; }
+// ---------- notifications ----------
+function notify(userId, type, text) {
+  if (!userId || !text) return;
+  if (!Array.isArray(db.notifications)) db.notifications = [];
+  db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, read: false, at: new Date().toISOString() });
+  if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-2000);
+}
+function notifyAdmins(type, text) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text)); }
+function workerAreas(w) {
+  const prof = w.profile || {};
+  const raw = prof.areas || prof.serviceAreas || prof.wAreas || '';
+  const list = Array.isArray(raw) ? raw : String(raw).split(/[,;]/);
+  return list.map(s => String(s).toLowerCase().trim()).filter(Boolean);
+}
+function notifyWorkersForJob(j) {
+  const city = (j.city || '').toLowerCase();
+  db.users.filter(u => u.role === 'worker' && u.status === 'active').forEach(w => {
+    const areas = workerAreas(w);
+    const match = !city || areas.some(a => a === 'any' || a.includes(city) || city.includes(a) || (a.includes('solano') && ['fairfield', 'vacaville', 'vallejo', 'suisun city', 'napa', 'dixon', 'benicia'].includes(city)));
+    if (match) notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.');
+  });
+}
 function publicJob(j, viewer) {
   const assigned = viewer && (viewer.role === 'admin' || j.assignedWorkerId === viewer.id);
   const base = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, payOffer: j.payOffer, createdAt: j.createdAt };
@@ -124,7 +147,7 @@ const server = http.createServer(async (req, res) => {
     const role = b.role === 'worker' ? 'worker' : 'customer';
     const prof = (b.profile && typeof b.profile === 'object') ? b.profile : {};
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
-    db.users.push(u); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
+    db.users.push(u); if (role === 'worker') notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
@@ -142,7 +165,7 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
     const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: b.membership || 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.membership === 'new' ? 0 : (b.membership === 'member' ? 60 : 75)), status: 'New', quote: null, quoteNote: '', photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
-    db.requests.push(r); save(); return send(res, 201, { request: r });
+    db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
@@ -161,12 +184,13 @@ const server = http.createServer(async (req, res) => {
         let quoteText = 'Quote: $' + b.quote + ' labor (you buy materials/parts).';
         if (r.estimateType === 'inperson' && r.estimateDue > 0) { const fc = Math.max(b.quote - r.estimateDue, 0); quoteText += ' Your $' + r.estimateDue + ' appointment credit — goes credited towards your repair when approved the same day: -$' + r.estimateDue + ' \u2192 Final cost: $' + fc + '.'; }
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: quoteText + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
+        notify(r.customerId, 'quote', 'You received a quote for request ' + r.id + ': $' + b.quote + ' labor. Open your request to approve or message us.');
       }
       if (b.status) r.status = b.status;
     } else if (user && user.role === 'customer' && r.customerId === user.id) {
       r.messages = r.messages || [];
-      if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); }
-      if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); }
+      if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); }
+      if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); }
     } else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { request: r });
   }
@@ -190,6 +214,8 @@ const server = http.createServer(async (req, res) => {
     if (!text) return send(res, 400, { error: 'message required' });
     r.messages = r.messages || [];
     r.messages.push({ from: isTeam ? 'team' : 'customer', name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
+    if (isTeam) notify(r.customerId, 'message', 'New message from the General Handyman Solutions Team on request ' + r.id + '.');
+    else notifyAdmins('message', 'New message from ' + user.name + ' on request ' + r.id + '.');
     save(); return send(res, 201, { request: r });
   }
 
@@ -204,7 +230,7 @@ const server = http.createServer(async (req, res) => {
     const w = db.users.find(u => u.id === workerMatch[1] && u.role === 'worker');
     if (!w) return send(res, 404, { error: 'worker not found' });
     const b = await readBody(req);
-    if (['active', 'review', 'notfit'].includes(b.status)) w.status = b.status;
+    if (['active', 'review', 'notfit'].includes(b.status)) { const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -223,7 +249,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
     const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, createdAt: new Date().toISOString() };
-    db.jobs.push(j); save(); return send(res, 201, { job: publicJob(j, user) });
+    db.jobs.push(j); notifyWorkersForJob(j); save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker'], res)) return;
@@ -239,6 +265,9 @@ const server = http.createServer(async (req, res) => {
     if (!j) return send(res, 404, { error: 'job not found' });
     if (j.status !== 'Open') return send(res, 409, { error: 'job already claimed' });
     j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString();
+    notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
+    const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
+    if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.');
     save(); return send(res, 200, { job: publicJob(j, user) });
   }
   const jobMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
@@ -246,10 +275,23 @@ const server = http.createServer(async (req, res) => {
     const j = db.jobs.find(x => x.id === jobMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     const b = await readBody(req);
-    if (user && user.role === 'admin' && b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; }
-    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && b.photosDone) { j.photosReceived = true; j.status = 'Done — photos sent'; }
+    if (user && user.role === 'admin' && b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
+    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && b.photosDone) { j.photosReceived = true; j.status = 'Done — photos sent'; notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); }
     else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { job: publicJob(j, user) });
+  }
+
+  // ---------- notifications ----------
+  if (p === '/api/notifications' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const mine = (db.notifications || []).filter(n => n.userId === user.id).slice(-100).reverse();
+    return send(res, 200, { notifications: mine, unread: mine.filter(n => !n.read).length });
+  }
+  if (p === '/api/notifications/read' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    (db.notifications || []).forEach(n => { if (n.userId === user.id && (!Array.isArray(b.ids) || b.ids.includes(n.id))) n.read = true; });
+    save(); return send(res, 200, { ok: true });
   }
 
   return send(res, 404, { error: 'not found' });
