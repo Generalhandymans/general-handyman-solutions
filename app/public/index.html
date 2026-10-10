@@ -115,6 +115,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
+    <div id="memberCard"></div>
     <h2>Request a handyman</h2>
     <p class="mut">Pick a service, add pictures, choose when — same as the main page, now inside your account so you can track it and chat with the Team. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
@@ -153,7 +154,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <button id="cSendBtn" onclick="sendRequest()">Send request</button>
       <div id="rMsg" class="mut"></div>
     </div>
-    <h2>My requests</h2>
+    <h2>My orders</h2>
     <div id="myRequests"></div>
     <h2>My jobs — chat with the Team and your worker</h2>
     <div id="myJobs"></div>
@@ -171,6 +172,8 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <h2>Team — control center</h2>
     <h3>Customer requests (send quotes)</h3>
     <div id="adminRequests"></div>
+    <h3>HomeCare memberships <span class="mut" style="font-size:12px;text-transform:none;letter-spacing:0">(Stripe is the source of truth — view only)</span></h3>
+    <div id="adminMembers"></div>
     <h3>Workers (activate after review)</h3>
     <div id="adminWorkers"></div>
     <h3>Create a job — admin only</h3>
@@ -193,6 +196,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 
 <script>
 let me=null, curMode='login';
+let stripeCfg={configured:false};
 function mode(m){ curMode=m;
   document.getElementById('tabLogin').classList.toggle('on', m==='login');
   document.getElementById('tabCustomer').classList.toggle('on', m==='customer');
@@ -224,7 +228,91 @@ async function doAuth(){
   }catch(e){ showErr(e.message); }
 }
 async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
-async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
+async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; stripeCfg=await api('/api/stripe/config').catch(()=>({configured:false})); }catch(e){} render(); }
+
+// ---------- HomeCare membership (customer dashboard) ----------
+// Benefits unlock ONLY for active members (verified via Stripe webhook):
+// free first estimate (if unused), $60 member estimates (vs $75), 20% off labor
+// on jobs under $1,000, priority scheduling. Non-members see normal pricing.
+function isMember(){ return me && me.homeCareStatus==='active'; }
+async function joinHomeCare(){
+  if(!stripeCfg.configured){ alert('Online payments are coming soon — the Team will set up your membership for now.'); return; }
+  try{ const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'homecare'})}); location.href=d.url; }
+  catch(e){ alert(e.message); }
+}
+async function manageBilling(){
+  try{ const d=await api('/api/stripe/portal',{method:'POST'}); location.href=d.url; }
+  catch(e){ alert(e.message); }
+}
+function claimFreeEstimate(){
+  // Scroll to the request form preset as an in-person member estimate —
+  // the server applies the freebie automatically on submit.
+  document.querySelectorAll('#cEst button').forEach(x=>x.classList.toggle('sel', x.dataset.v==='inperson'));
+  document.querySelectorAll('#cMember button').forEach(x=>x.classList.toggle('sel', x.dataset.v==='member'));
+  document.getElementById('rMsg').textContent='Your FREE HomeCare estimate: fill the form and send — no estimate charge. The discount applies automatically.';
+  custSummary();
+  document.getElementById('customerBox').scrollIntoView({behavior:'smooth'});
+}
+function renderMemberCard(){
+  const el=document.getElementById('memberCard'); if(!el||!me||me.role!=='customer'){ if(el) el.innerHTML=''; return; }
+  if(isMember()){
+    const cancelNote = me.homeCareCancelAt ? '<br><span class="mut">Cancels '+new Date(me.homeCareCancelAt).toLocaleDateString()+' — stays active until then.</span>' : '';
+    const freeCta = me.freeEstimateUsed
+      ? '<p class="mut">Free first estimate: <b>used</b> ✅</p>'
+      : '<button class="black" onclick="claimFreeEstimate()" style="font-size:16px;padding:14px 22px">🎉 Request your FREE estimate</button><p class="mut">Your first in-person estimate is on us — tap above and send the form.</p>';
+    el.innerHTML='<div class="card" style="border:2px solid #0b0b0b"><h3 style="margin-top:0">HomeCare <span class="pill" style="background:#0b0b0b;color:#fff">ACTIVE ✅</span></h3>'
+      +'<p class="mut" style="margin:4px 0">Member since '+(me.homeCareSince?new Date(me.homeCareSince).toLocaleDateString():'—')+' • $49/mo'+cancelNote+'</p>'
+      +'<p class="mut" style="margin:4px 0">Your benefits: free first estimate • $60 member estimates (vs $75) • 20% off labor on jobs under $1,000 • priority scheduling.</p>'
+      + freeCta
+      +'<button class="ghost" onclick="manageBilling()">Manage / cancel membership</button></div>';
+  } else {
+    el.innerHTML='<div class="card"><h3 style="margin-top:0">HomeCare membership — $49/mo</h3>'
+      +'<p class="mut" style="margin:4px 0">One free estimate in your first month, then $60 member estimates (vs $75), 20% off labor on jobs under $1,000, and priority scheduling. Cancel anytime — no penalties.</p>'
+      +(stripeCfg.configured
+        ? '<button onclick="joinHomeCare()">Join HomeCare — $49/mo</button>'
+        : '<p class="mut"><b>Online payments coming soon</b> — ask the Team and we will set it up for you.</p>')
+      +'</div>';
+  }
+}
+async function payEstimate(reqId, kind){
+  if(!stripeCfg.configured){ alert('Online payments are coming soon — the Team will confirm your booking for now.'); return; }
+  try{ const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:kind||'estimate', requestId:reqId})}); location.href=d.url; }
+  catch(e){ alert(e.message); }
+}
+// Order pipeline: what Gabriel calls "tu orden ya hecha" — every request shown
+// as an order with its real status, amounts, what is paid, and what is left.
+var ORDER_STEPS=['Submitted','Estimate sent','Approved','Scheduled','Done'];
+function orderStepIndex(status){
+  return {'New':0,'Quoted':1,'Approved':2,'Job posted':3,'Done':4}[status];
+}
+function orderStepsHtml(status){
+  if(status==='Declined') return '<span class="pill">Declined</span>';
+  const idx=orderStepIndex(status);
+  if(idx===undefined) return '<span class="pill">'+escHtml(status||'')+'</span>';
+  return '<div style="display:flex;gap:4px;flex-wrap:wrap;margin:8px 0">'+ORDER_STEPS.map(function(s,i){
+    return '<span class="pill" style="'+(i<idx?'background:#e8f5e9;border-color:#c8e6c9':(i===idx?'background:#0b0b0b;color:#fff':''))+'">'+(i<idx?'✓ ':'')+s+'</span>';
+  }).join('')+'</div>';
+}
+function orderAmountsHtml(r){
+  const e=r.estimate;
+  let h='';
+  if(r.freeEstimateClaim) h+='<span class="pill" style="background:#0b0b0b;color:#fff">🎉 FREE HomeCare estimate</span> ';
+  if(e){
+    h+='<br><b>Estimate total:</b> '+moneyFmt(e.total);
+    if(e.memberDiscount) h+=' <span class="pill">20% member discount applied</span>';
+    if(r.estimatePaid) h+='<br><b>Paid:</b> <span class="st">'+moneyFmt(r.estimatePaid.amount)+'</span> ✅ appointment secured';
+    else if(e.bookingDue>0) h+='<br><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' • <b>Balance at completion:</b> '+moneyFmt(e.balanceDue);
+  } else if(r.estimateType==='photo'){ h+='<br><span class="mut">Free photo estimate — the Team quotes from your pictures.</span>'; }
+  else { h+='<br><span class="mut">Waiting for the Team to send your quote.</span>'; }
+  return h;
+}
+function orderPayButtonHtml(r){
+  if(!(r.status==='Quoted'&&r.estimate&&r.estimate.bookingDue>0&&!r.estimatePaid&&r.estimateType!=='photo')) return '';
+  if(!stripeCfg.configured) return '<br><span class="mut"><b>Online payment coming soon</b> — the Team will confirm your booking.</span>';
+  const member60 = isMember() && Math.abs(r.estimate.bookingDue-60)<0.01;
+  const label = member60 ? 'Pay $60 member estimate' : 'Pay '+moneyFmt(r.estimate.bookingDue)+' to book';
+  return '<br><button class="black" onclick="payEstimate(\''+r.id+'\',\''+(member60?'member-estimate':'estimate')+'\')">'+label+'</button>';
+}
 let notifs=[]; let lastUnread=-1;
 async function loadNotifs(){ if(!me) return; try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
 function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(n=>'<div style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+'"><div>'+n.text+'</div><div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>').join(''):'<p class="mut">No notifications yet.</p>'); }
@@ -237,7 +325,7 @@ function render(){
   document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
-  if(me && me.role==='customer'){ loadRequests(); loadMyJobs(); custSummary(); }
+  if(me && me.role==='customer'){ renderMemberCard(); renderMemberPick(); loadRequests(); loadMyJobs(); custSummary(); }
   if(me && me.role==='worker') loadJobs();
   if(me && me.role==='admin'){ loadAdmin(); }
 }
@@ -257,17 +345,29 @@ function custState(){
 function custFee(){
   const st=custState();
   if(st.est==='photo') return {label:'FREE photo estimate', due:0};
-  let base = st.member==='new'?0:(st.member==='member'?60:75);
+  // Pricing follows Stripe-verified membership, not the form pick.
+  const member=isMember();
+  let base = member?60:75;
   let urgent = st.when==='ASAP / Emergency';
   let due = urgent && base>0 ? Math.round(base*1.25*100)/100 : base;
-  return {label:(st.member==='new'?'FREE first HomeCare estimate':(st.member==='member'?'$60 member estimate':'$75 flat'))+(urgent&&base>0?' + 25% ASAP/Emergency = $'+due:''), due};
+  return {label:(member?'$60 member estimate':'$75 flat')+(urgent&&base>0?' + 25% ASAP/Emergency = $'+due:''), due};
+}
+// The membership pick in the form is display-only and always truthful:
+// Stripe verification decides the price, never the customer's pick.
+function renderMemberPick(){
+  const g=document.getElementById('cMember'); if(!g) return;
+  if(isMember()){
+    g.innerHTML='<button type="button" data-v="member" class="sel">HomeCare member ✅ — $60 estimate</button>';
+  } else {
+    g.innerHTML='<button type="button" data-v="none" class="sel">Not a member — $75</button><span class="mut" style="align-self:center">Join HomeCare above for $60 estimates + a free first estimate.</span>';
+  }
 }
 function custSummary(){
   const st=custState(); const f=custFee();
   document.getElementById('cFeeTitle').textContent = st.est==='photo' ? 'Free photo estimate' : ('In-person estimate — '+f.label);
   document.getElementById('cSummary').innerHTML = 'Service: <b>'+(st.service||'pick one')+'</b> • Where: <b>'+(st.city||'—')+'</b> • When: <b>'+(st.when||'—')+'</b> • Estimate: <b>'+f.label+'</b>';
   document.getElementById('cSendBtn').textContent = st.est==='photo' ? 'Request free photo estimate' : 'Send request — '+f.label;
-  if(st.est!=='photo' && f.due>0) document.getElementById('cSummary').innerHTML += '<br><b>$75 secures your appointment — and it goes credited towards your repair when approved the same day.</b>';
+  if(st.est!=='photo' && f.due>0) document.getElementById('cSummary').innerHTML += '<br><b>$'+f.due+' secures your appointment — and it goes credited towards your repair when approved the same day.</b>';
 }
 async function sendRequest(){
   const st=custState(); const f=custFee();
@@ -292,7 +392,7 @@ function estimateHtml(r, isCustomer){
   const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
   let adj='';
   if(e.asapAmount) adj+='<tr><td colspan="3">ASAP / Emergency (+25%)</td><td class="num">'+moneyFmt(e.asapAmount)+'</td></tr>';
-  if(e.discountAmount) adj+='<tr><td colspan="3">Discount ('+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
+  if(e.discountAmount) adj+='<tr><td colspan="3">'+(e.memberDiscount?'HomeCare member discount':'Discount')+' ('+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
   if(e.credit) adj+='<tr><td colspan="3">Appointment credit (approved same day)</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
   return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • app.generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">Labor only — customer buys materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
 }
@@ -319,7 +419,7 @@ function readEstimate(idv){
   const asapAmount=asap?subtotal*0.25:0;
   const discountAmount=subtotal*Math.max(0,Math.min(90,discountPct))/100;
   const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
-  const bookingDue=bookingRaw===''? (credit>0?Math.min(75,total):Math.round(total/2*100)/100) : Math.min(Number(bookingRaw)||0,total);
+  const bookingDue=bookingRaw===''? (credit>0?Math.min(credit,total):Math.round(total/2*100)/100) : Math.min(Number(bookingRaw)||0,total);
   return { items, asap, discountPct, credit, bookingDue, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total, balanceDue:Math.round((total-bookingDue)*100)/100 };
 }
 function updateEstimateSummary(idv){ const el=document.getElementById('estSummary-'+idv); if(!el) return; const e=readEstimate(idv); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(e.subtotal)+(e.asapAmount?' • <b>ASAP:</b> '+moneyFmt(e.asapAmount):'')+(e.discountAmount?' • <b>Discount:</b> −'+moneyFmt(e.discountAmount):'')+(e.credit?' • <b>Credit:</b> −'+moneyFmt(e.credit):'')+'<br><b>Total for customer:</b> <span class="st">'+moneyFmt(e.total)+'</span> • Due to book: '+moneyFmt(e.bookingDue)+' • Balance: '+moneyFmt(e.balanceDue); }
@@ -349,9 +449,13 @@ async function loadRequests(){
   const d=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('myRequests').innerHTML = d.requests.map(function(r){
     const est=estimateHtml(r,true);
-    const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
-    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+threadHtml(r)+'</div>';
-  }).join('') || '<p class="mut">No requests yet.</p>';
+    const actions=(r.status==='Quoted')
+      ? '<div class="est-actions" style="margin-top:8px"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>'
+      : '';
+    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' '+orderStepsHtml(r.status)
+      +'<br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'
+      +orderAmountsHtml(r)+orderPayButtonHtml(r)+est+actions+threadHtml(r)+'</div>';
+  }).join('') || '<p class="mut">No orders yet — send your first request above.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 function jobChatHtml(j){
@@ -377,10 +481,28 @@ async function loadJobs(){
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
 async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
+async function loadAdminMembers(){
+  const el=document.getElementById('adminMembers'); if(!el) return;
+  const d=await api('/api/customers').catch(()=>({customers:[]}));
+  el.innerHTML = d.customers.map(function(c){
+    const st=c.homeCareStatus||'none';
+    const badge = st==='active' ? '<span class="pill" style="background:#0b0b0b;color:#fff">ACTIVE ✅</span>' : (st==='cancelled' ? '<span class="pill">cancelled</span>' : '<span class="pill">not a member</span>');
+    return '<div class="card"><b>'+escHtml(c.name||'Customer')+'</b> ('+escHtml(c.email||'')+(c.phone?' • '+escHtml(c.phone):'')+') '+badge
+      +'<br><span class="mut">Member since: '+(c.homeCareSince?new Date(c.homeCareSince).toLocaleDateString():'—')+(c.homeCareCancelAt?' • Cancelled: '+new Date(c.homeCareCancelAt).toLocaleDateString():'')+' • Free estimate: '+(c.freeEstimateUsed?'<b>used</b>':'<b>available</b>')+' • Requests: '+(c.requests||0)+'</span>'
+      +'<br><span class="mut">Stripe sets membership automatically — members join at $49/mo through checkout.</span>'
+      +(!c.freeEstimateUsed?'':' <button class="ghost" onclick="resetFreeEstimate(\''+c.id+'\')">Re-grant free estimate</button>')+'</div>';
+  }).join('') || '<p class="mut">No customers yet.</p>';
+}
+async function resetFreeEstimate(idv){
+  if(!confirm('Re-grant the free HomeCare estimate to this customer?')) return;
+  await api('/api/customers/'+idv,{method:'PATCH', body:JSON.stringify({freeEstimateUsed:false})});
+  loadAdminMembers();
+}
 async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+(r.customerHomeCare==='active'?' <span class="pill" style="background:#0b0b0b;color:#fff">HomeCare member — priority</span>':'')+(r.freeEstimateClaim?' <span class="pill">🎉 free estimate</span>':'')+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
+  loadAdminMembers();
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
