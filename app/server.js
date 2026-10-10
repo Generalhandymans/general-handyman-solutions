@@ -88,7 +88,7 @@ function publicJob(j, viewer) {
   const assigned = viewer && (viewer.role === 'admin' || j.assignedWorkerId === viewer.id);
   const base = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, payOffer: j.payOffer, createdAt: j.createdAt };
   if (viewer && viewer.role === 'admin') return Object.assign({}, j);
-  if (assigned) return Object.assign(base, { customerName: j.customerName, customerPhone: j.customerPhone, address: j.address, notes: j.notes || '' });
+  if (assigned) return Object.assign(base, { customerName: j.customerName, customerPhone: j.customerPhone, address: j.address, notes: j.notes || '', messages: j.messages || [] });
   return base; // workers who have not claimed see NO customer details
 }
 
@@ -248,11 +248,15 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
-    const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, createdAt: new Date().toISOString() };
+    const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
     db.jobs.push(j); notifyWorkersForJob(j); save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
-    if (!requireRole(user, ['admin', 'worker'], res)) return;
+    if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
+    if (user.role === 'customer') {
+      const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
+      return send(res, 200, { jobs: mine.map(j => ({ id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] })) });
+    }
     if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
     if (user.role === 'worker') return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)) });
     return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
@@ -279,6 +283,27 @@ const server = http.createServer(async (req, res) => {
     else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && b.photosDone) { j.photosReceived = true; j.status = 'Done — photos sent'; notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); }
     else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { job: publicJob(j, user) });
+  }
+
+  const jobMsgMatch = p.match(/^\/api\/jobs\/([\w-]+)\/messages$/);
+  if (jobMsgMatch && req.method === 'POST') {
+    const j = db.jobs.find(x => x.id === jobMsgMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
+    const isTeam = user && user.role === 'admin';
+    const isWorker = user && user.role === 'worker' && j.assignedWorkerId === user.id && user.status === 'active';
+    const isCust = user && cust && cust.id === user.id && !!j.assignedWorkerId;
+    if (!isTeam && !isWorker && !isCust) return send(res, 403, { error: 'not allowed' });
+    const b = await readBody(req);
+    const text = (b.text || '').toString().slice(0, 2000).trim();
+    if (!text) return send(res, 400, { error: 'message required' });
+    j.messages = j.messages || [];
+    const from = isTeam ? 'team' : (isWorker ? 'worker' : 'customer');
+    j.messages.push({ from, name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
+    if (!isTeam) notifyAdmins('message', 'Job ' + j.id + ': new message from ' + user.name + '.');
+    if (!isWorker && j.assignedWorkerId) notify(j.assignedWorkerId, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the Team' : user.name) + '.');
+    if (!isCust && cust) notify(cust.id, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the General Handyman Solutions Team' : user.name) + '.');
+    save(); return send(res, 201, { job: publicJob(j, user) });
   }
 
   // ---------- notifications ----------
