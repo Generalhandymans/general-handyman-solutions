@@ -86,6 +86,20 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
     return send(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
   }
+  if (req.method === 'GET' && p === '/manifest.json') {
+    res.writeHead(200, { 'Content-Type': 'application/manifest+json', 'Access-Control-Allow-Origin': '*' });
+    return res.end(fs.readFileSync(path.join(__dirname, 'public', 'manifest.json'), 'utf8'));
+  }
+  if (req.method === 'GET' && p === '/sw.js') {
+    res.writeHead(200, { 'Content-Type': 'text/javascript', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
+    return res.end(fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8'));
+  }
+  if (req.method === 'GET' && p.startsWith('/icons/') && p.endsWith('.png')) {
+    const file = path.join(__dirname, 'public', 'icons', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
   if (p === '/api/health') return send(res, 200, { ok: true, app: 'ghs-app' });
 
   // ---------- auth ----------
