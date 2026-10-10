@@ -85,7 +85,14 @@ function publicJob(j, viewer) {
   const assigned = viewer && (viewer.role === 'admin' || j.assignedWorkerId === viewer.id);
   const base = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, payOffer: j.payOffer, createdAt: j.createdAt };
   if (viewer && viewer.role === 'admin') return Object.assign({}, j);
-  if (assigned) return Object.assign(base, { customerName: j.customerName, customerPhone: j.customerPhone, address: j.address, notes: j.notes || '', messages: j.messages || [] });
+  if (assigned) {
+    // Gabriel is the only middleman (rule 2026-10-09): the worker NEVER sees
+    // the customer's name or phone. Address unlocks only when the Team confirms
+    // it (infoReleased). Contact runs through the Team in the job chat.
+    const view = Object.assign(base, { mine: true, infoReleased: !!j.infoReleased, notes: j.notes || '', messages: j.messages || [] });
+    if (j.infoReleased) view.address = j.address || '';
+    return view;
+  }
   return base; // workers who have not claimed see NO customer details
 }
 
@@ -420,7 +427,7 @@ const server = http.createServer(async (req, res) => {
     const cust = db.users.find(u => u.id === r.customerId);
     const payOffer = Number(b.payOffer);
     if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
-    const j = { id: id('JOB'), status: 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
+    const j = { id: id('JOB'), status: 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
     db.jobs.push(j);
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
@@ -509,7 +516,13 @@ const server = http.createServer(async (req, res) => {
     const j = db.jobs.find(x => x.id === jobMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     const b = await readBody(req);
-    if (user && user.role === 'admin' && b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
+    if (user && user.role === 'admin') {
+      if (b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
+      if (b.address !== undefined) j.address = cleanText(b.address, 300);
+      if (b.when !== undefined) j.when = cleanText(b.when, 200);
+      if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
+      if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.'); }
+    }
     else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && b.photosDone) { j.photosReceived = true; j.status = 'Done — photos sent'; notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); }
     else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { job: publicJob(j, user) });
