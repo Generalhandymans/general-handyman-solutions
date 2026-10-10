@@ -142,6 +142,8 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     </div>
     <h2>My requests</h2>
     <div id="myRequests"></div>
+    <h2>My jobs — chat with the Team and your worker</h2>
+    <div id="myJobs"></div>
   </div>
 
   <!-- WORKER -->
@@ -222,7 +224,7 @@ function render(){
   document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
-  if(me && me.role==='customer'){ loadRequests(); custSummary(); }
+  if(me && me.role==='customer'){ loadRequests(); loadMyJobs(); custSummary(); }
   if(me && me.role==='worker') loadJobs();
   if(me && me.role==='admin'){ loadAdmin(); }
 }
@@ -287,10 +289,25 @@ async function loadRequests(){
   document.getElementById('myRequests').innerHTML = d.requests.map(r=>'<div class="card"><b>'+r.id+'</b> — '+r.service+' <span class="pill">'+r.status+'</span><br><span class="mut">'+r.city+' • '+r.when+'</span>'+(r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>')+threadHtml(r)+'</div>').join('') || '<p class="mut">No requests yet.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
+function jobChatHtml(j){
+  const msgs=(j.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||''); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
+  return '<div class="thread">'+(msgs||'<span class="mut">Job chat is open — say hello.</span>')+'</div><div class="reply"><input id="jm-'+j.id+'" placeholder="Message about this job..."><button onclick="sendJobMsg(\''+j.id+'\')">Send</button></div>';
+}
+async function sendJobMsg(idv){
+  const inp=document.getElementById('jm-'+idv); if(!inp) return;
+  const text=inp.value.trim(); if(!text) return;
+  try{ await api('/api/jobs/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me.role==='admin') loadAdmin(); else if(me.role==='worker') loadJobs(); else loadMyJobs(); }
+  catch(e){ alert(e.message); }
+}
+async function loadMyJobs(){
+  const d=await api('/api/jobs').catch(()=>({jobs:[]}));
+  const el=document.getElementById('myJobs'); if(!el) return;
+  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
+}
 async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — these are the open job offers from the Team. Pick the ones you want: first pick wins, then the customer details unlock for you.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
-  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Pick this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
+  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.customerName?'<br><b>Your job details:</b> '+j.customerName+' • '+j.customerPhone+' • '+j.address:'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Pick this job</button>':(j.assignedWorkerId===me.id && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+(j.assignedWorkerId===me.id?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
 }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
@@ -308,7 +325,7 @@ async function loadAdmin(){
     + row('Availability', pf.availability) + row('Notes', pf.notes)
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span></div>').join('') || '<p class="mut">No jobs yet.</p>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
 }
 async function sendQuote(idv){ const v=document.getElementById('q-'+idv).value; const note=document.getElementById('qn-'+idv).value; await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({quote:Number(v), note})}); loadAdmin(); }
 async function setWorker(idv, status){ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); loadAdmin(); }
