@@ -665,6 +665,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---------- jobs / marketplace ----------
+  const jobDelMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
+  if (jobDelMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const idx = db.jobs.findIndex(j => j.id === jobDelMatch[1]);
+    if (idx === -1) return send(res, 404, { error: 'job not found' });
+    const removed = db.jobs.splice(idx, 1)[0];
+    // If the job came from a customer request, roll the request back so it is not stuck on "Job posted".
+    if (removed.requestId) {
+      const r = db.requests.find(x => x.id === removed.requestId);
+      if (r && r.jobId === removed.id) { r.status = 'Approved'; delete r.jobId; r.messages = r.messages || []; r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Job ' + removed.id + ' was cancelled by the Team.', at: new Date().toISOString() }); }
+    }
+    save(); return send(res, 200, { ok: true, deleted: removed.id });
+  }
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
