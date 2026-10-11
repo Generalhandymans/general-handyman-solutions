@@ -455,8 +455,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     <form id="workerForm" novalidate style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px;overflow:hidden">
       <div style="background:#0b0b0b;color:#fff;padding:16px">
         <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0">Worker application</h3>
-        <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Takes about a minute. Your account is created automatically — pick a password. Jobs unlock after the Team reviews and activates you.</p>
-        <a class="btn btn-red" style="margin-top:10px;font-size:14px" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Create worker account (with password) →</a>
+        <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Takes about a minute. Submitting creates your worker account automatically — jobs unlock after the Team reviews and activates you.</p>
       </div>
       <div style="padding:16px">
         <div class="label" style="margin-top:0">Applying as</div>
@@ -468,6 +467,8 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
         <div class="grid2" style="margin-top:6px">
           <div><label class="label" for="wName">Full name</label><input class="field" id="wName" autocomplete="name" placeholder="First &amp; last name"></div>
           <div><label class="label" for="wPhone">Phone number</label><input class="field" id="wPhone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
+          <div><label class="label" for="wEmail">Email (your app login)</label><input class="field" id="wEmail" type="email" autocomplete="email" placeholder="you@email.com"></div>
+          <div><label class="label" for="wPass">Pick a password</label><input class="field" id="wPass" type="password" autocomplete="new-password" placeholder="Min. 6 characters"></div>
           <div><label class="label" for="wCity">City you live in</label><input class="field" id="wCity" placeholder="Fairfield"></div>
           <div><label class="label" for="wArea">Areas you can work</label><input class="field" id="wArea" placeholder="Fairfield, Vacaville, Vallejo…"></div>
         </div>
@@ -785,6 +786,8 @@ window.__ghsWired=true;
     var werr=document.getElementById('workerError'); werr.classList.remove('show'); werr.textContent='';
     var wName=document.getElementById('wName').value.trim();
     var wPhone=document.getElementById('wPhone').value.trim();
+    var wEmail=document.getElementById('wEmail').value.trim().toLowerCase();
+    var wPass=document.getElementById('wPass').value;
     var wCity=document.getElementById('wCity').value.trim();
     var wArea=document.getElementById('wArea').value.trim();
     var wExp=document.getElementById('wExp').value;
@@ -799,6 +802,8 @@ window.__ghsWired=true;
     var problems=[];
     if(!wName) problems.push('add your full name');
     if(!wPhone) problems.push('add your phone number');
+    if(!wEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wEmail)) problems.push('add a valid email');
+    if(!wPass || wPass.length<6) problems.push('pick a password (min. 6 characters)');
     if(!wCity) problems.push('add the city you live in');
     if(!workerSkills.size) problems.push('tap at least one skill');
     if(!wExp) problems.push('pick your experience');
@@ -814,6 +819,7 @@ window.__ghsWired=true;
       'NEW WORKER APPLICATION — General Handyman Solutions ('+wid+')',
       'Applying as: '+workerRole,
       'Name: '+wName,
+      'Email: '+wEmail,
       'Phone: '+wPhone,
       'Lives in: '+wCity,
       'Can work: '+(wArea||'—'),
@@ -834,6 +840,24 @@ window.__ghsWired=true;
     document.getElementById('workerText').textContent=lines.join('\n');
     var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
     try{
+      // Step 1 — create the worker account in the app right away (one submit = registered).
+      var alreadyHad=false;
+      try{
+        var sres=await fetch('https://app.generalhandymans.app/api/signup',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            name:wName, email:wEmail, password:wPass, phone:wPhone, role:'worker',
+            skills:Array.from(workerSkills), vehicle:wVehicle,
+            profile:{city:wCity, areas:wArea, experience:wExp, toolsLevel:wTools, vehicleStyle:wVehicle,
+              hauling:wHaul, license:wLicense, insurance:wInsurance, transportation:wTransport,
+              availability:wAvail, notes:wMsg, applyingAs:workerRole, applicationId:wid}
+          })
+        });
+        if(sres.status===409){ alreadyHad=true; }
+        else if(!sres.ok){ throw new Error('signup failed'); }
+      }catch(acctErr){ throw new Error('Could not create your worker account — check your connection and try again.'); }
+      // Step 2 — send the full application details to the Team.
       var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
@@ -843,6 +867,7 @@ window.__ghsWired=true;
           application_id:wid,
           applying_as:workerRole,
           worker_name:wName,
+          worker_email:wEmail,
           worker_phone:wPhone,
           lives_in:wCity,
           can_work:wArea,
@@ -863,7 +888,9 @@ window.__ghsWired=true;
       });
       if(!res.ok) throw new Error('worker send failed');
       document.getElementById('workerSuccessTitle').textContent='Application sent ✓';
-      document.getElementById('workerSuccessMsg').textContent='The Team got your worker application and will review it.';
+      document.getElementById('workerSuccessMsg').innerHTML = alreadyHad
+        ? 'You already have a worker account with that email — your new application was sent to the Team for review.'
+        : 'Your worker account is created and the Team got your application. Jobs unlock after the Team reviews and activates you — you can log in at <b>app.generalhandymans.app</b>.';
     }catch(wsendErr){
       document.getElementById('workerSuccessTitle').textContent='Application ready — one more tap';
       document.getElementById('workerSuccessMsg').innerHTML='The automatic send did not go through. Copy the application below and DM it to <b>@generalhandymans</b>.';
