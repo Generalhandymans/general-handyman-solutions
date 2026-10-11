@@ -382,6 +382,7 @@ async function loadAdmin(){
   document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
+  adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
     return '<div class="card"><b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span>'
@@ -389,7 +390,7 @@ async function loadAdmin(){
     + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
-    + row('Availability', pf.availability) + row('Notes', pf.notes)
+    + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
@@ -403,6 +404,29 @@ async function postFromRequest(idv, custPrice){
   if(!confirm('Post this job to the workers?\n\nWorker pay: $'+payN+'\nCustomer price: $'+custPrice+'\nExtra info for the worker: '+(extra||'—')+'\n\nActive workers in the area get notified right away.')) return;
   try{ await api('/api/requests/'+idv+'/create-job',{method:'POST', body:JSON.stringify({payOffer:payN, notes:extra})}); loadAdmin(); }
   catch(e){ alert(e.message); }
+}
+let adminWorkersCache=[];
+function skillRankHtml(w){
+  const skills=((w.profile||{}).skills||w.skills||[]);
+  if(!skills.length) return '';
+  const ranks=w.teamRanks||{};
+  let sum=0,cnt=0;
+  const rows=skills.map(function(s){
+    const r=ranks[s]||0; if(r>0){sum+=r;cnt++;}
+    const sq=(''+s).replace(/'/g,"\\'");
+    let stars='';
+    for(let i=1;i<=5;i++){ stars+='<button class="ghost" style="padding:2px 7px;min-width:0" title="'+i+'" onclick="rankSkill(\''+w.id+'\',\''+sq+'\','+i+')">'+(i<=r?'\u2605':'\u2606')+'</button>'; }
+    return '<span style="display:inline-block;margin:3px 10px 3px 0;white-space:nowrap"><b>'+(''+s).replace(/</g,'&lt;')+'</b> '+stars+'</span>';
+  }).join('');
+  const avg=cnt?(' — avg '+(sum/cnt).toFixed(1)+'/5'):'';
+  return '<br><span class="mut">Team skill ranks (private \u2014 workers never see this)</span>'+avg+'<br>'+rows;
+}
+async function rankSkill(wid, skill, stars){
+  const w=adminWorkersCache.find(function(x){return x.id===wid;});
+  const cur=Object.assign({},(w&&w.teamRanks)||{});
+  if(stars===(cur[skill]||0)) delete cur[skill]; else cur[skill]=stars;
+  await api('/api/workers/'+wid,{method:'PATCH',body:JSON.stringify({skillRanks:cur})});
+  loadAdmin();
 }
 async function setWorker(idv, status){ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); loadAdmin(); }
 async function delRequest(idv){ if(!confirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
