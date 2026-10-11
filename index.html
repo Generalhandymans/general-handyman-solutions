@@ -281,6 +281,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
       <div class="steps" aria-hidden="true"><span class="on">1 Service</span><span>2 Details</span><span>3 When</span><span>4 Confirm</span></div>
 
       <form class="book-body" id="reqForm" novalidate>
+        <input type="text" id="hpReq" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
         <div class="label">What do you need? <small>Tap one</small></div>
         <div class="svc-grid" id="svcGrid">
           <button type="button" class="svc" data-service="TV Mounting & Installs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/></svg><span><b>TV Mounting &amp; Installs</b><span>TVs, shelves, mounts, fixtures</span></span></button>
@@ -453,6 +454,7 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
     <h2>Worker <em>signup</em></h2>
     <p class="sub">Want work with General Handyman Solutions? Create your worker account below — it is created automatically with your password, and jobs unlock after the Team reviews you. You are not hired until the Team confirms you directly.</p>
     <form id="workerForm" novalidate style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px;overflow:hidden">
+      <input type="text" id="hpWorker" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
       <div style="background:#0b0b0b;color:#fff;padding:16px">
         <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0">Worker application</h3>
         <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Takes about a minute. Submitting creates your worker account automatically — jobs unlock after the Team reviews and activates you.</p>
@@ -566,6 +568,43 @@ window.__ghsWired=true;
 (function(){
   var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[], selectedPhotoFiles=[];
   var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
+  var API='https://app.generalhandymans.app';
+  var FORMSUBMIT='https://formsubmit.co/ajax/generalhandymans@gmail.com';
+  // fetch with timeout so a hung server never leaves the button stuck on "Sending…"
+  function tfetch(url, opts, ms){
+    var c=new AbortController(); var t=setTimeout(function(){ c.abort(); }, ms||15000);
+    opts=opts||{}; opts.signal=c.signal;
+    return fetch(url, opts).finally(function(){ clearTimeout(t); });
+  }
+  // FormSubmit can answer 200 with success:"false" — treat that as a failure too
+  async function sendLead(opts){
+    var res=await tfetch(FORMSUBMIT, opts, 25000);
+    if(!res.ok) return false;
+    var j=await res.json().catch(function(){ return null; });
+    if(j && (j.success===false || j.success==='false')) return false;
+    return true;
+  }
+  function isEmail(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+  function digits(v){ return String(v||'').replace(/\D/g,''); }
+  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function memberLabel(){ return memberStatus==='new' ? 'New member — first estimate FREE (self-declared, Team to verify)' : (memberStatus==='member' ? 'Member — $60 estimate (self-declared, Team to verify)' : 'Not a member — $75 estimate'); }
+  function estimateLine(){
+    if(estimateType==='photo') return 'FREE photo estimate';
+    if(isUrgent() && memberStatus!=='new'){ var p=(memberStatus==='member'?60:75)*1.25; return '$'+(p%1?p.toFixed(2):p)+' ASAP/Emergency estimate (+25%)'; }
+    return estimateMap[memberStatus].line;
+  }
+  // Shrink phone photos so the FormSubmit attachment limit is not hit
+  function compressImage(file){
+    return new Promise(function(resolve){
+      if(!file.type || file.type.indexOf('image/')!==0 || !window.createImageBitmap){ resolve(file); return; }
+      createImageBitmap(file).then(function(bmp){
+        var sc=Math.min(1, 1280/Math.max(bmp.width,bmp.height));
+        var cv=document.createElement('canvas'); cv.width=Math.round(bmp.width*sc); cv.height=Math.round(bmp.height*sc);
+        cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);
+        cv.toBlob(function(b){ resolve(b ? new File([b], file.name.replace(/\.[^.]+$/,'')+'.jpg', {type:'image/jpeg'}) : file); }, 'image/jpeg', 0.75);
+      }).catch(function(){ resolve(file); });
+    });
+  }
   var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
   function isUrgent(){ return selectedWhen==='ASAP / Emergency'; }
   function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; var ur=document.getElementById('urgencyRow'); if(ur){ ur.style.display=isUrgent()?'flex':'none'; } updateMember(); }
@@ -631,13 +670,19 @@ window.__ghsWired=true;
     });
     if(selectedPhotoNames.length){ var note=document.createElement('span'); note.className='fine'; note.style.textAlign='left'; note.textContent=selectedPhotoNames.length+' picture(s) selected — DM these to @generalhandymans after sending.'; list.appendChild(note); }
   }); }
+  var jobDateEl=document.getElementById('jobDate');
+  jobDateEl.min=todayStr();
   wire('whenPills','data-when', function(v, btn){
     selectedWhen=v;
     var dw=document.getElementById('dateWrap');
-    if(v==='Pick a date'){ dw.classList.add('show'); } else { dw.classList.remove('show'); }
+    if(v==='Pick a date'){ dw.classList.add('show'); if(jobDateEl.value && jobDateEl.value>=todayStr()){ selectedWhen='On '+jobDateEl.value; } } else { dw.classList.remove('show'); }
     update();
   });
-  document.getElementById('jobDate').addEventListener('change', function(e){ if(e.target.value){ selectedWhen='On '+e.target.value; update(); }});
+  jobDateEl.addEventListener('change', function(e){
+    var v=e.target.value;
+    if(v && v>=todayStr()){ selectedWhen='On '+v; } else { e.target.value=''; selectedWhen='Pick a date'; }
+    update();
+  });
   document.getElementById('address').addEventListener('input', function(e){ /* city stays from chips unless typed */ });
   var ackBtn=document.getElementById('ackBtn'), ackBox=document.getElementById('ackBox');
   ackBtn.addEventListener('click', function(){
@@ -646,23 +691,24 @@ window.__ghsWired=true;
   var form=document.getElementById('reqForm'), err=document.getElementById('formError'), success=document.getElementById('successBox'), reqText=document.getElementById('requestText');
   form.addEventListener('submit', async function(e){
     e.preventDefault(); err.classList.remove('show'); err.textContent='';
+    var hpR=document.getElementById('hpReq'); if(hpR && hpR.value) return;
     var details=document.getElementById('details').value.trim();
     var address=document.getElementById('address').value.trim();
     var name=document.getElementById('name').value.trim();
     var phone=document.getElementById('phone').value.trim();
     var problems=[];
     if(!selectedService) problems.push('pick a service');
-    if(!address) problems.push('add the home address');
+    if(address.length<5) problems.push('add the full home address');
     if(estimateType==='photo' && !selectedPhotoFiles.length) problems.push('add at least one job picture for the free photo estimate');
-    if(!selectedWhen) problems.push('choose when you need it');
-    if(!details) problems.push('describe the job in a sentence or two');
+    if(!selectedWhen) problems.push('choose when you need it'); else if(selectedWhen==='Pick a date') problems.push('pick the date (today or later)');
+    if(details.length<5) problems.push('describe the job in a sentence or two');
     if(!ack) problems.push('confirm the estimate + labor-only rule (tap the box in the estimate section)');
-    if(!name) problems.push('add your name');
-    if(!phone) problems.push('add your phone number');
+    if(name.length<2) problems.push('add your name');
+    if(digits(phone).length<10) problems.push('add a valid phone number (10 digits)');
     var custEmail='', custPass='';
-    custEmail=document.getElementById('custEmail').value.trim();
+    custEmail=document.getElementById('custEmail').value.trim().toLowerCase();
     custPass=document.getElementById('custPass').value;
-    if(!custEmail || custEmail.indexOf('@')<1) problems.push('add your email — it creates your free account');
+    if(!isEmail(custEmail)) problems.push('add a valid email — it creates your free account');
     if(!custPass || custPass.length<6) problems.push('pick an account password (6+ characters)');
     if(problems.length){ err.textContent='Almost there — please '+problems.join(', ')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'}); return; }
     var id='GHS-'+Math.random().toString(36).slice(2,7).toUpperCase();
@@ -675,86 +721,95 @@ window.__ghsWired=true;
       'When: '+whenTxt,
       'Name: '+name,
       'Phone: '+phone,
-      'HomeCare status: '+(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate')),
+      'Email: '+custEmail,
+      'HomeCare status: '+memberLabel(),
       'Estimate type: '+(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
       'Urgency: '+(isUrgent()?'ASAP / Emergency — +25% urgency charge':'Standard timing'),
       'Pictures selected: '+(selectedPhotoNames.length ? selectedPhotoNames.length+' — '+selectedPhotoNames.join(', ')+' (customer will DM the pictures to @generalhandymans)' : 'None selected'),
       '—',
-      'Confirmed by customer: '+(estimateType==='photo'?'FREE photo estimate':estimateMap[memberStatus].line)+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
+      'Confirmed by customer: '+estimateLine()+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
     ];
     reqText.textContent=lines.join('\n');
     var submitBtn=document.getElementById('submitBtn');
     var originalBtn=submitBtn.textContent;
     submitBtn.disabled=true; submitBtn.textContent='Sending request…';
     var whereTxt=((selectedCity||'')+(address? (selectedCity?' — ':'')+address:''));
-    var memberTxt=(memberStatus==='new'?'New member — first estimate FREE':(memberStatus==='member'?'Member — $60 estimate':'Not a member — $75 estimate'));
-    var accountCreated=false, appRequestId='';
-    // Every request — photo or in-person — creates the customer account first.
+    var memberTxt=memberLabel();
+    var accountStatus='none', appSaved=false, appRequestId='', token='';
+    // Step 1 — create the customer account (required for every request, photo or in-person).
     try{
-      var su=await fetch('https://app.generalhandymans.app/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
+      var su=await tfetch(API+'/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
       var sud=await su.json().catch(function(){return {}});
-      if(!su.ok) throw new Error(sud.error==='email already registered' ? 'That email already has an account — use Customer login at the top, then send this request from inside your account.' : (sud.error||'account creation failed'));
-      var ar=await fetch('https://app.generalhandymans.app/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+(sud.token||'')}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:estimateType})});
-      var ard=await ar.json().catch(function(){return {}});
-      if(!ar.ok) throw new Error(ard.error||'request could not be saved to your account');
-      accountCreated=true; appRequestId=ard.request && ard.request.id ? ard.request.id : '';
-    }catch(acctErr){
-      err.textContent=acctErr.message; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'});
-      submitBtn.disabled=false; submitBtn.textContent=originalBtn; return;
+      if(su.ok){ accountStatus='created'; token=sud.token||''; }
+      else if(su.status===409 || /already/i.test(sud.error||'')){ accountStatus='exists'; }
+      else if(su.status>=400 && su.status<500){
+        err.textContent='Could not create your account: '+(sud.error||'please check your email and password')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'});
+        submitBtn.disabled=false; submitBtn.textContent=originalBtn; return;
+      } else { accountStatus='failed'; }
+    }catch(acctErr){ accountStatus='failed'; }
+    // Step 2 — save the request inside the new account.
+    if(accountStatus==='created' && token){
+      try{
+        var ar=await tfetch(API+'/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:estimateType})});
+        var ard=await ar.json().catch(function(){return {}});
+        if(ar.ok){ appSaved=true; appRequestId=(ard.request && ard.request.id) ? ard.request.id : ''; }
+      }catch(reqErr){}
     }
+    // Step 3 — ALWAYS send the lead to the Team, whatever happened above, so no lead is lost.
+    var acctTxt = accountStatus==='created' ? 'Account created' : (accountStatus==='exists' ? 'Email already had an account — customer must log in' : 'ACCOUNT NOT CREATED — help the customer set it up');
+    acctTxt += appSaved ? ' · request saved in app' : (accountStatus==='created' ? ' · request NOT saved in app (add manually)' : '');
+    var leadFields={
+      _subject:'New GHS lead '+id+' — '+selectedService, _template:'table', _honey:'',
+      request_id:id, service:selectedService, job_details:details, where:whereTxt, when:whenTxt,
+      customer_name:name, customer_phone:phone, customer_email:custEmail, homecare_status:memberTxt,
+      estimate_type:(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+      urgency:(isUrgent()?'ASAP / Emergency +25%':'Standard'),
+      pictures_selected:selectedPhotoNames.join(', '),
+      estimate_due:estimateLine(),
+      account_status:acctTxt, app_request_id:appRequestId,
+      confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
+      request_text:lines.join('\n')
+    };
+    var leadSent=false, photosAttached=0;
     try{
-      var res;
-      if(estimateType==='photo' && selectedPhotoFiles.length){
-        var fd=new FormData();
-        fd.append('_subject','New GHS lead '+id+' — '+selectedService);
-        fd.append('_template','table');
-        fd.append('request_id',id);
-        fd.append('service',selectedService);
-        fd.append('job_details',details);
-        fd.append('where',whereTxt);
-        fd.append('when',whenTxt);
-        fd.append('customer_name',name);
-        fd.append('customer_phone',phone);
-        fd.append('homecare_status',memberTxt);
-        fd.append('estimate_type','FREE photo estimate');
-        fd.append('pictures_selected',selectedPhotoNames.join(', '));
-        fd.append('confirmed','FREE photo estimate. Labor-only — customer buys materials/parts. 50% deposit locks approved work.');
-        fd.append('request_text',lines.join('\n'));
-        selectedPhotoFiles.slice(0,6).forEach(function(f){ fd.append('attachment', f, f.name); });
-        res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {method:'POST', headers:{'Accept':'application/json'}, body: fd});
-      } else {
-      res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Accept':'application/json'},
-        body: JSON.stringify({
-          _subject:'New GHS lead '+id+' — '+selectedService,
-          _template:'table',
-          request_id:id,
-          service:selectedService,
-          job_details:details,
-          where:whereTxt,
-          when:whenTxt,
-          customer_name:name,
-          customer_phone:phone,
-          homecare_status:memberTxt,
-          estimate_type:(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
-          urgency:(isUrgent()?'ASAP / Emergency +25%':'Standard'),
-          pictures_selected:selectedPhotoNames.join(', '),
-          estimate_due:estimateMap[memberStatus].line,
-          confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
-          request_text:lines.join('\n')
-        })
-      });
+      var files=[];
+      if(selectedPhotoFiles.length){
+        var comp=await Promise.all(selectedPhotoFiles.slice(0,6).map(compressImage)); var total=0;
+        comp.forEach(function(f){ if(total+f.size<=4500000){ files.push(f); total+=f.size; } });
       }
-      if(!res.ok) throw new Error('lead send failed');
-      document.getElementById('successTitle').textContent='Request sent ✓';
-      document.getElementById('successMsg').innerHTML = accountCreated ? 'Account created ✓ and request sent ✓'+(appRequestId?' ('+appRequestId+')':'')+'. Log in anytime with <b>Customer login</b> (top of page) to track it, get your quote, and message the Team back and forth.'+(estimateType==='photo' ? ' If your pictures were selected above, they were sent with the lead; you can also DM or WhatsApp them to the Team.' : '') : 'The Team got your request by email. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.';
-    }catch(sendErr){
-      document.getElementById('successTitle').textContent='Request ready — one more tap';
-      document.getElementById('successMsg').innerHTML='The automatic send did not go through. Copy the summary below and DM it to <b>@generalhandymans</b> so the Team still gets your lead.';
-    }finally{
-      submitBtn.disabled=false; submitBtn.textContent=originalBtn;
+      if(files.length){
+        var fd=new FormData();
+        Object.keys(leadFields).forEach(function(k){ fd.append(k, leadFields[k]); });
+        files.forEach(function(f){ fd.append('attachment', f, f.name); });
+        try{ leadSent=await sendLead({method:'POST', headers:{'Accept':'application/json'}, body: fd}); }catch(e1){ leadSent=false; }
+        if(leadSent) photosAttached=files.length;
+      }
+      if(!leadSent){
+        if(files.length) leadFields.pictures_note='Picture upload failed — customer will DM the pictures';
+        leadSent=await sendLead({method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(leadFields)});
+      }
+    }catch(sendErr){ leadSent=false; }
+    var st=document.getElementById('successTitle'), sm=document.getElementById('successMsg');
+    var loginTip=' Log in anytime with <b>Customer login</b> (top of page) to track it, get your quote, and message the Team back and forth.';
+    if(leadSent || appSaved){
+      st.textContent='Request sent ✓';
+      var m;
+      if(accountStatus==='created' && appSaved) m='Account created ✓ and request sent ✓'+(appRequestId?' ('+appRequestId+')':'')+'.'+loginTip;
+      else if(accountStatus==='created') m='Account created ✓ and the Team got your request by email ✓. It is not showing inside your account yet — the Team will link it.'+loginTip;
+      else if(accountStatus==='exists') m='That email already has an account, so we did not create a new one. The Team got your request by email ✓. Use <b>Customer login</b> (top of page) to track your jobs.';
+      else m='The Team got your request by email ✓, but we could not create your account right now. The Team will help you finish setting it up.';
+      if(!leadSent) m+=' The email copy did not go through, but your request is saved in your account. You can also DM the summary below to <b>@generalhandymans</b>.';
+      if(estimateType==='photo') m+= photosAttached ? ' Your pictures were sent with the request; you can also DM or WhatsApp them to the Team.' : ' Please DM or WhatsApp your pictures to the Team.';
+      sm.innerHTML=m;
+      // clear what must not be re-sent by accident
+      document.getElementById('details').value=''; document.getElementById('custPass').value='';
+      if(photoInput) photoInput.value=''; selectedPhotoFiles=[]; selectedPhotoNames=[]; document.getElementById('photoList').innerHTML='';
+      ack=false; ackBtn.classList.remove('sel'); ackBtn.setAttribute('aria-pressed','false'); ackBox.textContent='';
+    } else {
+      st.textContent='Request ready — one more tap';
+      sm.innerHTML=(accountStatus==='created' ? 'Your account was created ✓, but the request did not go through. ' : 'The automatic send did not go through. ')+'Copy the summary below and DM it to <b>@generalhandymans</b> so the Team still gets your lead.';
     }
+    submitBtn.disabled=false; submitBtn.textContent=originalBtn;
     var whatsBtn=document.getElementById('whatsBtn');
     if(whatsBtn){ if(estimateType==='photo'){ whatsBtn.style.display='inline-flex'; whatsBtn.href='https://wa.me/17078623773?text='+encodeURIComponent(lines.join('\n')+'\n\nI will send the job pictures here for the free photo estimate.'); } else { whatsBtn.style.display='none'; } }
     success.classList.add('show');
@@ -780,6 +835,7 @@ window.__ghsWired=true;
   var workerForm=document.getElementById('workerForm');
   if(workerForm){ workerForm.addEventListener('submit', async function(e){
     e.preventDefault();
+    var hpW=document.getElementById('hpWorker'); if(hpW && hpW.value) return;
     var werr=document.getElementById('workerError'); werr.classList.remove('show'); werr.textContent='';
     var wName=document.getElementById('wName').value.trim();
     var wPhone=document.getElementById('wPhone').value.trim();
@@ -797,9 +853,9 @@ window.__ghsWired=true;
     var wAvail=document.getElementById('wAvail').value.trim();
     var wMsg=document.getElementById('wMsg').value.trim();
     var problems=[];
-    if(!wName) problems.push('add your full name');
-    if(!wPhone) problems.push('add your phone number');
-    if(!wEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(wEmail)) problems.push('add a valid email');
+    if(wName.length<2) problems.push('add your full name');
+    if(digits(wPhone).length<10) problems.push('add a valid phone number (10 digits)');
+    if(!isEmail(wEmail)) problems.push('add a valid email');
     if(!wPass || wPass.length<6) problems.push('pick a password (min. 6 characters)');
     if(!wCity) problems.push('add the city you live in');
     if(!workerSkills.size) problems.push('tap at least one skill');
@@ -836,62 +892,66 @@ window.__ghsWired=true;
     ];
     document.getElementById('workerText').textContent=lines.join('\n');
     var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
+    var wAcct='failed';
+    // Step 1 — create the worker account.
     try{
-      // Step 1 — create the worker account in the app right away (one submit = registered).
-      var alreadyHad=false;
-      try{
-        var sres=await fetch('https://app.generalhandymans.app/api/signup',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            name:wName, email:wEmail, password:wPass, phone:wPhone, role:'worker',
-            skills:Array.from(workerSkills), vehicle:wVehicle,
-            profile:{city:wCity, areas:wArea, experience:wExp, toolsLevel:wTools, vehicleStyle:wVehicle,
-              hauling:wHaul, license:wLicense, insurance:wInsurance, transportation:wTransport,
-              availability:wAvail, notes:wMsg, applyingAs:workerRole, applicationId:wid}
-          })
-        });
-        if(sres.status===409){ alreadyHad=true; }
-        else if(!sres.ok){ throw new Error('signup failed'); }
-      }catch(acctErr){ throw new Error('Could not create your worker account — check your connection and try again.'); }
-      // Step 2 — send the full application details to the Team.
-      var res=await fetch('https://formsubmit.co/ajax/generalhandymans@gmail.com', {
+      var sres=await tfetch(API+'/api/signup',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name:wName, email:wEmail, password:wPass, phone:wPhone, role:'worker',
+          skills:Array.from(workerSkills), vehicle:wVehicle,
+          profile:{city:wCity, areas:wArea, experience:wExp, toolsLevel:wTools, vehicleStyle:wVehicle,
+            hauling:wHaul, license:wLicense, insurance:wInsurance, transportation:wTransport,
+            availability:wAvail, notes:wMsg, applyingAs:workerRole, applicationId:wid}
+        })
+      });
+      var sd=await sres.json().catch(function(){return {}});
+      if(sres.ok){ wAcct='created'; }
+      else if(sres.status===409 || /already/i.test(sd.error||'')){ wAcct='exists'; }
+      else if(sres.status>=400 && sres.status<500){
+        werr.textContent='Could not create your worker account: '+(sd.error||'please check your details')+'.'; werr.classList.add('show'); werr.scrollIntoView({behavior:'smooth', block:'center'});
+        wbtn.disabled=false; wbtn.textContent=worig; return;
+      }
+    }catch(acctErr){ wAcct='failed'; }
+    // Step 2 — ALWAYS send the application to the Team, whatever happened with the account.
+    var wAcctTxt = wAcct==='created' ? 'Worker account created' : (wAcct==='exists' ? 'Email already registered in the app (could be a customer account) — check/update role' : 'ACCOUNT NOT CREATED — create it manually or contact the applicant');
+    var wSent=false;
+    try{
+      wSent=await sendLead({
         method:'POST',
         headers:{'Content-Type':'application/json','Accept':'application/json'},
         body: JSON.stringify({
           _subject:'New worker application '+wid+' — '+workerRole,
-          _template:'table',
-          application_id:wid,
-          applying_as:workerRole,
-          worker_name:wName,
-          worker_email:wEmail,
-          worker_phone:wPhone,
-          lives_in:wCity,
-          can_work:wArea,
-          skills:skillsTxt,
-          experience:wExp,
-          tools_level:wTools,
-          has_gear:Array.from(workerGear).join(', '),
-          vehicle_style:wVehicle,
-          hauling:wHaul,
-          license_id:wLicense,
-          insurance:wInsurance,
-          transportation:wTransport,
-          availability:wAvail,
-          notes:wMsg,
+          _template:'table', _honey:'',
+          application_id:wid, applying_as:workerRole, worker_name:wName, worker_email:wEmail, worker_phone:wPhone,
+          lives_in:wCity, can_work:wArea, skills:skillsTxt, experience:wExp, tools_level:wTools,
+          has_gear:Array.from(workerGear).join(', '), vehicle_style:wVehicle, hauling:wHaul,
+          license_id:wLicense, insurance:wInsurance, transportation:wTransport, availability:wAvail, notes:wMsg,
+          account_status:wAcctTxt,
           review_status:'Needs Team review — approve / on review / not a fit',
           application_text:lines.join('\n')
         })
       });
-      if(!res.ok) throw new Error('worker send failed');
-      document.getElementById('workerSuccessTitle').textContent='Application sent ✓';
-      document.getElementById('workerSuccessMsg').innerHTML = alreadyHad
-        ? 'You already have a worker account with that email — your new application was sent to the Team for review.'
-        : 'Your worker account is created and the Team got your application. Jobs unlock after the Team reviews and activates you — you can log in at <b>app.generalhandymans.app</b>.';
-    }catch(wsendErr){
-      document.getElementById('workerSuccessTitle').textContent='Application ready — one more tap';
-      document.getElementById('workerSuccessMsg').innerHTML='The automatic send did not go through. Copy the application below and DM it to <b>@generalhandymans</b>.';
-    }finally{ wbtn.disabled=false; wbtn.textContent=worig; }
+    }catch(sendErr){ wSent=false; }
+    var wTitle=document.getElementById('workerSuccessTitle'), wMsgEl=document.getElementById('workerSuccessMsg');
+    if(wSent){
+      wTitle.textContent='Application sent ✓';
+      wMsgEl.innerHTML = wAcct==='created'
+        ? 'Your worker account is created and the Team got your application. Jobs unlock after the Team reviews and activates you — you can log in at <b>app.generalhandymans.app</b>.'
+        : (wAcct==='exists'
+          ? 'That email already has an account in the app, so we did not create a new one. The Team got your application and will review it. Log in at <b>app.generalhandymans.app</b> with that email.'
+          : 'The Team got your application, but your account could not be created right now. The Team will contact you to finish setting it up.');
+      document.getElementById('wPass').value='';
+    } else if(wAcct==='created' || wAcct==='exists'){
+      wTitle.textContent='Account ready — one more tap';
+      wMsgEl.innerHTML=(wAcct==='created' ? 'Your worker account is created ✓, but ' : 'Your email already has an account, but ')+'the application email to the Team did not go through. Copy the application below and DM it to <b>@generalhandymans</b> so the Team can review you.';
+    } else {
+      wTitle.textContent='Application not sent';
+      wMsgEl.innerHTML='Nothing went through — check your connection and tap the button again, or copy the application below and DM it to <b>@generalhandymans</b>.';
+      werr.textContent='Could not send your application. Please try again.'; werr.classList.add('show');
+    }
+    wbtn.disabled=false; wbtn.textContent=worig;
     var wsuccess=document.getElementById('workerSuccess'); wsuccess.classList.add('show'); wsuccess.scrollIntoView({behavior:'smooth', block:'center'});
   }); }
 
@@ -907,6 +967,11 @@ window.__ghsWired=true;
     p.querySelectorAll('.sel').forEach(function(b){ if(b!==btn) b.classList.remove('sel'); });
     btn.classList.add('sel');
   }
+  document.addEventListener('submit', function(e){
+    e.preventDefault();
+    var box=document.getElementById(e.target.id==='workerForm'?'workerError':'formError');
+    if(box){ box.textContent='This page did not finish loading. Please refresh it, or message us on WhatsApp at (707) 862-3773.'; box.classList.add('show'); }
+  });
   document.addEventListener('click', function(e){
     var t=e.target.closest('.svc,.chip,.pill');
     if(t){ if(t.closest('#workerSkills,#workerGear')){ t.classList.toggle('sel'); } else { group(t); } }
