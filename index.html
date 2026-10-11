@@ -572,7 +572,7 @@ window.__ghsWired=true;
   function updateMember(){
     var cl=document.getElementById('creditLine'); if(cl) cl.style.display = (estimateType==='photo' || memberStatus==='new') ? 'none' : '';
     var m=estimateMap[memberStatus];
-    var aw=document.getElementById('accountWrap'); if(aw){ aw.style.display = estimateType==='photo' ? 'none' : 'block'; }
+    var aw=document.getElementById('accountWrap'); if(aw){ aw.style.display='block'; }
     document.getElementById('feeAmount').textContent=m.amount;
     document.getElementById('feeTitle').textContent=m.title;
     document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking. Please add job pictures if you have them.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate. Please add job pictures if you have them.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. Please add job pictures if you have them. No surprises after you submit.');
