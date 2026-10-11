@@ -642,7 +642,8 @@ const server = http.createServer(async (req, res) => {
   // ---------- workers (admin) ----------
   if (p === '/api/workers' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
-    return send(res, 200, { workers: db.users.filter(u => u.role === 'worker').map(pubUser) });
+    // teamRanks is Team-private: attached here on the admin-only endpoint, never in pubUser.
+    return send(res, 200, { workers: db.users.filter(u => u.role === 'worker').map(u => Object.assign(pubUser(u), { teamRanks: (u.internal && u.internal.skillRanks) || {} })) });
   }
   const workerMatch = p.match(/^\/api\/workers\/([\w-]+)$/);
   if (workerMatch && req.method === 'PATCH') {
@@ -651,6 +652,16 @@ const server = http.createServer(async (req, res) => {
     if (!w) return send(res, 404, { error: 'worker not found' });
     const b = await readBody(req);
     if (['active', 'review', 'notfit'].includes(b.status)) { const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); } }
+    // Private Team-only skill ranks (1-5 per skill). Stored outside profile so workers never see them.
+    if (b.skillRanks && typeof b.skillRanks === 'object' && !Array.isArray(b.skillRanks)) {
+      w.internal = w.internal || {};
+      const clean = {};
+      for (const k of Object.keys(b.skillRanks).slice(0, 40)) {
+        const n = Math.max(0, Math.min(5, parseInt(b.skillRanks[k], 10) || 0));
+        if (n > 0 && String(k).length <= 60) clean[String(k).slice(0, 60)] = n;
+      }
+      w.internal.skillRanks = clean;
+    }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
