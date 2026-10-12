@@ -86,6 +86,8 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <div class="pick multi" id="wSkills">
         <button type="button" data-v="General handyman">General handyman</button><button type="button" data-v="Carpentry">Carpentry</button><button type="button" data-v="Paint & drywall">Paint &amp; drywall</button><button type="button" data-v="Electrical swaps">Electrical swaps</button><button type="button" data-v="Plumbing help">Plumbing help</button><button type="button" data-v="Mobile mechanic">Mobile mechanic</button><button type="button" data-v="Installs & assembly">Installs &amp; assembly</button><button type="button" data-v="Landscaping / yard">Landscaping / yard</button>
       </div>
+      <label>Rate yourself 1&ndash;10 in each skill <span class="mut">(10 = pro level, 1 = beginner)</span></label>
+      <div id="wSelfRate"></div>
       <label>What do you have? — tap all that apply</label>
       <div class="pick multi" id="wGear">
         <button type="button" data-v="Basic hand tools">Basic hand tools</button><button type="button" data-v="Power tools">Power tools</button><button type="button" data-v="Drill/driver">Drill/driver</button><button type="button" data-v="Saws">Saws</button><button type="button" data-v="Ladder">Ladder</button><button type="button" data-v="Truck bed/toolbox">Truck bed/toolbox</button><button type="button" data-v="Trailer">Trailer</button><button type="button" data-v="PPE/safety gear">PPE/safety gear</button><button type="button" data-v="No tools yet">No tools yet</button>
@@ -213,11 +215,29 @@ document.querySelectorAll('.pick').forEach(function(g){
 });
 function pickVals(idv){ return [...document.querySelectorAll('#'+idv+' button.sel')].map(b=>b.dataset.v); }
 function pickOne(idv){ const b=document.querySelector('#'+idv+' button.sel'); return b?b.dataset.v:''; }
+function renderSelfRate(){
+  const box=document.getElementById('wSelfRate'); if(!box) return;
+  const skills=[...document.querySelectorAll('#wSkills button')].map(b=>b.dataset.v);
+  box.innerHTML=skills.map(function(s){
+    let opts='<option value="">—</option>';
+    for(let i=1;i<=10;i++) opts+='<option value="'+i+'">'+i+'</option>';
+    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="flex:1">'+(''+s).replace(/</g,'&lt;')+'</span><select data-skill="'+(''+s).replace(/"/g,'&quot;')+'" style="width:90px">'+opts+'</select></div>';
+  }).join('');
+}
+function pickSelfRatings(){
+  const r={};
+  document.querySelectorAll('#wSelfRate select').forEach(function(sel){
+    const v=parseInt(sel.value,10), sk=sel.getAttribute('data-skill');
+    if(sk && v>=1 && v<=10) r[sk]=v;
+  });
+  return r;
+}
+renderSelfRate();
 async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
-    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim() } : {};
+    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings() } : {};
       const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:curMode, profile})});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; }
     render();
@@ -410,13 +430,15 @@ function skillRankHtml(w){
   const skills=((w.profile||{}).skills||w.skills||[]);
   if(!skills.length) return '';
   const ranks=w.teamRanks||{};
+  const selfR=(w.profile||{}).selfRatings||{};
   let sum=0,cnt=0;
   const rows=skills.map(function(s){
     const r=ranks[s]||0; if(r>0){sum+=r;cnt++;}
     const sq=(''+s).replace(/'/g,"\\'");
     let stars='';
     for(let i=1;i<=5;i++){ stars+='<button class="ghost" style="padding:2px 7px;min-width:0" title="'+i+'" onclick="rankSkill(\''+w.id+'\',\''+sq+'\','+i+')">'+(i<=r?'\u2605':'\u2606')+'</button>'; }
-    return '<span style="display:inline-block;margin:3px 10px 3px 0;white-space:nowrap"><b>'+(''+s).replace(/</g,'&lt;')+'</b> '+stars+'</span>';
+    const selfTag=selfR[s] ? ' <span class="mut">· self '+selfR[s]+'/10</span>' : '';
+    return '<span style="display:inline-block;margin:3px 10px 3px 0;white-space:nowrap"><b>'+(''+s).replace(/</g,'&lt;')+'</b> '+stars+selfTag+'</span>';
   }).join('');
   const avg=cnt?(' — avg '+(sum/cnt).toFixed(1)+'/5'):'';
   return '<br><span class="mut">Team skill ranks (private \u2014 workers never see this)</span>'+avg+'<br>'+rows;
