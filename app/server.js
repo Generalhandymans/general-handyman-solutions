@@ -519,6 +519,15 @@ const server = http.createServer(async (req, res) => {
     // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
     const role = b.role === 'worker' ? 'worker' : 'customer';
     const prof = (b.profile && typeof b.profile === 'object') ? b.profile : {};
+    // Worker self-ratings 1-10 per skill: the worker's own self-assessment at signup. Visible to the worker and the Team (unlike the Team's private 1-5 ranks).
+    if (prof.selfRatings && typeof prof.selfRatings === 'object' && !Array.isArray(prof.selfRatings)) {
+      const cleanSR = {};
+      for (const k of Object.keys(prof.selfRatings).slice(0, 40)) {
+        const n = parseInt(prof.selfRatings[k], 10);
+        if (k && n >= 1 && n <= 10) cleanSR[String(k).slice(0, 60)] = n;
+      }
+      prof.selfRatings = cleanSR;
+    } else { delete prof.selfRatings; }
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
