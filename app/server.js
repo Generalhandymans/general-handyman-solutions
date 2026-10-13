@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootstrap is one-time while no admin exists
 
-let db = { users: [], requests: [], jobs: [], notifications: [] };
+let db = { users: [], requests: [], jobs: [], notifications: [], invoices: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
 // Permanent storage: when SUPABASE_URL + SUPABASE_SERVICE_KEY are set (Render),
 // the whole app state lives in Supabase table ghs_state (key 'app'), so accounts,
@@ -37,6 +37,7 @@ async function loadFromSupabase() {
     const rows = await r.json();
     if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
     if (!Array.isArray(db.notifications)) db.notifications = [];
+    if (!Array.isArray(db.invoices)) db.invoices = [];
     if (!db.settings || typeof db.settings !== 'object') db.settings = {};
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
@@ -220,6 +221,18 @@ async function resendAutomation(type, payload) {
   if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
   if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($49/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $60 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($49/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
   if (type === 'homecare_cancelled') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'HomeCare membership cancelled', html: eventEmail('HomeCare cancelled', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership has been cancelled.', 'You can rejoin anytime from your dashboard — we would love to have you back.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Your HomeCare membership has been cancelled. Rejoin anytime from your dashboard.' }); }
+  if (type === 'invoice_sent') {
+    const inv = p.invoice || {};
+    if (!inv.customerEmail) return { attempted: true, sent: false, reason: 'invoice has no customer email' };
+    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your invoice from General Handyman Solutions (' + inv.id + ') — ' + usd(inv.total || 0) + ' due', html: invoiceEmailHtml(inv), text: invoiceEmailText(inv) });
+  }
+  if (type === 'invoice_paid') {
+    const inv = p.invoice || {};
+    const out = [];
+    if (inv.customerEmail) out.push(await sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — invoice ' + inv.id + ' paid in full', html: eventEmail('Invoice paid — thank you', ['Invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is now PAID IN FULL.', 'Payment method: ' + (inv.paidMethod || 'card') + '.', 'Thank you for your business! If you need anything else, just reply to this email or text (707) 862-3773.']), text: 'Invoice ' + inv.id + ' paid in full (' + usd(inv.total || 0) + '). Thank you!' }));
+    out.push(await sendMail({ to: [OWNER_EMAIL], subject: 'Invoice PAID: ' + inv.id + ' — ' + usd(inv.total || 0), html: eventEmail('Invoice paid', ['Invoice ' + inv.id, 'Customer: ' + (inv.customerName || '') + ' ' + (inv.customerEmail || ''), 'Amount: ' + usd(inv.total || 0), 'Method: ' + (inv.paidMethod || 'card')], OWNER_FOOTER), text: 'Invoice ' + inv.id + ' paid: ' + usd(inv.total || 0) }));
+    return { attempted: true, sent: out.some(x => x.sent), via: 'resend' };
+  }
   return { attempted: false, sent: false, reason: 'no email template for ' + type };
 }
 async function sendAutomation(type, payload) {
@@ -288,6 +301,16 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][price_data][product_data][name]'] = opts.label || 'In-person estimate — General Handyman Solutions';
     params['line_items[0][quantity]'] = '1';
     params['metadata[requestId]'] = opts.requestId || '';
+  } else if (kind === 'invoice') {
+    // One-time invoice payment: the payer may not have an app account (the
+    // invoice carries customerEmail directly), so user fields are optional.
+    params.mode = 'payment';
+    params['line_items[0][price_data][currency]'] = 'usd';
+    params['line_items[0][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[0][price_data][product_data][name]'] = opts.label || 'Invoice payment — General Handyman Solutions';
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[invoiceId]'] = opts.invoiceId || '';
+    params['metadata[customerEmail]'] = (user && user.email) || opts.email || '';
   } else {
     throw new Error('unknown checkout kind');
   }
@@ -331,6 +354,20 @@ async function handleStripeEvent(event) {
         fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: amount }));
       }
       notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ')' + (r ? ' on request ' + r.id : '') + '.');
+    } else if (kind === 'invoice') {
+      const inv = (db.invoices || []).find(x => x.id === (obj.metadata && obj.metadata.invoiceId));
+      const amount = Math.round(Number(obj.amount_total) || 0) / 100;
+      if (inv && inv.status !== 'paid') {
+        inv.status = 'paid';
+        inv.paidAt = new Date().toISOString();
+        inv.paidAmount = amount;
+        inv.paidMethod = 'stripe';
+        inv.stripeSessionId = obj.id;
+        notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
+        const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
+        if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!');
+        fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
+      }
     }
   } else if (type === 'customer.subscription.deleted') {
     const u = db.users.find(x => x.stripeSubscriptionId === obj.id);
@@ -419,6 +456,78 @@ function applyMemberDiscount(est, request, customer) {
   else est.bookingDue = Math.min(est.bookingDue, est.total);
   est.balanceDue = Math.round((est.total - est.bookingDue) * 100) / 100;
   return est;
+}
+// ---------- Invoices (added 2026-10-12) ----------
+// Standalone invoices for completed jobs: the admin creates a draft with line
+// items, sends it by email with a Stripe payment link, and the customer pays
+// online or the admin marks it paid by hand (cash/Zelle). Invoices are normal
+// business invoices (labor + any parts the Team agreed to include) — the
+// worker-facing copy rules do not apply to customer invoices.
+const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
+function normalizeInvoice(input) {
+  const raw = input && typeof input === 'object' ? input : {};
+  const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
+    const qty = Math.max(0, Math.min(9999, Number(it && it.qty) || 0));
+    const unitPrice = clampMoney(it && it.unitPrice);
+    const description = cleanText(it && (it.description || it.desc || it.name), 180);
+    return { description, qty, unitPrice, lineTotal: money(qty * unitPrice) };
+  }).filter(it => it.description && it.qty > 0 && it.unitPrice >= 0);
+  const subtotal = money(items.reduce((s, it) => s + it.lineTotal, 0));
+  const discount = Math.min(clampMoney(raw.discount), subtotal);
+  const total = money(subtotal - discount);
+  return { items, subtotal, discount, total };
+}
+function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
+function publicInvoice(inv) {
+  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0 };
+}
+function invoiceEmailHtml(inv) {
+  let rows = '';
+  (inv.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
+  const inner = '<p>Hi ' + escMail(inv.customerName || 'there') + ', here is your invoice <b>' + escMail(inv.id) + '</b> from General Handyman Solutions.</p>'
+    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Description</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
+    + '<p>Subtotal: <b>' + usd(inv.subtotal) + '</b></p>'
+    + (inv.discount > 0 ? '<p>Discount: <b>-' + usd(inv.discount) + '</b></p>' : '')
+    + '<p style="font-size:18px">Total due: <b>' + usd(inv.total) + '</b></p>'
+    + (inv.dueDate ? '<p>Due date: <b>' + escMail(inv.dueDate) + '</b></p>' : '')
+    + (inv.notes ? '<p>' + escMail(inv.notes) + '</p>' : '')
+    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Pay ' + usd(inv.total) + ' now</a></p>'
+    + '<p style="color:#666;font-size:13px">Or open this link to pay securely online:<br>' + escMail(invoicePayLink(inv)) + '</p>';
+  return mailShell('Your invoice from General Handyman Solutions', inner, 'Questions about this invoice? Text or call (707) 862-3773. Thank you for your business!');
+}
+function invoiceEmailText(inv) {
+  const lines = ['General Handyman Solutions — invoice ' + inv.id, 'Customer: ' + (inv.customerName || ''), ''];
+  (inv.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
+  lines.push('', 'Subtotal: ' + usd(inv.subtotal));
+  if (inv.discount > 0) lines.push('Discount: -' + usd(inv.discount));
+  lines.push('TOTAL DUE: ' + usd(inv.total));
+  if (inv.dueDate) lines.push('Due date: ' + inv.dueDate);
+  if (inv.notes) lines.push('', inv.notes);
+  lines.push('', 'Pay securely online: ' + invoicePayLink(inv), 'Questions? Text/call (707) 862-3773.');
+  return lines.join('\n');
+}
+function invoicePageHtml(inv) {
+  const pub = publicInvoice(inv);
+  const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  const badge = { draft: '#6b6762', sent: '#b26a00', paid: '#1a7f37', overdue: '#e10600', cancelled: '#6b6762' }[pub.status] || '#6b6762';
+  const payable = ['draft', 'sent'].includes(pub.status);
+  const payBlock = payable
+    ? '<button id="payBtn" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p><script>document.getElementById("payBtn").onclick=async()=>{var m=document.getElementById("payMsg");m.textContent="Opening secure checkout…";try{var r=await fetch("/api/invoices/' + pub.id + '/pay",{method:"POST"});var d=await r.json();if(!r.ok)throw new Error(d.error||"failed");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
+    : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">✅ This invoice was paid in full. Thank you!</p>' : '<p style="color:#666">This invoice is ' + escMail(pub.status) + '.</p>');
+  return '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice ' + escMail(pub.id) + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
+    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Invoice ' + escMail(pub.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(pub.status) + '</span></div>'
+    + '<p style="color:#666">Billed to <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 Due <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">Description</th><th style="padding:8px">Qty</th><th style="text-align:right;padding:8px">Each</th><th style="text-align:right;padding:8px">Line</th></tr>' + rows + '</table>'
+    + '<p>Subtotal: <b>' + usd(pub.subtotal) + '</b></p>'
+    + (pub.discount > 0 ? '<p>Discount: <b>-' + usd(pub.discount) + '</b></p>' : '')
+    + '<p style="font-size:22px">Total due: <b>' + usd(pub.total) + '</b></p>'
+    + (pub.notes ? '<p style="color:#555">' + escMail(pub.notes) + '</p>' : '')
+    + payBlock
+    + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
+    + '</div></body>';
 }
 function automationReady() { return mailReady() || googleReady(); }
 async function googleAutomation(type, payload) {
@@ -684,6 +793,116 @@ const server = http.createServer(async (req, res) => {
     save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
 
+  // ---------- invoices (admin) ----------
+  if (p === '/api/admin/invoices' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const norm = normalizeInvoice(b);
+    if (!cleanText(b.customerName, 120)) return send(res, 400, { error: 'customer name required' });
+    if (!norm.items.length) return send(res, 400, { error: 'add at least one priced line item' });
+    if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
+    const email = cleanText(b.customerEmail, 160).toLowerCase();
+    const inv = {
+      id: id('INV'), customerName: cleanText(b.customerName, 120), customerEmail: email,
+      customerPhone: cleanText(b.customerPhone, 40), customerId: cleanText(b.customerId, 40),
+      jobId: cleanText(b.jobId, 40), items: norm.items, subtotal: norm.subtotal,
+      discount: norm.discount, total: norm.total, status: 'draft',
+      notes: cleanText(b.notes, 1000), dueDate: cleanText(b.dueDate, 20),
+      createdAt: new Date().toISOString(), sentAt: null, paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: ''
+    };
+    // Link to an app customer account by email when one exists, so the invoice
+    // also shows up in their dashboard.
+    if (!inv.customerId && email) { const c = db.users.find(u => u.role === 'customer' && u.email === email); if (c) inv.customerId = c.id; }
+    if (!Array.isArray(db.invoices)) db.invoices = [];
+    db.invoices.push(inv);
+    notifyAdmins('invoice', 'Draft invoice ' + inv.id + ' created for ' + inv.customerName + ' (' + usd(inv.total) + ').');
+    save(); return send(res, 201, { invoice: publicInvoice(inv) });
+  }
+  if (p === '/api/admin/invoices' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, { invoices: (db.invoices || []).slice().reverse().map(publicInvoice) });
+  }
+  const invAdminMatch = p.match(/^\/api\/admin\/invoices\/([\w-]+)\/(send|cancel|mark-paid)$/);
+  if (invAdminMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const inv = (db.invoices || []).find(x => x.id === invAdminMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invoice not found' });
+    const action = invAdminMatch[2];
+    const b = await readBody(req);
+    if (action === 'send') {
+      if (inv.status !== 'draft') return send(res, 400, { error: 'only draft invoices can be sent' });
+      if (!inv.customerEmail) return send(res, 400, { error: 'invoice has no customer email — add one first' });
+      inv.status = 'sent'; inv.sentAt = new Date().toISOString();
+      notifyAdmins('invoice', 'Invoice ' + inv.id + ' sent to ' + inv.customerEmail + ' (' + usd(inv.total) + ').');
+      save();
+      const automation = await sendAutomation('invoice_sent', { invoice: publicInvoice(inv) });
+      return send(res, 200, { invoice: publicInvoice(inv), automation });
+    }
+    if (action === 'cancel') {
+      if (!['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be cancelled' });
+      inv.status = 'cancelled';
+      notifyAdmins('invoice', 'Invoice ' + inv.id + ' cancelled.');
+      save(); return send(res, 200, { invoice: publicInvoice(inv) });
+    }
+    if (action === 'mark-paid') {
+      if (!['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be marked paid' });
+      inv.status = 'paid'; inv.paidAt = new Date().toISOString();
+      inv.paidMethod = cleanText(b.method, 20) || 'manual';
+      inv.paidAmount = inv.total;
+      notifyAdmins('payment', 'Invoice ' + inv.id + ' marked PAID (' + usd(inv.total) + ', ' + inv.paidMethod + ').');
+      const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
+      if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + inv.total.toFixed(2) + ') was marked paid. Thank you!');
+      save();
+      fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
+      return send(res, 200, { invoice: publicInvoice(inv) });
+    }
+    return send(res, 400, { error: 'unknown action' });
+  }
+  const invPutMatch = p.match(/^\/api\/admin\/invoices\/([\w-]+)$/);
+  if (invPutMatch && req.method === 'PUT') {
+    // Edit an invoice while it is still draft or sent (e.g. price negotiation
+    // before payment). Totals are recalculated from the new line items. The
+    // payment page always charges the current total, so a sent invoice keeps
+    // working after an edit — no re-send is required for the link to charge
+    // the new amount.
+    if (!requireRole(user, ['admin'], res)) return;
+    const inv = (db.invoices || []).find(x => x.id === invPutMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invoice not found' });
+    if (!['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be edited' });
+    const b = await readBody(req);
+    const norm = normalizeInvoice(b);
+    if (!norm.items.length) return send(res, 400, { error: 'add at least one priced line item' });
+    if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
+    inv.items = norm.items; inv.subtotal = norm.subtotal; inv.discount = norm.discount; inv.total = norm.total;
+    if (b.customerName !== undefined) { const n = cleanText(b.customerName, 120); if (n) inv.customerName = n; }
+    if (b.customerEmail !== undefined) {
+      inv.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
+      // Re-link to an app customer account when the email changed.
+      inv.customerId = '';
+      if (inv.customerEmail) { const c = db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail); if (c) inv.customerId = c.id; }
+    }
+    if (b.customerPhone !== undefined) inv.customerPhone = cleanText(b.customerPhone, 40);
+    if (b.jobId !== undefined) inv.jobId = cleanText(b.jobId, 40);
+    if (b.notes !== undefined) inv.notes = cleanText(b.notes, 1000);
+    if (b.dueDate !== undefined) inv.dueDate = cleanText(b.dueDate, 20);
+    inv.updatedAt = new Date().toISOString();
+    notifyAdmins('invoice', 'Invoice ' + inv.id + ' updated — new total ' + usd(inv.total) + '.');
+    save(); return send(res, 200, { invoice: publicInvoice(inv) });
+  }
+  if (invPutMatch && req.method === 'DELETE') {
+    // Delete an invoice. Rule: only DRAFT invoices can be deleted outright.
+    // Sent or paid invoices must be cancelled instead so the record (and the
+    // payment history) is preserved.
+    if (!requireRole(user, ['admin'], res)) return;
+    const inv = (db.invoices || []).find(x => x.id === invPutMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invoice not found' });
+    if (inv.status !== 'draft') return send(res, 400, { error: 'only draft invoices can be deleted — cancel sent or paid invoices instead' });
+    const idx = db.invoices.indexOf(inv);
+    db.invoices.splice(idx, 1);
+    notifyAdmins('invoice', 'Draft invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ') was deleted.');
+    save(); return send(res, 200, { ok: true, deleted: inv.id });
+  }
+
   // ---------- jobs / marketplace ----------
   const jobDelMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
   if (jobDelMatch && req.method === 'DELETE') {
@@ -804,6 +1023,27 @@ const server = http.createServer(async (req, res) => {
       return send(res, 400, { error: 'unknown checkout kind' });
     } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
+  // ---------- invoices (customer payment) ----------
+  if (p === '/api/invoices/mine' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const email = (user.email || '').toLowerCase();
+    const mine = (db.invoices || []).filter(inv => inv.customerId === user.id || (email && (inv.customerEmail || '').toLowerCase() === email));
+    return send(res, 200, { invoices: mine.slice().reverse().map(publicInvoice) });
+  }
+  const invPayMatch = p.match(/^\/api\/invoices\/([\w-]+)\/pay$/);
+  if (invPayMatch && req.method === 'POST') {
+    // Public: anyone with the invoice link can pay it. No login required — the
+    // invoice id in the emailed link is the credential, same as estimate links.
+    const inv = (db.invoices || []).find(x => x.id === invPayMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invoice not found' });
+    if (inv.status === 'paid') return send(res, 400, { error: 'this invoice is already paid' });
+    if (inv.status === 'cancelled') return send(res, 400, { error: 'this invoice was cancelled — contact the Team' });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to pay another way' });
+    try {
+      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '' });
+      return send(res, 200, { url: s.url, amount: inv.total });
+    } catch (e) { console.error('invoice checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
   if (p === '/api/stripe/portal' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
@@ -828,6 +1068,13 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/payment/cancelled' && req.method === 'GET') {
     return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment cancelled</title><body style="font-family:system-ui;max-width:560px;margin:0 auto;padding:32px 20px;text-align:center"><h1>Payment <span style="color:#e10600">cancelled</span></h1><p>No charge was made. You can come back and try again anytime — your request is still saved in the app.</p><p><a href="/" style="background:#0b0b0b;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700">Back to the app</a></p><p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p></body>');
+  }
+
+  const invPageMatch = p.match(/^\/invoice\/([\w-]+)$/);
+  if (invPageMatch && req.method === 'GET') {
+    const inv = (db.invoices || []).find(x => x.id === invPageMatch[1]);
+    if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invoice not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
+    return send(res, 200, invoicePageHtml(inv));
   }
 
   // ---------- memberships (admin) ----------
