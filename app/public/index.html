@@ -159,6 +159,8 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="myRequests"></div>
     <h2>My jobs — chat with the Team and your worker</h2>
     <div id="myJobs"></div>
+    <h2>My invoices</h2>
+    <div id="myInvoices"></div>
   </div>
 
   <!-- WORKER -->
@@ -188,6 +190,18 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     </div>
     <h3>My job offers</h3>
     <div id="adminJobs"></div>
+    <h3>Invoices — bill customers for finished jobs</h3>
+    <div class="card">
+      <div class="row"><div><label>Customer name</label><input id="iName" placeholder="Customer full name"></div><div><label>Customer email</label><input id="iEmail" placeholder="customer@email.com"></div></div>
+      <div class="row"><div><label>Customer phone (optional)</label><input id="iPhone" placeholder="(707) 555-0123"></div><div><label>Job ID (optional)</label><input id="iJob" placeholder="JOB-XXXXXX"></div><div><label>Due date (optional)</label><input id="iDue" type="date"></div></div>
+      <div id="invRows"></div>
+      <button type="button" class="ghost" onclick="addInvoiceItem()">+ Add line</button>
+      <div class="est-grid" style="margin-top:10px"><label>Discount $<input type="number" min="0" step="0.01" id="iDiscount" value="0" oninput="updateInvoiceSummary()"></label><label>Notes for the invoice<input id="iNotes" placeholder="Thank-you note, payment terms..."></label></div>
+      <div class="est-summary" id="invSummary">Add the lines to see the total.</div>
+      <button onclick="createInvoice()">Create draft invoice</button>
+      <div id="iMsg" class="mut"></div>
+    </div>
+    <div id="adminInvoices"></div>
   </div>
 
   <p><button class="ghost" onclick="logout()">Log out</button></p>
@@ -353,6 +367,120 @@ async function sendEstimate(idv, sendEmail){
     loadAdmin();
   }catch(e){ alert(e.message); }
 }
+// ---------- Invoices (frontend) ----------
+function invItemRowHtml(it){
+  it=it||{description:'',qty:1,unitPrice:''};
+  return '<div class="est-row" data-inv-row><input data-inv-desc placeholder="Work / part description" value="'+escHtml(it.description||'')+'" oninput="updateInvoiceSummary()"><input data-inv-qty type="number" min="0" step="0.25" value="'+escHtml(it.qty||1)+'" oninput="updateInvoiceSummary()"><input data-inv-price type="number" min="0" step="0.01" placeholder="$" value="'+escHtml(it.unitPrice||'')+'" oninput="updateInvoiceSummary()"><button type="button" class="est-x" onclick="removeInvoiceItem(this)" title="Remove line">×</button></div>';
+}
+function addInvoiceItem(){ const box=document.getElementById('invRows'); if(box) box.insertAdjacentHTML('beforeend', invItemRowHtml()); updateInvoiceSummary(); }
+function removeInvoiceItem(btn){ const row=btn.closest('[data-inv-row]'); if(row) row.remove(); if(!document.querySelectorAll('#invRows [data-inv-row]').length) addInvoiceItem(); updateInvoiceSummary(); }
+function readInvoiceForm(){
+  const items=[...document.querySelectorAll('#invRows [data-inv-row]')].map(function(row){ return { description:row.querySelector('[data-inv-desc]').value.trim(), qty:Number(row.querySelector('[data-inv-qty]').value)||0, unitPrice:Number(row.querySelector('[data-inv-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
+  const subtotal=items.reduce((s,it)=>s+it.qty*it.unitPrice,0);
+  const discount=Math.min(Math.max(0, Number(document.getElementById('iDiscount').value)||0), subtotal);
+  const total=Math.max(0, Math.round((subtotal-discount)*100)/100);
+  return { items, discount:Math.round(discount*100)/100, subtotal:Math.round(subtotal*100)/100, total };
+}
+function updateInvoiceSummary(){ const el=document.getElementById('invSummary'); if(!el) return; const f=readInvoiceForm(); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(f.subtotal)+(f.discount?' • <b>Discount:</b> −'+moneyFmt(f.discount):'')+'<br><b>Invoice total:</b> <span class="st">'+moneyFmt(f.total)+'</span>'; }
+async function createInvoice(){
+  const f=readInvoiceForm();
+  const name=document.getElementById('iName').value.trim(), email=document.getElementById('iEmail').value.trim();
+  const msg=document.getElementById('iMsg');
+  if(!name){ msg.textContent='Customer name is required.'; return; }
+  if(!f.items.length || f.total<=0){ msg.textContent='Add at least one priced line first.'; return; }
+  if(!confirm('Create draft invoice?\n\nCustomer: '+name+'\nTotal: '+moneyFmt(f.total)+'\n\nYou can review it and send it by email next.')) return;
+  try{ await api('/api/admin/invoices',{method:'POST', body:JSON.stringify({customerName:name, customerEmail:email, customerPhone:document.getElementById('iPhone').value.trim(), jobId:document.getElementById('iJob').value.trim(), dueDate:document.getElementById('iDue').value, notes:document.getElementById('iNotes').value.trim(), items:f.items, discount:f.discount})});
+    msg.textContent='Draft invoice created.'; document.getElementById('invRows').innerHTML=''; addInvoiceItem(); document.getElementById('iDiscount').value='0'; document.getElementById('iNotes').value=''; updateInvoiceSummary(); loadInvoices();
+  }catch(e){ msg.textContent=e.message; }
+}
+function invStatusBadge(s){ const c={draft:'#6b6762',sent:'#b26a00',paid:'#1a7f37',overdue:'#e10600',cancelled:'#6b6762'}[s]||'#6b6762'; return '<span class="pill" style="border-color:'+c+';color:'+c+'">'+escHtml(s)+'</span>'; }
+let adminInvoicesCache=[];
+async function loadInvoices(){
+  const d=await api('/api/admin/invoices').catch(()=>({invoices:[]}));
+  adminInvoicesCache=d.invoices||[];
+  const el=document.getElementById('adminInvoices'); if(!el) return;
+  el.innerHTML = d.invoices.map(function(inv){
+    const items=(inv.items||[]).map(function(it){ return '<div class="mut">'+escHtml(it.description)+' × '+escHtml(it.qty)+' @ '+moneyFmt(it.unitPrice)+' = <b>'+moneyFmt(it.lineTotal)+'</b></div>'; }).join('');
+    const editable=inv.status==='draft'||inv.status==='sent';
+    const btns=[];
+    if(inv.status==='draft') btns.push('<button class="black" onclick="invoiceAct(\''+inv.id+'\',\'send\')">Send by email</button>');
+    if(editable){ btns.push('<button class="ghost" onclick="editInvoice(\''+inv.id+'\')">Edit</button>'); btns.push('<button onclick="invoiceAct(\''+inv.id+'\',\'mark-paid\')">Mark paid</button>'); btns.push('<button class="ghost" onclick="invoiceAct(\''+inv.id+'\',\'cancel\')">Cancel</button>'); }
+    if(inv.status==='draft') btns.push('<button class="ghost" onclick="delInvoice(\''+inv.id+'\')">Delete</button>');
+    btns.push('<button class="ghost" onclick="copyInvoiceLink(\''+inv.id+'\')">Copy payment link</button>');
+    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br><span class="mut">'+escHtml(inv.customerName)+(inv.customerEmail?' • '+escHtml(inv.customerEmail):'')+(inv.jobId?' • Job '+escHtml(inv.jobId):'')+(inv.dueDate?' • Due '+escHtml(inv.dueDate):'')+'</span><div style="margin:8px 0">'+items+'</div>'+(inv.discount?'<div class="mut">Discount: −'+moneyFmt(inv.discount)+'</div>':'')+'<div><b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b>'+(inv.paidMethod?' <span class="mut">• paid via '+escHtml(inv.paidMethod)+'</span>':'')+'</div>'+(inv.notes?'<div class="mut">Note: '+escHtml(inv.notes)+'</div>':'')+'<div class="row" style="margin-top:10px">'+btns.join('')+'</div><div id="invEdit-'+inv.id+'"></div></div>';
+  }).join('') || '<p class="mut">No invoices yet.</p>';
+}
+async function invoiceAct(idv, action){
+  let body={};
+  if(action==='mark-paid'){ const m=prompt('Payment method (cash, zelle, check, other):','cash'); if(m===null) return; body={method:m||'cash'}; if(!confirm('Mark invoice '+idv+' as PAID?')) return; }
+  else if(action==='cancel'){ if(!confirm('Cancel invoice '+idv+'?')) return; }
+  else if(action==='send'){ if(!confirm('Send invoice '+idv+' by email now?')) return; }
+  try{ const d=await api('/api/admin/invoices/'+idv+'/'+action,{method:'POST', body:JSON.stringify(body)});
+    if(action==='send' && d.automation && !d.automation.sent) alert('Invoice marked as sent, but the email did not go through. Reason: '+(d.automation.reason||'not configured')+'\n\nUse "Copy payment link" to send it manually.');
+    loadInvoices();
+  }catch(e){ alert(e.message); }
+}
+// ---------- Invoice editing (admin) ----------
+function invEditRowHtml(it){
+  it=it||{description:'',qty:1,unitPrice:''};
+  return '<div class="est-row" data-iedit-row><input data-iedit-desc placeholder="Work / part description" value="'+escHtml(it.description||'')+'" oninput="invEditChanged(this)"><input data-iedit-qty type="number" min="0" step="0.25" value="'+escHtml(it.qty||1)+'" oninput="invEditChanged(this)"><input data-iedit-price type="number" min="0" step="0.01" placeholder="$" value="'+escHtml(it.unitPrice||'')+'" oninput="invEditChanged(this)"><button type="button" class="est-x" onclick="removeInvoiceEditItem(this)" title="Remove line">×</button></div>';
+}
+function invEditChanged(inp){ const box=inp.closest('[id^="invEditRows-"]'); if(!box) return; updateInvoiceEditSummary(box.id.replace('invEditRows-','')); }
+function addInvoiceEditItem(idv){ const box=document.getElementById('invEditRows-'+idv); if(box) box.insertAdjacentHTML('beforeend', invEditRowHtml()); updateInvoiceEditSummary(idv); }
+function removeInvoiceEditItem(btn){ const box=btn.closest('[id^="invEditRows-"]'); const row=btn.closest('[data-iedit-row]'); if(row) row.remove(); if(!box) return; const idv=box.id.replace('invEditRows-',''); if(!box.querySelectorAll('[data-iedit-row]').length) addInvoiceEditItem(idv); updateInvoiceEditSummary(idv); }
+function readInvoiceEdit(idv){
+  const box=document.getElementById('invEditRows-'+idv); if(!box) return {items:[],discount:0,subtotal:0,total:0};
+  const items=[...box.querySelectorAll('[data-iedit-row]')].map(function(row){ return { description:row.querySelector('[data-iedit-desc]').value.trim(), qty:Number(row.querySelector('[data-iedit-qty]').value)||0, unitPrice:Number(row.querySelector('[data-iedit-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
+  const subtotal=items.reduce((s,it)=>s+it.qty*it.unitPrice,0);
+  const discount=Math.min(Math.max(0, Number(document.getElementById('ieDiscount-'+idv).value)||0), subtotal);
+  const total=Math.max(0, Math.round((subtotal-discount)*100)/100);
+  return { items, discount:Math.round(discount*100)/100, subtotal:Math.round(subtotal*100)/100, total };
+}
+function updateInvoiceEditSummary(idv){ const el=document.getElementById('invEditSummary-'+idv); if(!el) return; const f=readInvoiceEdit(idv); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(f.subtotal)+(f.discount?' • <b>Discount:</b> −'+moneyFmt(f.discount):'')+'<br><b>New total:</b> <span class="st">'+moneyFmt(f.total)+'</span>'; }
+function editInvoice(idv){
+  const inv=adminInvoicesCache.find(function(x){return x.id===idv;}); if(!inv) return;
+  const box=document.getElementById('invEdit-'+idv); if(!box) return;
+  const rows=(inv.items||[]).map(function(it){ return invEditRowHtml(it); }).join('');
+  box.innerHTML='<div style="margin-top:10px;border-top:1px dashed var(--line);padding-top:10px"><b>Edit invoice '+escHtml(inv.id)+'</b> <span class="mut">— the payment page always charges the current total, so the customer pays the new amount even on an already-sent link.</span>'
+    +'<div class="row" style="margin-top:8px"><div><label>Customer name</label><input id="ieName-'+idv+'" value="'+escHtml(inv.customerName||'')+'"></div><div><label>Customer email</label><input id="ieEmail-'+idv+'" value="'+escHtml(inv.customerEmail||'')+'"></div></div>'
+    +'<div class="row"><div><label>Customer phone</label><input id="iePhone-'+idv+'" value="'+escHtml(inv.customerPhone||'')+'"></div><div><label>Job ID</label><input id="ieJob-'+idv+'" value="'+escHtml(inv.jobId||'')+'"></div><div><label>Due date</label><input id="ieDue-'+idv+'" type="date" value="'+escHtml(inv.dueDate||'')+'"></div></div>'
+    +'<div id="invEditRows-'+idv+'">'+rows+'</div>'
+    +'<button type="button" class="ghost" onclick="addInvoiceEditItem(\''+idv+'\')">+ Add line</button>'
+    +'<div class="est-grid" style="margin-top:10px"><label>Discount $<input type="number" min="0" step="0.01" id="ieDiscount-'+idv+'" value="'+(inv.discount||0)+'" oninput="updateInvoiceEditSummary(\''+idv+'\')"></label><label>Notes<input id="ieNotes-'+idv+'" value="'+escHtml(inv.notes||'')+'"></label></div>'
+    +'<div class="est-summary" id="invEditSummary-'+idv+'"></div>'
+    +'<div class="row"><button class="black" onclick="saveInvoiceEdit(\''+idv+'\')">Save changes</button><button class="ghost" onclick="cancelInvoiceEdit(\''+idv+'\')">Cancel</button></div></div>';
+  updateInvoiceEditSummary(idv);
+}
+async function saveInvoiceEdit(idv){
+  const f=readInvoiceEdit(idv);
+  if(!f.items.length || f.total<=0){ alert('Add at least one priced line first.'); return; }
+  const name=document.getElementById('ieName-'+idv).value.trim();
+  if(!name){ alert('Customer name is required.'); return; }
+  if(!confirm('Save changes to invoice '+idv+'?\n\nNew total: '+moneyFmt(f.total))) return;
+  try{ await api('/api/admin/invoices/'+idv,{method:'PUT', body:JSON.stringify({customerName:name, customerEmail:document.getElementById('ieEmail-'+idv).value.trim(), customerPhone:document.getElementById('iePhone-'+idv).value.trim(), jobId:document.getElementById('ieJob-'+idv).value.trim(), dueDate:document.getElementById('ieDue-'+idv).value, notes:document.getElementById('ieNotes-'+idv).value.trim(), items:f.items, discount:f.discount})});
+    loadInvoices();
+  }catch(e){ alert(e.message); }
+}
+function cancelInvoiceEdit(idv){ const box=document.getElementById('invEdit-'+idv); if(box) box.innerHTML=''; }
+async function delInvoice(idv){
+  if(!confirm('Delete draft invoice '+idv+'? This removes it for good. Sent or paid invoices cannot be deleted — only cancelled.')) return;
+  try{ await api('/api/admin/invoices/'+idv,{method:'DELETE'}); loadInvoices(); }
+  catch(e){ alert(e.message); }
+}
+function copyInvoiceLink(idv){
+  const link=location.origin+'/invoice/'+idv;
+  const done=function(){ alert('Payment link copied:\n'+link); };
+  if(navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(function(){ prompt('Copy the payment link:', link); });
+  else prompt('Copy the payment link:', link);
+}
+async function loadMyInvoices(){
+  const el=document.getElementById('myInvoices'); if(!el) return;
+  const d=await api('/api/invoices/mine').catch(()=>({invoices:[]}));
+  el.innerHTML = d.invoices.map(function(inv){
+    const unpaid=['draft','sent'].indexOf(inv.status)>=0;
+    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br>'+(inv.dueDate?'<span class="mut">Due '+escHtml(inv.dueDate)+' • </span>':'')+'<b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b><br>'+(unpaid?'<a href="/invoice/'+inv.id+'"><button style="margin-top:8px">View & pay invoice</button></a>':'<a href="/invoice/'+inv.id+'" class="mut">View invoice</a>')+'</div>';
+  }).join('') || '<p class="mut">No invoices yet.</p>';
+}
 function threadHtml(r){
   const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||'Customer'); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
   const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="Job photo">'; }).join('');
@@ -414,6 +542,7 @@ async function loadAdmin(){
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
+  loadInvoices();
 }
 async function sendQuote(idv){ return sendEstimate(idv,false); }
 async function postFromRequest(idv, custPrice){
