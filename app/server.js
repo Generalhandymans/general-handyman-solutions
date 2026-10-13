@@ -233,6 +233,11 @@ async function resendAutomation(type, payload) {
     out.push(await sendMail({ to: [OWNER_EMAIL], subject: 'Invoice PAID: ' + inv.id + ' — ' + usd(inv.total || 0), html: eventEmail('Invoice paid', ['Invoice ' + inv.id, 'Customer: ' + (inv.customerName || '') + ' ' + (inv.customerEmail || ''), 'Amount: ' + usd(inv.total || 0), 'Method: ' + (inv.paidMethod || 'card')], OWNER_FOOTER), text: 'Invoice ' + inv.id + ' paid: ' + usd(inv.total || 0) }));
     return { attempted: true, sent: out.some(x => x.sent), via: 'resend' };
   }
+  if (type === 'invoice_reminder') {
+    const inv = p.invoice || {};
+    if (!inv.customerEmail) return { attempted: true, sent: false, reason: 'invoice has no customer email' };
+    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment reminder: invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is still unpaid', html: invoiceReminderEmailHtml(inv), text: invoiceReminderEmailText(inv) });
+  }
   return { attempted: false, sent: false, reason: 'no email template for ' + type };
 }
 async function sendAutomation(type, payload) {
@@ -479,7 +484,7 @@ function normalizeInvoice(input) {
 }
 function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
 function publicInvoice(inv) {
-  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0 };
+  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0 };
 }
 function invoiceEmailHtml(inv) {
   let rows = '';
@@ -506,11 +511,36 @@ function invoiceEmailText(inv) {
   lines.push('', 'Pay securely online: ' + invoicePayLink(inv), 'Questions? Text/call (707) 862-3773.');
   return lines.join('\n');
 }
+// Manual payment reminder email (added 2026-10-12): polite but firm. Only sent
+// when the admin presses "Remind" — there is no automatic reminder schedule.
+function invoiceReminderEmailHtml(inv) {
+  let rows = '';
+  (inv.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
+  const inner = '<p>Hi ' + escMail(inv.customerName || 'there') + ',</p>'
+    + '<p>This is a friendly reminder that invoice <b>' + escMail(inv.id) + '</b> for <b>' + usd(inv.total) + '</b> is still unpaid' + (inv.dueDate ? ' (due <b>' + escMail(inv.dueDate) + '</b>)' : '') + '.</p>'
+    + '<p>If you already paid, please disregard this message — and thank you!</p>'
+    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Description</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
+    + '<p>Subtotal: <b>' + usd(inv.subtotal) + '</b></p>'
+    + (inv.discount > 0 ? '<p>Discount: <b>-' + usd(inv.discount) + '</b></p>' : '')
+    + '<p style="font-size:18px">Total due: <b>' + usd(inv.total) + '</b></p>'
+    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Pay ' + usd(inv.total) + ' now</a></p>'
+    + '<p style="color:#666;font-size:13px">Or open this link to pay securely online:<br>' + escMail(invoicePayLink(inv)) + '</p>'
+    + '<p>Please settle this at your earliest convenience so we can close out your job. If something looks wrong on the invoice, just reply to this email and we will make it right.</p>';
+  return mailShell('Payment reminder — invoice ' + inv.id + ' (' + usd(inv.total) + ') still unpaid', inner, 'Questions about this invoice? Text or call (707) 862-3773. Thank you for your business!');
+}
+function invoiceReminderEmailText(inv) {
+  const lines = ['General Handyman Solutions — PAYMENT REMINDER', 'Invoice ' + inv.id + ' for ' + usd(inv.total) + ' is still unpaid.', ''];
+  (inv.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
+  lines.push('', 'TOTAL DUE: ' + usd(inv.total));
+  if (inv.dueDate) lines.push('Due date: ' + inv.dueDate);
+  lines.push('', 'Pay securely online: ' + invoicePayLink(inv), 'Already paid? Please disregard this message. Questions? Text/call (707) 862-3773.');
+  return lines.join('\n');
+}
 function invoicePageHtml(inv) {
   const pub = publicInvoice(inv);
   const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
   const badge = { draft: '#6b6762', sent: '#b26a00', paid: '#1a7f37', overdue: '#e10600', cancelled: '#6b6762' }[pub.status] || '#6b6762';
-  const payable = ['draft', 'sent'].includes(pub.status);
+  const payable = ['draft', 'sent', 'overdue'].includes(pub.status);
   const payBlock = payable
     ? '<button id="payBtn" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p><script>document.getElementById("payBtn").onclick=async()=>{var m=document.getElementById("payMsg");m.textContent="Opening secure checkout…";try{var r=await fetch("/api/invoices/' + pub.id + '/pay",{method:"POST"});var d=await r.json();if(!r.ok)throw new Error(d.error||"failed");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
     : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">✅ This invoice was paid in full. Thank you!</p>' : '<p style="color:#666">This invoice is ' + escMail(pub.status) + '.</p>');
@@ -822,7 +852,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, { invoices: (db.invoices || []).slice().reverse().map(publicInvoice) });
   }
-  const invAdminMatch = p.match(/^\/api\/admin\/invoices\/([\w-]+)\/(send|cancel|mark-paid)$/);
+  const invAdminMatch = p.match(/^\/api\/admin\/invoices\/([\w-]+)\/(send|cancel|mark-paid|remind)$/);
   if (invAdminMatch && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const inv = (db.invoices || []).find(x => x.id === invAdminMatch[1]);
@@ -855,6 +885,20 @@ const server = http.createServer(async (req, res) => {
       save();
       fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       return send(res, 200, { invoice: publicInvoice(inv) });
+    }
+    if (action === 'remind') {
+      // Manual payment reminder (admin-triggered only — no automatic schedule).
+      // Fires an in-app notification for the customer and a reminder email with
+      // the payment link, then stamps remindedAt and bumps reminderCount.
+      if (!['sent', 'overdue'].includes(inv.status)) return send(res, 400, { error: 'only sent or overdue invoices can be reminded' });
+      const cust = (inv.customerId && db.users.find(u => u.id === inv.customerId)) || (inv.customerEmail && db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail));
+      inv.reminderCount = (inv.reminderCount || 0) + 1;
+      inv.remindedAt = new Date().toISOString();
+      if (cust) notify(cust.id, 'invoice_reminder', 'Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv));
+      notifyAdmins('invoice', 'Payment reminder #' + inv.reminderCount + ' sent for invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ').');
+      save();
+      const automation = await sendAutomation('invoice_reminder', { invoice: publicInvoice(inv) });
+      return send(res, 200, { invoice: publicInvoice(inv), automation });
     }
     return send(res, 400, { error: 'unknown action' });
   }
