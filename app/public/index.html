@@ -446,7 +446,7 @@ async function loadInvoices(){
     const btns=[];
     if(inv.status==='draft') btns.push('<button class="black" onclick="invoiceAct(\''+inv.id+'\',\'send\')">Send by email</button>');
     if(editable){ btns.push('<button class="ghost" onclick="editInvoice(\''+inv.id+'\')">Edit</button>'); btns.push('<button onclick="invoiceAct(\''+inv.id+'\',\'mark-paid\')">Mark paid</button>'); btns.push('<button class="ghost" onclick="invoiceAct(\''+inv.id+'\',\'cancel\')">Cancel</button>'); }
-    if(inv.status==='draft') btns.push('<button class="ghost" onclick="delInvoice(\''+inv.id+'\')">Delete</button>');
+    if(inv.status!=='paid') btns.push('<button class="ghost" onclick="delInvoice(\''+inv.id+'\',\''+inv.status+'\')">Delete</button>');
     if(inv.status==='sent'||inv.status==='overdue') btns.push('<button class="black" onclick="invoiceAct(\''+inv.id+'\',\'remind\')">Remind</button>');
     btns.push('<button class="ghost" onclick="copyInvoiceLink(\''+inv.id+'\')">Copy payment link</button>');
     const remindLine=(inv.reminderCount?'<div class="mut">⏰ Reminded '+inv.reminderCount+'x'+(inv.remindedAt?' • last '+new Date(inv.remindedAt).toLocaleString():'')+'</div>':'');
@@ -517,8 +517,8 @@ async function saveInvoiceEdit(idv){
   }catch(e){ alert(e.message); }
 }
 function cancelInvoiceEdit(idv){ const box=document.getElementById('invEdit-'+idv); if(box) box.innerHTML=''; }
-async function delInvoice(idv){
-  if(!confirm('Delete draft invoice '+idv+'? This removes it for good. Sent or paid invoices cannot be deleted — only cancelled.')) return;
+async function delInvoice(idv, st){
+  if(!confirm('Delete invoice '+idv+' ('+(st||'')+')? This removes it for good. Only use for invoices that were never paid — paid invoices cannot be deleted.')) return;
   try{ await api('/api/admin/invoices/'+idv,{method:'DELETE'}); loadInvoices(); }
   catch(e){ alert(e.message); }
 }
