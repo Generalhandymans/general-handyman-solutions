@@ -1084,16 +1084,17 @@ const server = http.createServer(async (req, res) => {
     save(); return send(res, 200, { invoice: publicInvoice(inv) });
   }
   if (invPutMatch && req.method === 'DELETE') {
-    // Delete an invoice. Rule: only DRAFT invoices can be deleted outright.
-    // Sent or paid invoices must be cancelled instead so the record (and the
-    // payment history) is preserved.
+    // Delete an invoice. Rule: any invoice that was NEVER paid can be deleted
+    // outright (draft, sent, overdue, cancelled) — no point keeping clutter for
+    // money that never arrived. Paid invoices cannot be deleted; cancel them
+    // instead so the payment record is preserved.
     if (!requireRole(user, ['admin'], res)) return;
     const inv = (db.invoices || []).find(x => x.id === invPutMatch[1]);
     if (!inv) return send(res, 404, { error: 'invoice not found' });
-    if (inv.status !== 'draft') return send(res, 400, { error: 'only draft invoices can be deleted — cancel sent or paid invoices instead' });
+    if (inv.status === 'paid' || inv.paidAt) return send(res, 400, { error: 'paid invoices cannot be deleted — cancel instead to keep the payment record' });
     const idx = db.invoices.indexOf(inv);
     db.invoices.splice(idx, 1);
-    notifyAdmins('invoice', 'Draft invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ') was deleted.');
+    notifyAdmins('invoice', 'Invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ') was deleted.');
     save(); return send(res, 200, { ok: true, deleted: inv.id });
   }
 
