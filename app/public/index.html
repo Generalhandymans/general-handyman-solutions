@@ -112,14 +112,19 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     </div>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
-    <p class="mut" id="authHint">Customers: sign up to send requests, send photos, and get quotes here. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
+    <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
   </div>
 
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
     <h2>Request a handyman</h2>
-    <p class="mut">Pick a service, add pictures, choose when — same as the main page, now inside your account so you can track it and chat with the Team. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
+    <p class="mut">Pick a service, add pictures, choose when — no account needed. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
+      <div id="anonContact" style="display:none;border-bottom:1px dashed #ddd;margin-bottom:10px;padding-bottom:10px">
+        <label>Your name</label><input id="rName" placeholder="Full name" style="width:100%;max-width:420px">
+        <label>Email (we send your quote here)</label><input id="rEmail" type="email" placeholder="you@email.com" style="width:100%;max-width:420px">
+        <label>Phone</label><input id="rPhone" type="tel" placeholder="(707) 555-1234" style="width:100%;max-width:420px">
+      </div>
       <label>What do you need?</label>
       <div class="pick" id="cService">
         <button type="button" data-v="TV Mounting & Installs">TV Mounting &amp; Installs</button><button type="button" data-v="Repairs & Fixes">Repairs &amp; Fixes</button><button type="button" data-v="Painting & Walls">Painting &amp; Walls</button><button type="button" data-v="Carpentry">Carpentry</button><button type="button" data-v="Plumbing Help">Plumbing Help</button><button type="button" data-v="Electrical Swaps">Electrical Swaps</button><button type="button" data-v="Mobile Mechanic">Mobile Mechanic</button><button type="button" data-v="Assembly & Other">Assembly &amp; Other</button>
@@ -155,12 +160,12 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <button id="cSendBtn" onclick="sendRequest()">Send request</button>
       <div id="rMsg" class="mut"></div>
     </div>
-    <h2>My requests</h2>
-    <div id="myRequests"></div>
-    <h2>My jobs — chat with the Team and your worker</h2>
-    <div id="myJobs"></div>
-    <h2>My invoices</h2>
-    <div id="myInvoices"></div>
+    <h2 class="custAccountOnly">My requests</h2>
+    <div id="myRequests" class="custAccountOnly"></div>
+    <h2 class="custAccountOnly">My jobs — chat with the Team and your worker</h2>
+    <div id="myJobs" class="custAccountOnly"></div>
+    <h2 class="custAccountOnly">My invoices</h2>
+    <div id="myInvoices" class="custAccountOnly"></div>
   </div>
 
   <!-- WORKER -->
@@ -273,7 +278,13 @@ function render(){
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   document.getElementById('authBox').style.display = me ? 'none':'block';
-  document.getElementById('customerBox').style.display = me && me.role==='customer' ? 'block':'none';
+  // Quote form is public — no account needed. "My ..." sections need a customer login.
+  const showCust = !me || me.role==='customer';
+  document.getElementById('customerBox').style.display = showCust ? 'block':'none';
+  document.getElementById('anonContact').style.display = !me ? 'block':'none';
+  document.querySelectorAll('#customerBox .custAccountOnly').forEach(function(el){ el.style.display = (me && me.role==='customer') ? '' : 'none'; });
+  const memberRow = document.getElementById('cMember');
+  if(memberRow){ const showM = !!me; memberRow.style.display = showM ? '' : 'none'; const lbl = memberRow.previousElementSibling; if(lbl && lbl.tagName==='LABEL') lbl.style.display = showM ? '' : 'none'; }
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
   if(me && me.role==='customer'){ loadRequests(); loadMyJobs(); custSummary(); }
@@ -316,11 +327,21 @@ async function sendRequest(){
   if(!st.when){ msg.textContent='Choose when you need it.'; return; }
   if(!document.getElementById('rDesc').value.trim()){ msg.textContent='Describe the job in a sentence or two.'; return; }
   if(!custAck){ msg.textContent='Tap the confirm box (estimate + labor-only) before sending.'; return; }
+  let cName='', cEmail='', cPhone='';
+  if(!me){
+    cName=document.getElementById('rName').value.trim();
+    cEmail=document.getElementById('rEmail').value.trim();
+    cPhone=document.getElementById('rPhone').value.trim();
+    if(!cName){ msg.textContent='Add your name.'; return; }
+    if(!/.+@.+\..+/.test(cEmail)){ msg.textContent='Add a valid email — we send your quote there.'; return; }
+  }
   try{ const files=[...document.getElementById('rPhotos').files].slice(0,6); const photos=[];
     for(const fl of files){ photos.push(await fileToDataUrl(fl)); }
     if(st.est==='photo' && !photos.length){ msg.textContent='Free photo estimates need at least one picture.'; return; }
-    await api('/api/requests',{method:'POST', body:JSON.stringify({service:st.service, description:document.getElementById('rDesc').value, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:st.member, photos})});
-    msg.textContent='Request sent'+(photos.length?' with '+photos.length+' photo(s)':'')+'. The Team will review and send your quote right here — check back in this thread.'; document.getElementById('rPhotos').value=''; loadRequests();
+    await api('/api/requests',{method:'POST', body:JSON.stringify({service:st.service, description:document.getElementById('rDesc').value, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:me?st.member:'none', photos, customerName:cName, customerEmail:cEmail, customerPhone:cPhone})});
+    msg.textContent= me ? 'Request sent'+(photos.length?' with '+photos.length+' photo(s)':'')+'. The Team will review and send your quote right here — check back in this thread.'
+      : 'Request sent! The Team will review it and send your quote to '+cEmail+'. No account needed — you can approve and pay right from the email link.';
+    document.getElementById('rPhotos').value=''; if(me) loadRequests();
   }catch(e){ msg.textContent=e.message; }
 }
 function escHtml(v){ return (''+(v==null?'':v)).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
