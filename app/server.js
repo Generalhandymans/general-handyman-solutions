@@ -655,10 +655,10 @@ function invoiceFromEstimate(r) {
     : norm.items;
   const invNorm = depositMode ? normalizeInvoice({ items: invItems }) : norm;
   const cust = db.users.find(u => u.id === r.customerId);
-  const email = ((cust && cust.email) || '').toLowerCase();
+  const email = (r.customerEmail || (cust && cust.email) || '').toLowerCase();
   const inv = {
     id: id('INV'), customerName: r.customerName || (cust ? cust.name : ''), customerEmail: email,
-    customerPhone: (cust && cust.phone) || '', customerId: r.customerId || '',
+    customerPhone: r.customerPhone || (cust && cust.phone) || '', customerId: r.customerId || '',
     jobId: '', requestId: r.id, items: invNorm.items, subtotal: invNorm.subtotal,
     discount: invNorm.discount, total: invNorm.total, status: 'sent',
     notes: depositMode
@@ -703,7 +703,7 @@ function requestAutomationPayload(r) {
   return {
     appUrl: APP_URL,
     businessEmail: BUSINESS_EMAIL,
-    request: { id: r.id, customerName: r.customerName || (cust ? cust.name : ''), customerEmail: cust ? cust.email : '', customerPhone: cust ? (cust.phone || '') : '', service: r.service || '', description: r.description || '', city: r.city || '', address: r.address || '', when: r.when || '', estimateType: r.estimateType || '', membership: r.membership || '', status: r.status || '', quote: r.quote, quoteNote: r.quoteNote || '', estimate: r.estimate || null, createdAt: r.createdAt || '' },
+    request: { id: r.id, customerName: r.customerName || (cust ? cust.name : ''), customerEmail: r.customerEmail || (cust ? cust.email : ''), customerPhone: r.customerPhone || (cust ? (cust.phone || '') : ''), service: r.service || '', description: r.description || '', city: r.city || '', address: r.address || '', when: r.when || '', estimateType: r.estimateType || '', membership: r.membership || '', status: r.status || '', quote: r.quote, quoteNote: r.quoteNote || '', estimate: r.estimate || null, createdAt: r.createdAt || '' },
     adminEmails: adminEmails()
   };
 }
@@ -794,18 +794,29 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
 
   // ---------- customer requests ----------
+  // Public: no account required. Anonymous requests store name/email/phone on
+  // the request itself; logged-in customers keep member pricing + dashboard.
   if (p === '/api/requests' && req.method === 'POST') {
-    if (!requireRole(user, ['customer', 'admin'], res)) return;
     const b = await readBody(req);
     const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
+    const formName = cleanText(b.customerName, 80);
+    const formEmail = cleanText(b.customerEmail, 160).toLowerCase();
+    const formPhone = cleanText(b.customerPhone, 40);
+    const name = user ? user.name : formName;
+    const email = user ? (user.email || '').toLowerCase() : formEmail;
+    if (!name) return send(res, 400, { error: 'name required' });
+    if (!/.+@.+\..+/.test(email)) return send(res, 400, { error: 'valid email required' });
+    let customerId = user ? user.id : null;
+    // Link to an existing customer account by email when one exists.
+    if (!customerId && email) { const c = db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email); if (c) customerId = c.id; }
     // Estimate pricing is authoritative from Stripe-verified membership, NOT from
     // what the customer picked in the form: active members get $60 (or $0 for
     // their one free estimate, applied below), everyone else pays $75.
-    const hcActive = user.role === 'customer' && user.homeCareStatus === 'active';
-    const r = { id: id('GHS'), customerId: user.id, customerName: user.name, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: hcActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (hcActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name: user.name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const hcActive = !!user && user.role === 'customer' && user.homeCareStatus === 'active';
+    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: hcActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (hcActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     // HomeCare free estimate (one per membership): first in-person request from an
     // active member with the freebie unused consumes it automatically.
-    if (user.role === 'customer' && user.homeCareStatus === 'active' && !user.freeEstimateUsed && r.estimateType === 'inperson') {
+    if (user && user.role === 'customer' && user.homeCareStatus === 'active' && !user.freeEstimateUsed && r.estimateType === 'inperson') {
       user.freeEstimateUsed = true;
       r.membership = 'member';
       r.estimateDue = 0;
@@ -818,7 +829,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
     let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
-    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); const ei = (db.invoices || []).find(x => x.requestId === r.id); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '', customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none', estimateInvoice: ei ? { id: ei.id, status: ei.status } : null }); });
+    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); const ei = (db.invoices || []).find(x => x.requestId === r.id); return Object.assign({}, r, { customerPhone: r.customerPhone || (c ? (c.phone || '') : ''), customerEmail: r.customerEmail || (c ? c.email : ''), customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none', estimateInvoice: ei ? { id: ei.id, status: ei.status } : null }); });
     return send(res, 200, { requests: list });
   }
   const reqMatch = p.match(/^\/api\/requests\/([\w-]+)$/);
