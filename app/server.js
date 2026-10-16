@@ -159,7 +159,9 @@ function estimateEmailHtml(rq) {
     + '<p style="font-size:18px">Total: <b>' + usd(e.total) + '</b></p>'
     + '<p>Due to book: <b>' + usd(e.bookingDue) + '</b> \u2022 Balance at completion: <b>' + usd(e.balanceDue) + '</b></p>'
     + (rq.quoteNote ? '<p>' + escMail(rq.quoteNote) + '</p>' : '')
-    + '<p>Open the app to approve this estimate and confirm your time. The same estimate is attached as a PDF.</p>';
+    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & approve online</a></p>'
+    + '<p style="color:#666;font-size:13px">Or open this link — no account needed:<br>' + escMail(estimatePageLink(rq)) + '</p>'
+    + '<p>The same estimate is attached as a PDF.</p>';
   return mailShell('Your estimate from General Handyman Solutions', inner);
 }
 function estimateEmailText(rq) {
@@ -170,7 +172,7 @@ function estimateEmailText(rq) {
   if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
   if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
   if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
-  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue), '', 'Approve in the app: ' + APP_URL, 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
+  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue), '', 'Review & approve online (no account needed): ' + estimatePageLink(rq), 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
   return lines.join('\n');
 }
 function pdfEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
@@ -484,7 +486,7 @@ function normalizeInvoice(input) {
 }
 function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
 function publicInvoice(inv) {
-  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0 };
+  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
 }
 function invoiceEmailHtml(inv) {
   let rows = '';
@@ -544,6 +546,29 @@ function invoicePageHtml(inv) {
   const payBlock = payable
     ? '<button id="payBtn" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p><script>document.getElementById("payBtn").onclick=async()=>{var m=document.getElementById("payMsg");m.textContent="Opening secure checkout…";try{var r=await fetch("/api/invoices/' + pub.id + '/pay",{method:"POST"});var d=await r.json();if(!r.ok)throw new Error(d.error||"failed");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
     : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">✅ This invoice was paid in full. Thank you!</p>' : '<p style="color:#666">This invoice is ' + escMail(pub.status) + '.</p>');
+  // Scheduling request (added 2026-10-12): shown on the paid confirmation.
+  // This is a REQUEST, not a booking — Gabriel confirms the final schedule
+  // himself from the admin panel.
+  let schedBlock = '';
+  if (pub.status === 'paid') {
+    if (pub.scheduleRequestedAt) {
+      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">📅 Scheduling request received</h3>'
+        + '<p>Preferred: <b>' + escMail(pub.preferredDate || '—') + '</b> • <b>' + escMail(pub.preferredTime || '—') + '</b></p>'
+        + (pub.scheduleNotes ? '<p style="color:#555">' + escMail(pub.scheduleNotes) + '</p>' : '')
+        + (pub.confirmedDate
+          ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px">✅ <b>Confirmed by the Team: ' + escMail(pub.confirmedDate) + (pub.confirmedTime ? ' • ' + escMail(pub.confirmedTime) : '') + '</b></p>'
+          : '<p style="color:#666;font-size:13px">The Team will confirm your final date and time shortly — this is a request, not a booking yet.</p>')
+        + '</div>';
+    } else {
+      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">📅 Schedule your job</h3>'
+        + '<p style="color:#666;font-size:13px">Pick what works for you — the Team confirms the final date and time.</p>'
+        + '<label style="display:block;margin:8px 0">Preferred date<br><input type="date" id="schedDate" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box"></label>'
+        + '<label style="display:block;margin:8px 0">Time window<br><select id="schedTime" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%"><option value="morning">Morning (8am–12pm)</option><option value="afternoon">Afternoon (12pm–5pm)</option><option value="evening">Evening (5pm–8pm)</option></select></label>'
+        + '<label style="display:block;margin:8px 0">Notes<br><textarea id="schedNotes" placeholder="Gate code, parking, anything we should know…" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
+        + '<button id="schedBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Request this time</button><p id="schedMsg" style="color:#666"></p></div>'
+        + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent="Pick a preferred date first.";return;}m.textContent="Sending…";try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
+    }
+  }
   return '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice ' + escMail(pub.id) + ' — General Handyman Solutions</title>'
     + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
     + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
@@ -556,8 +581,96 @@ function invoicePageHtml(inv) {
     + '<p style="font-size:22px">Total due: <b>' + usd(pub.total) + '</b></p>'
     + (pub.notes ? '<p style="color:#555">' + escMail(pub.notes) + '</p>' : '')
     + payBlock
+    + schedBlock
     + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
     + '</div></body>';
+}
+// ---------- Public estimate approval (added 2026-10-12) ----------
+// Customers review, approve, or decline an estimate from a public link — no
+// account needed. The estimate id (GHS-XXXXXX) in the emailed link is the
+// credential, same as invoice links.
+function estimatePageLink(r) { return appBase() + '/estimate/' + r.id; }
+function estimatePageHtml(r) {
+  const e = r.estimate || {};
+  const rows = (e.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  let adj = '';
+  if (e.asapAmount > 0) adj += '<p>ASAP / Emergency (+25%): <b>' + usd(e.asapAmount) + '</b></p>';
+  if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
+  if (e.credit > 0) adj += '<p>Appointment credit: <b>-' + usd(e.credit) + '</b></p>';
+  const badge = { Quoted: '#b26a00', Approved: '#1a7f37', Declined: '#6b6762' }[r.status] || '#6b6762';
+  const badgeLabel = r.status === 'Quoted' ? 'awaiting approval' : String(r.status || '').toLowerCase();
+  const inv = (db.invoices || []).find(x => x.requestId === r.id);
+  let actionBlock = '';
+  if (r.status === 'Quoted') {
+    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px">'
+      + '<h3 style="margin-top:0">Approve this estimate?</h3>'
+      + '<p style="color:#666;font-size:13px">Approving creates your invoice right away — then you pay online with a card. No account needed.</p>'
+      + '<input id="decReason" placeholder="Optional: reason or change request…" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-bottom:10px;box-sizing:border-box">'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button id="apBtn" style="background:#1a7f37;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1">Approve estimate</button>'
+      + '<button id="decBtn" style="background:#fff;color:#333;border:1px solid #ccc;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1">Decline / request changes</button></div>'
+      + '<p id="decMsg" style="color:#666"></p></div>'
+      + '<script>function decide(action){var m=document.getElementById("decMsg");m.textContent="Sending…";var reason=document.getElementById("decReason").value;fetch("/estimate/' + r.id + '/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:reason})}).then(function(res){return res.json().then(function(d){return{ok:res.ok,d:d};});}).then(function(o){if(!o.ok)throw new Error(o.d.error||"failed");if(action==="approve"&&o.d.payUrl){m.innerHTML="Approved! Opening your secure payment page…";setTimeout(function(){location.href=o.d.payUrl;},1200);}else{location.reload();}}).catch(function(e){m.textContent=e.message;});}document.getElementById("apBtn").onclick=function(){decide("approve");};document.getElementById("decBtn").onclick=function(){if(confirm("Decline this estimate?"))decide("decline");};</scr' + 'ipt>';
+  } else if (r.status === 'Approved') {
+    actionBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#1a7f37">Estimate approved</h3>'
+      + (inv
+        ? '<p>Your invoice <b>' + escMail(inv.id) + '</b> (' + usd(inv.total) + ') is ready.' + (inv.status === 'paid' ? ' It is paid in full — thank you!' : '') + '</p><p><a href="/invoice/' + escMail(inv.id) + '" style="background:#e10600;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block">' + (inv.status === 'paid' ? 'View invoice' : 'Pay ' + usd(inv.total) + ' now') + '</a></p>'
+        : '<p>Your invoice is being prepared — the Team will send your payment link shortly.</p>')
+      + '</div>';
+  } else if (r.status === 'Declined') {
+    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">Estimate declined</h3><p style="color:#666">No problem — if anything changes, just text or call (707) 862-3773 and we will rework it.</p></div>';
+  }
+  return '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Estimate ' + escMail(r.id) + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
+    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Estimate ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
+    + '<p style="color:#666"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • for <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
+    + (r.description ? '<p style="color:#555">' + escMail(r.description) + '</p>' : '')
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">Work</th><th style="padding:8px">Qty</th><th style="text-align:right;padding:8px">Each</th><th style="text-align:right;padding:8px">Line</th></tr>' + rows + '</table>'
+    + '<p>Subtotal: <b>' + usd(e.subtotal) + '</b></p>' + adj
+    + '<p style="font-size:22px">Total: <b>' + usd(e.total) + '</b></p>'
+    + '<p><b>Due to book:</b> ' + usd(e.bookingDue) + ' • <b>Balance at completion:</b> ' + usd(e.balanceDue) + '</p>'
+    + (r.quoteNote ? '<p style="color:#555"><b>Team note:</b> ' + escMail(r.quoteNote) + '</p>' : '')
+    + '<p style="color:#666;font-size:13px">Labor only — you buy materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</p>'
+    + actionBlock
+    + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
+    + '</div></body>';
+}
+// Build a matching invoice from an approved estimate (public approval flow).
+// Estimate line items carry over; the ASAP surcharge becomes its own line and
+// the discount + appointment credit fold into the invoice discount, so the
+// invoice total matches the estimate total exactly.
+function invoiceFromEstimate(r) {
+  const e = r.estimate || {};
+  const items = (e.items || []).map(it => ({ description: it.description, qty: it.qty, unitPrice: it.unitPrice }));
+  if (e.asapAmount > 0) items.push({ description: 'ASAP / Emergency (+25%)', qty: 1, unitPrice: e.asapAmount });
+  const norm = normalizeInvoice({ items, discount: money((e.discountAmount || 0) + (e.credit || 0)) });
+  const bookingDue = money(e.bookingDue || 0);
+  // Deposit-first: the auto-invoice charges bookingDue now; the balance is
+  // invoiced at completion. Falls back to the full total when bookingDue is
+  // zero or covers everything.
+  const depositMode = bookingDue > 0 && bookingDue < norm.total;
+  const invItems = depositMode
+    ? [{ description: 'Deposit to book — ' + (r.service || 'job') + ' (' + r.id + ')', qty: 1, unitPrice: bookingDue }]
+    : norm.items;
+  const invNorm = depositMode ? normalizeInvoice({ items: invItems }) : norm;
+  const cust = db.users.find(u => u.id === r.customerId);
+  const email = ((cust && cust.email) || '').toLowerCase();
+  const inv = {
+    id: id('INV'), customerName: r.customerName || (cust ? cust.name : ''), customerEmail: email,
+    customerPhone: (cust && cust.phone) || '', customerId: r.customerId || '',
+    jobId: '', requestId: r.id, items: invNorm.items, subtotal: invNorm.subtotal,
+    discount: invNorm.discount, total: invNorm.total, status: 'sent',
+    notes: depositMode
+      ? 'Deposit for approved estimate ' + r.id + ' (job total ' + usd(norm.total) + '). Balance at completion: ' + usd(e.balanceDue) + '.'
+      : 'Auto-created from your approved estimate (' + r.id + '). Due to book: ' + usd(e.bookingDue) + ' • Balance at completion: ' + usd(e.balanceDue) + '.',
+    dueDate: '', createdAt: new Date().toISOString(), sentAt: new Date().toISOString(),
+    paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: ''
+  };
+  if (!inv.customerId && email) { const c = db.users.find(u => u.role === 'customer' && u.email === email); if (c) inv.customerId = c.id; }
+  if (!Array.isArray(db.invoices)) db.invoices = [];
+  db.invoices.push(inv);
+  return inv;
 }
 function automationReady() { return mailReady() || googleReady(); }
 async function googleAutomation(type, payload) {
@@ -705,7 +818,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
     let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
-    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '', customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none' }); });
+    if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); const ei = (db.invoices || []).find(x => x.requestId === r.id); return Object.assign({}, r, { customerPhone: c ? (c.phone || '') : '', customerEmail: c ? c.email : '', customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none', estimateInvoice: ei ? { id: ei.id, status: ei.status } : null }); });
     return send(res, 200, { requests: list });
   }
   const reqMatch = p.match(/^\/api\/requests\/([\w-]+)$/);
@@ -810,6 +923,22 @@ const server = http.createServer(async (req, res) => {
       }
       w.internal.skillRanks = clean;
     }
+    // Admin editing of worker profile data (name, phone, email, profile fields).
+    if (typeof b.name === 'string' && cleanText(b.name, 80)) w.name = cleanText(b.name, 80);
+    if (typeof b.phone === 'string') w.phone = cleanText(b.phone, 40);
+    if (typeof b.email === 'string' && /.+@.+\..+/.test(b.email.trim())) {
+      const em = b.email.trim().toLowerCase();
+      if (!db.users.some(u => u.id !== w.id && (u.email || '').toLowerCase() === em)) w.email = em;
+    }
+    if (b.profile && typeof b.profile === 'object' && !Array.isArray(b.profile)) {
+      w.profile = w.profile || {};
+      const pf = b.profile;
+      if (typeof pf.city === 'string') w.profile.city = cleanText(pf.city, 80);
+      if (typeof pf.experience === 'string') w.profile.experience = cleanText(pf.experience, 200);
+      if (typeof pf.vehicleStyle === 'string') w.profile.vehicleStyle = cleanText(pf.vehicleStyle, 120);
+      if (typeof pf.notes === 'string') w.profile.notes = cleanText(pf.notes, 500);
+      if (Array.isArray(pf.skills)) w.profile.skills = pf.skills.map(s => cleanText(String(s), 60)).filter(Boolean).slice(0, 30);
+    }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -835,7 +964,7 @@ const server = http.createServer(async (req, res) => {
     const inv = {
       id: id('INV'), customerName: cleanText(b.customerName, 120), customerEmail: email,
       customerPhone: cleanText(b.customerPhone, 40), customerId: cleanText(b.customerId, 40),
-      jobId: cleanText(b.jobId, 40), items: norm.items, subtotal: norm.subtotal,
+      jobId: cleanText(b.jobId, 40), requestId: cleanText(b.requestId, 40), items: norm.items, subtotal: norm.subtotal,
       discount: norm.discount, total: norm.total, status: 'draft',
       notes: cleanText(b.notes, 1000), dueDate: cleanText(b.dueDate, 20),
       createdAt: new Date().toISOString(), sentAt: null, paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: ''
@@ -909,28 +1038,38 @@ const server = http.createServer(async (req, res) => {
     // payment page always charges the current total, so a sent invoice keeps
     // working after an edit — no re-send is required for the link to charge
     // the new amount.
+    // Scheduling confirmation (confirmedDate/confirmedTime, added 2026-10-12)
+    // is allowed on any non-cancelled invoice — Gabriel confirms the final
+    // schedule himself after the customer requests a time.
     if (!requireRole(user, ['admin'], res)) return;
     const inv = (db.invoices || []).find(x => x.id === invPutMatch[1]);
     if (!inv) return send(res, 404, { error: 'invoice not found' });
-    if (!['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be edited' });
     const b = await readBody(req);
-    const norm = normalizeInvoice(b);
-    if (!norm.items.length) return send(res, 400, { error: 'add at least one priced line item' });
-    if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
-    inv.items = norm.items; inv.subtotal = norm.subtotal; inv.discount = norm.discount; inv.total = norm.total;
-    if (b.customerName !== undefined) { const n = cleanText(b.customerName, 120); if (n) inv.customerName = n; }
-    if (b.customerEmail !== undefined) {
-      inv.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
-      // Re-link to an app customer account when the email changed.
-      inv.customerId = '';
-      if (inv.customerEmail) { const c = db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail); if (c) inv.customerId = c.id; }
+    const onlyConfirm = b && Object.keys(b).length > 0 && Object.keys(b).every(k => k === 'confirmedDate' || k === 'confirmedTime');
+    if (!onlyConfirm && !['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be edited' });
+    if (inv.status === 'cancelled') return send(res, 400, { error: 'invoice is cancelled' });
+    if (!onlyConfirm) {
+      const norm = normalizeInvoice(b);
+      if (!norm.items.length) return send(res, 400, { error: 'add at least one priced line item' });
+      if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
+      inv.items = norm.items; inv.subtotal = norm.subtotal; inv.discount = norm.discount; inv.total = norm.total;
+      if (b.customerName !== undefined) { const n = cleanText(b.customerName, 120); if (n) inv.customerName = n; }
+      if (b.customerEmail !== undefined) {
+        inv.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
+        // Re-link to an app customer account when the email changed.
+        inv.customerId = '';
+        if (inv.customerEmail) { const c = db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail); if (c) inv.customerId = c.id; }
+      }
+      if (b.customerPhone !== undefined) inv.customerPhone = cleanText(b.customerPhone, 40);
+      if (b.jobId !== undefined) inv.jobId = cleanText(b.jobId, 40);
+      if (b.requestId !== undefined) inv.requestId = cleanText(b.requestId, 40);
+      if (b.notes !== undefined) inv.notes = cleanText(b.notes, 1000);
+      if (b.dueDate !== undefined) inv.dueDate = cleanText(b.dueDate, 20);
     }
-    if (b.customerPhone !== undefined) inv.customerPhone = cleanText(b.customerPhone, 40);
-    if (b.jobId !== undefined) inv.jobId = cleanText(b.jobId, 40);
-    if (b.notes !== undefined) inv.notes = cleanText(b.notes, 1000);
-    if (b.dueDate !== undefined) inv.dueDate = cleanText(b.dueDate, 20);
+    if (b.confirmedDate !== undefined) inv.confirmedDate = cleanText(b.confirmedDate, 40);
+    if (b.confirmedTime !== undefined) inv.confirmedTime = cleanText(b.confirmedTime, 40);
     inv.updatedAt = new Date().toISOString();
-    notifyAdmins('invoice', 'Invoice ' + inv.id + ' updated — new total ' + usd(inv.total) + '.');
+    notifyAdmins('invoice', onlyConfirm ? ('Schedule confirmed on invoice ' + inv.id + ': ' + (inv.confirmedDate || '') + (inv.confirmedTime ? ' • ' + inv.confirmedTime : '') + '.') : ('Invoice ' + inv.id + ' updated — new total ' + usd(inv.total) + '.'));
     save(); return send(res, 200, { invoice: publicInvoice(inv) });
   }
   if (invPutMatch && req.method === 'DELETE') {
@@ -1119,6 +1258,63 @@ const server = http.createServer(async (req, res) => {
     const inv = (db.invoices || []).find(x => x.id === invPageMatch[1]);
     if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invoice not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
     return send(res, 200, invoicePageHtml(inv));
+  }
+
+  // ---------- public estimate approval (added 2026-10-12) ----------
+  const estPageMatch = p.match(/^\/estimate\/([\w-]+)$/);
+  if (estPageMatch && req.method === 'GET') {
+    const r = db.requests.find(x => x.id === estPageMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Estimate not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
+    return send(res, 200, estimatePageHtml(r));
+  }
+  const estActMatch = p.match(/^\/estimate\/([\w-]+)\/(approve|decline)$/);
+  if (estActMatch && req.method === 'POST') {
+    // Public: anyone with the estimate link can approve or decline it. No
+    // login required — the estimate id in the emailed link is the credential,
+    // same as invoice links.
+    const r = db.requests.find(x => x.id === estActMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
+    if (r.status !== 'Quoted') return send(res, 400, { error: 'this estimate is no longer awaiting approval (status: ' + r.status + ')' });
+    const b = await readBody(req);
+    const action = estActMatch[2];
+    r.messages = r.messages || [];
+    if (action === 'approve') {
+      r.status = 'Approved';
+      r.messages.push({ from: 'customer', name: r.customerName || 'Customer', text: 'Approved the estimate from the public link.', at: new Date().toISOString() });
+      notifyAdmins('quote', (r.customerName || 'Customer') + ' APPROVED the estimate on ' + r.id + ' (' + usd(r.estimate.total) + ') via the public link.');
+      if (r.customerId) notify(r.customerId, 'quote', 'You approved the estimate on request ' + r.id + '. Your invoice is ready — pay online with the link below.');
+      const inv = invoiceFromEstimate(r);
+      notifyAdmins('invoice', 'Invoice ' + inv.id + ' auto-created from approved estimate on ' + r.id + ' (' + usd(inv.total) + ') — sent to ' + (inv.customerEmail || 'customer') + '.');
+      save();
+      fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' }));
+      return send(res, 200, { ok: true, invoiceId: inv.id, payUrl: invoicePayLink(inv) });
+    }
+    const reason = cleanText(b.reason, 500);
+    r.status = 'Declined';
+    r.messages.push({ from: 'customer', name: r.customerName || 'Customer', text: 'Declined the estimate from the public link.' + (reason ? ' Reason: ' + reason : ''), at: new Date().toISOString() });
+    notifyAdmins('quote', (r.customerName || 'Customer') + ' declined the estimate on ' + r.id + '.' + (reason ? ' Reason: ' + reason : ''));
+    save();
+    fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' }));
+    return send(res, 200, { ok: true });
+  }
+  // ---------- public scheduling request (added 2026-10-12) ----------
+  const schedMatch = p.match(/^\/api\/invoices\/([\w-]+)\/schedule$/);
+  if (schedMatch && req.method === 'POST') {
+    // Public: no login needed. This is a REQUEST, not a confirmation —
+    // Gabriel confirms the final schedule himself from the admin panel.
+    const inv = (db.invoices || []).find(x => x.id === schedMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invoice not found' });
+    if (inv.status === 'cancelled') return send(res, 400, { error: 'this invoice was cancelled — contact the Team' });
+    const b = await readBody(req);
+    const windows = ['morning', 'afternoon', 'evening'];
+    const win = cleanText(b.preferredTime, 40).toLowerCase();
+    inv.preferredDate = cleanText(b.preferredDate, 40);
+    inv.preferredTime = windows.includes(win) ? win : cleanText(b.preferredTime, 40);
+    inv.scheduleNotes = cleanText(b.scheduleNotes, 1000);
+    inv.scheduleRequestedAt = new Date().toISOString();
+    notifyAdmins('schedule', 'Scheduling request on invoice ' + inv.id + ' (' + (inv.customerName || inv.customerEmail || '') + '): preferred ' + (inv.preferredDate || 'no date') + ' • ' + (inv.preferredTime || 'no window') + (inv.scheduleNotes ? ' • Notes: ' + inv.scheduleNotes : '') + ' — confirm the final schedule yourself.');
+    save();
+    return send(res, 200, { ok: true, invoice: publicInvoice(inv) });
   }
 
   // ---------- memberships (admin) ----------
