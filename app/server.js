@@ -1184,6 +1184,20 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/stripe/config' && req.method === 'GET') {
     return send(res, 200, { configured: stripeReady(), homeCareMonthly: HOMECARE_MONTHLY_CENTS / 100 });
   }
+  if (p === '/api/admin/stripe/health' && req.method === 'GET') {
+    // Admin-only live check: actually calls Stripe so a bad/rotated key shows
+    // up here BEFORE a customer hits "pay". Not just "key exists".
+    if (!requireRole(user, ['admin'], res)) return;
+    if (!stripeReady()) return send(res, 200, { ok: false, reason: 'no key set — add STRIPE_SECRET_KEY in Render env' });
+    try {
+      const r = await fetch(STRIPE_API + '/account', { headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY }, signal: AbortSignal.timeout(10000) });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) return send(res, 200, { ok: false, reason: 'Stripe rejected the key (' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)) + ') — update STRIPE_SECRET_KEY in Render and redeploy' });
+      return send(res, 200, { ok: true, live: !(data.livemode === false), account: data.id || 'ok' });
+    } catch (e) {
+      return send(res, 200, { ok: false, reason: 'could not reach Stripe: ' + e.message });
+    }
+  }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
