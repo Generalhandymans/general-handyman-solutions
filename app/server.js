@@ -289,10 +289,12 @@ async function createCheckoutSession(kind, user, opts) {
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
-    customer_email: user.email,
     'metadata[userId]': user.id,
     'metadata[kind]': kind
   };
+  // Only send customer_email when we actually have one — Stripe rejects an
+  // empty string (e.g. text-message invoices created without an email).
+  if (user.email) params.customer_email = user.email;
   if (kind === 'homecare') {
     params.mode = 'subscription';
     params['line_items[0][price]'] = await homeCarePriceId();
