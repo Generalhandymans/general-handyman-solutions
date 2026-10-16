@@ -335,6 +335,21 @@ function estimateHtml(r, isCustomer){
   if(e.credit) adj+='<tr><td colspan="3">Appointment credit (approved same day)</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
   return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • app.generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">Labor only — customer buys materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
 }
+function estimateStatusBadgeHtml(r){
+  if(!r.estimate) return '';
+  var label='awaiting approval', color='#b26a00';
+  if(r.status==='Approved'){
+    var paid=r.estimateInvoice && r.estimateInvoice.status==='paid';
+    label=paid?'paid':'approved — awaiting payment'; color='#1a7f37';
+  } else if(r.status==='Declined'){ label='declined'; color='#6b6762'; }
+  return ' <span class="pill" style="background:'+color+'">estimate: '+label+'</span>';
+}
+function copyEstimateLink(idv){
+  var url=location.origin+'/estimate/'+idv;
+  function done(){ alert('Public estimate link copied:\n'+url+'\n\nNo account needed — the customer can approve and pay from this link.'); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('Copy the estimate link:',url); }); }
+  else prompt('Copy the estimate link:',url);
+}
 function estimateBuilderHtml(r){
   const e=r.estimate || null;
   const items=(e && e.items && e.items.length) ? e.items : [{description:(r.service||'Labor')+' — labor only', qty:1, unitPrice:''}];
@@ -414,7 +429,10 @@ async function loadInvoices(){
     if(inv.status==='sent'||inv.status==='overdue') btns.push('<button class="black" onclick="invoiceAct(\''+inv.id+'\',\'remind\')">Remind</button>');
     btns.push('<button class="ghost" onclick="copyInvoiceLink(\''+inv.id+'\')">Copy payment link</button>');
     const remindLine=(inv.reminderCount?'<div class="mut">⏰ Reminded '+inv.reminderCount+'x'+(inv.remindedAt?' • last '+new Date(inv.remindedAt).toLocaleString():'')+'</div>':'');
-    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br><span class="mut">'+escHtml(inv.customerName)+(inv.customerEmail?' • '+escHtml(inv.customerEmail):'')+(inv.jobId?' • Job '+escHtml(inv.jobId):'')+(inv.dueDate?' • Due '+escHtml(inv.dueDate):'')+'</span>'+remindLine+'<div style="margin:8px 0">'+items+'</div>'+(inv.discount?'<div class="mut">Discount: −'+moneyFmt(inv.discount)+'</div>':'')+'<div><b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b>'+(inv.paidMethod?' <span class="mut">• paid via '+escHtml(inv.paidMethod)+'</span>':'')+'</div>'+(inv.notes?'<div class="mut">Note: '+escHtml(inv.notes)+'</div>':'')+'<div class="row" style="margin-top:10px">'+btns.join('')+'</div><div id="invEdit-'+inv.id+'"></div></div>';
+    const schedLine=inv.scheduleRequestedAt
+      ? '<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:8px"><b>📅 Scheduling request:</b> '+escHtml(inv.preferredDate||'—')+' • '+escHtml(inv.preferredTime||'—')+(inv.scheduleNotes?'<br><span class="mut">'+escHtml(inv.scheduleNotes)+'</span>':'')+(inv.confirmedDate?'<br><span style="color:#1a7f37"><b>✅ Confirmed: '+escHtml(inv.confirmedDate)+(inv.confirmedTime?' • '+escHtml(inv.confirmedTime):'')+'</b></span>':'<div class="row" style="margin-top:6px"><input type="date" id="cfd-'+inv.id+'" value="'+escHtml(inv.confirmedDate||'')+'" style="width:150px"><select id="cft-'+inv.id+'" style="width:150px"><option value="">Time…</option><option value="morning"'+(inv.confirmedTime==='morning'?' selected':'')+'>Morning</option><option value="afternoon"'+(inv.confirmedTime==='afternoon'?' selected':'')+'>Afternoon</option><option value="evening"'+(inv.confirmedTime==='evening'?' selected':'')+'>Evening</option></select><button class="black" onclick="confirmSchedule(\''+inv.id+'\')">Confirm schedule</button></div>')
+      : '';
+    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br><span class="mut">'+escHtml(inv.customerName)+(inv.customerEmail?' • '+escHtml(inv.customerEmail):'')+(inv.jobId?' • Job '+escHtml(inv.jobId):'')+(inv.dueDate?' • Due '+escHtml(inv.dueDate):'')+'</span>'+remindLine+'<div style="margin:8px 0">'+items+'</div>'+(inv.discount?'<div class="mut">Discount: −'+moneyFmt(inv.discount)+'</div>':'')+'<div><b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b>'+(inv.paidMethod?' <span class="mut">• paid via '+escHtml(inv.paidMethod)+'</span>':'')+'</div>'+(inv.notes?'<div class="mut">Note: '+escHtml(inv.notes)+'</div>':'')+schedLine+'<div class="row" style="margin-top:10px">'+btns.join('')+'</div><div id="invEdit-'+inv.id+'"></div></div>';
   }).join('') || '<p class="mut">No invoices yet.</p>';
 }
 async function invoiceAct(idv, action){
@@ -428,6 +446,13 @@ async function invoiceAct(idv, action){
     if(action==='remind' && d.automation && !d.automation.sent) alert('Reminder logged, but the reminder email did not go through. Reason: '+(d.automation.reason||'not configured')+'\n\nUse "Copy payment link" to send it manually.');
     loadInvoices();
   }catch(e){ alert(e.message); }
+}
+async function confirmSchedule(idv){
+  var d=document.getElementById('cfd-'+idv), t=document.getElementById('cft-'+idv);
+  if(!d||!d.value){ alert('Pick a confirmed date first.'); return; }
+  if(!confirm('Confirm schedule for '+idv+': '+d.value+(t&&t.value?' • '+t.value:'')+'?')) return;
+  try{ await api('/api/admin/invoices/'+idv,{method:'PUT', body:JSON.stringify({confirmedDate:d.value, confirmedTime:t?t.value:''})}); loadInvoices(); }
+  catch(e){ alert(e.message); }
 }
 // ---------- Invoice editing (admin) ----------
 function invEditRowHtml(it){
@@ -536,7 +561,7 @@ async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JS
 async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
 async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
@@ -548,7 +573,7 @@ async function loadAdmin(){
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
-    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
+    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
   loadInvoices();
@@ -585,10 +610,40 @@ async function rankSkill(wid, skill, stars){
   const w=adminWorkersCache.find(function(x){return x.id===wid;});
   const cur=Object.assign({},(w&&w.teamRanks)||{});
   if(stars===(cur[skill]||0)) delete cur[skill]; else cur[skill]=stars;
-  await api('/api/workers/'+wid,{method:'PATCH',body:JSON.stringify({skillRanks:cur})});
+  try{ await api('/api/workers/'+wid,{method:'PATCH',body:JSON.stringify({skillRanks:cur})}); }
+  catch(e){ alert(e.message); }
   loadAdmin();
 }
-async function setWorker(idv, status){ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); loadAdmin(); }
+async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdmin(); }
+function escAttr(v){ return (''+(v||'')).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function editWorkerForm(idv){
+  const w = adminWorkersCache.find(function(x){return x.id===idv;});
+  const box = document.getElementById('editWorker-'+idv);
+  if(!w || !box) return;
+  const pf = w.profile||{};
+  function inp(idv2, label, val){ return '<label style="display:block;margin:5px 0"><span class="mut">'+label+'</span><br><input id="'+idv2+'" value="'+escAttr(val)+'" style="width:100%;max-width:420px"></label>'; }
+  box.innerHTML = '<div style="border-top:1px dashed #ddd;margin-top:8px;padding-top:8px">'
+    + inp('ew-name-'+idv,'Name',w.name)
+    + inp('ew-phone-'+idv,'Phone',w.phone)
+    + inp('ew-email-'+idv,'Email (their login)',w.email)
+    + inp('ew-city-'+idv,'City',pf.city)
+    + inp('ew-skills-'+idv,'Skills (comma separated)',((pf.skills||w.skills||[]).join(', ')))
+    + inp('ew-exp-'+idv,'Experience',pf.experience)
+    + inp('ew-veh-'+idv,'Vehicle',pf.vehicleStyle||w.vehicle)
+    + inp('ew-notes-'+idv,'Notes (Team only)',pf.notes)
+    + '<button class="black" onclick="saveWorkerEdit(\''+idv+'\')">Save changes</button> <button class="ghost" onclick="loadAdmin()">Cancel</button></div>';
+}
+async function saveWorkerEdit(idv){
+  const v = function(i){ const el=document.getElementById(i); return el?el.value:''; };
+  const skills = v('ew-skills-'+idv).split(',').map(function(s){return s.trim();}).filter(Boolean);
+  try{
+    await api('/api/workers/'+idv,{method:'PATCH',body:JSON.stringify({
+      name:v('ew-name-'+idv), phone:v('ew-phone-'+idv), email:v('ew-email-'+idv),
+      profile:{city:v('ew-city-'+idv), skills:skills, experience:v('ew-exp-'+idv), vehicleStyle:v('ew-veh-'+idv), notes:v('ew-notes-'+idv)}
+    })});
+    loadAdmin();
+  }catch(e){ alert(e.message); }
+}
 async function delRequest(idv){ if(!confirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
 async function delJob(idv){ if(!confirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); loadAdmin(); }
 async function delWorker(idv, name){ if(!confirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdmin(); }
