@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <title>General Handyman Solutions — App</title>
+<script src="https://js.stripe.com/v3/"></script>
 <style>
 :root{--red:#e10600;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -90,6 +91,11 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
+    <div id="cardRow" style="display:none">
+      <label>Card — charged $49 today, then $49/mo</label>
+      <div id="cardElement" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px"></div>
+      <p class="mut" style="font-size:12.5px">Secure payment via Stripe — your card number never touches our servers. Cancel anytime from your dashboard.</p>
+    </div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="workerExtra" style="display:none">
       <label>Applying as</label>
@@ -252,7 +258,9 @@ function mode(m){ curMode=m;
   document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
+  document.getElementById('cardRow').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('authBtn').textContent = m==='homecare' ? 'Create account & join — $49/mo' : (m==='login' ? 'Log in' : 'Create account');
+  if (m==='homecare') ensureStripe();
 }
 // ---------- Separate worker entry (added 2026-10-19) ----------
 // Workers get their own login screen via #worker (like the pros do —
@@ -290,7 +298,6 @@ window.addEventListener('hashchange', applyWorkerEntry);
 // "Join now" charges the $49/mo membership right away: logged-in customers
 // go straight to Stripe checkout; logged-out visitors create their account
 // first, then land on the checkout automatically.
-let pendingHomeCare = false;
 async function startHomeCareCheckout(){
   try{
     const d = await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'homecare'})});
@@ -302,6 +309,58 @@ function joinHomeCare(){
   if (location.hash === '#join-homecare') location.hash = '';
   mode('homecare');
   document.getElementById('authBox').scrollIntoView({behavior:'smooth'});
+}
+// ---------- Inline card charge for "New HomeCare member" (added 2026-10-19) ----------
+// One submit = account created + $49 charged right in the form (Stripe Elements
+// keeps the card number off our servers — PCI SAQ-A).
+let stripeObj = null, cardEl = null, stripeReadyFlag = false;
+async function ensureStripe(){
+  if (stripeObj) return true;
+  if (stripeReadyFlag) return !!stripeObj;
+  stripeReadyFlag = true;
+  try{
+    const cfg = await api('/api/stripe/config');
+    const pk = cfg.publishableKey || '';
+    if (!pk || typeof Stripe === 'undefined') {
+      document.getElementById('cardElement').innerHTML = '<p class="mut">Online signup is still being connected — create your account and text (707) 862-3773 and the Team will finish your membership.</p>';
+      return false;
+    }
+    stripeObj = Stripe(pk);
+    cardEl = stripeObj.elements().create('card', { style: { base: { fontSize: '16px' } } });
+    cardEl.mount('#cardElement');
+    cardEl.on('change', e => { if (e.error) showErr(e.error.message); else hideErr(); });
+    return true;
+  }catch(e){ return false; }
+}
+async function chargeHomeCare(email){
+  const btn = document.getElementById('authBtn');
+  try{
+    const okS = await ensureStripe();
+    if (!okS || !cardEl) {
+      showErr('Online HomeCare signup is still being connected — your account was created. Text (707) 862-3773 and the Team will finish your membership.');
+      render(); return;
+    }
+    btn.disabled = true; btn.textContent = 'Processing $49 payment…';
+    const s = await api('/api/stripe/homecare-subscribe', { method: 'POST' });
+    const conf = await stripeObj.confirmCardPayment(s.clientSecret, {
+      payment_method: { card: cardEl, billing_details: {
+        name: document.getElementById('aName').value.trim(),
+        email: email,
+        phone: document.getElementById('aPhone').value.trim()
+      } }
+    });
+    if (conf.error) throw new Error(conf.error.message);
+    const chk = await api('/api/stripe/homecare-confirm', { method: 'POST' });
+    try { cardEl.clear(); } catch(e){}
+    btn.disabled = false; mode('homecare');
+    if (chk.active) {
+      document.getElementById('authBox').innerHTML = '<h3>Welcome to HomeCare! 🎉</h3><p>Your membership is <b>active</b> — $49/mo. Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.</p>';
+    }
+    render();
+  }catch(e){
+    btn.disabled = false; mode('homecare');
+    showErr(e.message);
+  }
 }
 mode('login');
 async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Something failed'); return d; }
@@ -340,7 +399,7 @@ async function doAuth(){
       const role = curMode==='homecare' ? 'customer' : curMode;
       const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:role, profile})});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
-      if(curMode==='homecare') pendingHomeCare = true; // new member: charge $49/mo right away
+      if(curMode==='homecare'){ await chargeHomeCare(email); return; } // inline $49 charge, then welcome
     }
     render();
   }catch(e){ showErr(e.message); }
@@ -375,7 +434,6 @@ function render(){
   if(me && me.role==='admin'){ loadAdmin(); }
   // Direct HomeCare join: after login/signup with a pending join, go straight
   // to the $49/mo Stripe checkout.
-  if(pendingHomeCare && me){ pendingHomeCare = false; startHomeCareCheckout(); }
 }
 function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const img=new Image(); const url=URL.createObjectURL(file);
   img.onload=()=>{ const max=1200; let w=img.width,h=img.height; const sc=Math.min(1, max/Math.max(w,h)); w=Math.round(w*sc); h=Math.round(h*sc);
