@@ -51,6 +51,18 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .est-summary{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;font-size:14px;line-height:1.5}
 .est-actions{display:flex;gap:8px;flex-wrap:wrap}.est-actions button{flex:1;min-width:190px}
 @media(max-width:620px){.est-row{grid-template-columns:minmax(120px,1fr) 58px 86px 34px}.est-grid{grid-template-columns:1fr}.estimate th,.estimate td{padding:6px 4px}}
+.cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.cal-head b{font-size:18px;text-transform:uppercase;flex:1}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;text-align:center;padding:4px 0}
+.cal-day{min-height:62px;border:1px solid var(--line);border-radius:10px;padding:4px;font-size:12px;cursor:pointer;background:#fff;overflow:hidden}
+.cal-day.off{background:var(--soft);color:var(--muted);cursor:default}
+.cal-day.today{border-color:var(--red)}
+.cal-day.sel{outline:2px solid var(--red)}
+.cal-day .dn{font-weight:800;margin-bottom:2px}
+.cal-ev{background:#0b0b0b;color:#fff;border-radius:6px;padding:2px 5px;margin:2px 0;font-size:11px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-ev.req{background:#fff;color:var(--ink);border:1px dashed var(--line)}
+.cal-ev.sched{background:#0b5c2e}
+@media(max-width:620px){.cal-day{min-height:48px;font-size:11px}.cal-ev{font-size:10px}}
 </style>
 </head>
 <body>
@@ -178,6 +190,12 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
     <h2>Team — control center</h2>
+    <h3>Master calendar</h3>
+    <div class="card">
+      <div class="cal-head"><button class="ghost" onclick="calMove(-1)">&#8249;</button><b id="calTitle"></b><button class="ghost" onclick="calMove(1)">&#8250;</button><button class="ghost" onclick="calToday()">Today</button></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div id="calDay"></div>
+    </div>
     <h3>Customer requests (send quotes)</h3>
     <div id="adminRequests"></div>
     <h3>Workers (activate after review)</h3>
@@ -591,7 +609,77 @@ async function loadJobs(){
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
 async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
+// ---------- Master calendar (admin) ----------
+let calY=0, calM=0, calEvents=[], calSel='';
+function calInit(){ const d=new Date(); if(!calY){ calY=d.getFullYear(); calM=d.getMonth(); } }
+function calKey(){ return calY+'-'+String(calM+1).padStart(2,'0'); }
+function calMove(n){ calM+=n; if(calM<0){calM=11;calY--;} if(calM>11){calM=0;calY++;} calSel=''; loadCalendar(); }
+function calToday(){ const d=new Date(); calY=d.getFullYear(); calM=d.getMonth(); calSel=''; loadCalendar(); }
+async function loadCalendar(){
+  calInit();
+  try{ const d=await api('/api/admin/calendar?month='+calKey()); calEvents=d.events||[]; }
+  catch(e){ calEvents=[]; }
+  renderCalendar(); renderCalDay();
+}
+function escCal(s){ return (''+(s||'')).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function renderCalendar(){
+  const title=document.getElementById('calTitle'), grid=document.getElementById('calGrid');
+  if(!title||!grid) return;
+  const names=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  title.textContent=names[calM]+' '+calY;
+  const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  const first=new Date(calY,calM,1); const startDow=first.getDay();
+  const days=new Date(calY,calM+1,0).getDate();
+  let h=['Su','Mo','Tu','We','Th','Fr','Sa'].map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('');
+  for(let i=0;i<startDow;i++) h+='<div class="cal-day off"></div>';
+  for(let d=1;d<=days;d++){
+    const key=calY+'-'+String(calM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const evs=calEvents.filter(function(e){return e.date===key;});
+    const cls='cal-day'+(key===tkey?' today':'')+(key===calSel?' sel':'');
+    h+='<div class="'+cls+'" onclick="calSelect(\''+key+'\')"><div class="dn">'+d+'</div>'+
+      evs.slice(0,3).map(function(e){
+        const c=e.kind==='requested'?'cal-ev req':(e.kind==='scheduled'?'cal-ev sched':'cal-ev');
+        return '<div class="'+c+'">'+escCal((e.time?e.time+' ':'')+e.title)+'</div>';
+      }).join('')+(evs.length>3?'<div class="mut">+'+(evs.length-3)+' more</div>':'')+'</div>';
+  }
+  grid.innerHTML=h;
+}
+function calSelect(key){ calSel=key; renderCalendar(); renderCalDay(); }
+function renderCalDay(){
+  const el=document.getElementById('calDay'); if(!el) return;
+  if(!calSel){ el.innerHTML='<p class="mut" style="margin-top:10px">Tap a day to see jobs and add one.</p>'; return; }
+  const evs=calEvents.filter(function(e){return e.date===calSel;});
+  let h='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>'+escCal(calSel)+'</b>';
+  h+=evs.length? evs.map(function(e){
+    return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escCal(e.title)+'</b> <span class="pill">'+escCal(e.kind)+'</span><br><span class="mut">'+
+      escCal((e.time?e.time+' • ':'')+(e.location||''))+(e.customerName?' • '+escCal(e.customerName):'')+(e.workerName?' • '+escCal(e.workerName):'')+(e.status?' • '+escCal(e.status):'')+'</span></div>';
+  }).join('') : '<p class="mut">No jobs this day.</p>';
+  h+='<h3 style="margin-top:10px">Add job</h3><div class="row"><div><label>Service</label><input id="cService" placeholder="Door lock install"></div><div><label>Location / address</label><input id="cAddr" placeholder="123 Main St, Hercules"></div></div>'+
+    '<div class="row"><div><label>Date</label><input id="cDate" type="date" value="'+escCal(calSel)+'"></div><div><label>Time</label><input id="cTime" placeholder="10:00 AM"></div></div>'+
+    '<div class="row"><div><label>Pay offer to worker $ (optional)</label><input id="cPay" type="number" placeholder="120"></div><div><label>City</label><input id="cCity" placeholder="Hercules"></div></div>'+
+    '<button onclick="calAddJob()">Add to calendar</button> <span id="cMsg" class="mut"></span></div>';
+  el.innerHTML=h;
+}
+async function calAddJob(){
+  const msg=document.getElementById('cMsg');
+  const service=document.getElementById('cService').value.trim();
+  const date=document.getElementById('cDate').value;
+  if(!service){ msg.textContent='Service is required.'; return; }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ msg.textContent='Pick a valid date.'; return; }
+  const time=document.getElementById('cTime').value.trim();
+  const addr=document.getElementById('cAddr').value.trim();
+  const city=document.getElementById('cCity').value.trim();
+  const pay=document.getElementById('cPay').value;
+  msg.textContent='Adding…';
+  try{
+    await api('/api/jobs',{method:'POST', body:JSON.stringify({service:service, city:city, address:addr, when:(date+(time?' '+time:'')), schedDate:date, schedTime:time, payOffer:pay, description:'Added from master calendar'})});
+    msg.textContent='Added.';
+    calSel=date;
+    await loadCalendar(); loadAdmin();
+  }catch(e){ msg.textContent=e.message; }
+}
 async function loadAdmin(){
+  loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });

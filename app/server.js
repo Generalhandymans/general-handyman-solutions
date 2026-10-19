@@ -421,6 +421,7 @@ async function handleStripeEvent(event) {
 function money(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0; }
 function clampMoney(v) { return Math.max(0, money(v)); }
 function cleanText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 500); }
+function cleanDate(v) { const s = String(v == null ? '' : v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
 function normalizeEstimate(input, request) {
   const raw = input && typeof input === 'object' ? input : {};
   const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
@@ -1117,7 +1118,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
-    const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
+    const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
     db.jobs.push(j); notifyWorkersForJob(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j)); save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
@@ -1129,6 +1130,29 @@ const server = http.createServer(async (req, res) => {
     if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
     if (user.role === 'worker') return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)) });
     return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
+  }
+  // ---------- Master calendar (admin): jobs + invoice schedules for one month ----------
+  if (p === '/api/admin/calendar' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const month = String(url.searchParams.get('month') || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(month)) return send(res, 400, { error: 'month required as YYYY-MM' });
+    const workerName = (wid) => { const w = db.users.find(u => u.id === wid); return w ? (w.name || '') : ''; };
+    const events = [];
+    for (const j of db.jobs) {
+      if (j.schedDate && j.schedDate.slice(0, 7) === month) {
+        events.push({ kind: 'job', id: j.id, date: j.schedDate, time: j.schedTime || '', title: j.service || 'Job', location: j.address || j.city || '', status: j.status || '', customerName: j.customerName || '', workerName: workerName(j.assignedWorkerId) });
+      }
+    }
+    for (const inv of (db.invoices || [])) {
+      const d = inv.confirmedDate || inv.preferredDate || '';
+      if (d && d.slice(0, 7) === month) {
+        let loc = '';
+        if (inv.jobId) { const jj = db.jobs.find(x => x.id === inv.jobId); if (jj) loc = jj.address || jj.city || ''; }
+        events.push({ kind: inv.confirmedDate ? 'scheduled' : 'requested', id: inv.id, date: d, time: inv.confirmedTime || inv.preferredTime || '', title: 'Invoice ' + inv.id, location: loc, status: inv.status || '', customerName: inv.customerName || '', workerName: '' });
+      }
+    }
+    events.sort((a, b) => String(a.date + ' ' + a.time).localeCompare(String(b.date + ' ' + b.time)));
+    return send(res, 200, { events });
   }
   const claimMatch = p.match(/^\/api\/jobs\/([\w-]+)\/claim$/);
   if (claimMatch && req.method === 'POST') {
@@ -1153,6 +1177,8 @@ const server = http.createServer(async (req, res) => {
       if (b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
       if (b.address !== undefined) j.address = cleanText(b.address, 300);
       if (b.when !== undefined) j.when = cleanText(b.when, 200);
+      if (b.schedDate !== undefined) j.schedDate = cleanDate(b.schedDate);
+      if (b.schedTime !== undefined) j.schedTime = cleanText(b.schedTime, 50);
       if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
       if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.'); }
     }
