@@ -1217,7 +1217,15 @@ const server = http.createServer(async (req, res) => {
         events.push({ kind: inv.confirmedDate ? 'scheduled' : 'requested', id: inv.id, date: d, time: inv.confirmedTime || inv.preferredTime || '', title: 'Invoice ' + inv.id, location: loc, status: inv.status || '', customerName: inv.customerName || '', workerName: '' });
       }
     }
-    events.sort((a, b) => String(a.date + ' ' + a.time).localeCompare(String(b.date + ' ' + b.time)));
+    // Sort by date, then by time-of-day (best-effort 12h AM/PM parse; unparsed
+    // times sort alphabetically after parsed ones).
+    const timeKey = (t) => {
+      const m = /(\d{1,2}):(\d{2})\s*([AP])\.?M\.?/i.exec(String(t || ''));
+      if (!m) return '99:' + String(t || '');
+      let h = Number(m[1]) % 12; if (/P/i.test(m[3])) h += 12;
+      return String(h).padStart(2, '0') + ':' + m[2];
+    };
+    events.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (timeKey(a.time) < timeKey(b.time) ? -1 : timeKey(a.time) > timeKey(b.time) ? 1 : 0));
     return send(res, 200, { events });
   }
   const claimMatch = p.match(/^\/api\/jobs\/([\w-]+)\/claim$/);
