@@ -280,17 +280,36 @@ async function stripeGet(path) {
 async function homeCarePriceId() {
   if (process.env.STRIPE_PRICE_HOMECARE) return process.env.STRIPE_PRICE_HOMECARE;
   db.settings = db.settings || {};
+  const isGood = (p) => p && Number(p.unit_amount) === HOMECARE_MONTHLY_CENTS && p.recurring && p.recurring.interval === 'month' && p.active !== false;
   const cached = db.settings.stripeHomeCarePrice;
   if (cached) {
-    // Self-healing (added 2026-10-19): Stripe prices are immutable — if the
-    // cached price doesn't match the $49/mo the business charges (e.g. a $40
-    // test price cached earlier), create the correct price on the SAME
-    // product and repoint the cache. Never blocks checkout on failure.
+    // Self-healing (added 2026-10-19, refined same day): Stripe prices are
+    // immutable — if the cached price doesn't match the $49/mo the business
+    // charges (e.g. a $40 test price cached earlier), first check the
+    // product's DEFAULT price (the dashboard is the source of truth now) and
+    // only create a new price if no correct one exists. Never blocks checkout.
     try {
       const p = await stripeGet('/prices/' + cached);
-      if (p && Number(p.unit_amount) === HOMECARE_MONTHLY_CENTS && p.recurring && p.recurring.interval === 'month' && p.active !== false) return cached;
-      console.log('stripe: cached HomeCare price ' + cached + ' is $' + ((Number(p.unit_amount) || 0) / 100).toFixed(2) + ' — creating correct $' + (HOMECARE_MONTHLY_CENTS / 100).toFixed(2) + '/mo price on the same product');
-      const np = await stripeApi('/prices', { product: p.product, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
+      if (isGood(p)) return cached;
+      const productId = typeof p.product === 'string' ? p.product : (p.product && p.product.id);
+      console.log('stripe: cached HomeCare price ' + cached + ' is $' + ((Number(p.unit_amount) || 0) / 100).toFixed(2) + ' — checking product default first');
+      if (productId) {
+        try {
+          const prod = await stripeGet('/products/' + productId);
+          const defId = typeof prod.default_price === 'string' ? prod.default_price : (prod.default_price && prod.default_price.id);
+          if (defId && defId !== cached) {
+            const dp = await stripeGet('/prices/' + defId);
+            if (isGood(dp)) {
+              db.settings.stripeHomeCarePrice = defId;
+              save();
+              console.log('stripe: HomeCare price repointed to product default ' + defId);
+              return defId;
+            }
+          }
+        } catch (e) { console.error('stripe: product default lookup failed:', e.message); }
+      }
+      console.log('stripe: creating correct $' + (HOMECARE_MONTHLY_CENTS / 100).toFixed(2) + '/mo price on the same product');
+      const np = await stripeApi('/prices', { product: productId || p.product, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
       db.settings.stripeHomeCarePrice = np.id;
       save();
       console.log('stripe: HomeCare price corrected: ' + np.id + ' — set it as STRIPE_PRICE_HOMECARE in Render env to skip this check');
