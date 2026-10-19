@@ -125,6 +125,13 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
+    <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e10600;border-radius:12px;background:#fff5f5">
+      <b>Join HomeCare — $49/mo</b><br>
+      <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
+      <span class="mut" style="font-size:13px">Create your free account below, then join from your dashboard.</span>
+    </div>
+    <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a worker? <a href="#worker">Log in here →</a></p>
+    <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
   </div>
 
   <!-- CUSTOMER -->
@@ -243,6 +250,36 @@ function mode(m){ curMode=m;
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   document.getElementById('authBtn').textContent = m==='login' ? 'Log in' : 'Create account';
 }
+// ---------- Separate worker entry (added 2026-10-19) ----------
+// Workers get their own login screen via #worker (like the pros do —
+// worker and customer logins are never mixed). Landing page "Worker login"
+// buttons point here.
+function isWorkerEntry(){ return location.hash === '#worker'; }
+function applyWorkerEntry(){
+  const w = isWorkerEntry();
+  // Customer funnel (default): login + new-customer tabs, HomeCare front and
+  // center, worker login demoted to a small link. Worker entry (#worker):
+  // login + new-worker tabs only.
+  const tabC = document.getElementById('tabCustomer');
+  if (tabC) tabC.style.display = w ? 'none' : '';
+  const tabW = document.getElementById('tabWorker');
+  if (tabW) tabW.style.display = w ? '' : 'none';
+  const h = document.querySelector('#authBox h3');
+  if (h) h.textContent = w ? 'Worker login' : 'Log in / Sign up';
+  const hint = document.getElementById('authHint');
+  if (hint) hint.innerHTML = w
+    ? 'Team login — use your worker email + password to see open jobs and claim them. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.'
+    : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
+  const hc = document.getElementById('hcPromo');
+  if (hc) hc.style.display = w ? 'none' : 'block';
+  const wl = document.getElementById('workerLinkRow');
+  if (wl) wl.style.display = w ? 'none' : 'block';
+  const cl = document.getElementById('custLinkRow');
+  if (cl) cl.style.display = w ? 'block' : 'none';
+  if (w && curMode === 'customer') mode('login');
+  if (!w && curMode === 'worker') mode('login');
+}
+window.addEventListener('hashchange', applyWorkerEntry);
 mode('login');
 async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Something failed'); return d; }
 function showErr(t){ const e=document.getElementById('authErr'); e.textContent=t; e.classList.add('show'); }
@@ -773,6 +810,7 @@ async function createJob(){
     document.getElementById('jMsg').textContent='Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; loadAdmin();
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
+applyWorkerEntry();
 loadMe();
 </script>
 <script>
