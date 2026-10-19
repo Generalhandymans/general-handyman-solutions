@@ -560,7 +560,7 @@ function invoicePageHtml(inv) {
   // Customer-facing status (added 2026-10-19): the client never sees internal
   // workflow states — draft/sent both read as "Unpaid" on the public link.
   const displayStatus = (pub.status === 'draft' || pub.status === 'sent') ? 'unpaid' : pub.status;
-  const badge = { unpaid: '#b26a00', paid: '#1a7f37', overdue: '#e10600', cancelled: '#6b6762' }[displayStatus] || '#6b6762';
+  const badge = { unpaid: ['#fde2e2', '#c81e1e'], paid: ['#d3f0dd', '#1a7f37'], overdue: ['#fde2e2', '#c81e1e'], cancelled: ['#ececec', '#6b6762'] }[displayStatus] || ['#ececec', '#6b6762'];
   const payable = ['draft', 'sent', 'overdue'].includes(pub.status);
   const tipTotalCents = Math.round(pub.total * 100);
   const tipBtnStyle = 'padding:10px 16px;border:1px solid #ccc;border-radius:999px;background:#fff;font-weight:700;cursor:pointer;font-size:14px';
@@ -620,7 +620,7 @@ function invoicePageHtml(inv) {
     + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
     + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
     + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Invoice ' + escMail(pub.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(displayStatus) + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Invoice ' + escMail(pub.id) + '</h2><span style="background:' + badge[0] + ';color:' + badge[1] + ';border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(displayStatus) + '</span></div>'
     + '<p style="color:#666">Billed to <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 Due <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">Description</th><th style="padding:8px">Qty</th><th style="text-align:right;padding:8px">Each</th><th style="text-align:right;padding:8px">Line</th></tr>' + rows + '</table>'
     + '<p>Subtotal: <b>' + usd(pub.subtotal) + '</b></p>'
