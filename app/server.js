@@ -286,6 +286,9 @@ async function homeCarePriceId() {
 function appBase() { return APP_URL.replace(/\/$/, ''); }
 async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
+  // Optional tip (added 2026-10-19): applies to every one-time charge on the
+  // page EXCEPT the HomeCare membership. Added as a second line item.
+  const tipCents = kind === 'homecare' ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
@@ -323,6 +326,13 @@ async function createCheckoutSession(kind, user, opts) {
   } else {
     throw new Error('unknown checkout kind');
   }
+  if (tipCents > 0) {
+    params['line_items[1][price_data][currency]'] = 'usd';
+    params['line_items[1][price_data][unit_amount]'] = String(tipCents);
+    params['line_items[1][price_data][product_data][name]'] = 'Tip — thank you!';
+    params['line_items[1][quantity]'] = '1';
+  }
+  params['metadata[tipCents]'] = String(tipCents);
   return stripeApi('/checkout/sessions', params);
 }
 function readRawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
@@ -355,8 +365,9 @@ async function handleStripeEvent(event) {
     } else if (kind === 'estimate' || kind === 'member-estimate') {
       const r = db.requests.find(x => x.id === (obj.metadata && obj.metadata.requestId));
       const amount = Math.round(Number(obj.amount_total) || 0) / 100;
+      const tipCents = Math.max(0, Math.round(Number(obj.metadata && obj.metadata.tipCents) || 0));
       if (r) {
-        r.estimatePaid = { sessionId: obj.id, amount: amount, at: new Date().toISOString() };
+        r.estimatePaid = { sessionId: obj.id, amount: amount, tip: tipCents / 100, at: new Date().toISOString() };
         r.messages = r.messages || [];
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: $' + amount.toFixed(2) + ' towards your estimate. Your appointment is secured — the Team will confirm your time here.', at: new Date().toISOString() });
         notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.');
@@ -366,13 +377,15 @@ async function handleStripeEvent(event) {
     } else if (kind === 'invoice') {
       const inv = (db.invoices || []).find(x => x.id === (obj.metadata && obj.metadata.invoiceId));
       const amount = Math.round(Number(obj.amount_total) || 0) / 100;
+      const tipCents = Math.max(0, Math.round(Number(obj.metadata && obj.metadata.tipCents) || 0));
       if (inv && inv.status !== 'paid') {
         inv.status = 'paid';
         inv.paidAt = new Date().toISOString();
         inv.paidAmount = amount;
         inv.paidMethod = 'stripe';
         inv.stripeSessionId = obj.id;
-        notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
+        inv.tip = tipCents / 100;
+        notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + (tipCents > 0 ? ' (incl. $' + (tipCents / 100).toFixed(2) + ' tip)' : '') + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
         const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
         if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!');
         fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
@@ -489,7 +502,7 @@ function normalizeInvoice(input) {
 }
 function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
 function publicInvoice(inv) {
-  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
+  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, tip: inv.tip || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
 }
 function invoiceEmailHtml(inv) {
   let rows = '';
@@ -546,8 +559,36 @@ function invoicePageHtml(inv) {
   const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
   const badge = { draft: '#6b6762', sent: '#b26a00', paid: '#1a7f37', overdue: '#e10600', cancelled: '#6b6762' }[pub.status] || '#6b6762';
   const payable = ['draft', 'sent', 'overdue'].includes(pub.status);
+  const tipTotalCents = Math.round(pub.total * 100);
+  const tipBtnStyle = 'padding:10px 16px;border:1px solid #ccc;border-radius:999px;background:#fff;font-weight:700;cursor:pointer;font-size:14px';
   const payBlock = payable
-    ? '<button id="payBtn" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p><script>document.getElementById("payBtn").onclick=async()=>{var m=document.getElementById("payMsg");m.textContent="Opening secure checkout…";try{var r=await fetch("/api/invoices/' + pub.id + '/pay",{method:"POST"});var d=await r.json();if(!r.ok)throw new Error(d.error||"failed");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
+    ? '<div style="margin:14px 0;padding:14px;border:1px solid #e5e5e5;border-radius:12px;background:#fafafa">'
+    + '<p style="margin:0 0 10px;font-weight:700">Add a tip? <span style="font-weight:400;color:#666;font-size:13px">optional — thank you!</span></p>'
+    + '<div id="tipBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    + '<button type="button" data-tip="0" class="tipBtn" style="' + tipBtnStyle + '">No tip</button>'
+    + '<button type="button" data-tip="10" class="tipBtn" style="' + tipBtnStyle + '">10%</button>'
+    + '<button type="button" data-tip="15" class="tipBtn" style="' + tipBtnStyle + '">15%</button>'
+    + '<button type="button" data-tip="20" class="tipBtn" style="' + tipBtnStyle + '">20%</button>'
+    + '<button type="button" data-tip="custom" class="tipBtn" style="' + tipBtnStyle + '">Custom</button>'
+    + '</div>'
+    + '<div id="tipCustomWrap" style="display:none;margin-bottom:6px"><label style="font-size:14px;color:#555">$ <input id="tipCustom" type="number" min="0" step="0.01" placeholder="0.00" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:130px;font-size:15px"></label></div>'
+    + '<p id="tipLine" style="margin:0;color:#666;font-size:14px"></p>'
+    + '</div>'
+    + '<button id="payBtn" style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p>'
+    + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;'
+    + 'function fmtC(c){return \"$\"+(c/100).toFixed(2);}'
+    + 'function refreshPay(){var t=document.getElementById(\"tipLine\");t.textContent=tipCents>0?(\"Tip: \"+fmtC(tipCents)):\"\";document.getElementById(\"payBtn\").textContent=\"Pay \"+fmtC(invCents+tipCents)+\" now\";}'
+    + 'document.querySelectorAll(\".tipBtn\").forEach(function(b){b.onclick=function(){'
+    + 'document.querySelectorAll(\".tipBtn\").forEach(function(x){x.style.background=\"#fff\";x.style.color=\"#111\";});'
+    + 'b.style.background=\"#0b0b0b\";b.style.color=\"#fff\";'
+    + 'var v=b.getAttribute(\"data-tip\");'
+    + 'document.getElementById(\"tipCustomWrap\").style.display=(v===\"custom\")?\"block\":\"none\";'
+    + 'if(v===\"custom\"){tipCents=Math.max(0,Math.round(parseFloat(document.getElementById(\"tipCustom\").value||\"0\")*100)||0);}'
+    + 'else{tipCents=Math.round(invCents*parseFloat(v)/100);}'
+    + 'refreshPay();};});'
+    + 'document.getElementById(\"tipCustom\").oninput=function(){tipCents=Math.max(0,Math.round(parseFloat(this.value||\"0\")*100)||0);if(tipCents>invCents)tipCents=invCents;refreshPay();};'
+    + 'document.querySelector(\".tipBtn\").click();'
+    + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=\"Opening secure checkout…\";try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents})});var d=await r.json();if(!r.ok)throw new Error(d.error||\"failed\");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
     : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">✅ This invoice was paid in full. Thank you!</p>' : '<p style="color:#666">This invoice is ' + escMail(pub.status) + '.</p>');
   // Scheduling request (added 2026-10-12): shown on the paid confirmation.
   // This is a REQUEST, not a booking — Gabriel confirms the final schedule
@@ -1254,8 +1295,13 @@ const server = http.createServer(async (req, res) => {
         } else {
           amountCents = Math.round(r.estimate.bookingDue * 100);
         }
-        const s = await createCheckoutSession(kind, user, { amountCents, requestId: r.id, label });
-        return send(res, 200, { url: s.url, amount: amountCents / 100 });
+        // Optional tip (added 2026-10-19): integer cents, never negative,
+        // capped at 100% of the amount due.
+        let tipCents = Math.round(Number(b.tipCents) || 0);
+        if (tipCents < 0) tipCents = 0;
+        if (tipCents > amountCents) tipCents = amountCents;
+        const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label });
+        return send(res, 200, { url: s.url, amount: (amountCents + tipCents) / 100, tip: tipCents / 100 });
       }
       return send(res, 400, { error: 'unknown checkout kind' });
     } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
@@ -1277,8 +1323,15 @@ const server = http.createServer(async (req, res) => {
     if (inv.status === 'cancelled') return send(res, 400, { error: 'this invoice was cancelled — contact the Team' });
     if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to pay another way' });
     try {
-      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '' });
-      return send(res, 200, { url: s.url, amount: inv.total });
+      const body = await readBody(req);
+      // Optional tip from the invoice page (added 2026-10-19): integer cents,
+      // never negative, capped at 100% of the invoice total.
+      let tipCents = Math.round(Number(body.tipCents) || 0);
+      if (tipCents < 0) tipCents = 0;
+      const maxTip = Math.round(inv.total * 100);
+      if (tipCents > maxTip) tipCents = maxTip;
+      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '' });
+      return send(res, 200, { url: s.url, amount: inv.total + tipCents / 100, tip: tipCents / 100 });
     } catch (e) { console.error('invoice checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
   if (p === '/api/stripe/portal' && req.method === 'POST') {
