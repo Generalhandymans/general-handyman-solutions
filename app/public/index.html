@@ -82,7 +82,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div class="tabs">
       <button id="tabLogin" class="on" onclick="mode('login')">Log in</button>
       <button id="tabCustomer" onclick="mode('customer')">New customer</button>
-      <button id="tabWorker" onclick="mode('worker')">New worker</button>
+      <button id="tabWorker" onclick="mode('worker')">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
@@ -130,7 +130,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
       <span class="mut" style="font-size:13px">Create your free account below, then join from your dashboard.</span>
     </div>
-    <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a worker? <a href="#worker">Log in here →</a></p>
+    <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a General Handyman Solutions technician? <a href="#worker">Log in here →</a></p>
     <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
   </div>
 
@@ -265,10 +265,10 @@ function applyWorkerEntry(){
   const tabW = document.getElementById('tabWorker');
   if (tabW) tabW.style.display = w ? '' : 'none';
   const h = document.querySelector('#authBox h3');
-  if (h) h.textContent = w ? 'Worker login' : 'Log in / Sign up';
+  if (h) h.textContent = w ? 'Technician login' : 'Log in / Sign up';
   const hint = document.getElementById('authHint');
   if (hint) hint.innerHTML = w
-    ? 'Team login — use your worker email + password to see open jobs and claim them. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.'
+    ? 'Team login — use your technician email + password to see open jobs and claim them. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.'
     : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
   const hc = document.getElementById('hcPromo');
   if (hc) hc.style.display = w ? 'none' : 'block';
