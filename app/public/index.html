@@ -82,9 +82,11 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div class="tabs">
       <button id="tabLogin" class="on" onclick="mode('login')">Log in</button>
       <button id="tabCustomer" onclick="mode('customer')">New customer</button>
+      <button id="tabHomecare" onclick="mode('homecare')">New HomeCare member</button>
       <button id="tabWorker" onclick="mode('worker')">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
+    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px">Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
@@ -244,11 +246,13 @@ let me=null, curMode='login';
 function mode(m){ curMode=m;
   document.getElementById('tabLogin').classList.toggle('on', m==='login');
   document.getElementById('tabCustomer').classList.toggle('on', m==='customer');
+  document.getElementById('tabHomecare').classList.toggle('on', m==='homecare');
   document.getElementById('tabWorker').classList.toggle('on', m==='worker');
   document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
-  document.getElementById('authBtn').textContent = m==='login' ? 'Log in' : 'Create account';
+  document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
+  document.getElementById('authBtn').textContent = m==='homecare' ? 'Create account & join — $49/mo' : (m==='login' ? 'Log in' : 'Create account');
 }
 // ---------- Separate worker entry (added 2026-10-19) ----------
 // Workers get their own login screen via #worker (like the pros do —
@@ -264,6 +268,8 @@ function applyWorkerEntry(){
   if (tabC) tabC.style.display = w ? 'none' : '';
   const tabW = document.getElementById('tabWorker');
   if (tabW) tabW.style.display = w ? '' : 'none';
+  const tabH = document.getElementById('tabHomecare');
+  if (tabH) tabH.style.display = w ? 'none' : '';
   const h = document.querySelector('#authBox h3');
   if (h) h.textContent = w ? 'Technician login' : 'Log in / Sign up';
   const hint = document.getElementById('authHint');
@@ -276,7 +282,7 @@ function applyWorkerEntry(){
   if (wl) wl.style.display = w ? 'none' : 'block';
   const cl = document.getElementById('custLinkRow');
   if (cl) cl.style.display = w ? 'block' : 'none';
-  if (w && curMode === 'customer') mode('login');
+  if (w && (curMode === 'customer' || curMode === 'homecare')) mode('login');
   if (!w && curMode === 'worker') mode('login');
 }
 window.addEventListener('hashchange', applyWorkerEntry);
@@ -293,10 +299,8 @@ async function startHomeCareCheckout(){
 }
 function joinHomeCare(){
   if (me) { startHomeCareCheckout(); return; }
-  pendingHomeCare = true;
   if (location.hash === '#join-homecare') location.hash = '';
-  mode('customer');
-  showErr('Create your account below — you\'ll go straight to the $49/mo checkout.');
+  mode('homecare');
   document.getElementById('authBox').scrollIntoView({behavior:'smooth'});
 }
 mode('login');
@@ -333,8 +337,11 @@ async function doAuth(){
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
     else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings() } : {};
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:curMode, profile})});
-      const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; }
+      const role = curMode==='homecare' ? 'customer' : curMode;
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:role, profile})});
+      const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
+      if(curMode==='homecare') pendingHomeCare = true; // new member: charge $49/mo right away
+    }
     render();
   }catch(e){ showErr(e.message); }
 }
@@ -833,7 +840,7 @@ async function createJob(){
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
 applyWorkerEntry();
-if (location.hash === '#join-homecare') { pendingHomeCare = true; mode('customer'); }
+if (location.hash === '#join-homecare') { mode('homecare'); }
 loadMe();
 </script>
 <script>
