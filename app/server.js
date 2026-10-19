@@ -271,10 +271,32 @@ async function stripeApi(path, params) {
   if (!r.ok) throw new Error('stripe: ' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)));
   return data;
 }
+async function stripeGet(path) {
+  const r = await fetch(STRIPE_API + path, { method: 'GET', headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY }, signal: AbortSignal.timeout(20000) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('stripe: ' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)));
+  return data;
+}
 async function homeCarePriceId() {
   if (process.env.STRIPE_PRICE_HOMECARE) return process.env.STRIPE_PRICE_HOMECARE;
   db.settings = db.settings || {};
-  if (db.settings.stripeHomeCarePrice) return db.settings.stripeHomeCarePrice;
+  const cached = db.settings.stripeHomeCarePrice;
+  if (cached) {
+    // Self-healing (added 2026-10-19): Stripe prices are immutable — if the
+    // cached price doesn't match the $49/mo the business charges (e.g. a $40
+    // test price cached earlier), create the correct price on the SAME
+    // product and repoint the cache. Never blocks checkout on failure.
+    try {
+      const p = await stripeGet('/prices/' + cached);
+      if (p && Number(p.unit_amount) === HOMECARE_MONTHLY_CENTS && p.recurring && p.recurring.interval === 'month' && p.active !== false) return cached;
+      console.log('stripe: cached HomeCare price ' + cached + ' is $' + ((Number(p.unit_amount) || 0) / 100).toFixed(2) + ' — creating correct $' + (HOMECARE_MONTHLY_CENTS / 100).toFixed(2) + '/mo price on the same product');
+      const np = await stripeApi('/prices', { product: p.product, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
+      db.settings.stripeHomeCarePrice = np.id;
+      save();
+      console.log('stripe: HomeCare price corrected: ' + np.id + ' — set it as STRIPE_PRICE_HOMECARE in Render env to skip this check');
+      return np.id;
+    } catch (e) { console.error('stripe: HomeCare price check failed, keeping cached price:', e.message); return cached; }
+  }
   console.log('stripe: creating HomeCare $49/mo product + price (set STRIPE_PRICE_HOMECARE to skip this)');
   const product = await stripeApi('/products', { name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $60 member estimates after, 20% off labor under $1,000, priority scheduling.' });
   const price = await stripeApi('/prices', { product: product.id, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
