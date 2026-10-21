@@ -262,7 +262,9 @@ function fireAutomation(type, payload) { sendAutomation(type, payload).catch(() 
 // return 400 "payments not connected" instead of crashing.
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
-const STRIPE_API = 'https://api.stripe.com/v1';
+// STRIPE_API_BASE exists so local tests can point the Stripe client at a
+// mock; production leaves it unset and always talks to api.stripe.com.
+const STRIPE_API = process.env.STRIPE_API_BASE || 'https://api.stripe.com/v1';
 const HOMECARE_MONTHLY_CENTS = 4900;
 // Membership plans (added 2026-10-21): one active plan is stored on the user
 // as u.membershipPlan = { planKey, type, visitsPerMonth, priceId, productId,
@@ -570,6 +572,69 @@ async function createCheckoutSession(kind, user, opts) {
   return stripeApi('/checkout/sessions', params);
 }
 function readRawBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => r(b)); }); }
+// ---------- Inline one-submit membership subscriptions ----------
+// Shared core of the inline card flow (HomeCare since 2026-10-19, extended
+// to Yard Care / HomeCare Plus 2026-10-21): the member's card is collected
+// in the app's own form via Stripe Elements, so step 1 creates a
+// default_incomplete subscription at the SERVER-side plan price and
+// returns its PaymentIntent client secret; the browser confirms the card
+// with Stripe.js; step 2 verifies the payment with Stripe and activates
+// the membership synchronously through the SAME helpers the webhooks use
+// (activateHomeCare / activateMembershipPlan). The webhook lifecycle stays
+// as the backup activator and reconciles idempotently: subscription
+// metadata carries userId + kind + plan, and activation is a no-op when
+// the plan is already active on the same subscription.
+async function createInlineSubscription(user, plan) {
+  let customerId = user.stripeCustomerId || '';
+  if (customerId) { try { await stripeGet('/customers/' + customerId); } catch (e) { customerId = ''; } }
+  if (!customerId) {
+    const c = await stripeApi('/customers', { email: user.email, name: user.name || undefined, phone: user.phone || undefined, 'metadata[userId]': user.id });
+    customerId = c.id;
+    user.stripeCustomerId = customerId;
+  }
+  // Drop a stale incomplete subscription so card retries don't stack up.
+  if (user.stripeSubscriptionId) {
+    try {
+      const s = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
+      if (s && (s.status === 'incomplete' || s.status === 'incomplete_expired')) {
+        await stripeApi('/subscriptions/' + user.stripeSubscriptionId + '/cancel', {});
+      }
+    } catch (e) {}
+    user.stripeSubscriptionId = '';
+  }
+  const priceId = plan.key === 'homecare' ? await homeCarePriceId() : plan.priceId;
+  const sub = await stripeApi('/subscriptions', {
+    customer: customerId,
+    'items[0][price]': priceId,
+    'items[0][quantity]': '1',
+    payment_behavior: 'default_incomplete',
+    'payment_settings[save_default_payment_method]': 'on_subscription',
+    'metadata[userId]': user.id,
+    'metadata[kind]': plan.kind,
+    'metadata[plan]': plan.key,
+    'expand[]': 'latest_invoice.payment_intent'
+  });
+  user.stripeSubscriptionId = sub.id;
+  if (plan.key !== 'homecare') setMembershipPlan(user, plan.key, { status: sub.status || 'incomplete', subscriptionId: sub.id });
+  save();
+  const pi = sub.latest_invoice && sub.latest_invoice.payment_intent;
+  if (!pi || !pi.client_secret) throw new Error('stripe did not return a payment intent');
+  return { clientSecret: pi.client_secret, subscriptionId: sub.id };
+}
+async function inlineSubscriptionPaid(user) {
+  const sub = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
+  let paid = sub.status === 'active';
+  if (!paid) {
+    const invId = typeof sub.latest_invoice === 'string' ? sub.latest_invoice : (sub.latest_invoice && sub.latest_invoice.id);
+    if (invId) {
+      const inv = await stripeGet('/invoices/' + invId);
+      const piId = typeof inv.payment_intent === 'string' ? inv.payment_intent : (inv.payment_intent && inv.payment_intent.id);
+      if (piId) { const pi = await stripeGet('/payment_intents/' + piId); paid = pi.status === 'succeeded'; }
+      else paid = inv.status === 'paid';
+    }
+  }
+  return { paid, sub, plan: planFromSubscription(sub, membershipPlanOf(user)) };
+}
 function verifyStripeSig(payload, header) {
   if (!STRIPE_WEBHOOK_SECRET) return false;
   const m = /t=(\d+).*v1=([a-f0-9]+)/.exec(header || '');
@@ -1988,39 +2053,8 @@ const server = http.createServer(async (req, res) => {
     if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
     if (user.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
     try {
-      let customerId = user.stripeCustomerId || '';
-      if (customerId) { try { await stripeGet('/customers/' + customerId); } catch (e) { customerId = ''; } }
-      if (!customerId) {
-        const c = await stripeApi('/customers', { email: user.email, name: user.name || undefined, phone: user.phone || undefined, 'metadata[userId]': user.id });
-        customerId = c.id;
-        user.stripeCustomerId = customerId;
-      }
-      // Drop a stale incomplete subscription so card retries don't stack up.
-      if (user.stripeSubscriptionId) {
-        try {
-          const s = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
-          if (s && (s.status === 'incomplete' || s.status === 'incomplete_expired')) {
-            await stripeApi('/subscriptions/' + user.stripeSubscriptionId + '/cancel', {});
-          }
-        } catch (e) {}
-        user.stripeSubscriptionId = '';
-      }
-      const priceId = await homeCarePriceId();
-      const sub = await stripeApi('/subscriptions', {
-        customer: customerId,
-        'items[0][price]': priceId,
-        'items[0][quantity]': '1',
-        payment_behavior: 'default_incomplete',
-        'payment_settings[save_default_payment_method]': 'on_subscription',
-        'metadata[userId]': user.id,
-        'metadata[kind]': 'homecare',
-        'expand[]': 'latest_invoice.payment_intent'
-      });
-      user.stripeSubscriptionId = sub.id;
-      save();
-      const pi = sub.latest_invoice && sub.latest_invoice.payment_intent;
-      if (!pi || !pi.client_secret) throw new Error('stripe did not return a payment intent');
-      return send(res, 200, { clientSecret: pi.client_secret, subscriptionId: sub.id });
+      const r = await createInlineSubscription(user, MEMBERSHIP_PLANS.homecare);
+      return send(res, 200, r);
     } catch (e) { console.error('homecare subscribe failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
   if (p === '/api/stripe/homecare-confirm' && req.method === 'POST') {
@@ -2028,21 +2062,48 @@ const server = http.createServer(async (req, res) => {
     if (user.homeCareStatus === 'active') return send(res, 200, { active: true });
     if (!stripeReady() || !user.stripeSubscriptionId) return send(res, 400, { error: 'no pending membership found' });
     try {
-      const sub = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
-      let paid = sub.status === 'active';
-      if (!paid) {
-        const invId = typeof sub.latest_invoice === 'string' ? sub.latest_invoice : (sub.latest_invoice && sub.latest_invoice.id);
-        if (invId) {
-          const inv = await stripeGet('/invoices/' + invId);
-          const piId = typeof inv.payment_intent === 'string' ? inv.payment_intent : (inv.payment_intent && inv.payment_intent.id);
-          if (piId) { const pi = await stripeGet('/payment_intents/' + piId); paid = pi.status === 'succeeded'; }
-          else paid = inv.status === 'paid';
-        }
-      }
-      if (!paid) return send(res, 200, { active: false });
+      const chk = await inlineSubscriptionPaid(user);
+      if (!chk.paid) return send(res, 200, { active: false });
       activateHomeCare(user, true);
       return send(res, 200, { active: true });
     } catch (e) { console.error('homecare confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
+  }
+  // ---------- Inline one-submit join: Yard Care / HomeCare Plus ----------
+  // Same machinery as the HomeCare inline flow above, generalized by plan:
+  // the plan key is validated against the server-side MEMBERSHIP_PLANS map
+  // (the price only ever comes from the map), the service-address rule for
+  // yard/plus plans is enforced BEFORE any Stripe call, and one active
+  // membership per customer is refused. Activation at confirm goes through
+  // activateMembershipPlan — the same helper the webhook lifecycle uses —
+  // so the synchronous activation and the backup webhook agree exactly.
+  if (p === '/api/stripe/membership-subscribe' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const plan = MEMBERSHIP_PLANS[b.plan];
+    if (!plan || plan.key === 'homecare') return send(res, 400, { error: 'unknown membership plan' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
+    if (membershipPlanOf(user).status === 'active') return send(res, 400, { error: 'you already have an active membership plan' });
+    if (!cleanText(user.serviceAddress, 300)) return send(res, 400, { error: 'service address required', code: 'ADDRESS_REQUIRED' });
+    try {
+      const r = await createInlineSubscription(user, plan);
+      return send(res, 200, { clientSecret: r.clientSecret, subscriptionId: r.subscriptionId, plan: plan.key });
+    } catch (e) { console.error('membership subscribe failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/stripe/membership-confirm' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const current = membershipPlanOf(user);
+    if (current.status === 'active' && current.planKey && current.planKey !== 'homecare' && (!b.plan || current.planKey === b.plan)) return send(res, 200, { active: true, plan: current.planKey });
+    if (!stripeReady() || !user.stripeSubscriptionId) return send(res, 400, { error: 'no pending membership found' });
+    try {
+      const chk = await inlineSubscriptionPaid(user);
+      if (!chk.plan || chk.plan.key === 'homecare') return send(res, 400, { error: 'unknown membership plan' });
+      if (b.plan && b.plan !== chk.plan.key) return send(res, 400, { error: 'plan mismatch' });
+      if (!chk.paid) return send(res, 200, { active: false });
+      activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
+      return send(res, 200, { active: true, plan: chk.plan.key });
+    } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
   // ---------- invoices (customer payment) ----------
   if (p === '/api/invoices/mine' && req.method === 'GET') {
