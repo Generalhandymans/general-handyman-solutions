@@ -217,8 +217,24 @@ header nav a:hover{border-color:var(--red)}
       <input id="aServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
       <p class="mut" id="serviceAddressHint" style="font-size:12.5px;margin:4px 0 0">Optional for a regular account. Required when joining Yard Care or HomeCare Plus.</p>
     </div>
+    <div id="homeGroup" style="display:none">
+      <label>ZIP code <span class="mut">(optional — helps the Team plan your route)</span></label>
+      <input id="aZip" inputmode="numeric" autocomplete="postal-code" placeholder="94534">
+      <div class="row">
+        <div><label>Home type</label><select id="aHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
+        <div><label>Yard size</label><select id="aYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+      </div>
+      <label>Home notes <span class="mut">(optional — gate, dogs, access)</span></label>
+      <input id="aHomeNotes" maxlength="300" placeholder="Gate code, pets, parking…">
+    </div>
+    <div id="startGroup" style="display:none">
+      <label>Preferred start — we'll confirm your exact day</label>
+      <div class="pick" id="aStartPick"><button type="button" data-v="asap" class="sel">As soon as possible</button><button type="button" data-v="date">A specific date</button></div>
+      <input id="aStartDate" type="date" style="display:none;margin-top:8px">
+      <p class="mut" style="font-size:12.5px;margin:4px 0 0">Just a preference — the Team confirms your exact start day with you. Picking a date books nothing and charges nothing.</p>
+    </div>
     <div id="cardRow" style="display:none">
-      <label>Card — charged $49 today, then $49/mo</label>
+      <label id="cardChargeLabel">Card — charged $49 today, then $49/mo</label>
       <div id="cardElement" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px"></div>
       <p class="mut" style="font-size:12.5px">Secure payment via Stripe — your card number never touches our servers. Cancel anytime from your dashboard.</p>
     </div>
@@ -369,6 +385,23 @@ header nav a:hover{border-color:var(--red)}
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
     <div id="membershipSummary" class="custAccountOnly"></div>
+    <div id="homeDetailsBox" class="custAccountOnly" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">My home</h3>
+        <p class="mut" style="margin-top:0">Optional details that help the Team plan your visits — your ZIP is never required.</p>
+        <label>ZIP code</label><input id="hZip" inputmode="numeric" autocomplete="postal-code" placeholder="94534">
+        <div class="row">
+          <div><label>Home type</label><select id="hHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
+          <div><label>Yard size</label><select id="hYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+        </div>
+        <label>Home notes — gate, dogs, access…</label><input id="hHomeNotes" maxlength="300" placeholder="Gate code, pets, parking…">
+        <label>Preferred start — we'll confirm your exact day</label>
+        <div class="pick" id="hStartPick"><button type="button" data-v="asap" class="sel">As soon as possible</button><button type="button" data-v="date">A specific date</button></div>
+        <input id="hStartDate" type="date" style="display:none;margin-top:8px">
+        <p class="mut" style="font-size:12.5px">Just a preference — picking a date books nothing; the Team confirms your start day with you.</p>
+        <button onclick="saveHomeDetails()">Save home details</button> <span id="homeDetailsMsg" class="mut"></span>
+      </div>
+    </div>
     <h2>Request a handyman</h2>
     <p class="mut">Pick a service, add pictures, choose when — no account needed. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
@@ -501,6 +534,22 @@ function showLogin(){
   mode('login');
   document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
 }
+// Every price the auth/join form shows derives from JOIN_PLAN_INFO — the
+// plan the visitor actually selected — never from the static $49 HomeCare
+// defaults baked into the HTML. (Gabriel caught the card label staying at
+// $49 during Yard/Plus joins, 2026-10-21.) Also: the HomeCare promo box at
+// the bottom of the form is hidden while a join for a chosen plan is up,
+// so the only price on screen is that plan's.
+function syncAuthPriceTexts(m){
+  const hcInfo = JOIN_PLAN_INFO.homecare;
+  const hc = document.getElementById('hcChargeNote');
+  if (hc) hc.innerHTML = 'Your card will be charged <b>$' + hcInfo.monthly + ' today</b>, then $' + hcInfo.monthly + '/mo. 20% off any job • Free first in-person estimate • Cancel anytime.';
+  const info = m === 'homecare' ? hcInfo : (m === 'join' && pendingJoin ? JOIN_PLAN_INFO[pendingJoin.plan] : null);
+  const lbl = document.getElementById('cardChargeLabel');
+  if (lbl && info) lbl.textContent = 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
+  const promo = document.getElementById('hcPromo');
+  if (promo) promo.style.display = (m === 'join' || isWorkerEntry()) ? 'none' : 'block';
+}
 function mode(m){ curMode=m;
   if (m !== 'join') pendingJoin = null;
   document.getElementById('tabLogin').classList.toggle('on', m==='login');
@@ -515,10 +564,15 @@ function mode(m){ curMode=m;
     ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
     : 'Optional for a regular account. Required when joining Yard Care or HomeCare Plus.';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
+  const homeGroupEl = document.getElementById('homeGroup');
+  if (homeGroupEl) homeGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
+  const startGroupEl = document.getElementById('startGroup');
+  if (startGroupEl) startGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
   document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('joinChargeNote').style.display = m==='join' ? 'block':'none';
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
-  document.getElementById('authBtn').textContent = m==='homecare' ? 'Create account & join — $49/mo' : (m==='login' ? 'Log in' : 'Create account');
+  syncAuthPriceTexts(m);
+  document.getElementById('authBtn').textContent = m==='homecare' ? 'Create account & join — $' + JOIN_PLAN_INFO.homecare.monthly + '/mo' : (m==='login' ? 'Log in' : 'Create account');
   if (m==='homecare') ensureStripe();
 }
 // ---------- Separate worker entry (added 2026-10-19) ----------
@@ -544,7 +598,7 @@ function applyWorkerEntry(){
     ? 'Team login — use your technician email + password to see open jobs and claim them. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.'
     : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
   const hc = document.getElementById('hcPromo');
-  if (hc) hc.style.display = w ? 'none' : 'block';
+  if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
   const wl = document.getElementById('workerLinkRow');
   if (wl) wl.style.display = w ? 'none' : 'block';
   const cl = document.getElementById('custLinkRow');
@@ -592,6 +646,7 @@ const JOIN_PLAN_INFO = {
 };
 function enterJoinMode(){
   mode('join');
+  syncAuthPriceTexts('join');
   const info = pendingJoin ? JOIN_PLAN_INFO[pendingJoin.plan] : null;
   const note = document.getElementById('joinChargeNote');
   if (note && info) note.innerHTML = 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, ' + (pendingJoin.kind === 'homecare' ? '' : 'service address and ') + 'payment together. Cancel anytime.';
@@ -877,6 +932,74 @@ function pickSelfRatings(){
   return r;
 }
 renderSelfRate();
+// ---------- Home details + start preference (added 2026-10-21) ----------
+// Optional facts about the home (ZIP is never required) and a start-date
+// PREFERENCE — the Team confirms the exact day; picking a date books
+// nothing and charges nothing.
+function readStartPick(pickId, dateId){
+  const t = pickOne(pickId);
+  if (t === 'date') { const d = document.getElementById(dateId); const v = d ? d.value : ''; if (v) return { type: 'date', date: v }; }
+  return { type: 'asap', date: null };
+}
+function readHomeForm(){
+  return {
+    zipCode: document.getElementById('aZip').value.trim(),
+    homeType: document.getElementById('aHomeType').value,
+    yardSize: document.getElementById('aYardSize').value,
+    homeNotes: document.getElementById('aHomeNotes').value.trim(),
+    startPreference: readStartPick('aStartPick', 'aStartDate')
+  };
+}
+function syncPickDate(pickId, dateId){
+  const d = document.getElementById(dateId); if (!d) return;
+  d.style.display = pickOne(pickId) === 'date' ? 'block' : 'none';
+}
+function setPickSelection(pickId, v){
+  const g = document.getElementById(pickId); if (!g) return;
+  g.querySelectorAll('button').forEach(function(b){ b.classList.toggle('sel', b.dataset.v === v); });
+}
+[['aStartPick','aStartDate'],['hStartPick','hStartDate']].forEach(function(pair){
+  const p = document.getElementById(pair[0]);
+  if (p) p.addEventListener('click', function(){ setTimeout(function(){ syncPickDate(pair[0], pair[1]); }, 0); });
+});
+(function setStartDateMins(){
+  const t = new Date(); const iso = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
+  ['aStartDate', 'hStartDate'].forEach(function(idv){ const d = document.getElementById(idv); if (d) d.min = iso; });
+})();
+let homeFormSig = '';
+function syncHomeDetailsForm(){
+  if (!me || me.role !== 'customer') return;
+  const sp = me.startPreference || { type: 'asap', date: null };
+  const sig = JSON.stringify([me.zipCode || '', me.homeType || '', me.yardSize || '', me.homeNotes || '', sp.type || 'asap', sp.date || '']);
+  if (sig === homeFormSig) return;
+  homeFormSig = sig;
+  const z = document.getElementById('hZip'); if (z) z.value = me.zipCode || '';
+  const ht = document.getElementById('hHomeType'); if (ht) ht.value = me.homeType || '';
+  const ys = document.getElementById('hYardSize'); if (ys) ys.value = me.yardSize || '';
+  const hn = document.getElementById('hHomeNotes'); if (hn) hn.value = me.homeNotes || '';
+  setPickSelection('hStartPick', sp.type === 'date' ? 'date' : 'asap');
+  const d = document.getElementById('hStartDate');
+  if (d) d.value = (sp.type === 'date' && sp.date) ? sp.date : '';
+  syncPickDate('hStartPick', 'hStartDate');
+}
+async function saveHomeDetails(){
+  const msg = document.getElementById('homeDetailsMsg');
+  const body = {
+    zipCode: document.getElementById('hZip').value.trim(),
+    homeType: document.getElementById('hHomeType').value,
+    yardSize: document.getElementById('hYardSize').value,
+    homeNotes: document.getElementById('hHomeNotes').value.trim(),
+    startPreference: readStartPick('hStartPick', 'hStartDate')
+  };
+  if (msg) msg.textContent = 'Saving…';
+  try {
+    const d = await api('/api/me/home-details', { method: 'POST', body: JSON.stringify(body) });
+    if (d.user) me = d.user;
+    homeFormSig = '';
+    syncHomeDetailsForm();
+    if (msg) msg.textContent = 'Saved ✓';
+  } catch (e) { if (msg) msg.textContent = e.message; }
+}
 async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
@@ -886,9 +1009,10 @@ async function doAuth(){
       if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       const role = (curMode==='homecare' || curMode==='join') ? 'customer' : curMode;
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile})});
+      const homePayload = (curMode==='customer' || curMode==='join' || curMode==='homecare') ? readHomeForm() : {};
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile}, homePayload))});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
-      if(curMode==='homecare'){ await chargeHomeCare(email); return; } // inline $49 charge, then welcome
+      if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // inline $49 charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks this tab: never let a tab switch turn it into a $49 HomeCare charge; the resume below takes the user to the selected plan's checkout instead
       if(curMode==='join' && pendingJoin){ await finishInlineJoin(email); return; } // one-submit join: card charge + activation, then welcome
     }
     // Memberships page join: account first, then straight to checkout.
@@ -967,6 +1091,7 @@ function render(){
   const memberRow = document.getElementById('cMember');
   if(memberRow){ const showM = !!me; memberRow.style.display = showM ? '' : 'none'; const lbl = memberRow.previousElementSibling; if(lbl && lbl.tagName==='LABEL') lbl.style.display = showM ? '' : 'none'; }
   if (me && me.role === 'customer') syncMemberPicker();
+  if (me && me.role === 'customer') syncHomeDetailsForm();
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
   if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadMyJobs(); custSummary(); }
@@ -1402,6 +1527,7 @@ async function loadCalendar(){
   renderCalendar(); renderCalDay();
 }
 function escCal(s){ return (''+(s||'')).replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtStartDate(s){ const M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; const parts=String(s||'').split('-'); if (parts.length!==3) return String(s||''); return M[Number(parts[1])-1]+' '+Number(parts[2])+', '+parts[0]; }
 function renderCalendar(){
   const title=document.getElementById('calTitle'), grid=document.getElementById('calGrid');
   if(!title||!grid) return;
@@ -1512,7 +1638,7 @@ function renderYcDay(){
   h+=vs.length? vs.map(function(v){
     const plan=v.plan?escHtml(v.plan.name)+' • '+v.plan.visitsPerMonth+' visit'+(v.plan.visitsPerMonth===1?'':'s')+'/mo':'';
     return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escHtml(v.memberName||'Member')+'</b> <span class="pill">'+escHtml(v.status)+'</span><br><span class="mut">'+
-      plan+(v.serviceAddress?' • '+escHtml(v.serviceAddress):' • no service address on file')+(v.notes?' • '+escHtml(v.notes):'')+'</span>'+
+      plan+(v.serviceAddress?' • '+escHtml(v.serviceAddress):' • no service address on file')+(v.yardSize?' • '+escHtml(v.yardSize)+' yard':'')+(v.homeNotes?' • Home notes: '+escHtml(v.homeNotes):'')+(v.notes?' • '+escHtml(v.notes):'')+'</span>'+
       '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
       (v.status==='scheduled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'done\'})">Mark done</button>':'')+
       (v.status!=='cancelled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'cancelled\'})">Cancel visit</button>':'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'scheduled\'})">Restore</button>')+
@@ -1527,7 +1653,7 @@ function renderYcDay(){
       const p=u.membershipPlan||{}; const c=ycMonthCount(ycVisits, u.id);
       const over=c>=(p.visitsPerMonth||0);
       return '<option value="'+u.id+'">'+escHtml(u.name)+' — '+escHtml(p.name||'Plan')+' ('+(p.visitsPerMonth||0)+' visit'+(p.visitsPerMonth===1?'':'s')+'/mo) • '+c+'/'+(p.visitsPerMonth||0)+' scheduled this month'+(over?' — OVER PLAN if added':'')+'</option>';
-    }).join('')+'</select><div id="ycAddWarn" class="yc-over" style="display:none;margin:2px 0 6px"></div>'+
+    }).join('')+'</select><div id="ycAddWarn" class="yc-over" style="display:none;margin:2px 0 6px"></div><div id="ycMemberInfo" class="mut" style="display:none;margin:2px 0 6px"></div>'+
     '<div class="row"><div><label>Date</label><input id="ycAddDate" type="date" value="'+escCal(ycSel)+'"></div><div><label>Notes (optional)</label><input id="ycAddNotes" placeholder="Gate code, dogs, etc."></div></div>'+
     '<button onclick="ycAddVisit()">Add visit</button> <span id="ycMsg" class="mut"></span>';
   }
@@ -1539,7 +1665,22 @@ function ycAddMemberChanged(){
   const sel=document.getElementById('ycAddMember'), warn=document.getElementById('ycAddWarn');
   if(!sel||!warn) return;
   const u=ycMembers.find(function(x){return x.id===sel.value;});
-  if(!u){ warn.style.display='none'; return; }
+  const info=document.getElementById('ycMemberInfo');
+  if(!u){ warn.style.display='none'; if(info) info.style.display='none'; return; }
+  if (info) {
+    const lines=[];
+    if (u.serviceAddress) lines.push(escHtml(u.serviceAddress));
+    const home=[];
+    if (u.zipCode) home.push('ZIP '+escHtml(u.zipCode));
+    if (u.homeType) home.push(escHtml(u.homeType));
+    if (u.yardSize) home.push(escHtml(u.yardSize)+' yard');
+    if (home.length) lines.push('Home: '+home.join(' • '));
+    if (u.homeNotes) lines.push('Home notes: '+escHtml(u.homeNotes));
+    const sp=u.startPreference;
+    if (sp) lines.push('Wants to start: '+(sp.type==='date'&&sp.date?fmtStartDate(sp.date):'ASAP'));
+    info.innerHTML=lines.join('<br>');
+    info.style.display=lines.length?'block':'none';
+  }
   const p=u.membershipPlan||{}; const c=ycMonthCount(ycVisits, u.id);
   if(c>=(p.visitsPerMonth||0)){
     warn.textContent='Heads up: '+u.name+' already has '+c+' of '+(p.visitsPerMonth||0)+' plan visits scheduled this month — adding another goes over the plan.';

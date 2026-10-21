@@ -49,7 +49,7 @@ const sessions = new Map(); // token -> userId
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -952,6 +952,42 @@ function money(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(
 function clampMoney(v) { return Math.max(0, money(v)); }
 function cleanText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 500); }
 function cleanDate(v) { const s = String(v == null ? '' : v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
+// Home details (added 2026-10-21): optional customer-supplied facts about the
+// home the Team will service. ZIP is NEVER required (Gabriel's call) — it
+// only helps the Team plan routes. Workers never receive any of this: job
+// payloads are whitelisted in publicJob and user payloads for workers go
+// through pubUser of the WORKER's own record only.
+const HOME_TYPES = ['house', 'townhouse', 'apartment', 'other'];
+const YARD_SIZES = ['small', 'medium', 'large'];
+function cleanZip(v) { return String(v == null ? '' : v).replace(/[^0-9-]/g, '').slice(0, 10); }
+function cleanEnum(v, list) { const s = String(v == null ? '' : v).trim().toLowerCase(); return list.includes(s) ? s : ''; }
+function homeFieldsFrom(b) {
+  b = (b && typeof b === 'object') ? b : {};
+  return {
+    zipCode: cleanZip(b.zipCode),
+    homeType: cleanEnum(b.homeType, HOME_TYPES),
+    yardSize: cleanEnum(b.yardSize, YARD_SIZES),
+    homeNotes: cleanText(b.homeNotes, 300)
+  };
+}
+// Start-date preference (added 2026-10-21): a PREFERENCE only — it never
+// books a visit, posts a job, or charges anything. Gabriel confirms the
+// exact day with the member himself. Shape: { type:'asap'|'date', date }.
+function todayInLA() { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); }
+function normalizeStartPreference(v) {
+  const asap = { type: 'asap', date: null };
+  if (!v || typeof v !== 'object' || v.type !== 'date') return asap;
+  const s = cleanDate(v.date);
+  if (!s) return asap;
+  const d = new Date(s + 'T00:00:00Z');
+  if (isNaN(d) || d.toISOString().slice(0, 10) !== s) return asap;
+  return { type: 'date', date: s };
+}
+function cleanStartPreference(v) {
+  const n = normalizeStartPreference(v);
+  if (n.type === 'date' && n.date < todayInLA()) return { type: 'asap', date: null };
+  return n;
+}
 function normalizeEstimate(input, request) {
   const raw = input && typeof input === 'object' ? input : {};
   const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
@@ -1389,7 +1425,11 @@ const server = http.createServer(async (req, res) => {
       prof.selfRatings = cleanSR;
     } else { delete prof.selfRatings; }
     const serviceAddress = role === 'customer' ? cleanText(b.serviceAddress, 300) : '';
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    // Optional home details + start preference (customers only, never
+    // required — ZIP included: Gabriel's "no obligatorio" rule).
+    const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
+    const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -1409,6 +1449,21 @@ const server = http.createServer(async (req, res) => {
     user.serviceAddress = serviceAddress;
     save();
     return send(res, 200, { ok: true, serviceAddress, user: pubUser(user) });
+  }
+  // Home details + start preference: the member maintains these from their
+  // account area. Partial update — only fields present in the body change.
+  // Nothing here books, schedules, or charges anything: the start date is a
+  // preference the Team confirms with the member.
+  if (p === '/api/me/home-details' && req.method === 'POST') {
+    if (!requireRole(user, ['customer', 'admin'], res)) return;
+    const b = await readBody(req);
+    if (b.zipCode !== undefined) user.zipCode = cleanZip(b.zipCode);
+    if (b.homeType !== undefined) user.homeType = cleanEnum(b.homeType, HOME_TYPES);
+    if (b.yardSize !== undefined) user.yardSize = cleanEnum(b.yardSize, YARD_SIZES);
+    if (b.homeNotes !== undefined) user.homeNotes = cleanText(b.homeNotes, 300);
+    if (b.startPreference !== undefined) user.startPreference = cleanStartPreference(b.startPreference);
+    save();
+    return send(res, 200, { ok: true, user: pubUser(user) });
   }
 
   // ---------- customer requests ----------
@@ -2233,7 +2288,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const customers = db.users.filter(u => u.role === 'customer').map(u => {
       const reqs = db.requests.filter(r => r.customerId === u.id).length;
-      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
+      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
     });
     return send(res, 200, { customers });
   }
@@ -2267,6 +2322,7 @@ const server = http.createServer(async (req, res) => {
     const plan = u ? membershipPlanOf(u) : null;
     return { id: v.id, userId: v.userId, date: v.date, status: v.status, notes: v.notes || '', createdAt: v.createdAt,
       memberName: u ? (u.name || '') : '', memberEmail: u ? (u.email || '') : '', serviceAddress: u ? (u.serviceAddress || '') : '',
+      zipCode: u ? (u.zipCode || '') : '', homeType: u ? (u.homeType || '') : '', yardSize: u ? (u.yardSize || '') : '', homeNotes: u ? (u.homeNotes || '') : '', startPreference: u ? normalizeStartPreference(u.startPreference) : { type: 'asap', date: null },
       plan: plan ? { planKey: plan.planKey, type: plan.type, name: plan.name, visitsPerMonth: plan.visitsPerMonth, status: plan.status } : null };
   };
   const isActiveYardMember = (u) => {
