@@ -63,13 +63,29 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .cal-ev{background:#0b0b0b;color:#fff;border-radius:6px;padding:2px 5px;margin:2px 0;font-size:11px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cal-ev.req{background:#fff;color:var(--ink);border:1px dashed var(--line)}
 .cal-ev.sched{background:#0b5c2e}
+.cal-ev.done{background:#0b5c2e}
+.cal-ev.canc{background:#e8e4de;color:var(--muted);text-decoration:line-through}
+.yc-over{color:var(--red);font-weight:700}
 @media(max-width:620px){.cal-day{min-height:48px;font-size:11px}.cal-ev{font-size:10px}}
+.membership-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.share-links-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:14px 0}
+@media(max-width:800px){.share-links-grid{grid-template-columns:1fr}}
+.plan-card{display:flex;flex-direction:column}
+.plan-card img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+.plan-price{font-size:34px;font-weight:900;margin:4px 0}
+.plan-price span{font-size:16px;color:var(--muted);font-weight:600}
+.plan-card ul{margin:6px 0 12px;padding-left:18px;line-height:1.55;font-size:14px}
+.plan-card .grow{flex:1}
+@media(max-width:800px){.membership-grid{grid-template-columns:1fr}}
+header nav a{color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a}
+header nav a:hover{border-color:var(--red)}
 </style>
 </head>
 <body>
 <header>
   <b>General <em>Handyman</em> Solutions</b>
   <span style="display:flex;align-items:center;gap:10px">
+    <nav style="display:flex;gap:8px;align-items:center"><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e10600;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
     <span id="who" class="mut" style="color:#ccc"></span>
   </span>
@@ -91,6 +107,11 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
+    <div id="serviceAddressRow" style="display:none">
+      <label>Service address — where we'll do the work</label>
+      <input id="aServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
+      <p class="mut" id="serviceAddressHint" style="font-size:12.5px;margin:4px 0 0">Optional for a regular account. Required when joining Yard Care or HomeCare Plus.</p>
+    </div>
     <div id="cardRow" style="display:none">
       <label>Card — charged $49 today, then $49/mo</label>
       <div id="cardElement" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px"></div>
@@ -137,13 +158,112 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
       <b>Join HomeCare — $49/mo</b><br>
       <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
       <button onclick="joinHomeCare()" style="margin-top:10px;background:#e10600;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%">Join now — $49/mo</button>
+      <button class="ghost" onclick="location.hash='#memberships'" style="margin-top:8px;width:100%">Compare all memberships — Yard Care &amp; HomeCare Plus</button>
     </div>
     <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a General Handyman Solutions technician? <a href="#worker">Log in here →</a></p>
     <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
   </div>
 
+  <!-- MEMBERSHIPS (added 2026-10-21) — public pages at #memberships and #yard-care -->
+  <div id="membershipsBox" style="display:none">
+    <p class="mut"><a href="#" onclick="exitMemberships();return false;">← Back to the app</a></p>
+    <h2 id="membershipsHeading">Memberships</h2>
+    <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
+    <div id="yardCareHero" class="card" style="display:none;border-color:#bfe3bf;background:#f3fbf3">
+      <h3 style="margin-top:0">Yard care, handled every month</h3>
+      <p style="margin-bottom:0">Choose <b>Yard Care</b> for the yard visits by themselves, or <b>HomeCare Plus</b> for yard visits plus every HomeCare handyman benefit. Pick a plan below — or copy the direct signup link for the exact plan you want to send.</p>
+    </div>
+    <div id="yardShareLinks" style="display:none">
+      <h3>Direct signup links — copy the plan you want to send</h3>
+      <p class="mut">Each link opens signup with that exact plan selected. The customer creates their account, enters their service address, and pays — then they are a monthly member.</p>
+      <div class="share-links-grid">
+        <div class="card">
+          <b>Yard — 1 visit per month</b><br>
+          <a href="https://app.generalhandymans.app/#join-yard1" style="word-break:break-all">https://app.generalhandymans.app/#join-yard1</a><br>
+          <button type="button" style="margin-top:8px" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard1', this)">Copy link</button>
+        </div>
+        <div class="card">
+          <b>Yard — 2 visits per month</b><br>
+          <a href="https://app.generalhandymans.app/#join-yard2" style="word-break:break-all">https://app.generalhandymans.app/#join-yard2</a><br>
+          <button type="button" style="margin-top:8px" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard2', this)">Copy link</button>
+        </div>
+        <div class="card">
+          <b>HomeCare Plus — 1 yard visit per month</b><br>
+          <a href="https://app.generalhandymans.app/#join-plus1" style="word-break:break-all">https://app.generalhandymans.app/#join-plus1</a><br>
+          <button type="button" style="margin-top:8px" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus1', this)">Copy link</button>
+        </div>
+        <div class="card">
+          <b>HomeCare Plus — 2 yard visits per month</b><br>
+          <a href="https://app.generalhandymans.app/#join-plus2" style="word-break:break-all">https://app.generalhandymans.app/#join-plus2</a><br>
+          <button type="button" style="margin-top:8px" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus2', this)">Copy link</button>
+        </div>
+      </div>
+    </div>
+    <div id="yardCarePageLink" class="card" style="background:#f3fbf3;border-color:#bfe3bf">
+      <b>Here for the yard?</b> <span class="mut">Open the yard-focused page with Yard Care and HomeCare Plus — and the direct signup link for each plan.</span><br>
+      <button type="button" style="margin-top:8px" onclick="location.hash='#yard-care'">View Yard Care memberships</button>
+    </div>
+    <div id="membershipPageState"></div>
+    <div id="membershipAddressBox" class="card" style="display:none;border-color:#e10600;background:#fffafa">
+      <h3 style="margin-top:0">Service address needed</h3>
+      <p class="mut">Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.</p>
+      <label>Service address — where we'll do the work</label>
+      <input id="membershipServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
+      <div id="membershipAddressErr" class="err"></div>
+      <button onclick="saveMembershipServiceAddress()">Save &amp; continue to payment</button>
+    </div>
+    <div class="membership-grid">
+      <div class="card plan-card" id="homeCarePlanCard">
+        <img src="/stripe-homecare.png" alt="HomeCare membership — $49 per month">
+        <h3>HomeCare</h3>
+        <div class="plan-price">$49 <span>/month</span></div>
+        <ul>
+          <li>20% off labor on jobs under $1,000</li>
+          <li>First in-person estimate FREE, then $60 member estimates</li>
+          <li>Priority scheduling</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="joinHomeCare()">Join HomeCare — $49/mo</button>
+      </div>
+      <div class="card plan-card">
+        <img src="/stripe-yard-care.png" alt="Yard Care membership — from $95 per month">
+        <h3>Yard Care</h3>
+        <label>Yard visits per month</label>
+        <div class="pick" id="yardVisits">
+          <button type="button" data-v="yard1" class="sel" onclick="selectMembershipVisits('yard',1)">1 visit / month — $95</button><button type="button" data-v="yard2" onclick="selectMembershipVisits('yard',2)">2 visits / month — $175</button>
+        </div>
+        <div class="plan-price"><span id="yardPrice">$95</span> <span>/month</span></div>
+        <ul>
+          <li>Mowing · Edging · Blowing at every visit</li>
+          <li>Yard visits only — no handyman discounts included</li>
+          <li>The Team schedules your visits with you</li>
+        </ul>
+        <div class="grow"></div>
+        <button id="yardJoinBtn" onclick="startMembershipCheckout('yardcare')">Join Yard Care — $95/mo</button>
+      </div>
+      <div class="card plan-card">
+        <img src="/stripe-homecare-plus.png" alt="HomeCare Plus membership — from $135 per month">
+        <h3>HomeCare Plus</h3>
+        <label>Yard visits per month</label>
+        <div class="pick" id="plusVisits">
+          <button type="button" data-v="plus1" class="sel" onclick="selectMembershipVisits('plus',1)">1 yard visit / month — $135</button><button type="button" data-v="plus2" onclick="selectMembershipVisits('plus',2)">2 yard visits / month — $199</button>
+        </div>
+        <div class="plan-price"><span id="plusPrice">$135</span> <span>/month</span></div>
+        <ul>
+          <li><b>Everything in HomeCare</b> — 20% off labor, $60 member estimates, priority scheduling</li>
+          <li>PLUS yard visits included every month</li>
+          <li>Your home, inside &amp; out, on one plan</li>
+        </ul>
+        <div class="grow"></div>
+        <button id="plusJoinBtn" onclick="startMembershipCheckout('homecare-plus')">Join HomeCare Plus — $135/mo</button>
+      </div>
+    </div>
+    <p class="mut">Your first scheduled visit includes the regular yard cut. If a yard needs work beyond normal maintenance (extreme overgrowth, debris), the Team quotes that separately before starting. Labor-only on handyman jobs — you buy materials/parts. Questions? Text or call (707) 862-3773.</p>
+  </div>
+
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
+    <div id="membershipSummary" class="custAccountOnly"></div>
     <h2>Request a handyman</h2>
     <p class="mut">Pick a service, add pictures, choose when — no account needed. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
@@ -205,6 +325,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
     <h2>Team — control center</h2>
+    <p><button class="ghost" onclick="location.hash='#yard-calendar'">Yard Calendar — schedule member yard visits</button> <span class="mut">separate from the master calendar below</span></p>
     <h3>Master calendar</h3>
     <div class="card">
       <div class="cal-head"><button class="ghost" onclick="calMove(-1)">&#8249;</button><b id="calTitle"></b><button class="ghost" onclick="calMove(1)">&#8250;</button><button class="ghost" onclick="calToday()">Today</button></div>
@@ -244,6 +365,20 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
     <div id="adminInvoices"></div>
   </div>
 
+  <!-- YARD CALENDAR (admin, added 2026-10-21) — its own route #yard-calendar,
+       separate from the master calendar: these are membership yard visits,
+       NOT jobs. They never reach the worker board or the master calendar. -->
+  <div id="yardCalendarBox" style="display:none">
+    <h2>Yard Calendar — member yard visits</h2>
+    <p class="mut">Yard Care and HomeCare Plus members only. A visit here is scheduling bookkeeping for the yard route — it is not a job and never notifies workers.</p>
+    <p><button class="ghost" onclick="exitYardCalendar()">&#8592; Back to control center</button></p>
+    <div class="card">
+      <div class="cal-head"><button class="ghost" onclick="ycMove(-1)">&#8249;</button><b id="ycTitle"></b><button class="ghost" onclick="ycMove(1)">&#8250;</button><button class="ghost" onclick="ycToday()">Today</button></div>
+      <div class="cal-grid" id="ycGrid"></div>
+      <div id="ycDay"></div>
+    </div>
+  </div>
+
   <p><button class="ghost" onclick="logout()">Log out</button></p>
 </div>
 
@@ -256,6 +391,11 @@ function mode(m){ curMode=m;
   document.getElementById('tabWorker').classList.toggle('on', m==='worker');
   document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
+  document.getElementById('serviceAddressRow').style.display = m==='customer' ? 'block':'none';
+  const serviceAddressHint = document.getElementById('serviceAddressHint');
+  if (serviceAddressHint) serviceAddressHint.textContent = pendingMembershipPlan
+    ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
+    : 'Optional for a regular account. Required when joining Yard Care or HomeCare Plus.';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('cardRow').style.display = m==='homecare' ? 'block':'none';
@@ -306,9 +446,146 @@ async function startHomeCareCheckout(){
 }
 function joinHomeCare(){
   if (me) { startHomeCareCheckout(); return; }
-  if (location.hash === '#join-homecare') location.hash = '';
+  if (location.hash === '#join-homecare' || location.hash === '#memberships') location.hash = '';
   mode('homecare');
   document.getElementById('authBox').scrollIntoView({behavior:'smooth'});
+}
+// ---------- Memberships page: Yard Care + HomeCare Plus (added 2026-10-21) ----------
+// Same rule as HomeCare: membership requires an account. Logged-out
+// visitors are routed to create-account/login first; the chosen plan is
+// kept in pendingMembershipPlan and checkout resumes right after auth.
+// Prices are fixed server-side — the page only sends a plan key.
+let pendingMembershipPlan = null;
+let pendingAddressCheckout = null;
+let membershipDeepLinkKey = '';
+const MEMBERSHIP_JOIN_HASHES = {
+  '#join-yard1': { kind: 'yardcare', plan: 'yard1', which: 'yard', visits: 1 },
+  '#join-yard2': { kind: 'yardcare', plan: 'yard2', which: 'yard', visits: 2 },
+  '#join-plus1': { kind: 'homecare-plus', plan: 'plus1', which: 'plus', visits: 1 },
+  '#join-plus2': { kind: 'homecare-plus', plan: 'plus2', which: 'plus', visits: 2 }
+};
+function membershipJoinHashConfig(){ return MEMBERSHIP_JOIN_HASHES[location.hash] || null; }
+function isMembershipRoute(){ return location.hash === '#memberships' || location.hash === '#yard-care' || !!membershipJoinHashConfig(); }
+async function copyShareLink(url, button){
+  try {
+    await navigator.clipboard.writeText(url);
+    if (button) { const old = button.textContent; button.textContent = 'Copied!'; setTimeout(() => { button.textContent = old; }, 1600); }
+  } catch (e) { window.prompt('Copy this link:', url); }
+}
+function renderMembershipRouteMode(){
+  const yardRoute = location.hash === '#yard-care';
+  const heading = document.getElementById('membershipsHeading');
+  if (heading) heading.textContent = yardRoute ? 'Yard Care Memberships' : 'Memberships';
+  const intro = document.getElementById('membershipsIntro');
+  if (intro) intro.textContent = yardRoute
+    ? 'Yard work on one total monthly charge — never a per-visit charge. Cancel anytime. Joining needs a customer account and your service address: if you are not logged in, we take you to create one first, then straight to secure checkout.'
+    : 'One total monthly charge per plan — never a per-visit charge. Cancel anytime. Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.';
+  const hero = document.getElementById('yardCareHero');
+  if (hero) hero.style.display = yardRoute ? 'block' : 'none';
+  const share = document.getElementById('yardShareLinks');
+  if (share) share.style.display = yardRoute ? 'block' : 'none';
+  const pageLink = document.getElementById('yardCarePageLink');
+  if (pageLink) pageLink.style.display = yardRoute ? 'none' : 'block';
+  const homeCareCard = document.getElementById('homeCarePlanCard');
+  if (homeCareCard) homeCareCard.style.display = yardRoute ? 'none' : '';
+}
+function queueMembershipDeepLink(){
+  const cfg = membershipJoinHashConfig();
+  if (!cfg) return;
+  const key = location.hash + '|' + (me ? me.id : 'guest');
+  if (membershipDeepLinkKey === key) return;
+  membershipDeepLinkKey = key;
+  selectMembershipVisits(cfg.which, cfg.visits);
+  setTimeout(() => { startMembershipCheckout(cfg.kind, cfg.plan); }, 0);
+}
+function exitMemberships(){
+  if (location.hash) location.hash = '';
+  render();
+}
+function selectMembershipVisits(which, visits){
+  const group = document.getElementById(which === 'yard' ? 'yardVisits' : 'plusVisits');
+  const selectedPlan = (which === 'yard' ? 'yard' : 'plus') + visits;
+  if (group) group.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === selectedPlan));
+  if (which === 'yard') {
+    document.getElementById('yardPrice').textContent = visits === 2 ? '$175' : '$95';
+    document.getElementById('yardJoinBtn').textContent = visits === 2 ? 'Join Yard Care — $175/mo' : 'Join Yard Care — $95/mo';
+  } else {
+    document.getElementById('plusPrice').textContent = visits === 2 ? '$199' : '$135';
+    document.getElementById('plusJoinBtn').textContent = visits === 2 ? 'Join HomeCare Plus — $199/mo' : 'Join HomeCare Plus — $135/mo';
+  }
+}
+function showMembershipAddressForm(kind, plan){
+  pendingAddressCheckout = { kind, plan };
+  if (!isMembershipRoute()) location.hash = '#memberships';
+  render();
+  const box = document.getElementById('membershipAddressBox');
+  const input = document.getElementById('membershipServiceAddress');
+  const err = document.getElementById('membershipAddressErr');
+  if (input) input.value = (me && me.serviceAddress) || '';
+  if (err) { err.textContent = ''; err.classList.remove('show'); }
+  if (box) { box.style.display = 'block'; box.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  if (input) input.focus();
+}
+async function saveMembershipServiceAddress(){
+  const input = document.getElementById('membershipServiceAddress');
+  const err = document.getElementById('membershipAddressErr');
+  const serviceAddress = input ? input.value.trim() : '';
+  function showAddressErr(message){ if (err) { err.textContent = message; err.classList.add('show'); } else alert(message); }
+  if (!serviceAddress) { showAddressErr('Service address is required — enter the address where we will do the work.'); return; }
+  try {
+    const d = await api('/api/me/service-address', { method: 'POST', body: JSON.stringify({ serviceAddress }) });
+    if (d.user) me = d.user; else if (me) me.serviceAddress = d.serviceAddress || serviceAddress;
+    const box = document.getElementById('membershipAddressBox');
+    if (box) box.style.display = 'none';
+    const pending = pendingAddressCheckout; pendingAddressCheckout = null;
+    if (pending) await startMembershipCheckout(pending.kind, pending.plan);
+  } catch (e) { showAddressErr(e.message); }
+}
+async function startMembershipCheckout(kind, planOverride){
+  const plan = planOverride || (kind === 'yardcare' ? pickOne('yardVisits') : pickOne('plusVisits'));
+  if (!plan) { alert('Choose 1 or 2 visits per month first.'); return; }
+  if (!me) {
+    pendingMembershipPlan = { kind, plan };
+    if (location.hash) location.hash = ''; else render();
+    mode('customer');
+    showErr('Memberships need an account — create yours or log in, and we will take you straight to secure checkout. Your service address is required for Yard Care and HomeCare Plus.');
+    document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
+    return;
+  }
+  if (me.role !== 'customer' && me.role !== 'admin') { alert('Membership checkout is for customer accounts — log in with a customer account to join.'); return; }
+  if (!(me.serviceAddress || '').trim()) { showMembershipAddressForm(kind, plan); return; }
+  try {
+    const d = await api('/api/stripe/checkout', { method: 'POST', body: JSON.stringify({ kind, plan }) });
+    location.href = d.url;
+  } catch (e) {
+    if (e.code === 'ADDRESS_REQUIRED') { showMembershipAddressForm(kind, plan); return; }
+    alert(e.message);
+  }
+}
+function membershipPlanLine(p){
+  if (!p || p.status !== 'active') return '';
+  return '<b>' + escHtml(p.name) + '</b> — $' + escHtml(p.monthly) + '/mo' + (p.visitsPerMonth ? ' • ' + p.visitsPerMonth + ' yard visit' + (p.visitsPerMonth === 1 ? '' : 's') + '/month included' : '') + (p.type === 'plus' ? ' • all HomeCare benefits included' : (p.type === 'homecare' ? ' • member benefits active' : ' • yard visits only'));
+}
+function renderMembershipPageState(){
+  const el = document.getElementById('membershipPageState');
+  if (!el) return;
+  if (me && me.membershipPlan && me.membershipPlan.status === 'active') {
+    el.innerHTML = '<div class="card" style="background:#f3fbf3;border-color:#bfe3bf"><b>Your active plan:</b> ' + membershipPlanLine(me.membershipPlan) + '<br><span class="mut">See it anytime on your dashboard.</span></div>';
+  } else {
+    el.innerHTML = '';
+  }
+}
+function renderMyMembership(){
+  const el = document.getElementById('membershipSummary');
+  if (!el) return;
+  if (!me || me.role !== 'customer') { el.innerHTML = ''; return; }
+  const p = me.membershipPlan;
+  if (p && p.status === 'active') {
+    el.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + '<div class="mut" style="margin-top:4px">Your plan renews monthly. To change or cancel it, text or call the Team at (707) 862-3773.</div></div>';
+    if (p.type === 'yard' || p.type === 'plus') loadMyYardVisits();
+  } else {
+    el.innerHTML = '<div class="card"><h3 style="margin-top:0">My membership</h3><span class="mut">No active membership yet — members save 20% on labor, get $60 estimates, and can add monthly yard care.</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">View memberships</button></div>';
+  }
 }
 // ---------- Inline card charge for "New HomeCare member" (added 2026-10-19) ----------
 // One submit = account created + $49 charged right in the form (Stripe Elements
@@ -363,7 +640,7 @@ async function chargeHomeCare(email){
   }
 }
 mode('login');
-async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Something failed'); return d; }
+async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) { const err = new Error(d.error||'Something failed'); err.code = d.code || ''; err.status = r.status; throw err; } return d; }
 function showErr(t){ const e=document.getElementById('authErr'); e.textContent=t; e.classList.add('show'); }
 document.querySelectorAll('.pick').forEach(function(g){
   g.addEventListener('click', function(e){ const b=e.target.closest('button'); if(!b) return;
@@ -396,11 +673,21 @@ async function doAuth(){
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
     else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings() } : {};
+      const serviceAddress = curMode==='customer' ? document.getElementById('aServiceAddress').value.trim() : '';
+      if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       const role = curMode==='homecare' ? 'customer' : curMode;
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), role:role, profile})});
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: curMode==='customer' ? serviceAddress : undefined, role:role, profile})});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
       if(curMode==='homecare'){ await chargeHomeCare(email); return; } // inline $49 charge, then welcome
     }
+    // Memberships page join: account first, then straight to checkout.
+    if (pendingMembershipPlan && me && me.role === 'customer') {
+      const pending = pendingMembershipPlan; pendingMembershipPlan = null;
+      render();
+      await startMembershipCheckout(pending.kind, pending.plan);
+      return;
+    }
+    if (pendingMembershipPlan && me && me.role !== 'customer') pendingMembershipPlan = null;
     render();
   }catch(e){ showErr(e.message); }
 }
@@ -419,6 +706,34 @@ setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
+  // Memberships is a public page of its own (#memberships): while it is the
+  // route, it replaces the auth/customer/technician/admin boxes.
+  const onMemberships = isMembershipRoute();
+  const mb = document.getElementById('membershipsBox');
+  if (mb) mb.style.display = onMemberships ? 'block' : 'none';
+  if (onMemberships) {
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    renderMembershipRouteMode();
+    renderMembershipPageState();
+    queueMembershipDeepLink();
+    return;
+  }
+  // Yard Calendar is an admin-only page of its own (#yard-calendar): while it
+  // is the route (and the user is the admin), it replaces every other box.
+  const onYardCal = isYardCalendarRoute() && !!me && me.role==='admin';
+  const yb = document.getElementById('yardCalendarBox');
+  if (yb) yb.style.display = onYardCal ? 'block' : 'none';
+  if (onYardCal) {
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    loadYardCalendar();
+    return;
+  }
   document.getElementById('authBox').style.display = me ? 'none':'block';
   // Quote form is public — no account needed. "My ..." sections need a customer login.
   const showCust = !me || me.role==='customer';
@@ -429,7 +744,7 @@ function render(){
   if(memberRow){ const showM = !!me; memberRow.style.display = showM ? '' : 'none'; const lbl = memberRow.previousElementSibling; if(lbl && lbl.tagName==='LABEL') lbl.style.display = showM ? '' : 'none'; }
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
-  if(me && me.role==='customer'){ loadRequests(); loadMyJobs(); custSummary(); }
+  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadMyJobs(); custSummary(); }
   if(me && me.role==='worker') loadJobs();
   if(me && me.role==='admin'){ loadAdmin(); }
   // Direct HomeCare join: after login/signup with a pending join, go straight
@@ -898,6 +1213,138 @@ async function calAddJob(){
     await loadCalendar(); loadAdmin();
   }catch(e){ msg.textContent=e.message; }
 }
+// ---------- Yard calendar (admin, added 2026-10-21) ----------
+// SEPARATE from the master calendar above: this schedules the included
+// monthly yard visits of Yard Care / HomeCare Plus members. Visits are NOT
+// jobs — nothing here posts to the worker board or the master calendar.
+let ycY=0, ycM=0, ycVisits=[], ycMembers=[], ycSel='';
+function isYardCalendarRoute(){ return location.hash === '#yard-calendar'; }
+function exitYardCalendar(){ if (location.hash) location.hash=''; render(); }
+function ycInit(){ const d=new Date(); if(!ycY){ ycY=d.getFullYear(); ycM=d.getMonth(); } }
+function ycKey(){ return ycY+'-'+String(ycM+1).padStart(2,'0'); }
+function ycMove(n){ ycM+=n; if(ycM<0){ycM=11;ycY--;} if(ycM>11){ycM=0;ycY++;} ycSel=''; loadYardCalendar(); }
+function ycToday(){ const d=new Date(); ycY=d.getFullYear(); ycM=d.getMonth(); ycSel=''; loadYardCalendar(); }
+// Visits counting toward a member's monthly plan: scheduled + done (a
+// cancelled visit frees its slot back up).
+function ycMonthCount(visits, userId){ return (visits||[]).filter(function(v){ return v.userId===userId && v.status!=='cancelled'; }).length; }
+async function loadYardCalendar(){
+  ycInit();
+  const lastDay=new Date(ycY, ycM+1, 0).getDate();
+  try{ const d=await api('/api/admin/yard-visits?from='+ycKey()+'-01&to='+ycKey()+'-'+String(lastDay).padStart(2,'0')); ycVisits=d.visits||[]; }
+  catch(e){ ycVisits=[]; }
+  try{ const c=await api('/api/customers'); ycMembers=(c.customers||[]).filter(function(u){ const p=u.membershipPlan||{}; return p.status==='active' && (p.type==='yard'||p.type==='plus'); }); }
+  catch(e){ ycMembers=[]; }
+  renderYardCalendar(); renderYcDay();
+}
+function renderYardCalendar(){
+  const title=document.getElementById('ycTitle'), grid=document.getElementById('ycGrid');
+  if(!title||!grid) return;
+  const names=['January','February','March','April','May','June','July','August','September','October','November','December'];
+  title.textContent=names[ycM]+' '+ycY;
+  const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  const first=new Date(ycY,ycM,1); const startDow=first.getDay();
+  const days=new Date(ycY,ycM+1,0).getDate();
+  let h=['Su','Mo','Tu','We','Th','Fr','Sa'].map(function(d){return '<div class="cal-dow">'+d+'</div>';}).join('');
+  for(let i=0;i<startDow;i++) h+='<div class="cal-day off"></div>';
+  for(let d=1;d<=days;d++){
+    const key=ycY+'-'+String(ycM+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const vs=ycVisits.filter(function(v){return v.date===key;});
+    const cls='cal-day'+(key===tkey?' today':'')+(key===ycSel?' sel':'');
+    h+='<div class="'+cls+'" onclick="ycSelect(\''+key+'\')"><div class="dn">'+d+'</div>'+
+      vs.slice(0,3).map(function(v){
+        const c=v.status==='done'?'cal-ev done':(v.status==='cancelled'?'cal-ev canc':'cal-ev');
+        return '<div class="'+c+'">'+escHtml(v.memberName||'Member')+'</div>';
+      }).join('')+(vs.length>3?'<div class="mut">+'+(vs.length-3)+' more</div>':'')+'</div>';
+  }
+  grid.innerHTML=h;
+}
+function ycSelect(key){ ycSel=key; renderYardCalendar(); renderYcDay(); }
+function renderYcDay(){
+  const el=document.getElementById('ycDay'); if(!el) return;
+  if(!ycSel){ el.innerHTML='<p class="mut" style="margin-top:10px">Tap a day to see its yard visits and add one.</p>'; return; }
+  const vs=ycVisits.filter(function(v){return v.date===ycSel;});
+  let h='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>'+escCal(ycSel)+'</b>';
+  h+=vs.length? vs.map(function(v){
+    const plan=v.plan?escHtml(v.plan.name)+' • '+v.plan.visitsPerMonth+' visit'+(v.plan.visitsPerMonth===1?'':'s')+'/mo':'';
+    return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escHtml(v.memberName||'Member')+'</b> <span class="pill">'+escHtml(v.status)+'</span><br><span class="mut">'+
+      plan+(v.serviceAddress?' • '+escHtml(v.serviceAddress):' • no service address on file')+(v.notes?' • '+escHtml(v.notes):'')+'</span>'+
+      '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+      (v.status==='scheduled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'done\'})">Mark done</button>':'')+
+      (v.status!=='cancelled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'cancelled\'})">Cancel visit</button>':'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'scheduled\'})">Restore</button>')+
+      '<input type="date" id="yc-date-'+v.id+'" value="'+escCal(v.date)+'" style="width:auto;margin:0"><button class="ghost" onclick="ycReschedule(\''+v.id+'\')">Reschedule</button>'+
+      '<button class="ghost" onclick="ycDeleteVisit(\''+v.id+'\')">Delete</button></div></div>';
+  }).join('') : '<p class="mut">No yard visits this day.</p>';
+  h+='<h3 style="margin-top:12px">Add visit</h3>';
+  if(!ycMembers.length){
+    h+='<p class="mut">No active Yard Care / HomeCare Plus members yet.</p>';
+  } else {
+    h+='<label>Member</label><select id="ycAddMember" onchange="ycAddMemberChanged()">'+ycMembers.map(function(u){
+      const p=u.membershipPlan||{}; const c=ycMonthCount(ycVisits, u.id);
+      const over=c>=(p.visitsPerMonth||0);
+      return '<option value="'+u.id+'">'+escHtml(u.name)+' — '+escHtml(p.name||'Plan')+' ('+(p.visitsPerMonth||0)+' visit'+(p.visitsPerMonth===1?'':'s')+'/mo) • '+c+'/'+(p.visitsPerMonth||0)+' scheduled this month'+(over?' — OVER PLAN if added':'')+'</option>';
+    }).join('')+'</select><div id="ycAddWarn" class="yc-over" style="display:none;margin:2px 0 6px"></div>'+
+    '<div class="row"><div><label>Date</label><input id="ycAddDate" type="date" value="'+escCal(ycSel)+'"></div><div><label>Notes (optional)</label><input id="ycAddNotes" placeholder="Gate code, dogs, etc."></div></div>'+
+    '<button onclick="ycAddVisit()">Add visit</button> <span id="ycMsg" class="mut"></span>';
+  }
+  h+='</div>';
+  el.innerHTML=h;
+  ycAddMemberChanged();
+}
+function ycAddMemberChanged(){
+  const sel=document.getElementById('ycAddMember'), warn=document.getElementById('ycAddWarn');
+  if(!sel||!warn) return;
+  const u=ycMembers.find(function(x){return x.id===sel.value;});
+  if(!u){ warn.style.display='none'; return; }
+  const p=u.membershipPlan||{}; const c=ycMonthCount(ycVisits, u.id);
+  if(c>=(p.visitsPerMonth||0)){
+    warn.textContent='Heads up: '+u.name+' already has '+c+' of '+(p.visitsPerMonth||0)+' plan visits scheduled this month — adding another goes over the plan.';
+    warn.style.display='block';
+  } else { warn.style.display='none'; }
+}
+async function ycAddVisit(){
+  const msg=document.getElementById('ycMsg');
+  const userId=document.getElementById('ycAddMember').value;
+  const date=document.getElementById('ycAddDate').value;
+  const notes=document.getElementById('ycAddNotes').value.trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ msg.textContent='Pick a valid date.'; return; }
+  msg.textContent='Adding…';
+  try{
+    await api('/api/admin/yard-visits',{method:'POST', body:JSON.stringify({userId:userId, date:date, notes:notes})});
+    msg.textContent='Added.';
+    ycSel=date;
+    const parts=date.split('-'); ycY=Number(parts[0]); ycM=Number(parts[1])-1;
+    await loadYardCalendar();
+  }catch(e){ msg.textContent=e.message; }
+}
+async function ycPatchVisit(idv, patch){
+  try{ await api('/api/admin/yard-visits/'+idv,{method:'PATCH', body:JSON.stringify(patch)}); await loadYardCalendar(); }
+  catch(e){ alert(e.message); }
+}
+async function ycReschedule(idv){
+  const inp=document.getElementById('yc-date-'+idv);
+  const date=inp?inp.value:'';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ alert('Pick a valid date.'); return; }
+  await ycPatchVisit(idv, {date:date});
+  ycSel=date;
+  const parts=date.split('-'); ycY=Number(parts[0]); ycM=Number(parts[1])-1;
+  await loadYardCalendar();
+}
+async function ycDeleteVisit(idv){
+  if(!confirm('Delete this yard visit? This removes the visit record for good.')) return;
+  try{ await api('/api/admin/yard-visits/'+idv,{method:'DELETE'}); await loadYardCalendar(); }
+  catch(e){ alert(e.message); }
+}
+// Customer side: upcoming visits inside the "My membership" card.
+async function loadMyYardVisits(){
+  const el=document.getElementById('myYardVisits'); if(!el) return;
+  try{
+    const d=await api('/api/me/yard-visits');
+    const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+    const upcoming=(d.visits||[]).filter(function(v){ return v.status==='scheduled' && v.date>=tkey; });
+    if(!upcoming.length){ el.innerHTML='<span class="mut">No yard visits scheduled yet — the Team schedules your included visits here.</span>'; return; }
+    el.innerHTML='<b>Next yard visit: '+escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">Also coming up: '+upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':'');
+  }catch(e){}
+}
 async function loadAdmin(){
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
@@ -993,6 +1440,7 @@ async function createJob(){
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
 applyWorkerEntry();
+window.addEventListener('hashchange', function(){ render(); });
 if (location.hash === '#join-homecare') { mode('homecare'); }
 loadMe();
 </script>

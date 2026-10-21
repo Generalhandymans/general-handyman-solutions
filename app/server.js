@@ -10,8 +10,9 @@ const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootstrap is one-time while no admin exists
 
-let db = { users: [], requests: [], jobs: [], notifications: [], invoices: [] };
+let db = { users: [], requests: [], jobs: [], notifications: [], invoices: [], yardVisits: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
+if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
 // Permanent storage: when SUPABASE_URL + SUPABASE_SERVICE_KEY are set (Render),
 // the whole app state lives in Supabase table ghs_state (key 'app'), so accounts,
 // requests and jobs survive redeploys and restarts. Local file is the fallback.
@@ -38,6 +39,7 @@ async function loadFromSupabase() {
     if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
     if (!Array.isArray(db.notifications)) db.notifications = [];
     if (!Array.isArray(db.invoices)) db.invoices = [];
+    if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
     if (!db.settings || typeof db.settings !== 'object') db.settings = {};
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
@@ -47,7 +49,7 @@ const sessions = new Map(); // token -> userId
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -262,6 +264,161 @@ const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 const STRIPE_API = 'https://api.stripe.com/v1';
 const HOMECARE_MONTHLY_CENTS = 4900;
+// Membership plans (added 2026-10-21): one active plan is stored on the user
+// as u.membershipPlan = { planKey, type, visitsPerMonth, priceId, productId,
+// status, subscriptionId, since, cancelAt }. HomeCare remains the legacy
+// benefit flag: HomeCare and HomeCare Plus set homeCareStatus='active' (so
+// every existing isMember path — 20% labor discount, $60 estimates, the free
+// first estimate — applies to Plus exactly as it does to HomeCare), while
+// Yard Care records ONLY the yard plan and grants no HomeCare benefits.
+const MEMBERSHIP_PLANS = {
+  homecare: { key: 'homecare', type: 'homecare', kind: 'homecare', name: 'HomeCare', monthlyCents: 4900, visitsPerMonth: 0, priceId: '', productId: '' },
+  yard1: { key: 'yard1', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 9500, visitsPerMonth: 1, priceId: 'price_1UT2thLu9cCIcixBDpOWl0YO', productId: 'prod_VU0voRBxqFjPoE' },
+  yard2: { key: 'yard2', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 17500, visitsPerMonth: 2, priceId: 'price_1UT2thLu9cCIcixBnC849V1o', productId: 'prod_VU0voRBxqFjPoE' },
+  plus1: { key: 'plus1', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 13500, visitsPerMonth: 1, priceId: 'price_1UT2roLu9cCIcixB4swTI5MS', productId: 'prod_VU0t2nkCsauZe1' },
+  plus2: { key: 'plus2', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 19900, visitsPerMonth: 2, priceId: 'price_1UT2roLu9cCIcixBiIlrfJia', productId: 'prod_VU0t2nkCsauZe1' }
+};
+function membershipPlanPriceId(plan, source) {
+  if (!plan) return '';
+  if (plan.key !== 'homecare') return plan.priceId || '';
+  return (source && source.priceId) || process.env.STRIPE_PRICE_HOMECARE || (db.settings && db.settings.stripeHomeCarePrice) || '';
+}
+function membershipPlanOf(u) {
+  const empty = { planKey: null, type: null, name: '', monthly: 0, visitsPerMonth: 0, status: 'none', priceId: '', productId: '', subscriptionId: '', since: null, cancelAt: null, checkoutKind: null };
+  if (!u) return empty;
+  const stored = (u.membershipPlan && typeof u.membershipPlan === 'object') ? u.membershipPlan : null;
+  if (stored && MEMBERSHIP_PLANS[stored.planKey]) {
+    const plan = MEMBERSHIP_PLANS[stored.planKey];
+    return { planKey: plan.key, type: plan.type, name: plan.name, monthly: plan.monthlyCents / 100, visitsPerMonth: plan.visitsPerMonth, status: stored.status || 'none', priceId: stored.priceId || membershipPlanPriceId(plan, stored), productId: stored.productId || plan.productId || '', subscriptionId: stored.subscriptionId || '', since: stored.since || null, cancelAt: stored.cancelAt || null, checkoutKind: plan.kind };
+  }
+  // Legacy users (HomeCare sold before plan records existed): derive the
+  // plan from the HomeCare fields so nothing about their status changes.
+  const legacyStatus = u.homeCareStatus || 'none';
+  if (legacyStatus !== 'none' || u.stripeSubscriptionId) {
+    const plan = MEMBERSHIP_PLANS.homecare;
+    return { planKey: plan.key, type: plan.type, name: plan.name, monthly: plan.monthlyCents / 100, visitsPerMonth: 0, status: legacyStatus, priceId: membershipPlanPriceId(plan, u), productId: '', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince || null, cancelAt: u.homeCareCancelAt || null, checkoutKind: plan.kind };
+  }
+  return Object.assign({}, empty, { subscriptionId: u.stripeSubscriptionId || '' });
+}
+function setMembershipPlan(u, planKey, patch) {
+  const plan = MEMBERSHIP_PLANS[planKey];
+  if (!u || !plan) return null;
+  patch = patch || {};
+  const prev = (u.membershipPlan && typeof u.membershipPlan === 'object' && MEMBERSHIP_PLANS[u.membershipPlan.planKey]) ? u.membershipPlan : {};
+  const next = {
+    planKey: plan.key,
+    type: plan.type,
+    visitsPerMonth: plan.visitsPerMonth,
+    priceId: patch.priceId || prev.priceId || membershipPlanPriceId(plan, prev),
+    productId: patch.productId || prev.productId || plan.productId || '',
+    status: patch.status || prev.status || 'none',
+    subscriptionId: patch.subscriptionId || prev.subscriptionId || '',
+    since: patch.since !== undefined ? patch.since : (prev.since || null),
+    cancelAt: patch.cancelAt !== undefined ? patch.cancelAt : (prev.cancelAt || null)
+  };
+  u.membershipPlan = next;
+  if (next.subscriptionId) u.stripeSubscriptionId = next.subscriptionId;
+  return membershipPlanOf(u);
+}
+function activateMembershipPlan(u, planKey, opts) {
+  opts = opts || {};
+  const plan = MEMBERSHIP_PLANS[planKey];
+  if (!u || !plan) return null;
+  const before = membershipPlanOf(u);
+  const now = new Date().toISOString();
+  const sameActive = before.planKey === planKey && before.status === 'active' && (!opts.subscriptionId || !before.subscriptionId || before.subscriptionId === opts.subscriptionId);
+  const first = !!opts.first || !before.since;
+  const mp = setMembershipPlan(u, planKey, { status: 'active', subscriptionId: opts.subscriptionId || before.subscriptionId || '', since: before.since || now, cancelAt: null });
+  if (plan.type === 'homecare' || plan.type === 'plus') {
+    // Plus IS HomeCare for benefit purposes: reuse the exact legacy flag
+    // every member check in this file already reads.
+    u.homeCareStatus = 'active';
+    if (!u.homeCareSince) u.homeCareSince = mp.since || now;
+    u.homeCareCancelAt = null;
+    if (first) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
+  }
+  if (!sameActive) {
+    if (plan.type === 'yard') {
+      notify(u.id, 'membership', 'Welcome to Yard Care! Your plan is active — ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month included. The Team will schedule your visits with you.');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') joined Yard Care ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
+    } else if (plan.type === 'plus') {
+      notify(u.id, 'membership', 'Welcome to HomeCare Plus! Your membership is active: all HomeCare benefits (first in-person estimate FREE, then $60 member estimates, 20% off labor on jobs under $1,000, priority scheduling) PLUS ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month.');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare Plus ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
+    }
+  }
+  save();
+  return mp;
+}
+function cancelMembershipPlan(u, planKey, opts) {
+  opts = opts || {};
+  const plan = MEMBERSHIP_PLANS[planKey];
+  if (!u || !plan) return null;
+  const before = membershipPlanOf(u);
+  if (before.subscriptionId && opts.subscriptionId && before.subscriptionId !== opts.subscriptionId) return before;
+  const now = new Date().toISOString();
+  const mp = setMembershipPlan(u, planKey, { status: 'cancelled', subscriptionId: opts.subscriptionId || before.subscriptionId || '', since: before.since || null, cancelAt: now });
+  if (plan.type === 'homecare' || plan.type === 'plus') {
+    u.homeCareStatus = 'cancelled';
+    u.homeCareCancelAt = now;
+  }
+  return mp;
+}
+function planFromSubscription(obj, fallback) {
+  const md = (obj && obj.metadata) || {};
+  if (md.plan && MEMBERSHIP_PLANS[md.plan]) return MEMBERSHIP_PLANS[md.plan];
+  const items = (obj && obj.items && Array.isArray(obj.items.data)) ? obj.items.data : [];
+  const firstItem = items[0] || {};
+  const priceId = typeof firstItem.price === 'string' ? firstItem.price : (firstItem.price && firstItem.price.id) || '';
+  if (priceId) { const found = Object.keys(MEMBERSHIP_PLANS).map(k => MEMBERSHIP_PLANS[k]).find(pl => pl.priceId && pl.priceId === priceId); if (found) return found; }
+  if (md.kind === 'homecare') return MEMBERSHIP_PLANS.homecare;
+  if (fallback && fallback.planKey && fallback.subscriptionId && obj && fallback.subscriptionId === obj.id) return MEMBERSHIP_PLANS[fallback.planKey];
+  return null;
+}
+function userForSubscription(obj) {
+  if (!obj) return null;
+  const md = obj.metadata || {};
+  if (md.userId) { const byMeta = db.users.find(x => x.id === md.userId); if (byMeta) return byMeta; }
+  return db.users.find(x => x.stripeSubscriptionId && x.stripeSubscriptionId === obj.id)
+    || (obj.customer ? db.users.find(x => x.stripeCustomerId && x.stripeCustomerId === obj.customer) : null)
+    || null;
+}
+function syncMembershipPlanFromSubscription(u, obj) {
+  if (!u || !obj) return membershipPlanOf(u);
+  const before = membershipPlanOf(u);
+  const plan = planFromSubscription(obj, before);
+  if (!plan) return before;
+  if (before.status === 'active' && before.subscriptionId && obj.id && before.subscriptionId !== obj.id) return before; // never let a second subscription clobber the active plan
+  const status = (obj.status === 'active' || obj.status === 'trialing') ? 'active' : (obj.status || before.status || 'none');
+  const mp = setMembershipPlan(u, plan.key, {
+    status,
+    subscriptionId: obj.id || before.subscriptionId || '',
+    since: before.since || (obj.created ? new Date(Number(obj.created) * 1000).toISOString() : null),
+    cancelAt: obj.cancel_at ? new Date(Number(obj.cancel_at) * 1000).toISOString() : before.cancelAt
+  });
+  if (status === 'active') {
+    if (plan.type === 'homecare' || plan.type === 'plus') {
+      u.homeCareStatus = 'active';
+      if (!u.homeCareSince) u.homeCareSince = mp.since || new Date().toISOString();
+      u.homeCareCancelAt = obj.cancel_at ? mp.cancelAt : null;
+    } else if (before.subscriptionId && before.subscriptionId === obj.id && (before.type === 'homecare' || before.type === 'plus')) {
+      // Same subscription changed INTO a yard-only plan (e.g. via the
+      // billing portal): the HomeCare benefits go with the old plan.
+      u.homeCareStatus = 'none';
+      u.homeCareCancelAt = null;
+    }
+  } else if (status === 'canceled') {
+    if (plan.type === 'homecare' || plan.type === 'plus') { u.homeCareStatus = 'cancelled'; u.homeCareCancelAt = new Date().toISOString(); }
+  }
+  return mp;
+}
+function publicMembershipPlan(plan) {
+  return { key: plan.key, type: plan.type, name: plan.name, monthly: plan.monthlyCents / 100, visitsPerMonth: plan.visitsPerMonth, priceId: membershipPlanPriceId(plan, null), productId: plan.productId || '', checkoutKind: plan.kind };
+}
+function membershipPlansPublic() {
+  const out = {};
+  Object.keys(MEMBERSHIP_PLANS).forEach(k => { out[k] = publicMembershipPlan(MEMBERSHIP_PLANS[k]); });
+  return out;
+}
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
   const body = new URLSearchParams();
@@ -329,7 +486,7 @@ async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
   // page EXCEPT the HomeCare membership. Added as a second line item.
-  const tipCents = (kind === 'homecare' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
+  const tipCents = (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
@@ -345,6 +502,19 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][quantity]'] = '1';
     params['subscription_data[metadata][userId]'] = user.id;
     params['subscription_data[metadata][kind]'] = 'homecare';
+  } else if (kind === 'yardcare' || kind === 'homecare-plus') {
+    // Membership plans (added 2026-10-21): the price ALWAYS comes from the
+    // fixed server-side plan map keyed by opts.plan (yard1/yard2/plus1/
+    // plus2) — a price id sent by the client is never trusted or read.
+    const plan = MEMBERSHIP_PLANS[opts.plan];
+    if (!plan || plan.kind !== kind) throw new Error('unknown membership plan');
+    params.mode = 'subscription';
+    params['line_items[0][price]'] = plan.priceId;
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[plan]'] = plan.key;
+    params['subscription_data[metadata][userId]'] = user.id;
+    params['subscription_data[metadata][kind]'] = kind;
+    params['subscription_data[metadata][plan]'] = plan.key;
   } else if (kind === 'estimate' || kind === 'member-estimate') {
     // 'member-estimate' is a fixed $60 one-time payment for active members;
     // the session is a normal one-time payment, the kind is kept in metadata.
@@ -417,6 +587,7 @@ function activateHomeCare(u, isFirst) {
   u.homeCareStatus = 'active';
   if (!u.homeCareSince) u.homeCareSince = new Date().toISOString();
   u.homeCareCancelAt = null;
+  setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
   if (first) {
     u.freeEstimateUsed = false; // fresh membership gets its free first estimate
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
@@ -553,9 +724,20 @@ async function handleStripeEvent(event) {
       u.freeEstimateUsed = false; // fresh membership gets its free first estimate
       u.stripeCustomerId = obj.customer || u.stripeCustomerId || '';
       u.stripeSubscriptionId = obj.subscription || u.stripeSubscriptionId || '';
+      setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
       notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
       fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    } else if (kind === 'yardcare' || kind === 'homecare-plus') {
+      // Plan key comes from the checkout session metadata WE set server-side
+      // (never from the client). activateMembershipPlan records the plan,
+      // and for Plus also flips the legacy HomeCare flag so all member
+      // benefits apply. Idempotent against subscription.created ordering.
+      const planKey = obj.metadata && obj.metadata.plan;
+      const plan = planKey && MEMBERSHIP_PLANS[planKey];
+      if (!plan || plan.kind !== kind) { console.error('stripe webhook: membership session ' + obj.id + ' has unknown plan ' + planKey); return; }
+      if (obj.customer) u.stripeCustomerId = obj.customer;
+      activateMembershipPlan(u, plan.key, { subscriptionId: obj.subscription || '', first: true });
     } else if (kind === 'estimate' || kind === 'member-estimate') {
       const r = db.requests.find(x => x.id === (obj.metadata && obj.metadata.requestId));
       const amount = Math.round(Number(obj.amount_total) || 0) / 100;
@@ -585,40 +767,86 @@ async function handleStripeEvent(event) {
         fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       }
     }
-  } else if (type === 'customer.subscription.deleted') {
-    const u = db.users.find(x => x.stripeSubscriptionId === obj.id);
+  } else if (type === 'customer.subscription.created') {
+    // Record WHICH plan each subscription is (from its price/metadata) as
+    // soon as Stripe creates it. Only an already-paid (active/trialing)
+    // subscription activates benefits here; checkout.session.completed is
+    // the normal activator and activateMembershipPlan is idempotent.
+    const u = userForSubscription(obj);
     if (u) {
-      u.homeCareStatus = 'cancelled';
-      u.homeCareCancelAt = new Date().toISOString();
-      notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.');
-      notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare.');
-      fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+      if (obj.customer) u.stripeCustomerId = obj.customer;
+      const plan = planFromSubscription(obj, membershipPlanOf(u));
+      if (plan && (obj.status === 'active' || obj.status === 'trialing')) {
+        activateMembershipPlan(u, plan.key, { subscriptionId: obj.id });
+      } else {
+        syncMembershipPlanFromSubscription(u, obj);
+      }
+    }
+  } else if (type === 'customer.subscription.deleted') {
+    const u = userForSubscription(obj);
+    if (u) {
+      const current = membershipPlanOf(u);
+      const plan = planFromSubscription(obj, current) || (current.planKey ? MEMBERSHIP_PLANS[current.planKey] : MEMBERSHIP_PLANS.homecare);
+      cancelMembershipPlan(u, plan.key, { subscriptionId: obj.id });
+      if (plan.type === 'yard') {
+        notify(u.id, 'membership', 'Your Yard Care membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled Yard Care.');
+      } else if (plan.type === 'plus') {
+        notify(u.id, 'membership', 'Your HomeCare Plus membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare Plus.');
+      } else {
+        notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare.');
+        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+      }
     }
   } else if (type === 'customer.subscription.updated') {
-    const u = db.users.find(x => x.stripeSubscriptionId === obj.id);
-    if (u && obj.cancel_at_period_end) {
-      u.homeCareCancelAt = new Date(Number(obj.cancel_at) * 1000).toISOString();
-      notify(u.id, 'membership', 'HomeCare cancellation noted — your membership stays active until ' + new Date(Number(obj.cancel_at) * 1000).toLocaleDateString('en-US') + '.');
+    const u = userForSubscription(obj);
+    if (u) {
+      // Keeps the recorded plan current if the subscription changes (e.g.
+      // 1 yard visit upgraded to 2 in the billing portal).
+      const mp = syncMembershipPlanFromSubscription(u, obj);
+      if (obj.cancel_at_period_end) {
+        const until = new Date(Number(obj.cancel_at) * 1000);
+        const planName = mp && mp.name ? mp.name : 'HomeCare';
+        notify(u.id, 'membership', planName + ' cancellation noted — your membership stays active until ' + until.toLocaleDateString('en-US') + '.');
+      }
     }
   } else if (type === 'invoice.payment_failed') {
     // Stripe is the single source of truth: a failed subscription payment means
     // the customer loses member status until payment succeeds again.
     const u = db.users.find(x => x.stripeCustomerId === obj.customer);
-    if (u && u.homeCareStatus === 'active') {
-      u.homeCareStatus = 'cancelled';
-      u.homeCareCancelAt = new Date().toISOString();
-      notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.');
-      notifyAdmins('payment', 'HomeCare payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
-      fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    if (u) {
+      const current = membershipPlanOf(u);
+      if (current.planKey && current.status === 'active' && current.type !== 'homecare') {
+        cancelMembershipPlan(u, current.planKey, { subscriptionId: current.subscriptionId || '' });
+        notify(u.id, 'payment', 'Your ' + current.name + ' payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your benefits back.');
+        notifyAdmins('payment', current.name + ' payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
+      } else if (u.homeCareStatus === 'active') {
+        u.homeCareStatus = 'cancelled';
+        u.homeCareCancelAt = new Date().toISOString();
+        setMembershipPlan(u, 'homecare', { status: 'cancelled', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince || null, cancelAt: u.homeCareCancelAt });
+        notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.');
+        notifyAdmins('payment', 'HomeCare payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
+        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+      }
     }
   } else if (type === 'invoice.payment_succeeded') {
     // Payment recovered (e.g. after a retry or a rejoin): restore member status.
     // Also the backup activator for the inline "New HomeCare member" card flow.
     const subId = obj.subscription;
     const u = db.users.find(x => x.stripeSubscriptionId === subId || x.stripeCustomerId === obj.customer);
-    if (u && u.homeCareStatus !== 'active') {
-      if (subId) u.stripeSubscriptionId = subId;
-      activateHomeCare(u, false);
+    if (u) {
+      const current = membershipPlanOf(u);
+      const subMeta = (obj.subscription_details && obj.subscription_details.metadata) || {};
+      const planKey = (subMeta.plan && MEMBERSHIP_PLANS[subMeta.plan]) ? subMeta.plan : (current.planKey || null);
+      if (planKey && MEMBERSHIP_PLANS[planKey].type !== 'homecare') {
+        // Yard / Plus subscriptions restore THEIR plan — never plain HomeCare.
+        if (current.status !== 'active') activateMembershipPlan(u, planKey, { subscriptionId: subId || current.subscriptionId || '' });
+      } else if (u.homeCareStatus !== 'active') {
+        if (subId) u.stripeSubscriptionId = subId;
+        activateHomeCare(u, false);
+      }
     }
   } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
     // Estimate-hold lifecycle. PIs we do not track (inline HomeCare card
@@ -1056,6 +1284,13 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
+  // Membership plan card images (added 2026-10-21) — exact filenames only.
+  if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png'].includes(p)) {
+    const file = path.join(__dirname, 'public', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
   if (p === '/api/health') return send(res, 200, { ok: true, app: 'ghs-app' });
 
   // ---------- auth ----------
@@ -1088,7 +1323,8 @@ const server = http.createServer(async (req, res) => {
       }
       prof.selfRatings = cleanSR;
     } else { delete prof.selfRatings; }
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const serviceAddress = role === 'customer' ? cleanText(b.serviceAddress, 300) : '';
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -1100,6 +1336,15 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; Max-Age=0' }); }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
+  if (p === '/api/me/service-address' && req.method === 'POST') {
+    if (!requireRole(user, ['customer', 'admin'], res)) return;
+    const b = await readBody(req);
+    const serviceAddress = cleanText(b.serviceAddress, 300);
+    if (!serviceAddress) return send(res, 400, { error: 'service address required', code: 'ADDRESS_REQUIRED' });
+    user.serviceAddress = serviceAddress;
+    save();
+    return send(res, 200, { ok: true, serviceAddress, user: pubUser(user) });
+  }
 
   // ---------- customer requests ----------
   // Public: no account required. Anonymous requests store name/email/phone on
@@ -1630,7 +1875,18 @@ const server = http.createServer(async (req, res) => {
 
   // ---------- Stripe payments ----------
   if (p === '/api/stripe/config' && req.method === 'GET') {
-    return send(res, 200, { configured: stripeReady(), publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '', homeCareMonthly: HOMECARE_MONTHLY_CENTS / 100 });
+    return send(res, 200, {
+      configured: stripeReady(),
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '',
+      homeCareMonthly: HOMECARE_MONTHLY_CENTS / 100,
+      // Membership plans (added 2026-10-21, additive — existing fields are
+      // unchanged): fixed server-side prices/ids for every plan.
+      membershipPlans: membershipPlansPublic(),
+      yardCareMonthly: { oneVisit: MEMBERSHIP_PLANS.yard1.monthlyCents / 100, twoVisits: MEMBERSHIP_PLANS.yard2.monthlyCents / 100 },
+      homeCarePlusMonthly: { oneVisit: MEMBERSHIP_PLANS.plus1.monthlyCents / 100, twoVisits: MEMBERSHIP_PLANS.plus2.monthlyCents / 100 },
+      yardCareProductId: MEMBERSHIP_PLANS.yard1.productId,
+      homeCarePlusProductId: MEMBERSHIP_PLANS.plus1.productId
+    });
   }
   if (p === '/api/admin/stripe/health' && req.method === 'GET') {
     // Admin-only live check: actually calls Stripe so a bad/rotated key shows
@@ -1647,8 +1903,25 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
-    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     const b = await readBody(req);
+    // Membership plans (added 2026-10-21): the plan key is validated
+    // server-side FIRST, so an unknown plan is always a clean 400 and the
+    // price only ever comes from the fixed MEMBERSHIP_PLANS map — a
+    // client-sent price id is never read. Membership requires an account.
+    if (b.kind === 'yardcare' || b.kind === 'homecare-plus') {
+      if (!user) return send(res, 401, { error: 'login required' });
+      if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
+      const plan = MEMBERSHIP_PLANS[b.plan];
+      if (!plan || plan.kind !== b.kind) return send(res, 400, { error: 'unknown membership plan' });
+      if (!cleanText(user.serviceAddress, 300)) return send(res, 400, { error: 'service address required', code: 'ADDRESS_REQUIRED' });
+      if (membershipPlanOf(user).status === 'active') return send(res, 400, { error: 'you already have an active membership plan' });
+      if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+      try {
+        const s = await createCheckoutSession(b.kind, user, { plan: plan.key });
+        return send(res, 200, { url: s.url, plan: plan.key });
+      } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+    }
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     // 'estimate-hold' is public like invoice payments: the request id in
     // the body identifies the request, no login needed. Every other kind
     // still requires a logged-in user.
@@ -1899,7 +2172,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const customers = db.users.filter(u => u.role === 'customer').map(u => {
       const reqs = db.requests.filter(r => r.customerId === u.id).length;
-      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
+      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
     });
     return send(res, 200, { customers });
   }
@@ -1918,6 +2191,82 @@ const server = http.createServer(async (req, res) => {
       if (!c.freeEstimateUsed) notify(c.id, 'membership', 'The Team re-granted your free HomeCare estimate — request it from your dashboard.');
     }
     save(); return send(res, 200, { customer: { id: c.id, name: c.name, email: c.email, homeCareStatus: c.homeCareStatus || 'none', homeCareSince: c.homeCareSince || null, homeCareCancelAt: c.homeCareCancelAt || null, freeEstimateUsed: !!c.freeEstimateUsed } });
+  }
+
+  // ---------- Yard visits / Yard Calendar (admin, added 2026-10-21) ----------
+  // A SEPARATE calendar from the master jobs calendar: yard visits are the
+  // included monthly visits of Yard Care / HomeCare Plus members. A visit is
+  // NOT a job — creating or changing one never touches db.jobs, never
+  // notifies workers and never appears on /api/admin/calendar. Gabriel runs
+  // the yard route himself; this is purely scheduling bookkeeping.
+  if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+  const yardDateOk = (v) => { const s = cleanDate(v); if (!s) return ''; const d = new Date(s + 'T00:00:00Z'); return (!isNaN(d) && d.toISOString().slice(0, 10) === s) ? s : ''; };
+  const publicYardVisit = (v) => {
+    const u = db.users.find(x => x.id === v.userId);
+    const plan = u ? membershipPlanOf(u) : null;
+    return { id: v.id, userId: v.userId, date: v.date, status: v.status, notes: v.notes || '', createdAt: v.createdAt,
+      memberName: u ? (u.name || '') : '', memberEmail: u ? (u.email || '') : '', serviceAddress: u ? (u.serviceAddress || '') : '',
+      plan: plan ? { planKey: plan.planKey, type: plan.type, name: plan.name, visitsPerMonth: plan.visitsPerMonth, status: plan.status } : null };
+  };
+  const isActiveYardMember = (u) => {
+    if (!u || u.role !== 'customer') return false;
+    const plan = membershipPlanOf(u);
+    return plan.status === 'active' && (plan.type === 'yard' || plan.type === 'plus');
+  };
+  if (p === '/api/admin/yard-visits' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const from = cleanDate(url.searchParams.get('from') || '');
+    const to = cleanDate(url.searchParams.get('to') || '');
+    let list = db.yardVisits.slice();
+    if (from) list = list.filter(v => v.date >= from);
+    if (to) list = list.filter(v => v.date <= to);
+    list.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt < b.createdAt ? -1 : 1));
+    return send(res, 200, { visits: list.map(publicYardVisit) });
+  }
+  if (p === '/api/admin/yard-visits' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const target = db.users.find(u => u.id === cleanText(b.userId, 60));
+    if (!target) return send(res, 404, { error: 'customer not found' });
+    if (!isActiveYardMember(target)) return send(res, 400, { error: 'customer does not have an active Yard Care or HomeCare Plus membership' });
+    const date = yardDateOk(b.date);
+    if (!date) return send(res, 400, { error: 'valid date required as YYYY-MM-DD' });
+    const v = { id: id('YV'), userId: target.id, date, status: 'scheduled', notes: cleanText(b.notes, 500), createdAt: new Date().toISOString() };
+    db.yardVisits.push(v); save();
+    return send(res, 201, { visit: publicYardVisit(v) });
+  }
+  const yvMatch = p.match(/^\/api\/admin\/yard-visits\/([\w-]+)$/);
+  if (yvMatch && req.method === 'PATCH') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const v = db.yardVisits.find(x => x.id === yvMatch[1]);
+    if (!v) return send(res, 404, { error: 'yard visit not found' });
+    const b = await readBody(req);
+    if (b.date !== undefined) {
+      const date = yardDateOk(b.date);
+      if (!date) return send(res, 400, { error: 'valid date required as YYYY-MM-DD' });
+      v.date = date;
+    }
+    if (b.status !== undefined) {
+      if (!['scheduled', 'done', 'cancelled'].includes(b.status)) return send(res, 400, { error: 'status must be scheduled, done or cancelled' });
+      v.status = b.status;
+    }
+    if (b.notes !== undefined) v.notes = cleanText(b.notes, 500);
+    save();
+    return send(res, 200, { visit: publicYardVisit(v) });
+  }
+  if (yvMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const idx = db.yardVisits.findIndex(x => x.id === yvMatch[1]);
+    if (idx === -1) return send(res, 404, { error: 'yard visit not found' });
+    const removed = db.yardVisits.splice(idx, 1)[0];
+    save(); return send(res, 200, { ok: true, deleted: removed.id });
+  }
+  if (p === '/api/me/yard-visits' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const mine = db.yardVisits.filter(v => v.userId === user.id)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt < b.createdAt ? -1 : 1))
+      .map(v => ({ id: v.id, date: v.date, status: v.status, notes: v.notes || '' }));
+    return send(res, 200, { visits: mine });
   }
 
   // ---------- notifications ----------
