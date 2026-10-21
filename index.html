@@ -2,26 +2,993 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>General Handyman Solutions</title>
-<meta name="description" content="General Handyman Solutions — handyman, yard care and mobile mechanic memberships. Join online in one step.">
-<script>
-  // The app lives at app.generalhandymans.app — send every visitor there,
-  // keeping any #deep-link (e.g. #yard-care, #join-plus1) intact.
-  location.replace('https://app.generalhandymans.app/' + (window.location.search || '') + (window.location.hash || ''));
-</script>
-<meta http-equiv="refresh" content="0; url=https://app.generalhandymans.app/">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>General Handyman Solutions — On-Demand Handyman in Fairfield, Vacaville & Vallejo</title>
+<meta name="description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Pick a service, describe the job, choose timing. In-person estimate is a flat $75; HomeCare members get one free estimate in the first month. Labor-only — you buy materials.">
+<link rel="canonical" href="https://generalhandymans.app/">
+<meta property="og:url" content="https://generalhandymans.app/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0d0d0f;color:#fff;display:flex;min-height:100vh;margin:0;align-items:center;justify-content:center;text-align:center;padding:24px}
-  a{color:#fff;background:#e42535;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:800;display:inline-block;margin-top:16px}
-  p{color:#bbb}
+:root{
+  --bg:#ffffff; --bg2:#f6f5f3; --surface:#ffffff; --surface2:#faf9f7;
+  --ink:#0b0b0b; --muted:#6b6762; --faint:#9a968f;
+  --line:#e9e6e1; --line2:#ddd9d3;
+  --red:#e10600; --red-dark:#b80500; --red-soft:#fff1f0;
+  --black:#0b0b0b; --radius:18px; --radius-s:12px;
+  --shadow:0 18px 40px rgba(0,0,0,.10), 0 2px 8px rgba(0,0,0,.06);
+  --font:'Barlow',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --display:'Barlow Condensed','Barlow',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0a0a0a; --bg2:#101010; --surface:#141414; --surface2:#1a1a1a;
+    --ink:#f7f4f0; --muted:#a8a29e; --faint:#78716c;
+    --line:#262626; --line2:#333; --red:#ff2b1f; --red-dark:#e10600; --red-soft:#2a0f0e;
+    --shadow:0 18px 40px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.4);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+img{display:block;max-width:100%}
+button,input,textarea,select{font:inherit}
+/* topbar */
+.topbar{position:sticky;top:0;z-index:30;background:color-mix(in srgb,var(--bg) 92%, transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.topbar-in{max-width:1180px;margin:0 auto;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:14px}
+.brand{display:flex;align-items:center;gap:11px;text-decoration:none}
+.mark{width:38px;height:38px;background:var(--black);color:#fff;border-radius:9px;display:grid;place-items:center;font-family:var(--display);font-weight:800;letter-spacing:.04em;font-size:15px;line-height:1;border:2px solid var(--red)}
+@media(prefers-color-scheme:dark){.mark{background:#fff;color:#0b0b0b}}
+.brand-logo{height:48px;width:auto;border-radius:9px;border:1px solid var(--line)} .brand b{font-family:var(--display);font-size:19px;letter-spacing:.03em;line-height:.95;text-transform:uppercase}
+.brand span{display:block;font-family:var(--font);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:1px}
+.top-actions{display:flex;align-items:center;gap:10px}
+.live{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18)}
+.btn{appearance:none;border:0;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-weight:700;border-radius:999px;transition:.15s}
+.btn-red{background:var(--red);color:#fff;padding:11px 18px;font-size:14.5px}
+.btn-red:hover{background:var(--red-dark)}
+.btn-black{background:var(--ink);color:var(--bg);padding:12px 20px}
+.btn-ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line2);padding:11px 16px}
+.btn:active{transform:scale(.985)}
+/* hero layout */
+.shell{max-width:1180px;margin:0 auto;padding:0 18px}
+.hero{padding:28px 0 10px;display:grid;grid-template-columns:1.05fr .95fr;gap:28px;align-items:start}
+.kicker{display:inline-flex;align-items:center;gap:8px;background:var(--black);color:#fff;padding:7px 11px;border-radius:999px;font-size:11px;letter-spacing:.13em;text-transform:uppercase;font-weight:700}
+@media(prefers-color-scheme:dark){.kicker{background:#fff;color:#0b0b0b}}
+.kicker i{width:7px;height:7px;border-radius:50%;background:var(--red);display:block}
+.logo-banner{margin-top:16px;background:#050505;border:1px solid var(--line);border-radius:18px;padding:10px;box-shadow:var(--shadow)}
+.logo-banner img{width:100%;height:auto;border-radius:12px}
+.hero h1{font-family:var(--display);font-size:clamp(44px,6vw,74px);line-height:.88;letter-spacing:-.01em;text-transform:uppercase;margin:16px 0 12px;font-weight:800}
+.hero h1 em{font-style:normal;color:var(--red)}
+.hero p.lede{font-size:18px;line-height:1.5;color:var(--muted);max-width:52ch;margin:0}
+.hero-img{margin-top:22px;border-radius:18px;overflow:hidden;border:1px solid var(--line);position:relative;background:var(--bg2)}
+.hero-img img{width:100%;height:300px;object-fit:cover}
+.hero-img figcaption{position:absolute;left:12px;bottom:12px;background:rgba(0,0,0,.82);color:#fff;padding:8px 11px;border-radius:999px;font-size:12.5px;font-weight:600;display:flex;gap:8px;align-items:center}
+.hero-img figcaption b{color:#ff4d42}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.quick span{border:1px solid var(--line2);background:var(--surface);padding:8px 11px;border-radius:999px;font-size:13px;font-weight:600}
+/* booking card */
+.book{position:sticky;top:76px;background:var(--surface);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);overflow:hidden}
+.book-head{background:#0b0b0b;color:#fff;padding:18px 18px 14px;position:relative}
+@media(prefers-color-scheme:dark){.book-head{background:#fff;color:#0b0b0b}}
+.book-head h2{font-family:var(--display);font-size:28px;line-height:.95;text-transform:uppercase;margin:0;letter-spacing:.02em}
+.book-head p{margin:6px 0 0;font-size:13.5px;opacity:.75;line-height:1.4}
+.book-head .price-tag{position:absolute;right:16px;top:16px;text-align:right}
+.book-head .price-tag b{display:block;font-family:var(--display);font-size:30px;line-height:1;color:var(--red)}
+.book-head .price-tag span{font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:700;opacity:.7}
+.steps{display:flex;gap:6px;padding:12px 16px 0}
+.steps span{flex:1;text-align:center;font-size:11px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;color:var(--faint);padding:8px 4px;border-bottom:3px solid var(--line)}
+.steps span.on{color:var(--ink);border-color:var(--red)}
+.book-body{padding:16px}
+.label{font-size:12px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;margin:18px 0 9px;display:flex;justify-content:space-between;align-items:center}
+.label:first-child{margin-top:2px}
+.label small{letter-spacing:0;text-transform:none;font-weight:600;color:var(--muted);font-size:12.5px}
+.svc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.svc{border:1px solid var(--line2);background:var(--surface2);border-radius:14px;padding:12px;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.svc:hover{border-color:var(--ink)}
+.svc.sel{border-color:var(--red);background:var(--red-soft);box-shadow:0 0 0 1px var(--red) inset}
+.svc svg{width:22px;height:22px;flex:none;color:var(--red);margin-top:1px}
+.svc b{font-size:14.5px;line-height:1.1;display:block}
+.svc span{font-size:12.5px;color:var(--muted);line-height:1.3;display:block;margin-top:2px}
+.field{width:100%;border:1px solid var(--line2);background:var(--surface);color:var(--ink);border-radius:12px;padding:12px 13px;font-size:15px}
+.field::placeholder{color:var(--faint)}
+textarea.field{min-height:86px;resize:vertical;line-height:1.45}
+.field:focus,.svc:focus-visible,.chip:focus-visible,.pill:focus-visible{outline:2px solid var(--red);outline-offset:1px}
+.chips,.pills{display:flex;flex-wrap:wrap;gap:7px}
+.chip,.pill{border:1px solid var(--line2);background:var(--surface);color:var(--ink);padding:9px 12px;border-radius:999px;font-size:13.5px;font-weight:600;cursor:pointer}
+.chip.sel,.pill.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+@media(prefers-color-scheme:dark){.chip.sel,.pill.sel{background:#fff;color:#0b0b0b;border-color:#fff}}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.date-wrap{display:none;margin-top:9px}.date-wrap.show{display:block}
+/* $75 box */
+.fee-box{margin-top:18px;border:2px solid var(--red);border-radius:16px;overflow:hidden;background:var(--surface)}
+.fee-top{display:flex;gap:12px;padding:14px 14px 12px;background:var(--red-soft);border-bottom:1px solid color-mix(in srgb,var(--red) 22%, var(--line))}
+.fee-amount{font-family:var(--display);font-size:42px;line-height:.9;font-weight:800;color:var(--red);white-space:nowrap}
+.fee-top b{font-size:15.5px;line-height:1.2;display:block}
+.fee-top p{margin:4px 0 0;font-size:13px;line-height:1.45;color:var(--muted)}
+.fee-list{list-style:none;margin:0;padding:12px 14px;display:grid;gap:9px}
+.fee-list li{display:flex;gap:9px;font-size:13.5px;line-height:1.45}
+.fee-list li::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--red);flex:none;margin-top:6px}
+.fee-list b{font-weight:700}
+.ack{width:100%;margin:0 14px 14px;width:calc(100% - 28px);border:1px solid var(--line2);background:var(--surface);border-radius:12px;padding:12px;text-align:left;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.ack .box{width:22px;height:22px;border-radius:6px;border:2px solid var(--line2);flex:none;display:grid;place-items:center;font-weight:800;color:#fff;margin-top:1px}
+.ack.sel{border-color:var(--red);background:var(--red-soft)}
+.ack.sel .box{background:var(--red);border-color:var(--red)}
+.ack b{font-size:13.5px;line-height:1.3;display:block}
+.ack span{font-size:12.5px;color:var(--muted);line-height:1.35;display:block;margin-top:1px}
+.summary{margin-top:14px;background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:12px 13px;font-size:13.5px;line-height:1.5}
+.summary div{display:flex;justify-content:space-between;gap:12px;padding:3px 0}
+.summary div span:first-child{color:var(--muted)}
+.summary div b{text-align:right}
+.summary .total{border-top:1px dashed var(--line2);margin-top:7px;padding-top:9px;font-size:14.5px}
+.request-btn{width:100%;margin-top:12px;padding:16px;border-radius:14px;font-size:16px}
+.fine{font-size:12px;color:var(--muted);line-height:1.5;text-align:center;margin:10px 4px 2px}
+.error{display:none;background:#fff1f0;border:1px solid #f3b3ae;color:#8b0f08;padding:10px 12px;border-radius:12px;font-size:13.5px;margin-top:10px;line-height:1.4}
+@media(prefers-color-scheme:dark){.error{background:#2a0f0e;color:#ffb4ae;border-color:#5a1d19}}
+.error.show{display:block}
+.success{display:none;margin-top:14px;border:1px solid #bfe8c8;background:#f0fdf3;border-radius:16px;padding:16px}
+@media(prefers-color-scheme:dark){.success{background:#0f2415;border-color:#234d2e;color:#e7f7ea}}
+.success.show{display:block}
+.success h3{font-family:var(--display);text-transform:uppercase;font-size:22px;margin:0 0 6px;letter-spacing:.02em}
+.success p{font-size:13.5px;line-height:1.5;margin:0;color:inherit;opacity:.85}
+.success pre{white-space:pre-wrap;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12.5px;line-height:1.55;margin:12px 0;overflow:auto}
+.success .row{display:flex;flex-wrap:wrap;gap:8px}
+/* sections */
+.section{padding:42px 0 8px}
+.section h2{font-family:var(--display);font-size:clamp(30px,4vw,44px);line-height:.92;text-transform:uppercase;margin:0 0 8px;font-weight:800}
+.section h2 em{font-style:normal;color:var(--red)}
+.section .sub{color:var(--muted);font-size:16px;line-height:1.5;max-width:62ch;margin:0}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:20px}
+.card{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--surface)}
+.card img{width:100%;height:170px;object-fit:cover}
+.card div{padding:14px}
+.card h3{font-family:var(--display);font-size:20px;text-transform:uppercase;margin:0 0 5px;letter-spacing:.02em}
+.card p{font-size:13.5px;line-height:1.5;color:var(--muted);margin:0}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:20px}
+.how article{border:1px solid var(--line);border-radius:18px;padding:18px;background:var(--surface)}
+.how .num{width:34px;height:34px;border-radius:50%;background:var(--red);color:#fff;display:grid;place-items:center;font-weight:800;margin-bottom:12px}
+.how h3{margin:0 0 6px;font-size:16px}
+.how p{margin:0;color:var(--muted);font-size:14px;line-height:1.55}
+.area{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+.area span{padding:10px 13px;border-radius:999px;border:1px solid var(--line2);font-weight:600;font-size:14px;background:var(--surface)}
+.area span.primary{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+@media(prefers-color-scheme:dark){.area span.primary{background:#fff;color:#0b0b0b;border-color:#fff}}
+.jobs{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+.jobs div{border:1px solid var(--line);border-radius:14px;padding:13px 14px;background:var(--surface);font-size:14px;line-height:1.45}
+.jobs b{display:block;font-size:14.5px}
+.jobs span{color:var(--muted);font-size:13px}
+.cta-band{margin:34px 0 90px;background:#0b0b0b;color:#fff;border-radius:20px;padding:26px;display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap}
+@media(prefers-color-scheme:dark){.cta-band{background:#fff;color:#0b0b0b}}
+.cta-band h2{font-family:var(--display);font-size:32px;text-transform:uppercase;line-height:.95;margin:0}
+.cta-band p{margin:6px 0 0;opacity:.75;font-size:14.5px}
+footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);font-size:13px;line-height:1.6}
+.sticky{position:fixed;left:12px;right:92px;bottom:12px;z-index:40;background:#0b0b0b;color:#fff;border-radius:16px;padding:10px;display:none;align-items:center;gap:10px;box-shadow:0 16px 34px rgba(0,0,0,.28)}
+@media(prefers-color-scheme:dark){.sticky{background:#fff;color:#0b0b0b}}
+.sticky div{flex:1;padding-left:6px}.sticky b{font-size:13.5px;display:block;line-height:1.1}.sticky span{font-size:12px;opacity:.75}
+.sticky a{background:var(--red);color:#fff;text-decoration:none;padding:12px 14px;border-radius:11px;font-weight:800;font-size:14px;white-space:nowrap}
+@media(max-width:900px){
+  .hero{grid-template-columns:1fr;padding-top:18px}
+  .book{position:relative;top:auto}
+  .cards{grid-template-columns:1fr 1fr}
+  .how{grid-template-columns:1fr}
+  .jobs{grid-template-columns:1fr}
+  .sticky{display:flex}
+  .top-actions .live{display:none}
+  .hero-img img{height:220px}
+}
+@media(max-width:520px){
+  .svc-grid,.grid2,.cards{grid-template-columns:1fr}
+  .book-head .price-tag{position:static;text-align:left;margin-top:10px}
+  .steps span{font-size:10px}
+}
 </style>
+<meta property="og:type" content="website">
+<meta property="og:title" content="General Handyman Solutions — Handyman in Fairfield, Vacaville & Vallejo">
+<meta property="og:description" content="On-demand handyman and mobile mechanic in Fairfield, Vacaville, Vallejo. Free photo estimate, flat $75 in-person estimate credited toward your repair, labor-only pricing.">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HomeAndConstructionBusiness",
+  "name": "General Handyman Solutions",
+  "url": "https://generalhandymans.app/",
+  "telephone": "+1-707-862-3773",
+  "email": "generalhandymans@gmail.com",
+  "priceRange": "$$",
+  "description": "On-demand handyman, mobile mechanic, and drain help based in Fairfield, CA. Labor-only pricing: customers buy materials and parts. Flat $75 in-person estimate credited toward the repair when approved the same day. HomeCare membership $49/month.",
+  "areaServed": [
+    {"@type": "City", "name": "Fairfield, CA"},
+    {"@type": "City", "name": "Vacaville, CA"},
+    {"@type": "City", "name": "Vallejo, CA"},
+    {"@type": "City", "name": "Suisun City, CA"},
+    {"@type": "City", "name": "Napa, CA"},
+    {"@type": "AdministrativeArea", "name": "Solano County, CA"}
+  ],
+  "openingHoursSpecification": [{
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+    "opens": "09:00",
+    "closes": "18:00"
+  }],
+  "sameAs": [
+    "https://www.instagram.com/generalhandymans"
+  ],
+  "makesOffer": [
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Handyman services in Fairfield, CA"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "TV mounting and installation"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Mobile mechanic service"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Drain cleaning and sewer repair help"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Fireplace wall installation"}},
+    {"@type": "Offer", "itemOffered": {"@type": "Service", "name": "Interior and garage painting"}}
+  ]
+}
+</script>
 </head>
 <body>
-  <main>
-    <h1>General Handyman Solutions</h1>
-    <p>Opening the app&hellip;</p>
-    <a href="https://app.generalhandymans.app/">Tap here if it doesn&rsquo;t open</a>
-  </main>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <a class="brand" href="#top" aria-label="General Handyman Solutions home">
+      <img class="brand-logo" src="data:image/webp;base64,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" alt="General Handyman Solutions logo">
+    </a>
+    <div class="top-actions">
+      <span class="live"><span class="dot"></span> Taking requests — Fairfield area</span>
+      <a class="btn btn-ghost" href="https://app.generalhandymans.app/" target="_blank" rel="noopener">Customer login</a>
+      <a class="btn btn-ghost" href="https://app.generalhandymans.app/#worker" target="_blank" rel="noopener">Technician login</a>
+      <a class="btn btn-red" href="#book">Request service</a>
+    </div>
+  </div>
+</header>
+
+<main id="top" class="shell">
+
+  <section class="hero">
+    <div>
+      <span class="kicker"><i></i> On-demand handyman • Like booking a ride, for repairs</span>
+      <div class="logo-banner"><img src="data:image/webp;base64,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" alt="General Handyman Solutions logo"></div>
+      <h1>Need a hand?<br>Get it <em>handled.</em></h1>
+      <p class="lede">Pick a service, describe the job, choose when you need it. The General Handyman Solutions Team reviews every request and replies with a clear labor quote — no guessing, no runaround.</p>
+
+      <figure class="hero-img">
+        <img src="assets/fireplace-hero.webp" alt="Handyman installing floating shelves with LED lighting on a tiled fireplace wall">
+        <figcaption><b>●</b> Fireplace walls • Shelves • Tile • Paint</figcaption>
+      </figure>
+
+      <div class="quick" aria-label="Popular requests">
+        <span>Free photo estimate</span><span>In-person estimate — $75 flat</span><span>HomeCare $49/mo • First estimate free</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
+      </div>
+
+      <div class="section" style="padding-top:34px">
+        <h2>How it <em>works</em></h2>
+        <div class="how">
+          <article><div class="num">1</div><h3>Request in under a minute</h3><p>Choose the service, add photos/details if you can, pick ASAP, today, or a day that works.</p></article>
+          <article><div class="num">2</div><h3>$75 estimate, then a labor quote</h3><p>The in-person estimate visit is a flat $75. HomeCare members get one free estimate in the first month, then $60 member estimates. After the Team sees the job, you get a labor-only price — you buy the materials/parts, so you control the brand and cost.</p></article>
+          <article><div class="num">3</div><h3>Lock it in &amp; get it done</h3><p>50% deposit locks the job in. Remainder on completion. That’s it.</p></article>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOOKING CARD -->
+    <section class="book" id="book" aria-label="Request a handyman">
+      <div class="book-head">
+        <h2>Request a<br>handyman</h2>
+        <p>Fairfield • Vacaville • Vallejo &amp; nearby Solano</p>
+        <div class="price-tag"><span>Estimate visit</span><b>$75</b><span>flat • members save</span></div>
+      </div>
+      <div class="steps" aria-hidden="true"><span class="on">1 Service</span><span>2 Details</span><span>3 When</span><span>4 Confirm</span></div>
+
+      <form class="book-body" id="reqForm" novalidate>
+        <input type="text" id="hpReq" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+        <div class="label">What do you need? <small>Tap one</small></div>
+        <div class="svc-grid" id="svcGrid">
+          <button type="button" class="svc" data-service="TV Mounting & Installs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M9 21h6"/></svg><span><b>TV Mounting &amp; Installs</b><span>TVs, shelves, mounts, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Repairs & Fixes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4L14 13l-3-3 3.7-3.7Z"/></svg><span><b>Repairs &amp; Fixes</b><span>Doors, drywall, hardware, odd jobs</span></span></button>
+          <button type="button" class="svc" data-service="Painting & Walls"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="13" height="8" rx="1"/><path d="M17 8h3v4h-7v3M10 15v6M7 21h6"/></svg><span><b>Painting &amp; Walls</b><span>Rooms, garages, panels, touch-ups</span></span></button>
+          <button type="button" class="svc" data-service="Carpentry"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20L20 4M7 17l-2 2M14 7l3 3"/></svg><span><b>Carpentry</b><span>Trim, shelves, framing, wood repair</span></span></button>
+          <button type="button" class="svc" data-service="Plumbing Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3v6a3 3 0 0 0 6 0V3M9 3v18"/></svg><span><b>Plumbing Help</b><span>Clogs, leaks, hookups, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Electrical Swaps"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M13 2L4 14h6l-1 8 9-12h-6l1-8Z"/></svg><span><b>Electrical Swaps</b><span>Lights, sconces, outlets, fixtures</span></span></button>
+          <button type="button" class="svc" data-service="Mobile Mechanic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 16l1.5-5A2 2 0 0 1 8.4 9.5h7.2a2 2 0 0 1 1.9 1.5L19 16M5 16h14M5 16v4M19 16v4M7.5 13h.01M16.5 13h.01"/></svg><span><b>Mobile Mechanic</b><span>At your home — starters, brakes &amp; more</span></span></button>
+          <button type="button" class="svc" data-service="Assembly & Other"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg><span><b>Assembly &amp; Other</b><span>Furniture, appliances, not sure? Ask</span></span></button>
+        </div>
+
+        <label class="label" for="details">Describe the job <small>Photos help the Team quote faster</small></label>
+        <textarea class="field" id="details" placeholder="e.g. Mount a 65&quot; TV in living room, install 2 floating shelves, paint one wall…"></textarea>
+
+        <div class="label">Estimate type</div>
+        <div class="pills" id="estimatePills">
+          <button type="button" class="pill" data-estimate="photo">Free photo estimate — pictures required</button>
+          <button type="button" class="pill sel" data-estimate="inperson">In-person estimate — pictures requested</button>
+        </div>
+        <div id="photoWrap" style="margin-top:10px">
+          <label class="label" for="photos" style="margin-top:0">Add job pictures <small id="photoHint">Please add pictures if you have them</small></label>
+          <input class="field" type="file" id="photos" accept="image/*" multiple>
+          <p class="fine" style="text-align:left;margin-left:0">Add pictures for every estimate if you can. Free photo estimates require pictures; in-person estimates are faster with pictures too. You can also DM or WhatsApp the same pictures to the Team after sending.</p>
+          <div id="photoList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+        </div>
+
+        <div class="label">Where is the job?</div>
+        <div class="chips" id="cityChips">
+          <button type="button" class="chip" data-city="Fairfield">Fairfield</button>
+          <button type="button" class="chip" data-city="Vacaville">Vacaville</button>
+          <button type="button" class="chip" data-city="Vallejo">Vallejo</button>
+          <button type="button" class="chip" data-city="Suisun City">Suisun City</button>
+          <button type="button" class="chip" data-city="Napa area">Napa area</button>
+          <button type="button" class="chip" data-city="Other nearby">Other nearby</button>
+        </div>
+        <input class="field" id="address" style="margin-top:9px" placeholder="Home address (required)">
+
+        <div class="label">When do you need it?</div>
+        <div class="pills" id="whenPills">
+          <button type="button" class="pill" data-when="ASAP / Emergency">ASAP / Emergency</button>
+          <button type="button" class="pill" data-when="Today">Today</button>
+          <button type="button" class="pill" data-when="Tomorrow">Tomorrow</button>
+          <button type="button" class="pill" data-when="This week">This week</button>
+          <button type="button" class="pill" data-when="Pick a date">Pick a date</button>
+        </div>
+        <div class="date-wrap" id="dateWrap"><input type="date" class="field" id="jobDate"></div>
+
+        <div class="label">HomeCare membership <small>$49/mo</small></div>
+        <div class="pills" id="memberPills">
+          <button type="button" class="pill sel" data-member="none">Not a member — $75</button>
+          <button type="button" class="pill" data-member="new">New member — first estimate FREE</button>
+          <button type="button" class="pill" data-member="member">Member — $60 estimate</button>
+        </div>
+        <p class="fine" style="margin-top:8px">HomeCare is $49/month: one free estimate in your first month, $60 member estimates after that, 20% off labor on jobs under $1000, and priority scheduling. Membership must be active before the free/member estimate is booked.</p>
+
+        <!-- $75 + LABOR-ONLY : must be seen before submit -->
+        <div class="fee-box" role="note" aria-label="Estimate charge and labor-only policy">
+          <div class="fee-top">
+            <div class="fee-amount" id="feeAmount">$75</div>
+            <div>
+              <b id="feeTitle">In-person estimate / service visit — $75 flat</b>
+              <p id="feeDesc">That’s the flat charge to come out, look at the job in person, and lock in a real quote. No surprises after you submit.</p>
+            </div>
+          </div>
+          <ul class="fee-list">
+            <li id="creditLine"><b>$75 secures your appointment — and it goes credited towards your repair when approved the same day.</b></li>
+            <li><span id="feeDueLine"><b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after the Team sees the job (or from clear photos).</span></li>
+            <li><span><b>Labor-only — you buy materials &amp; parts.</b> Paint, tile, fixtures, mounts, parts, etc. are yours to purchase so you control cost and brand. The Team brings the labor and tools.</span></li>
+            <li><span><b>50% deposit locks the work in</b> once you approve the labor quote. Balance on completion.</span></li>
+            <li><span><b>ASAP / Emergency adds 25%.</b> If you pick ASAP / Emergency, the estimate visit and labor quote are priced with a 25% urgency charge.</span></li>
+          </ul>
+          <button type="button" class="ack" id="ackBtn" aria-pressed="false">
+            <span class="box" id="ackBox"></span>
+            <span><b id="ackText">I understand: $75 flat estimate visit + labor-only (I buy materials/parts)</b><span>Tap to confirm before you send the request.</span></span>
+          </button>
+        </div>
+
+        <div class="grid2" style="margin-top:16px">
+          <div><label class="label" for="name" style="margin-top:0">Your name</label><input class="field" id="name" autocomplete="name" placeholder="First &amp; last name"></div>
+          <div><label class="label" for="phone" style="margin-top:0">Phone</label><input class="field" id="phone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
+        </div>
+
+        <div id="accountWrap" style="margin-top:14px;border:1px dashed var(--line2);border-radius:14px;padding:12px">
+          <div class="label" style="margin-top:0">Create your customer account <small id="accountWhy">Required for every request — it is free and lets you track your request, receive your quote, and message the Team</small></div>
+          <div class="grid2">
+            <div><label class="label" for="custEmail" style="margin-top:0">Email</label><input class="field" id="custEmail" type="email" autocomplete="email" placeholder="you@email.com"></div>
+            <div><label class="label" for="custPass" style="margin-top:0">Password</label><input class="field" id="custPass" type="password" autocomplete="new-password" placeholder="Pick a password"></div>
+          </div>
+          <p class="fine" style="text-align:left;margin:6px 0 0">Your account lets you track the request, receive the quote here, and message the Team back and forth. Already have an account? Use Customer login at the top — then send this request from inside your account.</p>
+        </div>
+
+        <div class="summary" id="summary" aria-live="polite">
+          <div><span>Service</span><b id="sumService">Not selected yet</b></div>
+          <div><span>Area</span><b id="sumCity">—</b></div>
+          <div><span>When</span><b id="sumWhen">—</b></div>
+          <div id="urgencyRow" style="display:none"><span>Urgency</span><b style="color:var(--red)">+25% ASAP/Emergency</b></div>
+          <div class="total"><span>Estimate visit — due to book</span><b id="sumEstimate" style="color:var(--red)">$75 flat</b></div>
+          <div><span>Materials / parts</span><b>You purchase</b></div>
+        </div>
+
+        <div class="error" id="formError"></div>
+        <button class="btn btn-red request-btn" id="submitBtn" type="submit">Request service — $75 estimate →</button>
+        <p class="fine">Submitting sends your request straight to the General Handyman Solutions Team. The Team reviews every request and replies with the next step and labor quote. Estimate/membership payment links are added after you send the request.</p>
+
+        <div class="success" id="successBox">
+          <h3 id="successTitle">Request sent ✓</h3>
+          <p id="successMsg">The General Handyman Solutions Team got your request. Keep this request ID, or copy the summary if you also want to DM it to <b>@generalhandymans</b>.</p>
+          <pre id="requestText"></pre>
+          <div class="row">
+            <button type="button" class="btn btn-black" id="copyBtn" style="padding:11px 16px;font-size:14px">Copy request</button>
+            <a class="btn btn-ghost" style="font-size:14px" href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">DM @generalhandymans</a>
+            <a class="btn btn-ghost" id="whatsBtn" style="font-size:14px;display:none" href="#" target="_blank" rel="noopener">WhatsApp the pictures</a>
+            <a class="btn btn-ghost" style="font-size:14px" href="https://docs.google.com/forms/d/e/1FAIpQLSepjlGsA8gBBdnEpEbWGuzAmTNvFcYVaxzcyKU0UbX4PF06hA/viewform" target="_blank" rel="noopener">Customer database form</a>
+          </div>
+          <p style="margin-top:10px" id="successReminder">Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.</p>
+        </div>
+      </form>
+    </section>
+  </section>
+
+  <section class="section">
+    <h2>Services on <em>demand</em></h2>
+    <p class="sub">Tap a service above to start a request. Every job is quoted labor-only — you buy materials, the Team handles the work.</p>
+    <div class="cards">
+      <article class="card"><img src="assets/tv-mount.webp" alt="Handyman mounting a large TV on a living room wall with a level"><div><h3>Installs &amp; Mounting</h3><p>TVs, iPad/tablet mounts, floating shelves, fixtures, tub/shower doors, assembly.</p></div></article>
+      <article class="card"><img src="assets/fireplace-wall.webp" alt="Fireplace wall with tile and floating shelves being installed"><div><h3>Walls &amp; Fireplaces</h3><p>Fireplace walls, tile, panels, trim removal, floating shelves with LED, paint.</p></div></article>
+      <article class="card"><img src="assets/painting.webp" alt="Worker painting an interior garage wall with wood panels nearby"><div><h3>Paint &amp; Carpentry</h3><p>Interior/garage paint, wall panels, sconce prep, wood repair and patching.</p></div></article>
+      <article class="card"><img src="assets/mechanic.webp" alt="Mobile mechanic working on a car engine in a driveway"><div><h3>Mobile Mechanic</h3><p>I come to you: starters, fuel pumps, buttons/controls, diagnostics help and installs.</p></div></article>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Recent job <em>types</em></h2>
+    <p class="sub">Real kinds of work the Team takes around Solano County. Your job doesn’t have to match exactly — describe it in the request.</p>
+    <div class="jobs">
+      <div><b>Fireplace &amp; living-room walls</b><span>Tile, floating shelves + LED, panels, sconces, paint</span></div>
+      <div><b>Garage &amp; interior repaint</b><span>Walls + ceiling, single color, fixture swaps</span></div>
+      <div><b>Washer / dryer relocation</b><span>240V outlet, vent through wall, plumbing tie-in, patch</span></div>
+      <div><b>Mounts &amp; commercial installs</b><span>iPad wall mounts, door hardware, outlet/cover repairs</span></div>
+      <div><b>Tub / shower door installs</b><span>Measured installs — you supply the door kit</span></div>
+      <div><b>Mobile mechanic jobs</b><span>Starter replacement, fuel pump, steering controls &amp; more</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Service <em>area</em></h2>
+    <p class="sub">Hyperlocal and mobile — based around Fairfield. If you’re just outside this ring, add your city in the request and ask.</p>
+    <div class="area">
+      <span class="primary">Fairfield — home base</span><span>Vacaville</span><span>Vallejo</span><span>Suisun City</span><span>Napa</span><span>Solano County</span><span>El Sobrante / nearby on request</span>
+    </div>
+  </section>
+
+  <section class="section" id="membership">
+    <h2>HomeCare <em>membership</em></h2>
+    <p class="sub">For homeowners, landlords, and property managers who call more than once. Join before you book and your first estimate is free.</p>
+    <div class="jobs">
+      <div><b>$49/month</b><span>Cancel anytime. No hidden fees.</span></div>
+      <div><b>First estimate FREE</b><span>One free in-person estimate during your first month of membership.</span></div>
+      <div><b>$60 member estimates</b><span>After the first-month free estimate, member estimate visits are $60 instead of $75.</span></div>
+      <div><b>20% off labor under $1000</b><span>Member discount applies to labor on qualifying jobs under $1000.</span></div>
+      <div><b>Priority scheduling</b><span>Members jump ahead of non-member requests when the schedule fills up.</span></div>
+      <div><b>Labor-only stays simple</b><span>You buy materials/parts; The Team brings labor and tools.</span></div>
+    </div>
+    <p class="fine">Membership must be active before booking the free or member-priced estimate. One free estimate per new membership. Core service area only; outside-area travel can still apply.</p>
+  </section>
+
+
+  <section class="section" id="workers">
+    <h2>Worker <em>signup</em></h2>
+    <p class="sub">Want work with General Handyman Solutions? Create your worker account below — it is created automatically with your password, and jobs unlock after the Team reviews you. You are not hired until the Team confirms you directly.</p>
+    <form id="workerForm" novalidate style="border:1px solid var(--line);border-radius:18px;background:var(--surface);margin-top:18px;overflow:hidden">
+      <input type="text" id="hpWorker" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+      <div style="background:#0b0b0b;color:#fff;padding:16px">
+        <h3 style="font-family:var(--display);text-transform:uppercase;font-size:24px;margin:0">Worker application</h3>
+        <p style="margin:4px 0 0;font-size:13.5px;opacity:.75">Takes about a minute. Submitting creates your worker account automatically — jobs unlock after the Team reviews and activates you.</p>
+      </div>
+      <div style="padding:16px">
+        <div class="label" style="margin-top:0">Applying as</div>
+        <div class="pills" id="workerRolePills">
+          <button type="button" class="pill sel" data-wrole="Skilled subcontractor">Skilled subcontractor</button>
+          <button type="button" class="pill" data-wrole="Helper">Helper</button>
+        </div>
+
+        <div class="grid2" style="margin-top:6px">
+          <div><label class="label" for="wName">Full name</label><input class="field" id="wName" autocomplete="name" placeholder="First &amp; last name"></div>
+          <div><label class="label" for="wPhone">Phone number</label><input class="field" id="wPhone" autocomplete="tel" inputmode="tel" placeholder="(707) 555-0123"></div>
+          <div><label class="label" for="wEmail">Email (your app login)</label><input class="field" id="wEmail" type="email" autocomplete="email" placeholder="you@email.com"></div>
+          <div><label class="label" for="wPass">Pick a password</label><input class="field" id="wPass" type="password" autocomplete="new-password" placeholder="Min. 6 characters"></div>
+          <div><label class="label" for="wCity">City you live in</label><input class="field" id="wCity" placeholder="Fairfield"></div>
+          <div><label class="label" for="wArea">Areas you can work</label><input class="field" id="wArea" placeholder="Fairfield, Vacaville, Vallejo…"></div>
+        </div>
+
+        <div class="label">Your skills <small>Tap all that apply</small></div>
+        <div class="chips" id="workerSkills">
+          <button type="button" class="chip" data-wskill="General handyman">General handyman</button>
+          <button type="button" class="chip" data-wskill="Carpentry">Carpentry</button>
+          <button type="button" class="chip" data-wskill="Paint & drywall">Paint &amp; drywall</button>
+          <button type="button" class="chip" data-wskill="Electrical swaps">Electrical swaps</button>
+          <button type="button" class="chip" data-wskill="Plumbing help">Plumbing help</button>
+          <button type="button" class="chip" data-wskill="Mobile mechanic">Mobile mechanic</button>
+          <button type="button" class="chip" data-wskill="Installs & assembly">Installs &amp; assembly</button>
+          <button type="button" class="chip" data-wskill="Landscaping / yard">Landscaping / yard</button>
+        </div>
+
+        <div class="label">What do you have? <small>Tap all that apply</small></div>
+        <div class="chips" id="workerGear">
+          <button type="button" class="chip" data-wgear="Basic hand tools">Basic hand tools</button>
+          <button type="button" class="chip" data-wgear="Power tools">Power tools</button>
+          <button type="button" class="chip" data-wgear="Drill / driver">Drill / driver</button>
+          <button type="button" class="chip" data-wgear="Saws">Saws</button>
+          <button type="button" class="chip" data-wgear="Ladder">Ladder</button>
+          <button type="button" class="chip" data-wgear="Truck bed / toolbox">Truck bed / toolbox</button>
+          <button type="button" class="chip" data-wgear="Trailer">Trailer</button>
+          <button type="button" class="chip" data-wgear="PPE / safety gear">PPE / safety gear</button>
+          <button type="button" class="chip" data-wgear="No tools yet">No tools yet</button>
+        </div>
+
+        <div class="grid2">
+          <div><label class="label" for="wExp">Experience</label><select class="field" id="wExp"><option value="">Choose…</option><option>Less than 1 year</option><option>1–2 years</option><option>3–5 years</option><option>5+ years</option></select></div>
+          <div><label class="label" for="wTools">Tools level</label><select class="field" id="wTools"><option value="">Choose…</option><option>Full tools</option><option>Some tools</option><option>No tools yet</option></select></div>
+          <div><label class="label" for="wVehicle">Vehicle style</label><select class="field" id="wVehicle"><option value="">Choose…</option><option>Pickup truck</option><option>Work van</option><option>SUV</option><option>Sedan / hatchback</option><option>E-bike</option><option>No vehicle / need a ride</option><option>Other</option></select></div>
+          <div><label class="label" for="wHaul">Can your vehicle haul materials?</label><select class="field" id="wHaul"><option value="">Choose…</option><option>Yes — truck/van/trailer loads</option><option>Small materials only</option><option>No hauling</option><option>Not applicable</option></select></div>
+          <div><label class="label" for="wTransport">Transportation</label><select class="field" id="wTransport"><option value="">Choose…</option><option>Own truck/car</option><option>E-bike / rideshare</option><option>Need a ride</option></select></div>
+          <div><label class="label" for="wLicense">License / ID</label><select class="field" id="wLicense"><option value="">Choose…</option><option>Driver license</option><option>State ID only</option><option>Working on it</option></select></div>
+          <div><label class="label" for="wInsurance">Insurance</label><select class="field" id="wInsurance"><option value="">Choose…</option><option>Has general liability insurance</option><option>No insurance yet</option><option>Not sure</option></select></div>
+          <div><label class="label" for="wAvail">Availability</label><input class="field" id="wAvail" placeholder="Weekdays, weekends, same-day…"></div>
+        </div>
+
+        <label class="label" for="wMsg">Anything the Team should know?</label>
+        <textarea class="field" id="wMsg" placeholder="Licenses, past work, limits, languages, pay expectations…"></textarea>
+
+        <button type="button" class="ack" id="wAckBtn" aria-pressed="false" style="margin:16px 0 0;width:100%">
+          <span class="box" id="wAckBox"></span>
+          <span><b>I understand the Team reviews workers first</b><span>Approved, on review, or not a fit — applying does not guarantee a job.</span></span>
+        </button>
+
+        <div class="error" id="workerError"></div>
+        <button class="btn btn-red request-btn" id="workerSubmitBtn" type="submit" style="margin-top:14px">Send worker application →</button>
+        <p class="fine">Your application goes straight to the Team for review.</p>
+
+        <div class="success" id="workerSuccess">
+          <h3 id="workerSuccessTitle">Application sent ✓</h3>
+          <p id="workerSuccessMsg">The Team got your worker application and will review it.</p>
+          <pre id="workerText"></pre>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <section class="section" id="jobboard">
+    <h2>Worker <em>job board</em></h2>
+    <p class="sub">The easy system for workers: <b>create your account, get reviewed once, then pick the jobs you want</b> from the jobs the Team posts — pay offer shown up front, no bidding, no chasing leads. Jobs go to active workers only, first pick wins.</p>
+    <div class="how">
+      <article><div class="num">1</div><h3>The Team posts the job</h3><p>Service, city, what the job is, when it’s needed, and the <b>pay offer</b> — for example “TV mount • Fairfield • Today • <b>$75</b>”. Customer address is never posted here.</p></article>
+      <article><div class="num">2</div><h3>You pick it</h3><p>Once the Team reviews and activates your account, log in and pick the jobs you want. First come, first served among active workers.</p></article>
+      <article><div class="num">3</div><h3>Details unlock</h3><p>After the Team confirms your claim, they send you the customer’s full address and phone. Finish the job, send completion photos, get paid your offer.</p></article>
+    </div>
+    <div style="border:1px solid var(--line);border-radius:18px;background:var(--surface);padding:16px;margin-top:16px">
+      <div class="label" style="margin-top:0">Your jobs wait inside your account</div>
+      <p class="fine" style="text-align:left;margin:6px 0 12px">That is the whole system: account → one review → pick your jobs. Active workers see open jobs with the pay offer, and the Team confirms the address and time with the worker who picks the job.</p>
+      <a class="btn btn-red" style="padding:12px 18px;font-size:14.5px" href="https://app.generalhandymans.app/#worker" target="_blank" rel="noopener">Technician login → see open jobs</a>
+    </div>
+  </section>
+
+  <div class="cta-band">
+    <div><h2>Ready when<br>you are.</h2><p>$75 books the estimate visit • Members: first estimate free • Labor-only • 50% deposit to start work</p></div>
+    <a class="btn" href="#book" style="background:var(--red);color:#fff;padding:15px 20px;font-size:15px">Start a request →</a>
+  </div>
+
+  <footer>
+    <b style="color:var(--ink)">General Handyman Solutions</b> — General Handyman Solutions Team • Fairfield, Vacaville, Vallejo &amp; Solano County<br>
+    Instagram <a href="https://instagram.com/generalhandymans" target="_blank" rel="noopener">@generalhandymans</a> • <a href="#workers">Worker signup</a> • Labor-only quotes: you buy materials/parts, 50% deposit locks the job. In-person estimate is $75 flat; HomeCare members ($49/mo) get one free estimate in the first month, then $60 member estimates.
+  </footer>
+</main>
+
+<div class="sticky" aria-hidden="false">
+  <div><b>Join HomeCare — $49/mo</b><span>20% off any job • Free first in-person estimate</span></div>
+  <a href="https://app.generalhandymans.app/#join-homecare" target="_blank" rel="noopener">Join →</a>
+</div>
+
+<script>
+window.__ghsWired=true;
+(function(){
+  var selectedService='', selectedCity='', selectedWhen='', ack=false, memberStatus='none', estimateType='inperson', selectedPhotoNames=[], selectedPhotoFiles=[];
+  var estimateMap={none:{amount:'$75', title:'In-person estimate / service visit — $75 flat', due:'$75 flat', ack:'$75 flat estimate visit', btn:'Request service — $75 estimate →', line:'$75 flat in-person estimate/service visit'}, new:{amount:'FREE', title:'New HomeCare member — first estimate FREE', due:'FREE — first month', ack:'first HomeCare estimate is FREE + labor-only (I buy materials/parts)', btn:'Request service — first estimate FREE →', line:'FREE first-month HomeCare member estimate'}, member:{amount:'$60', title:'HomeCare member estimate — $60', due:'$60 member rate', ack:'$60 HomeCare member estimate + labor-only (I buy materials/parts)', btn:'Request service — $60 member estimate →', line:'$60 HomeCare member estimate'}};
+  var API='https://app.generalhandymans.app';
+  var FORMSUBMIT='https://formsubmit.co/ajax/generalhandymans@gmail.com';
+  // fetch with timeout so a hung server never leaves the button stuck on "Sending…"
+  function tfetch(url, opts, ms){
+    var c=new AbortController(); var t=setTimeout(function(){ c.abort(); }, ms||15000);
+    opts=opts||{}; opts.signal=c.signal;
+    return fetch(url, opts).finally(function(){ clearTimeout(t); });
+  }
+  // FormSubmit can answer 200 with success:"false" — treat that as a failure too
+  async function sendLead(opts){
+    var res=await tfetch(FORMSUBMIT, opts, 25000);
+    if(!res.ok) return false;
+    var j=await res.json().catch(function(){ return null; });
+    if(j && (j.success===false || j.success==='false')) return false;
+    return true;
+  }
+  function isEmail(v){ return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v); }
+  function digits(v){ return String(v||'').replace(/\D/g,''); }
+  function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  function memberLabel(){ return memberStatus==='new' ? 'New member — first estimate FREE (self-declared, Team to verify)' : (memberStatus==='member' ? 'Member — $60 estimate (self-declared, Team to verify)' : 'Not a member — $75 estimate'); }
+  function estimateLine(){
+    if(estimateType==='photo') return 'FREE photo estimate';
+    if(isUrgent() && memberStatus!=='new'){ var p=(memberStatus==='member'?60:75)*1.25; return '$'+(p%1?p.toFixed(2):p)+' ASAP/Emergency estimate (+25%)'; }
+    return estimateMap[memberStatus].line;
+  }
+  // Shrink phone photos so the FormSubmit attachment limit is not hit
+  function compressImage(file){
+    return new Promise(function(resolve){
+      if(!file.type || file.type.indexOf('image/')!==0 || !window.createImageBitmap){ resolve(file); return; }
+      createImageBitmap(file).then(function(bmp){
+        var sc=Math.min(1, 1280/Math.max(bmp.width,bmp.height));
+        var cv=document.createElement('canvas'); cv.width=Math.round(bmp.width*sc); cv.height=Math.round(bmp.height*sc);
+        cv.getContext('2d').drawImage(bmp,0,0,cv.width,cv.height);
+        cv.toBlob(function(b){ resolve(b ? new File([b], file.name.replace(/\.[^.]+$/,'')+'.jpg', {type:'image/jpeg'}) : file); }, 'image/jpeg', 0.75);
+      }).catch(function(){ resolve(file); });
+    });
+  }
+  var sumService=document.getElementById('sumService'), sumCity=document.getElementById('sumCity'), sumWhen=document.getElementById('sumWhen');
+  function isUrgent(){ return selectedWhen==='ASAP / Emergency'; }
+  function update(){ sumService.textContent=selectedService||'Not selected yet'; sumCity.textContent=selectedCity||'—'; sumWhen.textContent=selectedWhen||'—'; var ur=document.getElementById('urgencyRow'); if(ur){ ur.style.display=isUrgent()?'flex':'none'; } updateMember(); }
+  function updateMember(){
+    var cl=document.getElementById('creditLine'); if(cl) cl.style.display = (estimateType==='photo' || memberStatus==='new') ? 'none' : '';
+    var m=estimateMap[memberStatus];
+    var aw=document.getElementById('accountWrap'); if(aw){ aw.style.display='block'; }
+    document.getElementById('feeAmount').textContent=m.amount;
+    document.getElementById('feeTitle').textContent=m.title;
+    document.getElementById('feeDesc').textContent = memberStatus==='new' ? 'Your first HomeCare estimate is free in month one. Membership ($49/mo) must be active before booking. Please add job pictures if you have them.' : (memberStatus==='member' ? 'HomeCare members pay $60 for estimate visits after the first-month free estimate. Please add job pictures if you have them.' : 'That’s the flat charge to come out, look at the job in person, and lock in a real quote. Please add job pictures if you have them. No surprises after you submit.');
+    document.getElementById('feeDueLine').innerHTML = memberStatus==='new' ? '<b>FREE first estimate — new HomeCare members.</b> One free estimate in your first month. Final labor is quoted after the Team sees the job (or from clear photos).' : (memberStatus==='member' ? '<b>$60 member estimate — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after the Team sees the job (or from clear photos).' : '<b>$75 flat — due to book the visit.</b> Confirms your in-person estimate / first service visit. Final labor is quoted after the Team sees the job (or from clear photos).');
+    document.getElementById('ackText').textContent='I understand: '+m.ack+' + labor-only (I buy materials/parts)';
+    document.getElementById('sumEstimate').textContent=m.due;
+    document.getElementById('submitBtn').textContent=m.btn;
+    var sr=document.getElementById('successReminder'); if(sr){ sr.innerHTML = memberStatus==='new' ? 'Reminder: new HomeCare members get <b>one free estimate in the first month</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : (memberStatus==='member' ? 'Reminder: HomeCare member estimate visits are <b>$60</b> after the first-month free estimate. Labor-only — you buy materials/parts. 50% deposit locks approved work in.' : 'Reminder: the in-person estimate/service visit is <b>$75 flat</b>. Labor-only — you buy materials/parts. 50% deposit locks approved work in.'); }
+    if(isUrgent() && estimateType!=='photo'){
+      var base = memberStatus==='member' ? 60 : 75;
+      if(memberStatus==='new'){
+        document.getElementById('feeDesc').textContent='ASAP / Emergency selected. Your first HomeCare estimate is still free in month one; the 25% urgency charge applies to the labor quote if you book the work.';
+        document.getElementById('feeDueLine').innerHTML='<b>ASAP / Emergency:</b> first estimate free for new members; labor quote includes the 25% urgency charge.';
+      } else {
+        var urgentPrice = base * 1.25;
+        var urgentTxt = '$' + (urgentPrice % 1 ? urgentPrice.toFixed(2) : urgentPrice);
+        document.getElementById('feeAmount').textContent=urgentTxt;
+        document.getElementById('feeTitle').textContent='ASAP / Emergency estimate — '+urgentTxt;
+        document.getElementById('feeDesc').textContent='ASAP / Emergency adds 25% to the estimate visit and labor quote. Please add job pictures if you have them.';
+        document.getElementById('feeDueLine').innerHTML='<b>'+urgentTxt+' — due to book the ASAP/Emergency visit.</b> That is the regular estimate plus the 25% urgency charge. Final labor is quoted after the Team sees the job (or from clear photos).';
+        document.getElementById('ackText').textContent='I understand: '+urgentTxt+' ASAP/Emergency estimate (+25%) + labor-only (I buy materials/parts)';
+        document.getElementById('sumEstimate').textContent=urgentTxt+' incl. +25%';
+        document.getElementById('submitBtn').textContent='Request ASAP/Emergency — '+urgentTxt+' estimate →';
+      }
+    }
+    if(estimateType==='photo'){
+      document.getElementById('feeAmount').textContent='FREE';
+      document.getElementById('feeTitle').textContent='Free photo estimate — send pictures for a first quote';
+      document.getElementById('feeDesc').textContent='Send clear pictures of the job for a free first look. If the Team needs to see it in person, the in-person estimate is $75 (or your member rate).';
+      document.getElementById('feeDueLine').innerHTML='<b>FREE photo estimate.</b> Pick your job pictures above, send the request, then DM the same pictures to @generalhandymans.';
+      document.getElementById('ackText').textContent='I understand: free photo estimate + labor-only (I buy materials/parts)';
+      document.getElementById('sumEstimate').textContent='FREE photo estimate';
+      document.getElementById('submitBtn').textContent='Request free photo estimate →';
+      if(sr){ sr.innerHTML='Reminder: this is a <b>free photo estimate</b>. DM your job pictures to @generalhandymans after sending. In-person visits are $75 or member rate.'; }
+    }
+  }
+  function updateEstimate(){ updateMember(); }
+  function wire(id, attr, cb){
+    var el=document.getElementById(id); if(!el) return;
+    el.addEventListener('click', function(e){
+      var btn=e.target.closest('['+attr+']'); if(!btn) return;
+      el.querySelectorAll('['+attr+']').forEach(function(b){b.classList.remove('sel')});
+      btn.classList.add('sel'); cb(btn.getAttribute(attr), btn);
+    });
+  }
+  wire('svcGrid','data-service', function(v){ selectedService=v; update(); });
+  wire('cityChips','data-city', function(v){ selectedCity=v; update(); });
+  wire('memberPills','data-member', function(v){ memberStatus=v; updateMember(); });
+  wire('estimatePills','data-estimate', function(v){ estimateType=v; var hint=document.getElementById('photoHint'); if(hint){ hint.textContent = v==='photo' ? 'Required for the free photo estimate' : 'Please add pictures if you have them'; } updateEstimate(); });
+  var photoInput=document.getElementById('photos');
+  if(photoInput){ photoInput.addEventListener('change', function(e){
+    selectedPhotoFiles=Array.from(e.target.files||[]); selectedPhotoNames=selectedPhotoFiles.map(function(f){return f.name});
+    var list=document.getElementById('photoList'); list.innerHTML='';
+    selectedPhotoFiles.slice(0,6).forEach(function(f){
+      var img=document.createElement('img'); img.src=URL.createObjectURL(f); img.alt=f.name; img.style.width='74px'; img.style.height='74px'; img.style.objectFit='cover'; img.style.borderRadius='10px'; img.style.border='1px solid var(--line)'; list.appendChild(img);
+    });
+    if(selectedPhotoNames.length){ var note=document.createElement('span'); note.className='fine'; note.style.textAlign='left'; note.textContent=selectedPhotoNames.length+' picture(s) selected — DM these to @generalhandymans after sending.'; list.appendChild(note); }
+  }); }
+  var jobDateEl=document.getElementById('jobDate');
+  jobDateEl.min=todayStr();
+  wire('whenPills','data-when', function(v, btn){
+    selectedWhen=v;
+    var dw=document.getElementById('dateWrap');
+    if(v==='Pick a date'){ dw.classList.add('show'); if(jobDateEl.value && jobDateEl.value>=todayStr()){ selectedWhen='On '+jobDateEl.value; } } else { dw.classList.remove('show'); }
+    update();
+  });
+  jobDateEl.addEventListener('change', function(e){
+    var v=e.target.value;
+    if(v && v>=todayStr()){ selectedWhen='On '+v; } else { e.target.value=''; selectedWhen='Pick a date'; }
+    update();
+  });
+  document.getElementById('address').addEventListener('input', function(e){ /* city stays from chips unless typed */ });
+  var ackBtn=document.getElementById('ackBtn'), ackBox=document.getElementById('ackBox');
+  ackBtn.addEventListener('click', function(){
+    ack=!ack; ackBtn.classList.toggle('sel', ack); ackBtn.setAttribute('aria-pressed', ack?'true':'false'); ackBox.textContent=ack?'✓':'';
+  });
+  var form=document.getElementById('reqForm'), err=document.getElementById('formError'), success=document.getElementById('successBox'), reqText=document.getElementById('requestText');
+  form.addEventListener('submit', async function(e){
+    e.preventDefault(); err.classList.remove('show'); err.textContent='';
+    var hpR=document.getElementById('hpReq'); if(hpR && hpR.value) return;
+    var details=document.getElementById('details').value.trim();
+    var address=document.getElementById('address').value.trim();
+    var name=document.getElementById('name').value.trim();
+    var phone=document.getElementById('phone').value.trim();
+    var problems=[];
+    if(!selectedService) problems.push('pick a service');
+    if(address.length<5) problems.push('add the full home address');
+    if(estimateType==='photo' && !selectedPhotoFiles.length) problems.push('add at least one job picture for the free photo estimate');
+    if(!selectedWhen) problems.push('choose when you need it'); else if(selectedWhen==='Pick a date') problems.push('pick the date (today or later)');
+    if(details.length<5) problems.push('describe the job in a sentence or two');
+    if(!ack) problems.push('confirm the estimate + labor-only rule (tap the box in the estimate section)');
+    if(name.length<2) problems.push('add your name');
+    if(digits(phone).length<10) problems.push('add a valid phone number (10 digits)');
+    var custEmail='', custPass='';
+    custEmail=document.getElementById('custEmail').value.trim().toLowerCase();
+    custPass=document.getElementById('custPass').value;
+    if(!isEmail(custEmail)) problems.push('add a valid email — it creates your free account');
+    if(!custPass || custPass.length<6) problems.push('pick an account password (6+ characters)');
+    if(problems.length){ err.textContent='Almost there — please '+problems.join(', ')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    var id='GHS-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    var whenTxt=selectedWhen;
+    var lines=[
+      'NEW REQUEST — General Handyman Solutions ('+id+')',
+      'Service: '+selectedService,
+      'Job: '+details,
+      'Where: '+((selectedCity||'')+(address? (selectedCity?' — ':'')+address:'')),
+      'When: '+whenTxt,
+      'Name: '+name,
+      'Phone: '+phone,
+      'Email: '+custEmail,
+      'HomeCare status: '+memberLabel(),
+      'Estimate type: '+(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+      'Urgency: '+(isUrgent()?'ASAP / Emergency — +25% urgency charge':'Standard timing'),
+      'Pictures selected: '+(selectedPhotoNames.length ? selectedPhotoNames.length+' — '+selectedPhotoNames.join(', ')+' (customer will DM the pictures to @generalhandymans)' : 'None selected'),
+      '—',
+      'Confirmed by customer: '+estimateLine()+'. Labor-only — I buy materials/parts. 50% deposit locks approved work.'
+    ];
+    reqText.textContent=lines.join('\n');
+    var submitBtn=document.getElementById('submitBtn');
+    var originalBtn=submitBtn.textContent;
+    submitBtn.disabled=true; submitBtn.textContent='Sending request…';
+    var whereTxt=((selectedCity||'')+(address? (selectedCity?' — ':'')+address:''));
+    var memberTxt=memberLabel();
+    var accountStatus='none', appSaved=false, appRequestId='', token='';
+    // Step 1 — create the customer account (required for every request, photo or in-person).
+    try{
+      var su=await tfetch(API+'/api/signup', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name:name, email:custEmail, password:custPass, phone:phone, role:'customer'})});
+      var sud=await su.json().catch(function(){return {}});
+      if(su.ok){ accountStatus='created'; token=sud.token||''; }
+      else if(su.status===409 || /already/i.test(sud.error||'')){ accountStatus='exists'; }
+      else if(su.status>=400 && su.status<500){
+        err.textContent='Could not create your account: '+(sud.error||'please check your email and password')+'.'; err.classList.add('show'); err.scrollIntoView({behavior:'smooth', block:'center'});
+        submitBtn.disabled=false; submitBtn.textContent=originalBtn; return;
+      } else { accountStatus='failed'; }
+    }catch(acctErr){ accountStatus='failed'; }
+    // Step 2 — save the request inside the new account.
+    if(accountStatus==='created' && token){
+      try{
+        var ar=await tfetch(API+'/api/requests', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+token}, body: JSON.stringify({service:selectedService, description:details, city:selectedCity, address:address, when:whenTxt, estimateType:estimateType})});
+        var ard=await ar.json().catch(function(){return {}});
+        if(ar.ok){ appSaved=true; appRequestId=(ard.request && ard.request.id) ? ard.request.id : ''; }
+      }catch(reqErr){}
+    }
+    // Step 3 — ALWAYS send the lead to the Team, whatever happened above, so no lead is lost.
+    var acctTxt = accountStatus==='created' ? 'Account created' : (accountStatus==='exists' ? 'Email already had an account — customer must log in' : 'ACCOUNT NOT CREATED — help the customer set it up');
+    acctTxt += appSaved ? ' · request saved in app' : (accountStatus==='created' ? ' · request NOT saved in app (add manually)' : '');
+    var leadFields={
+      _subject:'New GHS lead '+id+' — '+selectedService, _template:'table', _honey:'',
+      request_id:id, service:selectedService, job_details:details, where:whereTxt, when:whenTxt,
+      customer_name:name, customer_phone:phone, customer_email:custEmail, homecare_status:memberTxt,
+      estimate_type:(estimateType==='photo'?'FREE photo estimate':'In-person estimate'),
+      urgency:(isUrgent()?'ASAP / Emergency +25%':'Standard'),
+      pictures_selected:selectedPhotoNames.join(', '),
+      estimate_due:estimateLine(),
+      account_status:acctTxt, app_request_id:appRequestId,
+      confirmed:'Labor-only — customer buys materials/parts. 50% deposit locks approved work.',
+      request_text:lines.join('\n')
+    };
+    var leadSent=false, photosAttached=0;
+    try{
+      var files=[];
+      if(selectedPhotoFiles.length){
+        var comp=await Promise.all(selectedPhotoFiles.slice(0,6).map(compressImage)); var total=0;
+        comp.forEach(function(f){ if(total+f.size<=4500000){ files.push(f); total+=f.size; } });
+      }
+      if(files.length){
+        var fd=new FormData();
+        Object.keys(leadFields).forEach(function(k){ fd.append(k, leadFields[k]); });
+        files.forEach(function(f){ fd.append('attachment', f, f.name); });
+        try{ leadSent=await sendLead({method:'POST', headers:{'Accept':'application/json'}, body: fd}); }catch(e1){ leadSent=false; }
+        if(leadSent) photosAttached=files.length;
+      }
+      if(!leadSent){
+        if(files.length) leadFields.pictures_note='Picture upload failed — customer will DM the pictures';
+        leadSent=await sendLead({method:'POST', headers:{'Content-Type':'application/json','Accept':'application/json'}, body: JSON.stringify(leadFields)});
+      }
+    }catch(sendErr){ leadSent=false; }
+    var st=document.getElementById('successTitle'), sm=document.getElementById('successMsg');
+    var loginTip=' Log in anytime with <b>Customer login</b> (top of page) to track it, get your quote, and message the Team back and forth.';
+    if(leadSent || appSaved){
+      st.textContent='Request sent ✓';
+      var m;
+      if(accountStatus==='created' && appSaved) m='Account created ✓ and request sent ✓'+(appRequestId?' ('+appRequestId+')':'')+'.'+loginTip;
+      else if(accountStatus==='created') m='Account created ✓ and the Team got your request by email ✓. It is not showing inside your account yet — the Team will link it.'+loginTip;
+      else if(accountStatus==='exists') m='That email already has an account, so we did not create a new one. The Team got your request by email ✓. Use <b>Customer login</b> (top of page) to track your jobs.';
+      else m='The Team got your request by email ✓, but we could not create your account right now. The Team will help you finish setting it up.';
+      if(!leadSent) m+=' The email copy did not go through, but your request is saved in your account. You can also DM the summary below to <b>@generalhandymans</b>.';
+      if(estimateType==='photo') m+= photosAttached ? ' Your pictures were sent with the request; you can also DM or WhatsApp them to the Team.' : ' Please DM or WhatsApp your pictures to the Team.';
+      sm.innerHTML=m;
+      // clear what must not be re-sent by accident
+      document.getElementById('details').value=''; document.getElementById('custPass').value='';
+      if(photoInput) photoInput.value=''; selectedPhotoFiles=[]; selectedPhotoNames=[]; document.getElementById('photoList').innerHTML='';
+      ack=false; ackBtn.classList.remove('sel'); ackBtn.setAttribute('aria-pressed','false'); ackBox.textContent='';
+    } else {
+      st.textContent='Request ready — one more tap';
+      sm.innerHTML=(accountStatus==='created' ? 'Your account was created ✓, but the request did not go through. ' : 'The automatic send did not go through. ')+'Copy the summary below and DM it to <b>@generalhandymans</b> so the Team still gets your lead.';
+    }
+    submitBtn.disabled=false; submitBtn.textContent=originalBtn;
+    var whatsBtn=document.getElementById('whatsBtn');
+    if(whatsBtn){ if(estimateType==='photo'){ whatsBtn.style.display='inline-flex'; whatsBtn.href='https://wa.me/17078623773?text='+encodeURIComponent(lines.join('\n')+'\n\nI will send the job pictures here for the free photo estimate.'); } else { whatsBtn.style.display='none'; } }
+    success.classList.add('show');
+    success.scrollIntoView({behavior:'smooth', block:'center'});
+  });
+  document.getElementById('copyBtn').addEventListener('click', function(){
+    var txt=reqText.textContent; var btn=this;
+    function done(){ btn.textContent='Copied ✓'; setTimeout(function(){btn.textContent='Copy request'},1800); }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(done).catch(function(){ fallback(); }); } else fallback();
+    function fallback(){ var ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); done(); }
+  });
+
+  // Worker signup
+  var workerRole='Skilled subcontractor', workerSkills=new Set(), workerGear=new Set(), workerAck=false;
+  wire('workerRolePills','data-wrole', function(v){ workerRole=v; });
+
+  var wg=document.getElementById('workerGear');
+  if(wg){ wg.addEventListener('click', function(e){ var btn=e.target.closest('[data-wgear]'); if(!btn) return; var v=btn.getAttribute('data-wgear'); if(workerGear.has(v)){ workerGear.delete(v); btn.classList.remove('sel'); } else { workerGear.add(v); btn.classList.add('sel'); } }); }
+  var ws=document.getElementById('workerSkills');
+  if(ws){ ws.addEventListener('click', function(e){ var btn=e.target.closest('[data-wskill]'); if(!btn) return; var v=btn.getAttribute('data-wskill'); if(workerSkills.has(v)){ workerSkills.delete(v); btn.classList.remove('sel'); } else { workerSkills.add(v); btn.classList.add('sel'); } }); }
+  var wAckBtn=document.getElementById('wAckBtn'), wAckBox=document.getElementById('wAckBox');
+  if(wAckBtn){ wAckBtn.addEventListener('click', function(){ workerAck=!workerAck; wAckBtn.classList.toggle('sel', workerAck); wAckBtn.setAttribute('aria-pressed', workerAck?'true':'false'); wAckBox.textContent=workerAck?'✓':''; }); }
+  var workerForm=document.getElementById('workerForm');
+  if(workerForm){ workerForm.addEventListener('submit', async function(e){
+    e.preventDefault();
+    var hpW=document.getElementById('hpWorker'); if(hpW && hpW.value) return;
+    var werr=document.getElementById('workerError'); werr.classList.remove('show'); werr.textContent='';
+    var wName=document.getElementById('wName').value.trim();
+    var wPhone=document.getElementById('wPhone').value.trim();
+    var wEmail=document.getElementById('wEmail').value.trim().toLowerCase();
+    var wPass=document.getElementById('wPass').value;
+    var wCity=document.getElementById('wCity').value.trim();
+    var wArea=document.getElementById('wArea').value.trim();
+    var wExp=document.getElementById('wExp').value;
+    var wTools=document.getElementById('wTools').value;
+    var wTransport=document.getElementById('wTransport').value;
+    var wVehicle=document.getElementById('wVehicle').value;
+    var wHaul=document.getElementById('wHaul').value;
+    var wLicense=document.getElementById('wLicense').value;
+    var wInsurance=document.getElementById('wInsurance').value;
+    var wAvail=document.getElementById('wAvail').value.trim();
+    var wMsg=document.getElementById('wMsg').value.trim();
+    var problems=[];
+    if(wName.length<2) problems.push('add your full name');
+    if(digits(wPhone).length<10) problems.push('add a valid phone number (10 digits)');
+    if(!isEmail(wEmail)) problems.push('add a valid email');
+    if(!wPass || wPass.length<6) problems.push('pick a password (min. 6 characters)');
+    if(!wCity) problems.push('add the city you live in');
+    if(!workerSkills.size) problems.push('tap at least one skill');
+    if(!wExp) problems.push('pick your experience');
+    if(!wTools) problems.push('pick your tools');
+    if(!wTransport) problems.push('pick your transportation');
+    if(!wVehicle) problems.push('pick your vehicle style');
+    if(!wHaul) problems.push('pick if your vehicle can haul materials');
+    if(!workerAck) problems.push('confirm the Team reviews workers first');
+    if(problems.length){ werr.textContent='Almost there — please '+problems.join(', ')+'.'; werr.classList.add('show'); werr.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    var wid='WORKER-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    var skillsTxt=Array.from(workerSkills).join(', ');
+    var lines=[
+      'NEW WORKER APPLICATION — General Handyman Solutions ('+wid+')',
+      'Applying as: '+workerRole,
+      'Name: '+wName,
+      'Email: '+wEmail,
+      'Phone: '+wPhone,
+      'Lives in: '+wCity,
+      'Can work: '+(wArea||'—'),
+      'Skills: '+skillsTxt,
+      'Experience: '+wExp,
+      'Tools level: '+wTools,
+      'Has: '+(Array.from(workerGear).join(', ')||'—'),
+      'Vehicle style: '+wVehicle,
+      'Hauling: '+wHaul,
+      'License / ID: '+(wLicense||'—'),
+      'Insurance: '+(wInsurance||'—'),
+      'Transportation: '+wTransport,
+      'Availability: '+(wAvail||'—'),
+      'Notes: '+(wMsg||'—'),
+      '—',
+      'Review status: Needs Team review (approve / on review / not a fit).'
+    ];
+    document.getElementById('workerText').textContent=lines.join('\n');
+    var wbtn=document.getElementById('workerSubmitBtn'); var worig=wbtn.textContent; wbtn.disabled=true; wbtn.textContent='Sending application…';
+    var wAcct='failed';
+    // Step 1 — create the worker account.
+    try{
+      var sres=await tfetch(API+'/api/signup',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name:wName, email:wEmail, password:wPass, phone:wPhone, role:'worker',
+          skills:Array.from(workerSkills), vehicle:wVehicle,
+          profile:{city:wCity, areas:wArea, experience:wExp, toolsLevel:wTools, vehicleStyle:wVehicle,
+            hauling:wHaul, license:wLicense, insurance:wInsurance, transportation:wTransport,
+            availability:wAvail, notes:wMsg, applyingAs:workerRole, applicationId:wid}
+        })
+      });
+      var sd=await sres.json().catch(function(){return {}});
+      if(sres.ok){ wAcct='created'; }
+      else if(sres.status===409 || /already/i.test(sd.error||'')){ wAcct='exists'; }
+      else if(sres.status>=400 && sres.status<500){
+        werr.textContent='Could not create your worker account: '+(sd.error||'please check your details')+'.'; werr.classList.add('show'); werr.scrollIntoView({behavior:'smooth', block:'center'});
+        wbtn.disabled=false; wbtn.textContent=worig; return;
+      }
+    }catch(acctErr){ wAcct='failed'; }
+    // Step 2 — ALWAYS send the application to the Team, whatever happened with the account.
+    var wAcctTxt = wAcct==='created' ? 'Worker account created' : (wAcct==='exists' ? 'Email already registered in the app (could be a customer account) — check/update role' : 'ACCOUNT NOT CREATED — create it manually or contact the applicant');
+    var wSent=false;
+    try{
+      wSent=await sendLead({
+        method:'POST',
+        headers:{'Content-Type':'application/json','Accept':'application/json'},
+        body: JSON.stringify({
+          _subject:'New worker application '+wid+' — '+workerRole,
+          _template:'table', _honey:'',
+          application_id:wid, applying_as:workerRole, worker_name:wName, worker_email:wEmail, worker_phone:wPhone,
+          lives_in:wCity, can_work:wArea, skills:skillsTxt, experience:wExp, tools_level:wTools,
+          has_gear:Array.from(workerGear).join(', '), vehicle_style:wVehicle, hauling:wHaul,
+          license_id:wLicense, insurance:wInsurance, transportation:wTransport, availability:wAvail, notes:wMsg,
+          account_status:wAcctTxt,
+          review_status:'Needs Team review — approve / on review / not a fit',
+          application_text:lines.join('\n')
+        })
+      });
+    }catch(sendErr){ wSent=false; }
+    var wTitle=document.getElementById('workerSuccessTitle'), wMsgEl=document.getElementById('workerSuccessMsg');
+    if(wSent){
+      wTitle.textContent='Application sent ✓';
+      wMsgEl.innerHTML = wAcct==='created'
+        ? 'Your worker account is created and the Team got your application. Jobs unlock after the Team reviews and activates you — you can log in at <b>app.generalhandymans.app</b>.'
+        : (wAcct==='exists'
+          ? 'That email already has an account in the app, so we did not create a new one. The Team got your application and will review it. Log in at <b>app.generalhandymans.app</b> with that email.'
+          : 'The Team got your application, but your account could not be created right now. The Team will contact you to finish setting it up.');
+      document.getElementById('wPass').value='';
+    } else if(wAcct==='created' || wAcct==='exists'){
+      wTitle.textContent='Account ready — one more tap';
+      wMsgEl.innerHTML=(wAcct==='created' ? 'Your worker account is created ✓, but ' : 'Your email already has an account, but ')+'the application email to the Team did not go through. Copy the application below and DM it to <b>@generalhandymans</b> so the Team can review you.';
+    } else {
+      wTitle.textContent='Application not sent';
+      wMsgEl.innerHTML='Nothing went through — check your connection and tap the button again, or copy the application below and DM it to <b>@generalhandymans</b>.';
+      werr.textContent='Could not send your application. Please try again.'; werr.classList.add('show');
+    }
+    wbtn.disabled=false; wbtn.textContent=worig;
+    var wsuccess=document.getElementById('workerSuccess'); wsuccess.classList.add('show'); wsuccess.scrollIntoView({behavior:'smooth', block:'center'});
+  }); }
+
+  update(); updateMember();
+})();
+</script>
+<script>
+// Fallback wiring: only runs if the main script failed to load/execute.
+(function(){
+  if(window.__ghsWired) return;
+  function group(btn){
+    var p=btn.parentElement; if(!p) return;
+    p.querySelectorAll('.sel').forEach(function(b){ if(b!==btn) b.classList.remove('sel'); });
+    btn.classList.add('sel');
+  }
+  document.addEventListener('submit', function(e){
+    e.preventDefault();
+    var box=document.getElementById(e.target.id==='workerForm'?'workerError':'formError');
+    if(box){ box.textContent='This page did not finish loading. Please refresh it, or message us on WhatsApp at (707) 862-3773.'; box.classList.add('show'); }
+  });
+  document.addEventListener('click', function(e){
+    var t=e.target.closest('.svc,.chip,.pill');
+    if(t){ if(t.closest('#workerSkills,#workerGear')){ t.classList.toggle('sel'); } else { group(t); } }
+    var ack=e.target.closest('#ackBtn,#wAckBtn');
+    if(ack){ ack.classList.toggle('sel'); var box=ack.querySelector('.box'); if(box) box.textContent=ack.classList.contains('sel')?'✓':''; }
+  });
+})();
+</script>
+<style>
+#waFloat{position:fixed;right:18px;bottom:18px;z-index:9999;width:60px;height:60px;border-radius:50%;background:#25D366;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(0,0,0,.35);transition:transform .2s}
+#waFloat:hover{transform:scale(1.08)}
+#waFloat::after{content:'';position:absolute;inset:0;border-radius:50%;border:2px solid #25D366;animation:waPulse 2s ease-out infinite}
+@keyframes waPulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.5);opacity:0}}
+#waFloat svg{width:32px;height:32px;fill:#fff}
+</style>
+<a id="waFloat" href="https://wa.me/17078623773?text=Hola!%20Vengo%20de%20generalhandymans.app%20y%20necesito%20ayuda%20con%3A" target="_blank" rel="noopener" aria-label="Chat with us on WhatsApp">
+<svg viewBox="0 0 32 32"><path d="M16 3C9.4 3 4 8.4 4 15c0 2.4.7 4.6 1.9 6.5L4 29l7.7-1.8c1.8 1 3.9 1.5 6.1 1.5h.1c6.6 0 12-5.4 12-12S22.6 3 16 3zm0 21.8c-1.9 0-3.7-.5-5.3-1.5l-.4-.2-4.6 1.1 1.1-4.5-.3-.4c-1-1.6-1.6-3.5-1.6-5.5 0-5.5 4.5-10 10.1-10 5.5 0 10 4.5 10 10s-4.5 10-10 10zm5.5-7.5c-.3-.2-1.8-.9-2-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.3-.7.1-.3-.2-1.3-.5-2.5-1.5-.9-.8-1.5-1.8-1.7-2.1-.2-.3 0-.5.1-.6l.9-1.1c.3-.3.4-.6.4-.9 0-.2-.7-1.8-1-2.4-.3-.6-.5-.5-.7-.6h-.6c-.2 0-.6.2-.9.7-.3.5-1.2 1.2-1.2 2.9s1.2 3.4 1.4 3.6c.2.2 2.4 3.7 5.8 5.2 1.1.5 1.7.7 2.3.6.6-.1 1.8-.7 2-1.4.3-.7.3-1.3.2-1.4-.1-.2-.3-.2-.6-.4z"/></svg>
+</a>
 </body>
 </html>
