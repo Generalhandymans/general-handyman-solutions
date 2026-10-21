@@ -707,7 +707,9 @@ async function loadRequests(){
   document.getElementById('myRequests').innerHTML = d.requests.map(function(r){
     const est=estimateHtml(r,true);
     const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
-    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+threadHtml(r)+'</div>';
+    const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
+    const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">Secure my appointment — authorize '+moneyFmt(r.estimateDue)+' hold (not a charge yet)</button></div>':'');
+    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+holdBlock+threadHtml(r)+'</div>';
   }).join('') || '<p class="mut">No requests yet.</p>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
@@ -734,6 +736,99 @@ async function loadJobs(){
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
 async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
+// ---------- Estimate authorization holds (2026-10-20) ----------
+function holdsOf(r){ return Array.isArray(r.holds) ? r.holds : []; }
+function holdsPoolCents(r){ return holdsOf(r).filter(function(h){ return h.status==='authorized'; }).reduce(function(s,h){ return s+(Number(h.authorizedCents)||0); },0); }
+function holdTargetCents(r){ return r && r.estimate ? Math.round(((Number(r.estimate.total)||0)+(Number(r.estimate.credit)||0))*100) : 0; }
+function holdStatusHtml(r){
+  const holds=holdsOf(r);
+  if(!holds.length) return '';
+  const parts=holds.map(function(h){
+    const st=h.status==='authorized'?'ON HOLD — not charged yet':(h.status==='captured'?'CHARGED '+moneyFmt((h.capturedCents||0)/100):h.status);
+    return escHtml(h.key)+' hold: '+moneyFmt((h.authorizedCents||0)/100)+' — '+st+(h.captureBefore&&h.status==='authorized'?' &bull; hold valid until '+escHtml(String(h.captureBefore).slice(0,10)):'');
+  });
+  return '<div style="margin-top:8px;background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:8px 10px"><b>💳 Your payment:</b> '+parts.join('<br>')+'<br><span class="mut">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</span></div>';
+}
+async function secureHold(idv){
+  try{
+    const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'estimate-hold', requestId:idv})});
+    if(d.url) location.href=d.url; else alert('Could not start the authorization.');
+  }catch(e){ alert(e.message); }
+}
+function adminHoldPanelHtml(r){
+  const holds=holdsOf(r);
+  const pool=holdsPoolCents(r);
+  const target=holdTargetCents(r);
+  if(!holds.length && !(r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0)) return '';
+  const rows=holds.map(function(h){
+    return '<div>'+escHtml(h.key)+' — <b>'+escHtml(h.status)+'</b> &bull; authorized '+moneyFmt((h.authorizedCents||0)/100)+' &bull; captured '+moneyFmt((h.capturedCents||0)/100)+(h.captureBefore?' &bull; hold expires '+escHtml(String(h.captureBefore).slice(0,10)):'')+(h.incremental?' &bull; incremental: '+escHtml(h.incremental):'')+' <span class="mut">('+escHtml(h.pi||'')+')</span></div>';
+  }).join('');
+  let diff='';
+  if(r.estimate){
+    if(pool<target) diff='<div style="color:#b26a00"><b>Still to authorize: '+moneyFmt((target-pool)/100)+'</b> <span class="mut">(authorized '+moneyFmt(pool/100)+' of '+moneyFmt(target/100)+' approved total)</span></div>';
+    else if(pool>target) diff='<div style="color:#b26a00"><b>Authorized exceeds the total by '+moneyFmt((pool-target)/100)+'</b> <span class="mut">— charge only the final amount; the rest releases.</span></div>';
+    else diff='<div style="color:#1a7f37"><b>Authorized pool covers the approved total exactly.</b></div>';
+  }
+  const visit=holds.find(function(h){ return h.key==='visit' && h.status==='authorized'; });
+  const anyActive=holds.some(function(h){ return h.status==='authorized'; });
+  const incDisabled=!visit || visit.incremental==='unavailable';
+  return '<div style="margin-top:10px;border:1px solid #ecd28f;background:#fff8e6;border-radius:10px;padding:10px">'
+    +'<b>💳 Authorization holds — YOU control the money</b> <span class="mut">Nothing is ever charged automatically. You decide the amount and the moment.</span>'
+    +(rows||'<div class="mut">No holds yet — the customer authorizes the estimate fee from their request card or the estimate page.</div>')
+    +diff
+    +(r.holdSync?'<div class="mut">After approval: '+escHtml(r.holdSync.state)+' &bull; target '+moneyFmt((r.holdSync.targetCents||0)/100)+(r.holdSync.error?' &bull; '+escHtml(r.holdSync.error):'')+'</div>':'')
+    +'<div class="row" style="margin-top:8px;flex-wrap:wrap;gap:6px">'
+    +'<button class="black" '+(anyActive?'':'disabled')+' onclick="holdCapture(\''+r.id+'\','+(target||pool)+')">Charge now — you pick the amount &amp; when</button>'
+    +'<button class="ghost" '+(incDisabled?'disabled':'')+' onclick="holdIncrement(\''+r.id+'\','+target+')">Increment authorization</button>'
+    +'<button class="ghost" onclick="holdAuthorizeBalance(\''+r.id+'\')">Send balance authorization link</button>'
+    +'<button class="ghost" '+(visit?'':'disabled')+' onclick="holdCaptureVisit(\''+r.id+'\','+((visit&&visit.authorizedCents)||0)+')">Capture visit fee only</button>'
+    +'<button class="ghost" '+(anyActive?'':'disabled')+' onclick="holdRelease(\''+r.id+'\')">Release hold(s)</button>'
+    +'<button class="ghost" onclick="holdClose(\''+r.id+'\','+pool+')">Close billing</button>'
+    +'</div>'
+    +(visit&&visit.incremental==='unavailable'?'<div class="mut">This card cannot be incremented — use the balance authorization instead.</div>':'')
+    +'<div id="holdMsg-'+r.id+'" class="mut"></div></div>';
+}
+async function holdAct(idv, action, body){
+  const m=document.getElementById('holdMsg-'+idv); if(m) m.textContent='Working…';
+  try{ const d=await api('/api/requests/'+idv+'/hold/'+action,{method:'POST', body:JSON.stringify(body||{})}); if(m) m.textContent='Done.'; return d; }
+  catch(e){ if(m) m.textContent=e.message; throw e; }
+}
+async function holdCapture(idv, defCents){
+  const v=prompt('Final amount to charge NOW ($). You decide the amount and the moment — nothing is ever charged automatically.', ((defCents||0)/100).toFixed(2));
+  if(v==null) return;
+  const cents=Math.round(parseFloat(v)*100);
+  if(!(cents>0)){ alert('Enter an amount over $0.'); return; }
+  try{ await holdAct(idv,'capture',{finalCents:cents}); loadAdmin(); }catch(e){}
+}
+async function holdCaptureVisit(idv, visitCents){
+  if(!confirm('Charge ONLY the visit fee ('+moneyFmt((visitCents||0)/100)+') from the hold now? Use this when the customer declined the work or did not show up.')) return;
+  try{ await holdAct(idv,'capture',{finalCents:visitCents}); loadAdmin(); }catch(e){}
+}
+async function holdIncrement(idv, targetCents){
+  const v=prompt('New TOTAL authorization ($):', ((targetCents||0)/100).toFixed(2));
+  if(v==null) return;
+  const cents=Math.round(parseFloat(v)*100);
+  if(!(cents>0)){ alert('Enter a total over $0.'); return; }
+  try{ await holdAct(idv,'increment',{totalCents:cents}); loadAdmin(); }catch(e){ alert('Increment failed — send a balance authorization instead. Details are in the panel message.'); }
+}
+async function holdAuthorizeBalance(idv){
+  try{
+    const d=await holdAct(idv,'authorize-balance',{});
+    if(d && d.url){ const m=document.getElementById('holdMsg-'+idv); if(m) m.innerHTML='Balance authorization link ('+moneyFmt(d.amount)+'): <a href="'+d.url+'" target="_blank" rel="noopener">open checkout</a> — send it to the customer; after approval it also appears on their estimate page.'; }
+  }catch(e){}
+}
+async function holdRelease(idv){
+  if(!confirm('Release (cancel) ALL active authorization holds on this request? The customer is NOT charged for the released amounts.')) return;
+  try{ await holdAct(idv,'release',{}); loadAdmin(); }catch(e){}
+}
+async function holdClose(idv, poolCents){
+  if(poolCents>0 && !confirm('There is still '+moneyFmt(poolCents/100)+' authorized but NOT charged on this request. Close billing anyway? (Closing never charges or releases anything by itself.)')) return;
+  try{
+    const d=await holdAct(idv,'close',{});
+    if(d && d.warning) alert('Billing closed. Warning: '+moneyFmt((d.poolCents||0)/100)+' is still authorized and uncharged on this request.');
+    loadAdmin();
+  }catch(e){}
+}
 // ---------- Master calendar (admin) ----------
 let calY=0, calM=0, calEvents=[], calSel='';
 function calInit(){ const d=new Date(); if(!calY){ calY=d.getFullYear(); calM=d.getMonth(); } }
@@ -806,7 +901,7 @@ async function calAddJob(){
 async function loadAdmin(){
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];

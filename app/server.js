@@ -329,7 +329,7 @@ async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
   // page EXCEPT the HomeCare membership. Added as a second line item.
-  const tipCents = kind === 'homecare' ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
+  const tipCents = (kind === 'homecare' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
@@ -354,6 +354,29 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][price_data][product_data][name]'] = opts.label || 'In-person estimate — General Handyman Solutions';
     params['line_items[0][quantity]'] = '1';
     params['metadata[requestId]'] = opts.requestId || '';
+  } else if (kind === 'estimate-hold') {
+    // Authorization HOLD for the in-person estimate fee (added 2026-10-20,
+    // HOLD-PAYMENT-MODEL): capture_method=manual means Stripe AUTHORIZES
+    // the card but does NOT charge it. Gabriel captures the final amount by
+    // hand when the work is done — nothing captures automatically. The
+    // incremental-authorization request rides along as if_available: until
+    // Stripe enables it on the account, webhook enrichment reports
+    // 'unavailable' and the app falls back to a second balance
+    // authorization. No tip on holds: tips are settled at the end as today.
+    params.mode = 'payment';
+    params['line_items[0][price_data][currency]'] = 'usd';
+    params['line_items[0][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[0][price_data][product_data][name]'] = opts.label || 'In-person estimate — authorization hold — General Handyman Solutions';
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[requestId]'] = opts.requestId || '';
+    params['metadata[holdKey]'] = opts.holdKey || 'visit';
+    params['payment_intent_data[capture_method]'] = 'manual';
+    params['payment_intent_data[metadata][kind]'] = 'estimate-hold';
+    params['payment_intent_data[metadata][requestId]'] = opts.requestId || '';
+    params['payment_intent_data[metadata][holdKey]'] = opts.holdKey || 'visit';
+    params['payment_method_options[card][request_incremental_authorization]'] = 'if_available';
+    params['custom_text[submit][message]'] = 'This places an authorization HOLD for an estimated amount — it is NOT a final charge. The hold may increase if you approve a larger written quote, and you are only charged the final amount when the work is done.';
+    params['custom_text[after_submit][message]'] = 'Your card was authorized (hold only, not charged). You can follow your payment live from your estimate page.';
   } else if (kind === 'invoice') {
     // One-time invoice payment: the payer may not have an app account (the
     // invoice carries customerEmail directly), so user fields are optional.
@@ -405,12 +428,122 @@ function activateHomeCare(u, isFirst) {
   }
   save();
 }
+// ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
+// Gabriel's payment model: the in-person estimate fee ($75 regular / $60
+// member) is AUTHORIZED (a hold) when the customer books — never charged up
+// front and NEVER captured automatically anywhere in this app. After the
+// customer approves the estimate, the authorization is raised to the
+// approved total (incremental authorization when the card supports it,
+// otherwise a second "balance" authorization). Gabriel captures the final
+// amount BY HAND from the admin panel when he decides, at the amount he
+// decides. Approvals and job completions never trigger a capture.
+function requestHolds(r) { return Array.isArray(r && r.holds) ? r.holds : []; }
+function holdsPool(r) { return requestHolds(r).filter(h => h.status === 'authorized').reduce((s, h) => s + (Number(h.authorizedCents) || 0), 0); }
+function findHold(r, pi) { return requestHolds(r).find(h => h.pi === pi) || null; }
+function findHoldByPi(pi) {
+  if (!pi) return null;
+  for (const r of db.requests) { const h = findHold(r, pi); if (h) return { request: r, hold: h }; }
+  return null;
+}
+// The amount the customer owes in total for the approved estimate, in
+// cents: estimate.total already had the appointment credit SUBTRACTED, so
+// the authorization target adds it back (total + credit).
+function holdTargetCents(r) { return r && r.estimate ? Math.round(((Number(r.estimate.total) || 0) + (Number(r.estimate.credit) || 0)) * 100) : 0; }
+function upsertHold(r, key, pi, patch) {
+  if (!Array.isArray(r.holds)) r.holds = [];
+  let h = r.holds.find(x => x.key === key) || (pi ? r.holds.find(x => x.pi === pi) : null);
+  const now = new Date().toISOString();
+  if (!h) { h = { key: key || 'visit', pi: pi || '', sessionId: '', status: 'authorized', authorizedCents: 0, capturedCents: 0, captureBefore: null, incremental: null, createdAt: now, updatedAt: now }; r.holds.push(h); }
+  Object.assign(h, patch || {});
+  if (pi) h.pi = pi;
+  h.updatedAt = now;
+  return h;
+}
+// Webhook side of a completed estimate-hold checkout: file the hold on the
+// request, then TRY to enrich it with the authorization expiry and the
+// incremental-authorization availability. Enrichment failure must never
+// fail the webhook (a fake/rotated key still leaves a usable hold record).
+async function holdFromCheckoutSession(obj) {
+  const md = obj.metadata || {};
+  const r = db.requests.find(x => x.id === md.requestId);
+  if (!r) { console.error('stripe webhook: estimate-hold session ' + obj.id + ' has no matching request'); return; }
+  const pi = typeof obj.payment_intent === 'string' ? obj.payment_intent : ((obj.payment_intent && obj.payment_intent.id) || '');
+  const key = md.holdKey === 'balance' ? 'balance' : 'visit';
+  const authorizedCents = Math.round(Number(obj.amount_total) || 0);
+  const existing = requestHolds(r).find(h => h.sessionId === obj.id) || (pi ? findHold(r, pi) : null);
+  const firstTime = !existing;
+  const h = upsertHold(r, key, pi, { sessionId: obj.id, status: 'authorized', authorizedCents: authorizedCents || (existing ? existing.authorizedCents : 0) });
+  if (pi) {
+    try {
+      const full = await stripeGet('/payment_intents/' + pi + '?expand[]=latest_charge');
+      const card = full && full.latest_charge && full.latest_charge.payment_method_details && full.latest_charge.payment_method_details.card;
+      if (card) {
+        if (card.capture_before) h.captureBefore = new Date(Number(card.capture_before) * 1000).toISOString();
+        if (card.incremental_authorization && card.incremental_authorization.status) h.incremental = card.incremental_authorization.status;
+        h.updatedAt = new Date().toISOString();
+      }
+    } catch (e) { console.error('hold enrichment failed (continuing without it):', e.message); }
+  }
+  if (firstTime) {
+    r.messages = r.messages || [];
+    r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: key === 'balance'
+      ? 'Balance authorization received: ' + usd(h.authorizedCents / 100) + ' is on hold (authorized only — NOT charged yet). The Team will confirm the final charge with you when the work is done.'
+      : 'Appointment secured: we placed a ' + usd(h.authorizedCents / 100) + ' authorization HOLD on your card (authorized only — NOT charged yet). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
+    if (r.customerId) notify(r.customerId, 'payment', 'Authorization hold placed (' + usd(h.authorizedCents / 100) + ') on request ' + r.id + ' — not charged yet. Your appointment is secured.');
+    notifyAdmins('payment', 'Authorization HOLD ' + usd(h.authorizedCents / 100) + ' placed on request ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — ' + key + ' hold, PI ' + (pi || 'n/a') + '.');
+  }
+}
+// After an estimate approval, TRY to raise the visit hold to the approved
+// total. This only ever raises an AUTHORIZATION — never a capture. Any
+// failure lands on r.holdSync so the admin panel and the public estimate
+// page can offer the balance-authorization fallback. Never throws.
+async function tryHoldIncrementAfterApproval(r) {
+  try {
+    const visit = requestHolds(r).find(h => h.key === 'visit' && h.status === 'authorized');
+    if (!visit || !r.estimate) return;
+    const target = holdTargetCents(r);
+    if (!(target > 0)) return;
+    if (holdsPool(r) >= target) { r.holdSync = { targetCents: target, state: 'covered', at: new Date().toISOString() }; return; }
+    if (visit.incremental === 'unavailable') {
+      r.holdSync = { targetCents: target, state: 'needs_balance', at: new Date().toISOString() };
+      notifyAdmins('payment', 'Request ' + r.id + ' approved (' + usd(target / 100) + ') — this card cannot be incremented. Send the balance authorization from the hold panel.');
+      return;
+    }
+    const out = await stripeApi('/payment_intents/' + visit.pi + '/increment_authorization', { amount: target });
+    visit.authorizedCents = Math.round(Number(out.amount) || target);
+    visit.updatedAt = new Date().toISOString();
+    r.holdSync = { targetCents: target, state: 'incremented', at: new Date().toISOString() };
+    r.messages = r.messages || [];
+    r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your card authorization was updated to ' + usd(target / 100) + ' (hold only — still NOT charged). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
+    if (r.customerId) notify(r.customerId, 'payment', 'Authorization on request ' + r.id + ' updated to ' + usd(target / 100) + ' (hold only, not charged).');
+    notifyAdmins('payment', 'Authorization on request ' + r.id + ' incremented to ' + usd(target / 100) + '.');
+  } catch (e) {
+    console.error('hold increment after approval failed', r.id, e.message);
+    r.holdSync = { targetCents: holdTargetCents(r), state: 'increment_failed', at: new Date().toISOString(), error: e.message };
+    notifyAdmins('payment', 'Increment FAILED on request ' + r.id + ': ' + e.message + ' — use the balance authorization fallback in the hold panel.');
+  }
+}
+// Shared by the admin button and the public estimate page: create a
+// balance-authorization checkout for whatever of the approved total is not
+// yet authorized. Throws plain Errors with customer-safe messages.
+async function startBalanceAuthorization(r) {
+  const target = holdTargetCents(r);
+  if (!r.estimate || !(target > 0)) throw new Error('build the estimate first — the balance is the approved total minus what is already authorized');
+  const missing = target - holdsPool(r);
+  if (missing <= 0) throw new Error('the authorized pool already covers the approved total');
+  if (requestHolds(r).some(h => h.key === 'balance' && h.status === 'authorized')) throw new Error('a balance authorization is already active on this request');
+  const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents: missing, requestId: r.id, holdKey: 'balance', label: 'Balance authorization (request ' + r.id + ') — General Handyman Solutions' });
+  return { url: s.url, amount: missing / 100 };
+}
 async function handleStripeEvent(event) {
   const type = event && event.type;
   const obj = event && event.data && event.data.object;
   if (!obj) return;
   if (type === 'checkout.session.completed') {
     const kind = obj.metadata && obj.metadata.kind;
+    // Estimate holds are filed BEFORE the user lookup: a guest checkout has
+    // no app user, and the request (via session metadata) is the identity.
+    if (kind === 'estimate-hold') { await holdFromCheckoutSession(obj); return; }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
     if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
     if (kind === 'homecare') {
@@ -486,6 +619,39 @@ async function handleStripeEvent(event) {
     if (u && u.homeCareStatus !== 'active') {
       if (subId) u.stripeSubscriptionId = subId;
       activateHomeCare(u, false);
+    }
+  } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
+    // Estimate-hold lifecycle. PIs we do not track (inline HomeCare card
+    // flow, older charges) are ignored silently. Idempotent: Stripe may
+    // deliver any of these more than once.
+    const found = findHoldByPi(obj.id);
+    if (!found) return;
+    const r = found.request, h = found.hold;
+    if (type === 'payment_intent.amount_capturable_updated') {
+      // Fires after an incremental authorization: obj.amount is the new
+      // total authorized amount on the PaymentIntent.
+      if (h.status === 'authorized' && Number(obj.amount) > 0) { h.authorizedCents = Math.round(Number(obj.amount)); h.updatedAt = new Date().toISOString(); }
+    } else if (type === 'payment_intent.succeeded') {
+      // A capture Gabriel triggered by hand just settled. Holds NEVER set
+      // estimatePaid — they are their own money trail on r.holds.
+      if (h.status !== 'captured') {
+        h.status = 'captured';
+        h.capturedCents = Math.round(Number(obj.amount_received) || 0);
+        h.updatedAt = new Date().toISOString();
+        r.messages = r.messages || [];
+        r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment captured: ' + usd(h.capturedCents / 100) + ' was charged to your card for request ' + r.id + '. Thank you!', at: new Date().toISOString() });
+        if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!');
+        notifyAdmins('payment', 'Hold CAPTURED on request ' + r.id + ': ' + usd(h.capturedCents / 100) + ' (PI ' + h.pi + ').');
+      }
+    } else if (type === 'payment_intent.canceled') {
+      if (h.status === 'authorized') {
+        const expired = h.captureBefore && new Date(h.captureBefore).getTime() <= Date.now();
+        h.status = expired ? 'expired' : 'released';
+        h.updatedAt = new Date().toISOString();
+        notifyAdmins('payment', 'Hold ' + (expired ? 'EXPIRED' : 'RELEASED') + ' on request ' + r.id + ' (' + usd(h.authorizedCents / 100) + ', PI ' + h.pi + ') — nothing was charged for it.');
+      }
+    } else if (type === 'payment_intent.payment_failed') {
+      notifyAdmins('payment', 'Payment FAILED on hold PI ' + h.pi + ' (request ' + r.id + ') — a charge or increment may have been declined. Check the hold panel.');
     }
   }
 }
@@ -694,6 +860,42 @@ function invoicePageHtml(inv) {
 // Customers review, approve, or decline an estimate from a public link — no
 // account needed. The estimate id (GHS-XXXXXX) in the emailed link is the
 // credential, same as invoice links.
+// "Your payment" panel for the public estimate page (added 2026-10-20):
+// the customer watches their authorization live — hold placed, approved
+// total authorized, final charge — in plain language, no account needed.
+function estimatePayPanelHtml(r) {
+  const holds = requestHolds(r);
+  if (!holds.length && !r.holdSync) return '';
+  const visit = holds.find(h => h.key === 'visit');
+  const bal = holds.find(h => h.key === 'balance');
+  const pool = holdsPool(r);
+  const captured = holds.reduce((s, h) => s + (Number(h.capturedCents) || 0), 0);
+  const target = holdTargetCents(r);
+  const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString('en-US') : '';
+  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString('en-US') : '';
+  const holdState = (h) => h.status === 'captured' ? '<b>Charged</b>' : h.status === 'authorized' ? '<b>On hold — not charged yet</b>' : '<b>' + escMail(h.status) + '</b>';
+  let lines = '';
+  if (visit) lines += '<p style="margin:6px 0">Estimate visit — ' + usd(visit.authorizedCents / 100) + ': ' + holdState(visit) + (visit.status === 'authorized' && visit.captureBefore ? ' <span style="color:#666">(hold valid until ' + fmtD(visit.captureBefore) + ')</span>' : '') + '</p>';
+  if (bal && bal.status !== 'released' && bal.status !== 'expired') lines += '<p style="margin:6px 0">Balance authorization — ' + usd(bal.authorizedCents / 100) + ': ' + holdState(bal) + '</p>';
+  if (target > 0) lines += '<p style="margin:6px 0">Approved total: <b>' + usd(target / 100) + '</b> — authorized so far: <b>' + usd(Math.max(pool, captured) / 100) + '</b></p>';
+  if (captured > 0) {
+    const lastCap = holds.filter(h => h.status === 'captured').slice(-1)[0];
+    lines += '<p style="margin:6px 0">Final charge: <b>' + usd(captured / 100) + ' charged</b>' + (lastCap ? ' on ' + fmtDT(lastCap.updatedAt) : '') + (target > captured ? ' — the ' + usd((target - captured) / 100) + ' that was not used was released from the authorization.' : '') + '</p>';
+  } else if (pool > 0) {
+    lines += '<p style="margin:6px 0">Final charge: <b>Pending</b> — you are charged only when the work is done, and only the final amount.</p>';
+  }
+  let balanceBtn = '';
+  if (r.status === 'Approved' && r.holdSync && (r.holdSync.state === 'needs_balance' || r.holdSync.state === 'increment_failed')) {
+    const missing = Math.max(0, target - pool - captured);
+    if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">Authorize ' + usd(missing / 100) + ' balance</button> <span id="balMsg" style="color:#666"></span></p>'
+      + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent="Opening secure authorization…";fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||"failed";}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
+  }
+  // Live refresh while the customer watches — skipped while the estimate
+  // is still awaiting their decision so a typed reply is never wiped.
+  const refresh = r.status !== 'Quoted' ? '<script>setTimeout(function(){location.reload();},30000);</scr' + 'ipt>' : '';
+  return '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">Your payment</h3>' + lines
+    + '<p style="color:#666;font-size:13px;margin:8px 0 0">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</p>' + balanceBtn + '</div>' + refresh;
+}
 function estimatePageLink(r) { return appBase() + '/estimate/' + r.id; }
 function estimatePageHtml(r) {
   const e = r.estimate || {};
@@ -737,6 +939,7 @@ function estimatePageHtml(r) {
     + '<p><b>Due to book:</b> ' + usd(e.bookingDue) + ' • <b>Balance at completion:</b> ' + usd(e.balanceDue) + '</p>'
     + (r.quoteNote ? '<p style="color:#555"><b>Team note:</b> ' + escMail(r.quoteNote) + '</p>' : '')
     + '<p style="color:#666;font-size:13px">Labor only — you buy materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</p>'
+    + estimatePayPanelHtml(r)
     + actionBlock
     + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
     + '</div></body>';
@@ -967,6 +1170,7 @@ const server = http.createServer(async (req, res) => {
     } else if (user && user.role === 'customer' && r.customerId === user.id) {
       r.messages = r.messages || [];
       if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' })); }
+      if (b.action === 'approve') await tryHoldIncrementAfterApproval(r); // increment only — never a capture; failures land on r.holdSync
       if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' })); }
     } else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { request: r, automation });
@@ -977,6 +1181,112 @@ const server = http.createServer(async (req, res) => {
     if (idx === -1) return send(res, 404, { error: 'request not found' });
     const removed = db.requests.splice(idx, 1)[0];
     save(); return send(res, 200, { ok: true, deleted: removed.id });
+  }
+
+  // ---------- Estimate holds (admin) — Gabriel controls the money BY HAND ----------
+  // Every money movement here is an explicit admin action. Nothing in this
+  // block (or anywhere) captures automatically: not on approval, not on
+  // job completion, not on a date.
+  const holdMatch = p.match(/^\/api\/requests\/([\w-]+)\/hold\/(increment|authorize-balance|capture|release|close)$/);
+  if (holdMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const r = db.requests.find(x => x.id === holdMatch[1]);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    const action = holdMatch[2];
+    const b = await readBody(req);
+    const holds = requestHolds(r);
+    if (action === 'close') {
+      // Manual billing close: a STATUS change only. Never captures, never
+      // releases. Warns when money is still authorized and uncharged so
+      // Gabriel closes with his eyes open.
+      const pool = holdsPool(r);
+      r.status = 'Closed';
+      save();
+      return send(res, 200, { ok: true, status: r.status, warning: pool > 0 ? 'authorized_uncaptured' : null, poolCents: pool });
+    }
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    if (action === 'release') {
+      const active = holds.filter(h => h.status === 'authorized');
+      if (!active.length) return send(res, 400, { error: 'no active authorization holds on this request' });
+      const released = [];
+      for (const h of active) {
+        try { await stripeApi('/payment_intents/' + h.pi + '/cancel', {}); released.push(h.pi); }
+        catch (e) { return send(res, 502, { error: 'Stripe release failed on ' + h.pi + ': ' + e.message, released }); }
+      }
+      // The payment_intent.canceled webhook flips each hold to 'released'.
+      return send(res, 200, { ok: true, released });
+    }
+    if (action === 'increment') {
+      const visit = holds.find(h => h.key === 'visit' && h.status === 'authorized');
+      if (!visit) return send(res, 400, { error: 'no active visit hold to increment on this request' });
+      if (visit.incremental === 'unavailable') return send(res, 400, { error: 'this card does not support incremental authorizations — authorize the balance instead' });
+      const totalCents = Math.round(Number(b.totalCents) || 0);
+      if (!(totalCents > visit.authorizedCents)) return send(res, 400, { error: 'new total must be more than the current authorization (' + usd(visit.authorizedCents / 100) + ')' });
+      try {
+        const out = await stripeApi('/payment_intents/' + visit.pi + '/increment_authorization', { amount: totalCents });
+        visit.authorizedCents = Math.round(Number(out.amount) || totalCents);
+        visit.updatedAt = new Date().toISOString();
+        r.holdSync = { targetCents: totalCents, state: 'incremented', at: new Date().toISOString() };
+        save();
+        return send(res, 200, { ok: true, hold: visit, poolCents: holdsPool(r) });
+      } catch (e) { return send(res, 502, { error: 'Stripe increment failed: ' + e.message }); }
+    }
+    if (action === 'authorize-balance') {
+      try {
+        const out = await startBalanceAuthorization(r);
+        return send(res, 200, out);
+      } catch (e) {
+        if (String(e.message).indexOf('stripe:') === 0) return send(res, 502, { error: 'payment service error — try again in a minute' });
+        return send(res, 400, { error: e.message });
+      }
+    }
+    if (action === 'capture') {
+      const active = holds.filter(h => h.status === 'authorized')
+        .sort((x, y) => (x.key === 'visit' ? 0 : 1) - (y.key === 'visit' ? 0 : 1));
+      if (!active.length) return send(res, 400, { error: 'no active authorization holds to capture on this request' });
+      const pool = holdsPool(r);
+      const target = holdTargetCents(r);
+      // Editable final amount, Gabriel's call. Default: the approved
+      // target, capped at what is actually authorized.
+      let finalCents = Math.round(Number(b.finalCents) || 0);
+      if (!(finalCents > 0)) finalCents = target > 0 ? Math.min(pool, target) : pool;
+      // NEVER charge more than the customer authorized. More money needs
+      // an increment or a balance authorization first — said out loud.
+      if (finalCents > pool) return send(res, 400, { error: 'final amount ' + usd(finalCents / 100) + ' is more than the authorized pool ' + usd(pool / 100) + ' — increment the authorization or send a balance authorization first' });
+      const results = [];
+      let remaining = finalCents;
+      for (const h of active) {
+        if (remaining <= 0) break;
+        const take = Math.min(remaining, h.authorizedCents);
+        try {
+          const out = await stripeApi('/payment_intents/' + h.pi + '/capture', { amount_to_capture: take });
+          results.push({ pi: h.pi, key: h.key, capturedCents: Math.round(Number(out.amount_received) || take) });
+          remaining -= take;
+        } catch (e) { return send(res, 502, { error: 'capture failed on ' + h.pi + ' (' + h.key + ' hold): ' + e.message, captured: results }); }
+      }
+      // Holds stay 'authorized' locally until the payment_intent.succeeded
+      // webhook confirms each capture — the webhook is the source of truth.
+      notifyAdmins('payment', 'Manual capture started on request ' + r.id + ': ' + usd(finalCents / 100) + ' across ' + results.length + ' hold(s). The webhook confirms the final amounts.');
+      save();
+      return send(res, 200, { ok: true, captured: results, finalCents });
+    }
+  }
+  const custBalMatch = p.match(/^\/api\/requests\/([\w-]+)\/hold\/customer-balance$/);
+  if (custBalMatch && req.method === 'POST') {
+    // Public (the estimate link is the credential, same trust model as the
+    // invoice pay links): after approving their estimate, the customer
+    // authorizes whatever balance the first hold could not be raised to.
+    const r = db.requests.find(x => x.id === custBalMatch[1]);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    if (r.status !== 'Approved') return send(res, 400, { error: 'approve the estimate first' });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773' });
+    try {
+      const out = await startBalanceAuthorization(r);
+      return send(res, 200, out);
+    } catch (e) {
+      if (String(e.message).indexOf('stripe:') === 0) return send(res, 502, { error: 'payment service error — try again in a minute' });
+      return send(res, 400, { error: e.message });
+    }
   }
 
   const createJobMatch = p.match(/^\/api\/requests\/([\w-]+)\/create-job$/);
@@ -1337,9 +1647,12 @@ const server = http.createServer(async (req, res) => {
     }
   }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
-    if (!user) return send(res, 401, { error: 'login required' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     const b = await readBody(req);
+    // 'estimate-hold' is public like invoice payments: the request id in
+    // the body identifies the request, no login needed. Every other kind
+    // still requires a logged-in user.
+    if (b.kind !== 'estimate-hold' && !user) return send(res, 401, { error: 'login required' });
     try {
       if (b.kind === 'homecare') {
         if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
@@ -1371,6 +1684,20 @@ const server = http.createServer(async (req, res) => {
         if (tipCents > amountCents) tipCents = amountCents;
         const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label });
         return send(res, 200, { url: s.url, amount: (amountCents + tipCents) / 100, tip: tipCents / 100 });
+      }
+      if (b.kind === 'estimate-hold') {
+        // Authorization hold for the in-person estimate fee. The amount
+        // ALWAYS comes from the request server-side (estimateDue: $75
+        // regular / $60 member) — the client can never name a price.
+        const r = db.requests.find(x => x.id === b.requestId);
+        if (!r) return send(res, 404, { error: 'request not found' });
+        if (user && user.role === 'customer' && r.customerId && r.customerId !== user.id) return send(res, 403, { error: 'not allowed' });
+        if (r.estimateType !== 'inperson') return send(res, 400, { error: 'holds only apply to in-person estimates (photo estimates are free)' });
+        const amountCents = Math.round((Number(r.estimateDue) || 0) * 100);
+        if (!(amountCents > 0)) return send(res, 400, { error: 'this request has no estimate fee to authorize (free estimate or already covered)' });
+        if (requestHolds(r).some(h => h.key === 'visit' && h.status === 'authorized')) return send(res, 400, { error: 'an authorization hold is already active on this request' });
+        const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions' });
+        return send(res, 200, { url: s.url, amount: amountCents / 100, hold: true });
       }
       return send(res, 400, { error: 'unknown checkout kind' });
     } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
@@ -1532,6 +1859,11 @@ const server = http.createServer(async (req, res) => {
       notifyAdmins('invoice', 'Invoice ' + inv.id + ' auto-created from approved estimate on ' + r.id + ' (' + usd(inv.total) + ') — sent to ' + (inv.customerEmail || 'customer') + '.');
       save();
       fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' }));
+      // Raise the authorization to the approved total if a visit hold is
+      // active (increment only — NEVER a capture). Failure is recorded on
+      // r.holdSync and never fails the approval itself.
+      await tryHoldIncrementAfterApproval(r);
+      save();
       return send(res, 200, { ok: true, invoiceId: inv.id, payUrl: invoicePayLink(inv) });
     }
     const reason = cleanText(b.reason, 500);
