@@ -261,6 +261,109 @@ footer{border-top:1px solid var(--line);padding:22px 0 34px;color:var(--muted);f
         <span>Free photo estimate</span><span>In-person estimate — $75 flat</span><span>HomeCare $49/mo • First estimate free</span><span>TV mounting</span><span>Mobile mechanic</span><span>Paint &amp; wall panels</span><span>Installs &amp; assembly</span><span>Washer / dryer hookup help</span>
       </div>
 
+      <!-- MEMBERSHIPS (six-box grid, mirrors the app storefront design) -->
+      <section id="ghsMemberships" aria-label="Memberships">
+        <style>
+          #ghsMemberships{background:#0b0b0b;border-radius:20px;padding:30px 22px 22px;margin:26px 0 0;color:#fff}
+          #ghsMemberships *,#ghsMemberships *::before,#ghsMemberships *::after{box-sizing:border-box}
+          #ghsMemberships .ghs-mem-title{text-align:center;font-size:38px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;margin:0;color:#fff;line-height:1.1}
+          #ghsMemberships .ghs-mem-sub{text-align:center;color:#b3aca2;font-size:16.5px;margin:8px 0 2px}
+          #ghsMemberships .ghs-mem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0 4px}
+          @media(max-width:800px){#ghsMemberships .ghs-mem-grid{grid-template-columns:1fr}}
+          #ghsMemberships .ghs-mem-card{background:#141414;border:2px solid #e42535;border-radius:16px;padding:22px 18px 18px;display:flex;flex-direction:column;text-align:center}
+          #ghsMemberships .ghs-mem-card.ghs-mem-free{border-color:#2fbf71}
+          #ghsMemberships .ghs-mem-card h3{margin:0;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:#fff}
+          #ghsMemberships .ghs-mem-price{font-size:37px;font-weight:900;margin:10px 0 6px;color:#e42535;line-height:1.1}
+          #ghsMemberships .ghs-mem-price span{font-size:.6em;font-weight:800}
+          #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-price{color:#2fbf71}
+          #ghsMemberships .ghs-mem-subline{color:#a49d93;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+          #ghsMemberships .ghs-mem-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;line-height:1.5;font-size:14.5px;color:#f2f0ec}
+          #ghsMemberships .ghs-mem-card ul li{padding:4px 0 4px 26px;position:relative}
+          #ghsMemberships .ghs-mem-card ul li::before{content:"✓";position:absolute;left:2px;top:4px;font-weight:900;color:#e42535}
+          #ghsMemberships .ghs-mem-card.ghs-mem-free ul li::before{color:#2fbf71}
+          #ghsMemberships .ghs-mem-grow{flex:1}
+          #ghsMemberships .ghs-mem-btn{display:block;width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;font-weight:800;background:#e42535;color:#fff;text-decoration:none;text-align:center;cursor:pointer}
+          #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-btn{background:#2fbf71}
+        </style>
+        <h2 class="ghs-mem-title">Memberships</h2>
+        <p class="ghs-mem-sub">With or without a membership — you choose.</p>
+        <div class="ghs-mem-grid">
+          <div class="ghs-mem-card ghs-mem-free">
+            <h3>FREE</h3>
+            <div class="ghs-mem-price">$0</div>
+            <div class="ghs-mem-subline">No membership</div>
+            <ul>
+              <li>Free photo estimate</li>
+              <li>Pay per job</li>
+              <li>In-person estimate $75</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#book">Get my free estimate</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare Plus</h3>
+            <div class="ghs-mem-price">$135<span>/mo</span></div>
+            <div class="ghs-mem-subline">1 yard visit / month</div>
+            <ul>
+              <li>1 yard visit every month</li>
+              <li>Everything in HomeCare</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://app.generalhandymans.app/#join-plus1">Join Plus</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare Plus</h3>
+            <div class="ghs-mem-price">$199<span>/mo</span></div>
+            <div class="ghs-mem-subline">2 yard visits / month</div>
+            <ul>
+              <li>2 yard visits every month</li>
+              <li>Everything in HomeCare</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://app.generalhandymans.app/#join-plus2">Join Plus</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare</h3>
+            <div class="ghs-mem-price">$49<span>/mo</span></div>
+            <div class="ghs-mem-subline">No yard</div>
+            <ul>
+              <li>20% off labor (jobs under $1,000)</li>
+              <li>First in-person estimate FREE, then $60</li>
+              <li>Priority scheduling</li>
+              <li>Cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://app.generalhandymans.app/#join-homecare">Join HomeCare</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>Yard Care</h3>
+            <div class="ghs-mem-price">$95<span>/mo</span></div>
+            <div class="ghs-mem-subline">1 visit / month</div>
+            <ul>
+              <li>1 yard visit every month</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+              <li>One monthly charge · cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://app.generalhandymans.app/#join-yard1">Join Yard Care</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>Yard Care</h3>
+            <div class="ghs-mem-price">$175<span>/mo</span></div>
+            <div class="ghs-mem-subline">2 visits / month</div>
+            <ul>
+              <li>2 yard visits every month</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+              <li>One monthly charge · cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://app.generalhandymans.app/#join-yard2">Join Yard Care</a>
+          </div>
+        </div>
+      </section>
+
       <div class="section" style="padding-top:34px">
         <h2>How it <em>works</em></h2>
         <div class="how">
