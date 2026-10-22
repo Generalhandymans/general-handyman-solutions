@@ -100,7 +100,15 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .cg-card.free ul li::before{color:#2fbf71}
 .cg-card .grow{flex:1}
 .cg-card img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:14px;border:1px solid #333}
-.cg-card .copy-link{margin-top:8px;background:transparent;border:1px solid #444;color:#c9c2b8;font-size:13px;padding:9px 12px}
+/* v27: signup share links — one dark panel of compact rows (name + price, muted truncated URL, red Copy button) */
+.share-panel{background:#141414;border:2px solid #e42535;border-radius:16px;padding:18px;margin:0 0 18px;color:#f2f0ec}
+.share-panel h3{margin:0 0 4px;color:#fff}
+.share-panel .share-sub{color:#a49d93;font-size:13.5px;margin:0 0 6px}
+.share-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #2b2b2b}
+.share-meta{flex:1;min-width:0;text-align:left}
+.share-name{display:block;font-weight:800;color:#fff;font-size:15px}
+.share-url{display:block;color:#8f8a81;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.share-copy{flex:none;width:auto;background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;font-size:14px;cursor:pointer}
 #teamContactPill{position:fixed;left:12px;bottom:12px;z-index:1200;display:none;gap:8px}
 #teamContactPill a{display:inline-block;background:#e42535;color:#fff;font-weight:800;font-size:14.5px;padding:12px 16px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #teamContactPill a.sms{background:#1a1a1a;border:1.5px solid #e42535}
@@ -353,6 +361,15 @@ header nav a:hover{border-color:var(--red)}
     <p class="mut"><a href="#" onclick="exitMemberships();return false;">← Back to the app</a></p>
     <h2 id="membershipsHeading">Memberships</h2>
     <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
+    <div class="share-panel" id="shareLinksPanel">
+      <h3>Share a signup link</h3>
+      <p class="share-sub">Send a customer straight to one exact plan — they join in one step. Tap Copy and paste the link anywhere.</p>
+      <div class="share-row"><div class="share-meta"><span class="share-name">HomeCare — $49/mo</span><span class="share-url">app.generalhandymans.app/#join-homecare</span></div><button type="button" class="share-copy" onclick="copyShareLink('https://app.generalhandymans.app/#join-homecare', this)">Copy link</button></div>
+      <div class="share-row"><div class="share-meta"><span class="share-name">Yard Care — 1 visit · $95/mo</span><span class="share-url">app.generalhandymans.app/#join-yard1</span></div><button type="button" class="share-copy" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard1', this)">Copy link</button></div>
+      <div class="share-row"><div class="share-meta"><span class="share-name">Yard Care — 2 visits · $175/mo</span><span class="share-url">app.generalhandymans.app/#join-yard2</span></div><button type="button" class="share-copy" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard2', this)">Copy link</button></div>
+      <div class="share-row"><div class="share-meta"><span class="share-name">HomeCare Plus — 1 yard visit · $135/mo</span><span class="share-url">app.generalhandymans.app/#join-plus1</span></div><button type="button" class="share-copy" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus1', this)">Copy link</button></div>
+      <div class="share-row"><div class="share-meta"><span class="share-name">HomeCare Plus — 2 yard visits · $199/mo</span><span class="share-url">app.generalhandymans.app/#join-plus2</span></div><button type="button" class="share-copy" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus2', this)">Copy link</button></div>
+    </div>
     <div id="yardCareHero" class="card" style="display:none;border:2px solid #e42535;background:#141414;color:#fff">
       <h3 style="margin-top:0">Yard care, handled every month</h3>
       <p style="margin-bottom:0;color:#f2f0ec">Choose <b>Yard Care</b> for the yard visits by themselves, or <b>HomeCare Plus</b> for yard visits plus every HomeCare handyman benefit. Pick your plan below — every card shows its exact plan, price and signup button.</p>
@@ -361,10 +378,10 @@ header nav a:hover{border-color:var(--red)}
       <h2 class="cg-title" style="font-size:30px">Yard plans</h2>
       <p class="cg-sub">Four ways to put your yard on autopilot — pick the exact plan and join in one step.</p>
       <div class="compare-grid" id="yardCardsGrid">
-        <div class="cg-card yard-card" data-plan="yard1"><img id="ycImg-yard1" src="" alt=""><h3>Yard Care</h3><div class="cg-price">$95<span>/mo</span></div><div class="cg-subline">1 visit / month</div><ul><li>1 yard visit every month</li><li>Mowing · edging · blowing at every visit</li><li>Light weeding included</li><li>Free first in-person estimate</li><li>One total monthly charge — never a per-visit fee</li><li>Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('yardcare','yard1')">Join Yard Care</button><button type="button" class="copy-link" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard1', this)">Copy signup link</button></div>
-        <div class="cg-card yard-card" data-plan="yard2"><img id="ycImg-yard2" src="" alt=""><h3>Yard Care</h3><div class="cg-price">$175<span>/mo</span></div><div class="cg-subline">2 visits / month</div><ul><li>2 yard visits every month</li><li>Mowing · edging · blowing at every visit</li><li>Light weeding included</li><li>Free first in-person estimate</li><li>One total monthly charge — never a per-visit fee</li><li>Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('yardcare','yard2')">Join Yard Care</button><button type="button" class="copy-link" onclick="copyShareLink('https://app.generalhandymans.app/#join-yard2', this)">Copy signup link</button></div>
-        <div class="cg-card yard-card" data-plan="plus1"><img id="ycImg-plus1" src="" alt=""><h3>HomeCare Plus</h3><div class="cg-price">$135<span>/mo</span></div><div class="cg-subline">1 yard visit / month</div><ul><li>1 yard visit every month</li><li>Everything in HomeCare — 20% off labor (jobs under $1,000)</li><li>First in-person estimate FREE, then $60 member estimates</li><li>Mowing · edging · blowing at every visit</li><li>One total monthly charge — never a per-visit fee</li><li>Priority scheduling · Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('homecare-plus','plus1')">Join Plus</button><button type="button" class="copy-link" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus1', this)">Copy signup link</button></div>
-        <div class="cg-card yard-card" data-plan="plus2"><img id="ycImg-plus2" src="" alt=""><h3>HomeCare Plus</h3><div class="cg-price">$199<span>/mo</span></div><div class="cg-subline">2 yard visits / month</div><ul><li>2 yard visits every month</li><li>Everything in HomeCare — 20% off labor (jobs under $1,000)</li><li>First in-person estimate FREE, then $60 member estimates</li><li>Mowing · edging · blowing at every visit</li><li>One total monthly charge — never a per-visit fee</li><li>Priority scheduling · Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('homecare-plus','plus2')">Join Plus</button><button type="button" class="copy-link" onclick="copyShareLink('https://app.generalhandymans.app/#join-plus2', this)">Copy signup link</button></div>
+        <div class="cg-card yard-card" data-plan="yard1"><img id="ycImg-yard1" src="" alt=""><h3>Yard Care</h3><div class="cg-price">$95<span>/mo</span></div><div class="cg-subline">1 visit / month</div><ul><li>1 yard visit every month</li><li>Mowing · edging · blowing at every visit</li><li>Light weeding included</li><li>Free first in-person estimate</li><li>One total monthly charge — never a per-visit fee</li><li>Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('yardcare','yard1')">Join Yard Care</button></div>
+        <div class="cg-card yard-card" data-plan="yard2"><img id="ycImg-yard2" src="" alt=""><h3>Yard Care</h3><div class="cg-price">$175<span>/mo</span></div><div class="cg-subline">2 visits / month</div><ul><li>2 yard visits every month</li><li>Mowing · edging · blowing at every visit</li><li>Light weeding included</li><li>Free first in-person estimate</li><li>One total monthly charge — never a per-visit fee</li><li>Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('yardcare','yard2')">Join Yard Care</button></div>
+        <div class="cg-card yard-card" data-plan="plus1"><img id="ycImg-plus1" src="" alt=""><h3>HomeCare Plus</h3><div class="cg-price">$135<span>/mo</span></div><div class="cg-subline">1 yard visit / month</div><ul><li>1 yard visit every month</li><li>Everything in HomeCare — 20% off labor (jobs under $1,000)</li><li>First in-person estimate FREE, then $60 member estimates</li><li>Mowing · edging · blowing at every visit</li><li>One total monthly charge — never a per-visit fee</li><li>Priority scheduling · Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('homecare-plus','plus1')">Join Plus</button></div>
+        <div class="cg-card yard-card" data-plan="plus2"><img id="ycImg-plus2" src="" alt=""><h3>HomeCare Plus</h3><div class="cg-price">$199<span>/mo</span></div><div class="cg-subline">2 yard visits / month</div><ul><li>2 yard visits every month</li><li>Everything in HomeCare — 20% off labor (jobs under $1,000)</li><li>First in-person estimate FREE, then $60 member estimates</li><li>Mowing · edging · blowing at every visit</li><li>One total monthly charge — never a per-visit fee</li><li>Priority scheduling · Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('homecare-plus','plus2')">Join Plus</button></div>
       </div>
     </div>
     <div id="yardCarePageLink" class="card" style="background:#f3fbf3;border-color:#bfe3bf">
@@ -2836,9 +2853,31 @@ checkResetHash();
 loadMe();
 </script>
 <script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
-}
+// v27: keep every visitor on the CURRENT app version. When an updated
+// service worker takes control of this tab, reload ONCE (per session) so a
+// long-open page picks up the new app; also ask the browser to check for a
+// newer service worker every time the tab becomes visible again.
+try {
+  if ('serviceWorker' in navigator) {
+    var ghsHadSwController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      try {
+        if (!ghsHadSwController) return; // first install is not an update
+        if (sessionStorage.getItem('ghsSwReloaded')) return;
+        sessionStorage.setItem('ghsSwReloaded', '1');
+        location.reload();
+      } catch (e) {}
+    });
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').then(function (reg) {
+        try { window.__ghsSwReg = reg; } catch (e) {}
+        document.addEventListener('visibilitychange', function () {
+          try { if (document.visibilityState === 'visible' && window.__ghsSwReg) window.__ghsSwReg.update(); } catch (e) {}
+        });
+      }).catch(() => {});
+    });
+  }
+} catch (e) {}
 if (window.Notification && Notification.permission === 'default') { Notification.requestPermission().catch(() => {}); }
 </script>
 </body>
