@@ -1689,6 +1689,8 @@ function render(){
     renderOrder();
     return;
   }
+  const obOff = document.getElementById('orderBox');
+  if (obOff) obOff.style.display = 'none';
   const onMemberships = isMembershipRoute();
   const mb = document.getElementById('membershipsBox');
   if (mb) mb.style.display = onMemberships ? 'block' : 'none';
