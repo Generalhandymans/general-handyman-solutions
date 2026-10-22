@@ -49,7 +49,7 @@ const sessions = new Map(); // token -> userId
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, createdAt: u.createdAt }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -120,7 +120,7 @@ function publicJob(j, viewer) {
     // Gabriel is the only middleman (rule 2026-10-09): the worker NEVER sees
     // the customer's name or phone. Address unlocks only when the Team confirms
     // it (infoReleased). Contact runs through the Team in the job chat.
-    const view = Object.assign(base, { mine: true, infoReleased: !!j.infoReleased, notes: j.notes || '', messages: j.messages || [] });
+    const view = Object.assign(base, { mine: true, infoReleased: !!j.infoReleased, notes: j.notes || '', messages: j.messages || [], payoutStatus: j.payoutStatus || null, payoutAt: j.payoutAt || null });
     if (j.infoReleased) view.address = j.address || '';
     // v22 live tracking: the assigned worker sees their OWN live point (it is
     // their phone sharing it). Destination coords ride along with the address
@@ -636,6 +636,61 @@ function membershipPlansPublic() {
   const out = {};
   Object.keys(MEMBERSHIP_PLANS).forEach(k => { out[k] = publicMembershipPlan(MEMBERSHIP_PLANS[k]); });
   return out;
+}
+
+// ---------- Stripe Connect worker payouts (v29, 2026-10-22) ----------
+// Gabriel's rule (2026-10-22): a technician's pay is AUTOMATED. Each worker
+// connects a Stripe Express account ONCE (ID + bank, Stripe-hosted, about
+// 2 minutes — prompted from their first login). When a job reaches
+// 'Done — photos sent' AND the customer's payment on its request has been
+// captured, the app transfers the job's payOffer to the worker's account;
+// Stripe then pays it out to their bank. Gabriel never sends payouts by
+// hand — but he CAN force/retry one with POST /api/admin/jobs/:id/pay-worker
+// (the semi-manual override). The worker NEVER needs the customer's total
+// for this; only their own payOffer moves.
+async function refreshWorkerConnect(u, force) {
+  if (!u || !u.stripeAccountId || !stripeReady()) return !!(u && u.stripePayoutsReady);
+  const fresh = u.stripeCheckedAt && (Date.now() - new Date(u.stripeCheckedAt).getTime() < 5 * 60 * 1000);
+  if (fresh && !force) return !!u.stripePayoutsReady;
+  try {
+    const acct = await stripeGet('/accounts/' + u.stripeAccountId);
+    u.stripePayoutsReady = !!acct.payouts_enabled;
+    u.stripeDetailsSubmitted = !!acct.details_submitted;
+    u.stripeCheckedAt = new Date().toISOString();
+    save();
+  } catch (e) { console.error('connect: status refresh failed for ' + u.id + ':', e.message); }
+  return !!u.stripePayoutsReady;
+}
+async function maybePayWorkerForJob(j, opts) {
+  opts = opts || {};
+  try {
+    if (!j || !j.assignedWorkerId || !(Number(j.payOffer) > 0)) return;
+    if (j.payoutTransferId) { if (j.payoutStatus !== 'paid') { j.payoutStatus = 'paid'; save(); } return; }
+    if (j.status !== 'Done — photos sent' && !opts.force) return;
+    const w = db.users.find(x => x.id === j.assignedWorkerId);
+    if (!w) return;
+    if (!stripeReady()) { j.payoutStatus = 'stripe_off'; save(); return; }
+    if (w.stripeAccountId && !w.stripePayoutsReady) await refreshWorkerConnect(w);
+    if (!w.stripeAccountId || !w.stripePayoutsReady) {
+      j.payoutStatus = 'awaiting_worker_setup'; save();
+      if (!j.payoutSetupNagAt) { j.payoutSetupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Job ' + j.id + ' is done but ' + w.name + ' has not finished setting up payouts — their ' + usd(j.payOffer) + ' is waiting.'); save(); }
+      return;
+    }
+    const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
+    if (r && !(r.holds || []).some(h => h.status === 'captured')) { j.payoutStatus = 'awaiting_capture'; save(); return; }
+    const amount = Math.round(Number(j.payOffer) * 100);
+    const tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id });
+    j.payoutTransferId = tr.id; j.payoutStatus = 'paid'; j.payoutAt = new Date().toISOString(); j.workerPaid = true; delete j.payoutError;
+    save();
+    notify(w.id, 'payment', 'Your payout of ' + usd(j.payOffer) + ' for job ' + j.id + ' (' + (j.service || '') + ') was sent via Stripe — it pays out to your bank automatically.');
+    notifyAdmins('payment', 'Worker payout sent: ' + usd(j.payOffer) + ' to ' + w.name + ' for job ' + j.id + ' (transfer ' + tr.id + ').');
+  } catch (e) {
+    const msg = String((e && e.message) || e);
+    j.payoutStatus = /insufficient/i.test(msg) ? 'pending_funds' : 'error';
+    j.payoutError = msg.slice(0, 200);
+    save();
+    notifyAdmins('payment', 'Worker payout for job ' + j.id + ' did not go out (' + j.payoutStatus + '): ' + j.payoutError);
+  }
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
@@ -1159,6 +1214,7 @@ async function handleStripeEvent(event) {
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment captured: ' + usd(h.capturedCents / 100) + ' was charged to your card for request ' + r.id + '. Thank you!', at: new Date().toISOString() });
         if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!');
         notifyAdmins('payment', 'Hold CAPTURED on request ' + r.id + ': ' + usd(h.capturedCents / 100) + ' (PI ' + h.pi + ').');
+        db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); });
       }
     } else if (type === 'payment_intent.canceled') {
       if (h.status === 'authorized') {
@@ -2516,7 +2572,36 @@ const server = http.createServer(async (req, res) => {
       if (!handled) return send(res, 403, { error: 'not allowed' });
     }
     else return send(res, 403, { error: 'not allowed' });
-    save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); return send(res, 200, { job: publicJob(j, user) });
+    save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') maybePayWorkerForJob(j); return send(res, 200, { job: publicJob(j, user) });
+  }
+
+
+  // ---------- Stripe Connect onboarding + payout override (v29) ----------
+  if (p === '/api/worker/connect/start' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    if (!stripeReady()) return send(res, 503, { error: 'payments are not configured yet' });
+    try {
+      if (!user.stripeAccountId) {
+        const acct = await stripeApi('/accounts', { type: 'express', country: 'US', email: user.email, 'capabilities[transfers][requested]': 'true', business_type: 'individual', 'metadata[userId]': user.id });
+        user.stripeAccountId = acct.id; user.stripeCheckedAt = null; save();
+      }
+      const link = await stripeApi('/account_links', { account: user.stripeAccountId, type: 'account_onboarding', refresh_url: APP_URL + '#worker', return_url: APP_URL + '#worker' });
+      return send(res, 200, { url: link.url });
+    } catch (e) { return send(res, 502, { error: 'Stripe Connect error: ' + e.message }); }
+  }
+  if (p === '/api/worker/connect/status' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    await refreshWorkerConnect(user, true);
+    if (user.stripePayoutsReady) db.jobs.filter(x => x.assignedWorkerId === user.id && x.payoutStatus === 'awaiting_worker_setup').forEach(jj => { maybePayWorkerForJob(jj); });
+    return send(res, 200, { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted });
+  }
+  const payWorkerMatch = p.match(/^\/api\/admin\/jobs\/([\w-]+)\/pay-worker$/);
+  if (payWorkerMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const j = db.jobs.find(x => x.id === payWorkerMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    await maybePayWorkerForJob(j, { force: true });
+    return send(res, 200, { ok: true, payoutStatus: j.payoutStatus || null, payoutTransferId: j.payoutTransferId || null, payoutError: j.payoutError || null });
   }
 
   // ---------- Ratings (v25, C1) ----------

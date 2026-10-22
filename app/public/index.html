@@ -652,6 +652,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
   <div id="workerBox" style="display:none">
     <h2>Open job offers</h2>
     <p class="mut" id="workerStatus"></p>
+    <div id="workerPayouts"></div>
     <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
     <div id="jobList"></div>
     <h2>My yard visits</h2>
@@ -1682,7 +1683,7 @@ function render(){
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
   if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadMyJobs(); custSummary(); }
-  if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); }
+  if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); }
   if(me && me.role==='admin'){ loadAdmin(); }
   // Direct HomeCare join: after login/signup with a pending join, go straight
   // to the $49/mo Stripe checkout.
@@ -2043,6 +2044,14 @@ async function loadJobs(){
   document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.mine?'<br>'+(j.infoReleased?'<b>Your job details (Team-confirmed):</b> '+escHtml(j.address||''):'<b>Address & exact time:</b> <span class="mut">the Team confirms them with you here before the job \u2014 you never need the customer\u2019s phone, the Team coordinates everything.</span>')+(j.notes?'<br><b>Team notes:</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
   sndWorkerJobs(d.jobs || []);
 }
+async function loadPayouts(){ const box=document.getElementById('workerPayouts'); if(!box||!me||me.role!=='worker'||me.status!=='active'){ if(box) box.innerHTML=''; return; }
+  let st=null; try{ st=await api('/api/worker/connect/status'); }catch(e){}
+  if(st&&st.ready){ box.innerHTML='<div class="card" style="border:1.5px solid #1d5c38;background:#0b2013"><b>\u{1F4B3} Payouts are ON</b><p class="mut">When you finish a job, your pay is sent automatically to your bank via Stripe. Nothing else to do.</p></div>'; return; }
+  box.innerHTML='<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>\u{1F4B3} Set up your payouts</b><p class="mut">Get paid automatically the moment you finish a job — Stripe sends your pay straight to your bank. One-time setup, about 2 minutes: your ID and your bank.</p><button onclick="startConnect()">Set up payouts with Stripe</button></div>';
+}
+async function startConnect(){ try{ const r=await api('/api/worker/connect/start',{method:'POST'}); if(r&&r.url){ location.href=r.url; } else alert('Could not start Stripe setup — try again.'); }catch(e){ alert(e.message); } }
+function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_capture:'Payout waiting — customer payment not captured yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
+async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdmin(); }catch(e){ alert(e.message); } }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
 // ---------- Notification sound (added 2026-10-21, v22) ----------
@@ -2795,7 +2804,7 @@ async function loadAdmin(){
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
-    return '<div class="card"><b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span>'
+    return '<div class="card"><b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>'
     + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
     + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
@@ -2803,7 +2812,7 @@ async function loadAdmin(){
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   loadInvoices();
   loadAdminRatings();
