@@ -1842,6 +1842,83 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { console.error('membership reactivate failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
 
+  // ---------- Delete my account (added 2026-10-21, v26) ----------
+  // Self-service account deletion — the Google Play data-deletion path.
+  // Any role. The user confirms by typing their own account email exactly.
+  // In-flight work BLOCKS deletion (the work must be finished, or the Team
+  // reassigns/closes it first); history is then kept ANONYMIZED — amounts,
+  // services and dates survive for tax/legal, every personal field goes.
+  if (p === '/api/me/delete-account' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const confirmEmail = cleanText(b.confirmEmail, 160).toLowerCase();
+    if (!confirmEmail || confirmEmail !== (user.email || '').toLowerCase()) return send(res, 400, { error: 'type your account email address exactly to confirm deletion' });
+    const uid = user.id;
+    const JOB_DONE = 'Done — photos sent';
+    const REQ_TERMINAL = ['Closed', 'Declined'];
+    if (user.role === 'worker') {
+      const activeJob = db.jobs.find(j => j.assignedWorkerId === uid && j.status !== JOB_DONE);
+      if (activeJob) return send(res, 409, { error: 'You still have an assigned job that is not finished (' + activeJob.id + '). Finish it, or ask the Team to reassign it, before deleting your account.' });
+      const activeVisit = db.yardVisits.find(v => v.assignedWorkerId === uid && !['done', 'cancelled'].includes(v.status));
+      if (activeVisit) return send(res, 409, { error: 'You still have a yard visit that is not finished (' + activeVisit.id + '). Finish it, or ask the Team to reassign it, before deleting your account.' });
+    }
+    if (user.role === 'customer') {
+      const openReq = db.requests.find(r => r.customerId === uid && !REQ_TERMINAL.includes(r.status));
+      if (openReq) return send(res, 409, { error: 'You have a request still in progress (' + openReq.id + '). Let the Team finish or close it — or contact the Team — before deleting your account.' });
+      const openJob = db.jobs.find(j => sseCustomerOwnsJob(j, user) && j.status !== JOB_DONE);
+      if (openJob) return send(res, 409, { error: 'You have a job still in progress (' + openJob.id + '). Let the Team finish it — or contact the Team — before deleting your account.' });
+    }
+    // Cancel any active membership subscription NOW (deletion cancels
+    // immediately — unlike the voluntary end-of-period cancel — and prepaid
+    // membership payments are not refunded, per the Terms). Best-effort:
+    // a Stripe failure is logged and never holds the deletion hostage.
+    const plan = membershipPlanOf(user);
+    const subId = (plan && plan.subscriptionId) || user.stripeSubscriptionId || '';
+    if (subId && stripeReady()) {
+      try { await stripeApi('/subscriptions/' + subId + '/cancel', {}); }
+      catch (e) { console.error('delete-account: stripe cancel failed for', subId, '-', e.message); }
+    }
+    // Anonymize the history. Ownership through requests is resolved BEFORE
+    // any record is touched, because anonymizing a request severs the link
+    // its jobs are found through.
+    const myReqIds = new Set(db.requests.filter(r => r.customerId === uid).map(r => r.id));
+    db.requests.forEach(r => {
+      if (!myReqIds.has(r.id)) return;
+      r.customerId = null; r.anonymized = true;
+      r.customerName = 'Deleted user'; r.customerEmail = ''; r.customerPhone = ''; r.address = '';
+      (r.messages || []).forEach(m => { if (m && m.from === 'customer') m.name = ''; });
+    });
+    db.jobs.forEach(j => {
+      if (j.customerId === uid || (j.requestId && myReqIds.has(j.requestId))) {
+        if ('customerId' in j) j.customerId = null;
+        j.customerName = 'Deleted user'; j.customerPhone = ''; j.address = '';
+        j.anonymized = true;
+        (j.messages || []).forEach(m => { if (m && m.from === 'customer') m.name = ''; });
+      }
+    });
+    (db.invoices || []).forEach(inv => {
+      if (inv.customerId === uid) {
+        inv.customerId = null; inv.anonymized = true;
+        inv.customerName = 'Deleted user'; inv.customerEmail = ''; inv.customerPhone = '';
+      }
+    });
+    // Yard visits keep their operational record (date, photos, worker pay)
+    // with the personal linkage removed. A deleted worker's visits keep the
+    // record too and lose the assignee the same way.
+    db.yardVisits.forEach(v => {
+      if (v.userId === uid) { v.userId = null; v.anonymized = true; }
+      if (v.assignedWorkerId === uid) v.assignedWorkerId = null;
+    });
+    // The user's own notifications and password-reset token die with the
+    // account; every session is invalidated; then the record itself goes.
+    db.notifications = (db.notifications || []).filter(n => n.userId !== uid);
+    const idx = db.users.findIndex(u => u.id === uid);
+    if (idx !== -1) db.users.splice(idx, 1);
+    invalidateSessionsFor(uid);
+    save();
+    return send(res, 200, { ok: true });
+  }
+
   // ---------- customer requests ----------
   // Public: no account required. Anonymous requests store name/email/phone on
   // the request itself; logged-in customers keep member pricing + dashboard.

@@ -232,7 +232,7 @@ header nav a:hover{border-color:var(--red)}
       </div>
     </div>
     <p class="cg-foot">General Handyman Solutions · v1.0</p>
-    <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a></p>
+    <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a> · <a href="#privacy">Privacy Policy</a></p>
   </div>
 
   <!-- AUTH -->
@@ -449,7 +449,7 @@ header nav a:hover{border-color:var(--red)}
       <div class="clause"><h4>12. Workmanship guarantee.</h4><p>If something we did fails within <b>30 days</b> of the completed job, tell the Team and we will make it right.</p></div>
       <div class="clause"><h4>13. Changes to these terms.</h4><p>We may update these terms; the current version always lives in the app and at generalhandymans.app. Continuing to use the service after an update means you accept the new terms.</p></div>
       <div class="clause"><h4>14. Contact.</h4><p>General Handyman Solutions · (707) 862-3773 · generalhandymans.app</p></div>
-      <p class="mut" style="margin-top:14px">See also: <a href="#how-it-works">How it works</a> — the step-by-step for customers and technicians.</p>
+      <p class="mut" style="margin-top:14px">See also: <a href="#how-it-works">How it works</a> — the step-by-step for customers and technicians — and our <a href="#privacy">Privacy Policy</a>.</p>
     </div>
   </div>
 
@@ -483,6 +483,25 @@ header nav a:hover{border-color:var(--red)}
         <div class="step-card"><div class="step-badge red">5</div><div class="step-body"><b>Run your job with the status buttons</b><span>— On my way (the customer watches the map) → Arrived → Completed.</span></div></div>
         <div class="step-card"><div class="step-badge red">6</div><div class="step-body"><b>Your pay</b><span>— handyman work pays $50/hr (short jobs pay a $100 minimum); a standard yard visit pays $50 flat; your pay for every job is shown before you claim it, and it never changes after you accept.</span></div></div>
       </div>
+    </div>
+  </div>
+
+  <!-- PRIVACY POLICY (added 2026-10-21, v26) — public page at #privacy -->
+  <div id="privacyBox" style="display:none">
+    <p class="mut"><a href="#" onclick="exitInfoView();return false;">← Back to the app</a></p>
+    <div class="card legal-card">
+      <h2>General Handyman Solutions — Privacy Policy</h2>
+      <p class="legal-updated">Last updated: October 2026</p>
+      <div class="clause"><h4>1. What we collect.</h4><p>When you use General Handyman Solutions ("GHS", "we", "the Team"), we collect: <b>account information</b> — your name, email address, phone number, and a securely hashed password (we never store your plain password); <b>your service address and home details</b> you provide (ZIP, home type, yard size, access notes); <b>service requests and jobs</b> — descriptions, scheduling details, messages with the Team, and photos you send or that document the work, including yard-visit before/after photos; and <b>payment records</b> — amounts, dates, and payment status. Card payments are processed by Stripe: <b>we never see or store your full card number.</b></p></div>
+      <div class="clause"><h4>2. How we use it.</h4><p>We use your information only to run the service: creating and managing your account and membership, scheduling and performing your services, processing payments and sending receipts, communicating with you about your requests, jobs, and visits, showing the live arrival map during a job, and keeping the records the law requires for taxes and accounting.</p></div>
+      <div class="clause"><h4>3. Live location — only during the trip.</h4><p>When a technician taps "On my way" to your job, the app shares their location so you can watch the arrival on the map. Only the <b>single latest point</b> is kept — never a route history — and it is <b>deleted as soon as the trip status changes</b>. Technicians share location only while en route to an active job, and customers never receive a technician's phone number (see section 5).</p></div>
+      <div class="clause"><h4>4. Who processes data for us.</h4><p>We use a small number of service providers, only for the jobs described here: <b>Stripe</b> processes card payments and memberships; <b>Resend</b> delivers our emails (estimates, receipts, notifications); <b>OpenStreetMap / Nominatim</b> converts service addresses into map coordinates for scheduling and the live map; <b>Supabase</b> hosts our database (accounts, requests, jobs, invoices and yard visits) and <b>Render</b> hosts the app itself. These providers process data on our instructions and for no other purpose.</p></div>
+      <div class="clause"><h4>5. What we never do.</h4><p><b>We never sell your personal data.</b> We never share a customer's phone number with a technician, and never share a technician's phone number with a customer — all communication runs through the Team. A technician receives a job's address and time only for a specific job assigned to them. We do not share your information with advertisers.</p></div>
+      <div class="clause"><h4>6. Your choices.</h4><p>You can see and correct your information in the app at any time (your profile, service address, and home details). We do not send marketing messages without your consent. If you believe any information we hold is wrong, contact the Team and we will fix it.</p></div>
+      <div class="clause"><h4>7. Delete your account.</h4><p>You can delete your account yourself, any time: log in, open your account area, choose <b>"Delete my account"</b>, and confirm by typing your account email address. Deleting your account removes your profile and login, cancels any active membership effective immediately (membership payments are prepaid and are not refunded — see the <a href="#terms">Terms &amp; Conditions</a>), and signs you out everywhere. Work that is still in progress must be finished, or reassigned by the Team, before the account can be deleted. Past invoices and payment records are kept in <b>anonymized</b> form (without your name, email, phone, or address) as required for tax and legal purposes. You can also request deletion by writing to <b>generalhandymans@gmail.com</b>.</p></div>
+      <div class="clause"><h4>8. How long we keep data.</h4><p>Account information is kept while your account is active. If you delete your account, your personal information is removed and the remaining service and payment records are kept only in anonymized form, for as long as tax and legal rules require. Photos attached to completed work are kept with the anonymized service record.</p></div>
+      <div class="clause"><h4>9. Contact.</h4><p>General Handyman Solutions · generalhandymans@gmail.com · (707) 862-3773 · generalhandymans.app</p></div>
+      <p class="mut" style="margin-top:14px">See also: <a href="#terms">Terms &amp; Conditions</a> and <a href="#how-it-works">How it works</a>.</p>
     </div>
   </div>
 
@@ -555,6 +574,7 @@ header nav a:hover{border-color:var(--red)}
     <div id="myJobs" class="custAccountOnly"></div>
     <h2 class="custAccountOnly">My invoices</h2>
     <div id="myInvoices" class="custAccountOnly"></div>
+    <div id="delAcctSlotC"></div>
   </div>
 
   <!-- WORKER -->
@@ -566,6 +586,7 @@ header nav a:hover{border-color:var(--red)}
     <h2>My yard visits</h2>
     <p class="mut">Yard visits the Team assigns to you — the address appears here once you are assigned. To finish a visit you need a BEFORE photo and an AFTER photo.</p>
     <div id="workerYardVisits"></div>
+    <div id="delAcctSlotW"></div>
   </div>
 
   <!-- ADMIN -->
@@ -611,6 +632,7 @@ header nav a:hover{border-color:var(--red)}
       <div id="iMsg" class="mut"></div>
     </div>
     <div id="adminInvoices"></div>
+    <div id="delAcctSlotA"></div>
   </div>
 
   <!-- YARD CALENDAR (admin, added 2026-10-21) — its own route #yard-calendar,
@@ -913,7 +935,8 @@ const MEMBERSHIP_JOIN_HASHES = {
 function membershipJoinHashConfig(){ return MEMBERSHIP_JOIN_HASHES[location.hash] || null; }
 function isTermsRoute(){ return location.hash === '#terms'; }
 function isHowRoute(){ return location.hash === '#how-it-works'; }
-function isInfoRoute(){ return isTermsRoute() || isHowRoute(); }
+function isPrivacyRoute(){ return location.hash === '#privacy'; }
+function isInfoRoute(){ return isTermsRoute() || isHowRoute() || isPrivacyRoute(); }
 function exitInfoView(){ if (location.hash) location.hash = ''; render(); }
 function showHowSide(side){
   const tech = side === 'tech';
@@ -1155,6 +1178,58 @@ function renderMyMembership(){
   } else {
     el.innerHTML = '<div class="card"><h3 style="margin-top:0">My membership</h3><span class="mut">No active membership yet — members save 20% on labor, get $60 estimates, and can add monthly yard care.</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">View memberships</button></div>';
   }
+}
+// ---------- Delete my account (added 2026-10-21, v26) ----------
+// One shared self-service section, painted into the current role's slot.
+// The server is the authority: it re-checks the typed email and blocks
+// deletion while work is in flight; this UI explains and confirms.
+let delAcctPaintedFor = '';
+function deleteAccountHtml(sfx){
+  return '<div class="card" style="border-color:#e5b4b4;background:#fffafa;margin-top:12px">'
+    + '<h3 style="margin-top:0">Delete my account</h3>'
+    + '<div id="delIntro-' + sfx + '"><p class="mut" style="margin-top:0">You can delete your account and personal information yourself, right here. This is permanent.</p>'
+    + '<button class="ghost" onclick="showDeleteAccount(\'' + sfx + '\')">Delete my account</button></div>'
+    + '<div id="delWarn-' + sfx + '" style="display:none">'
+    + '<b>What happens when you delete your account:</b>'
+    + '<ul style="margin:8px 0;padding-left:18px">'
+    + '<li>Your profile and login are deleted, and you are signed out everywhere.</li>'
+    + '<li>Any active membership is cancelled effective immediately. Membership payments are prepaid and are <b>not refunded</b>.</li>'
+    + '<li>Past invoices and payment records are kept in anonymized form (no name, email, phone, or address) for tax and legal purposes.</li>'
+    + '<li>Work still in progress must be finished — or reassigned by the Team — before your account can be deleted.</li>'
+    + '</ul>'
+    + '<label>Type your account email address to confirm</label>'
+    + '<input id="delEmail-' + sfx + '" type="email" autocomplete="email" placeholder="you@email.com">'
+    + '<div class="err" id="delErr-' + sfx + '"></div>'
+    + '<div style="margin-top:8px"><button style="background:#b00020;border-color:#b00020" onclick="doDeleteAccount(\'' + sfx + '\')">Yes, delete my account permanently</button> '
+    + '<button class="ghost" onclick="hideDeleteAccount(\'' + sfx + '\')">Keep my account</button></div>'
+    + '</div></div>';
+}
+function paintDeleteAccount(){
+  const slots = { customer: 'delAcctSlotC', worker: 'delAcctSlotW', admin: 'delAcctSlotA' };
+  const sfxs = { customer: 'C', worker: 'W', admin: 'A' };
+  for (const role in slots) { const el = document.getElementById(slots[role]); if (el && (!me || me.role !== role)) el.innerHTML = ''; }
+  if (!me) { delAcctPaintedFor = ''; return; }
+  const el = document.getElementById(slots[me.role]);
+  if (!el) return;
+  if (delAcctPaintedFor === me.id && el.innerHTML) return; // never wipe a half-typed confirmation on re-render
+  el.innerHTML = deleteAccountHtml(sfxs[me.role]);
+  delAcctPaintedFor = me.id;
+}
+function showDeleteAccount(sfx){ const w = document.getElementById('delWarn-' + sfx); const i = document.getElementById('delIntro-' + sfx); if (w) w.style.display = 'block'; if (i) i.style.display = 'none'; }
+function hideDeleteAccount(sfx){ const w = document.getElementById('delWarn-' + sfx); const i = document.getElementById('delIntro-' + sfx); if (w) w.style.display = 'none'; if (i) i.style.display = 'block'; const e = document.getElementById('delErr-' + sfx); if (e) e.textContent = ''; const inp = document.getElementById('delEmail-' + sfx); if (inp) inp.value = ''; }
+async function doDeleteAccount(sfx){
+  const inp = document.getElementById('delEmail-' + sfx);
+  const err = document.getElementById('delErr-' + sfx);
+  const email = inp ? inp.value.trim() : '';
+  if (err) err.textContent = '';
+  if (!email) { if (err) err.textContent = 'Type your account email address to confirm.'; return; }
+  try {
+    await api('/api/me/delete-account', { method: 'POST', body: JSON.stringify({ confirmEmail: email }) });
+  } catch (e) { if (err) err.textContent = e.message; return; }
+  const slot = document.getElementById(sfx === 'C' ? 'delAcctSlotC' : (sfx === 'W' ? 'delAcctSlotW' : 'delAcctSlotA'));
+  if (slot) slot.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3;margin-top:12px"><h3 style="margin-top:0">Your account has been deleted</h3><p class="mut" style="margin:0">Your profile, login, and membership are gone. Thank you for being with General Handyman Solutions — the Team is at (707) 862-3773 if you ever need us again.</p></div>';
+  delAcctPaintedFor = '';
+  setTimeout(function(){ location.reload(); }, 2600);
 }
 // ---------- My membership: change plan / cancel / undo (added 2026-10-21, v20) ----------
 // Self-service from the dashboard card. A change needs the member's
@@ -1457,6 +1532,7 @@ async function toggleNotifs(){ const p=document.getElementById('notifPanel'); co
 setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
   updateContactPill();
+  paintDeleteAccount();
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   paintSoundBtn();
@@ -1469,6 +1545,8 @@ function render(){
   if (tb) tb.style.display = isTermsRoute() ? 'block' : 'none';
   const hb = document.getElementById('howBox');
   if (hb) hb.style.display = isHowRoute() ? 'block' : 'none';
+  const pb = document.getElementById('privacyBox');
+  if (pb) pb.style.display = isPrivacyRoute() ? 'block' : 'none';
   if (isInfoRoute()) {
     const cgI = document.getElementById('compareGridBox'); if (cgI) cgI.style.display = 'none';
     const mbI = document.getElementById('membershipsBox'); if (mbI) mbI.style.display = 'none';
@@ -1477,7 +1555,7 @@ function render(){
     document.getElementById('workerBox').style.display = 'none';
     document.getElementById('adminBox').style.display = 'none';
     const ybI = document.getElementById('yardCalendarBox'); if (ybI) ybI.style.display = 'none';
-    const infoBox = isTermsRoute() ? tb : hb;
+    const infoBox = isTermsRoute() ? tb : (isPrivacyRoute() ? pb : hb);
     if (infoBox) infoBox.scrollIntoView();
     return;
   }
