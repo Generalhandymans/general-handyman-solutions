@@ -207,7 +207,6 @@ header nav a:hover{border-color:var(--red)}
       <button id="tabWorker" onclick="mode('worker')">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
-    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px">Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px"></p>
     <div id="planSelRow" style="display:none">
       <label>Choose your plan</label>
@@ -283,6 +282,7 @@ header nav a:hover{border-color:var(--red)}
       </div>
       <label>Anything the Team should know?</label><textarea id="wNotes" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
+    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $49/mo total.</b> Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
@@ -550,14 +550,19 @@ function showLogin(){
 // defaults baked into the HTML. (Gabriel caught the card label staying at
 // $49 during Yard/Plus joins, 2026-10-21.) v17: there is ONE member form
 // with an in-form plan selector, and the member tab opens that same form —
-// so BOTH red-box notes are re-rendered from the SELECTED plan's template
-// in every mode: #joinChargeNote (the visible note in join mode) and the
-// legacy #hcChargeNote ("el mensajito de abajo en rojo"). #hcChargeNote is
-// displayed only in the legacy homecare render; in join mode it stays
-// hidden, but its text still follows the selection — it can never show
-// $49 next to another plan's form. Also: the HomeCare promo box at the
-// bottom of the form is hidden while the member form is up, so the only
-// price on screen is the selected plan's.
+// so BOTH red-box notes are re-rendered from the SELECTED plan's template:
+// #joinChargeNote (the summary at the top of the form) and #hcChargeNote
+// ("el mensajito de abajo en rojo"). v18: Gabriel liked that little red
+// box, so it is BACK at the bottom of the form — below the card fields,
+// just above the submit button — VISIBLE in both member modes (join and
+// the legacy homecare render), naming the selected plan, its total
+// monthly price and its included perks (the yard visit is named for the
+// Yard/Plus plans; Yard perks include the free in-person estimate — the
+// member already gets the visit, so the estimate is free). Its text
+// always follows the selection — it can never show $49 next to another
+// plan's form. Also: the HomeCare promo box at the bottom of the form is
+// hidden while the member form is up, so the only price on screen is the
+// selected plan's.
 // The plan the member form is currently selling: the armed pending join if
 // there is one, else whatever the in-form selector shows, else HomeCare.
 function memberFormPlan(){
@@ -569,7 +574,7 @@ function memberFormPlan(){
 function syncAuthPriceTexts(m){
   const info = (m === 'join' || m === 'homecare') ? JOIN_PLAN_INFO[memberFormPlan()] : null;
   const hc = document.getElementById('hcChargeNote');
-  if (hc && info) hc.innerHTML = 'Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
+  if (hc && info) hc.innerHTML = '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
   const lbl = document.getElementById('cardChargeLabel');
   if (lbl && info) lbl.textContent = 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
   const promo = document.getElementById('hcPromo');
@@ -600,7 +605,7 @@ function mode(m){ curMode=m;
   if (homeGroupEl) homeGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
   const startGroupEl = document.getElementById('startGroup');
   if (startGroupEl) startGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
-  document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
+  document.getElementById('hcChargeNote').style.display = (m==='homecare' || m==='join') ? 'block':'none';
   document.getElementById('joinChargeNote').style.display = m==='join' ? 'block':'none';
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
   syncAuthPriceTexts(m);
@@ -670,8 +675,8 @@ let pendingAddressCheckout = null;
 let pendingJoin = null;
 const JOIN_PLAN_INFO = {
   homecare: { name: 'HomeCare', monthly: 49, kind: 'homecare', perks: '20% off any job • Free first in-person estimate • Cancel anytime.' },
-  yard1: { name: 'Yard Care', monthly: 95, kind: 'yardcare', perks: 'Monthly yard care • One total charge • Cancel anytime.' },
-  yard2: { name: 'Yard Care', monthly: 175, kind: 'yardcare', perks: 'Monthly yard care • One total charge • Cancel anytime.' },
+  yard1: { name: 'Yard Care', monthly: 95, kind: 'yardcare', perks: 'Monthly yard care • Free in-person estimate • One total charge • Cancel anytime.' },
+  yard2: { name: 'Yard Care', monthly: 175, kind: 'yardcare', perks: 'Monthly yard care • Free in-person estimate • One total charge • Cancel anytime.' },
   plus1: { name: 'HomeCare Plus', monthly: 135, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.' },
   plus2: { name: 'HomeCare Plus', monthly: 199, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 2 yard visits / month included • Cancel anytime.' }
 };
