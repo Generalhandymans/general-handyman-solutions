@@ -666,6 +666,8 @@ async function maybePayWorkerForJob(j, opts) {
   try {
     if (!j || !j.assignedWorkerId || !(Number(j.payOffer) > 0)) return;
     if (j.payoutTransferId) { if (j.payoutStatus !== 'paid') { j.payoutStatus = 'paid'; save(); } return; }
+    if (j.payoutInFlight && (Date.now() - j.payoutInFlight < 120000)) return; // a transfer attempt is already running — never double-pay
+    j.payoutTriedAt = new Date().toISOString();
     if (j.status !== 'Done — photos sent' && !opts.force) return;
     const w = db.users.find(x => x.id === j.assignedWorkerId);
     if (!w) return;
@@ -679,7 +681,10 @@ async function maybePayWorkerForJob(j, opts) {
     const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
     if (r && !(r.holds || []).some(h => h.status === 'captured')) { j.payoutStatus = 'awaiting_capture'; save(); return; }
     const amount = Math.round(Number(j.payOffer) * 100);
-    const tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id });
+    j.payoutInFlight = Date.now(); save();
+    let tr;
+    try { tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id }); }
+    finally { delete j.payoutInFlight; }
     j.payoutTransferId = tr.id; j.payoutStatus = 'paid'; j.payoutAt = new Date().toISOString(); j.workerPaid = true; delete j.payoutError;
     save();
     notify(w.id, 'payment', 'Your payout of ' + usd(j.payOffer) + ' for job ' + j.id + ' (' + (j.service || '') + ') was sent via Stripe — it pays out to your bank automatically.');
@@ -691,6 +696,21 @@ async function maybePayWorkerForJob(j, opts) {
     save();
     notifyAdmins('payment', 'Worker payout for job ' + j.id + ' did not go out (' + j.payoutStatus + '): ' + j.payoutError);
   }
+}
+// Retry payouts that were waiting (funds pending, capture not in yet, or
+// the worker had not finished setup). Runs inside normal request handling
+// only — throttled — never as background work.
+let lastPayoutSweep = 0;
+function sweepPendingPayouts() {
+  const now = Date.now();
+  if (now - lastPayoutSweep < 60 * 1000) return;
+  lastPayoutSweep = now;
+  db.jobs.filter(j => !j.payoutTransferId
+    && ['pending_funds', 'awaiting_capture', 'awaiting_worker_setup'].includes(j.payoutStatus)
+    && j.status === 'Done — photos sent'
+    && !(j.payoutTriedAt && (now - new Date(j.payoutTriedAt).getTime() < 2 * 60 * 1000)))
+    .slice(0, 10)
+    .forEach(j => { maybePayWorkerForJob(j); });
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
@@ -1214,7 +1234,7 @@ async function handleStripeEvent(event) {
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment captured: ' + usd(h.capturedCents / 100) + ' was charged to your card for request ' + r.id + '. Thank you!', at: new Date().toISOString() });
         if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!');
         notifyAdmins('payment', 'Hold CAPTURED on request ' + r.id + ': ' + usd(h.capturedCents / 100) + ' (PI ' + h.pi + ').');
-        db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); });
+        db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); }); sweepPendingPayouts();
       }
     } else if (type === 'payment_intent.canceled') {
       if (h.status === 'authorized') {
@@ -2462,7 +2482,7 @@ const server = http.createServer(async (req, res) => {
     }
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') {
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
