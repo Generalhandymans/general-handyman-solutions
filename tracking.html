@@ -107,8 +107,8 @@
 </div>
 <div class="card" id="techBtns" style="display:none;margin-top:10px;padding:0 14px 14px;background:none;border:none">
   <div class="tbtns">
-    <a class="msg" href="#">💬 Message the Team</a>
-    <a class="call" href="#">📞 Call the Team</a>
+    <a class="msg" href="https://app.generalhandymans.app">💬 Message the Team</a>
+    <a class="call" href="tel:+17078623773">📞 Call the Team</a>
   </div>
 </div>
 
@@ -129,6 +129,13 @@
 <button id="sim">▶ Demo: simulate the process — a technician claims the job</button>
 <p class="note">Live tracking — in the app this map runs on real locations. Hammers = handymen available in the area, like Uber shows cars.</p>
 
+
+<div id="rateCard" style="display:none;margin:16px auto;max-width:430px;background:#141416;border:1px solid #2a2a2e;border-radius:18px;padding:18px;text-align:center">
+  <div style="font-weight:800;font-size:17px;color:#fff">How was your technician?</div>
+  <p style="color:#9a968f;font-size:13.5px;margin:6px 0 10px">Your rating goes to the Team — it is how our technicians build their ★ score.</p>
+  <div id="stars" style="font-size:36px;letter-spacing:8px;cursor:pointer;color:#3a3a3e"><span data-n="1">★</span><span data-n="2">★</span><span data-n="3">★</span><span data-n="4">★</span><span data-n="5">★</span></div>
+  <p id="rateMsg" style="min-height:20px;color:#2fbf71;font-weight:700;margin:8px 0 0"></p>
+</div>
 <script>
 let stage = 0;
 const sim = document.getElementById('sim');
@@ -168,10 +175,27 @@ sim.addEventListener('click', () => {
     const eta = document.getElementById('etaBox'); eta.style.display = 'block';
     let n = 12; const el = document.getElementById('etaN');
     setInterval(() => { if (n > 4) { n--; el.textContent = n; } }, 30000);
-    sim.textContent = '✓ Process complete — this is the full flow';
+    sim.textContent = '▶ Demo: he arrives, finishes — and you rate the job';
+  } else if (stage === 2) {
+    stage = 3;
+    toast('🎉 Job done! Your payment is complete.');
+    const st = document.getElementById('stWay');
+    st.classList.remove('now'); st.classList.add('done'); st.querySelector('.ic').textContent = '✓';
+    document.getElementById('statusH').textContent = 'Job done 🎉';
+    document.getElementById('statusP').textContent = 'Paid at completion — $260. One last step: rate your technician.';
+    document.getElementById('etaBox').style.display = 'none';
+    document.getElementById('chipTxt').textContent = 'Job complete';
+    const rc = document.getElementById('rateCard'); rc.style.display = 'block';
+    rc.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    sim.textContent = '✓ Full flow complete — thanks!';
     sim.disabled = true;
   }
 });
+document.querySelectorAll('#stars span').forEach(sp => sp.addEventListener('click', () => {
+  const n = Number(sp.dataset.n);
+  document.querySelectorAll('#stars span').forEach(x => x.style.color = Number(x.dataset.n) <= n ? '#ffb400' : '#3a3a3e');
+  document.getElementById('rateMsg').textContent = 'Thanks! You rated ★' + n + ' — the Team has it.';
+}));
 </script>
 
 </body>
