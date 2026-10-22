@@ -2022,7 +2022,19 @@ const server = http.createServer(async (req, res) => {
     const hcActive = !!user && user.role === 'customer' && user.homeCareStatus === 'active';
     const userPlan = (user && user.role === 'customer') ? membershipPlanOf(user) : null;
     const memberActive = hcActive || !!(userPlan && userPlan.planKey && userPlan.status === 'active');
-    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (memberActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    let menuOrder = null;
+    if (b.estimateType === 'menu' && b.menuOrder && typeof b.menuOrder === 'object') {
+      const mo = b.menuOrder;
+      const num = (v, max) => { const n = Number(v); return isFinite(n) && n >= 0 && n <= max ? Math.round(n * 100) / 100 : 0; };
+      menuOrder = {
+        serviceId: cleanText(mo.serviceId, 60),
+        extras: Array.isArray(mo.extras) ? mo.extras.slice(0, 8).map(x => ({ name: cleanText(x && x.name, 80), price: num(x && x.price, 10000) })).filter(x => x.name) : [],
+        asap: !!mo.asap,
+        joinedMembership: !!mo.joinedMembership,
+        totals: { list: num(mo.totals && mo.totals.list, 100000), member: num(mo.totals && mo.totals.member, 100000), due: num(mo.totals && mo.totals.due, 100000) }
+      };
+    }
+    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 60 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     // Member free estimate (ONE per customer account, shared across plans):
     // first in-person request from an active member of any kind with the
     // freebie unused consumes it automatically. Stored exactly like the
@@ -2878,6 +2890,67 @@ const server = http.createServer(async (req, res) => {
       activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
+  }
+  // ---------- Menu-order authorization hold (inline, 2026-10-22) ----------
+  // The real checkout's payment step: the customer enters their card ONCE
+  // in the app (Stripe Elements). If they added HomeCare, the membership is
+  // its own Stripe subscription, created and confirmed first through the
+  // existing inline membership endpoints (a separate Stripe process, as
+  // Gabriel requires) — then this hold is confirmed with the same card.
+  // The hold is the $75 visit authorization (manual capture, Gabriel
+  // captures the final menu total by hand when the job is done).
+  if (p === '/api/orders/hold' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const r = db.requests.find(x => x.id === b.requestId);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
+    if (r.estimateType !== 'menu') return send(res, 400, { error: 'not a menu order' });
+    if (requestHolds(r).some(x => x.key === 'visit' && x.status === 'authorized')) return send(res, 400, { error: 'hold already placed on this order' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    try {
+      const params = {
+        amount: String(Math.round((Number(r.estimateDue) || 75) * 100)),
+        currency: 'usd',
+        capture_method: 'manual',
+        'payment_method_options[card][request_incremental_authorization]': 'if_available',
+        description: 'Visit authorization hold — menu order ' + r.id + ' — General Handyman Solutions',
+        'metadata[requestId]': r.id, 'metadata[holdKey]': 'visit', 'metadata[kind]': 'menu-hold'
+      };
+      if (user.stripeCustomerId) params.customer = user.stripeCustomerId;
+      const pi = await stripeApi('/payment_intents', params);
+      return send(res, 200, { clientSecret: pi.client_secret, paymentIntentId: pi.id });
+    } catch (e) { console.error('menu hold failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/orders/hold-confirm' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const r = db.requests.find(x => x.id === b.requestId);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
+    const piId = cleanText(b.paymentIntentId, 160);
+    if (!piId) return send(res, 400, { error: 'paymentIntentId required' });
+    if (findHold(r, piId)) return send(res, 200, { ok: true, already: true });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    try {
+      const pi = await stripeGet('/payment_intents/' + piId + '?expand[]=latest_charge');
+      if (!pi || pi.status !== 'requires_capture') return send(res, 400, { error: 'the authorization is not in place yet' });
+      if (!pi.metadata || pi.metadata.requestId !== r.id) return send(res, 400, { error: 'payment does not match this order' });
+      const cents = Number(pi.amount) || 0;
+      const h = upsertHold(r, 'visit', piId, { status: 'authorized', authorizedCents: cents });
+      const card = pi.latest_charge && pi.latest_charge.payment_method_details && pi.latest_charge.payment_method_details.card;
+      if (card) {
+        if (card.capture_before) h.captureBefore = new Date(Number(card.capture_before) * 1000).toISOString();
+        if (card.incremental_authorization && card.incremental_authorization.status) h.incremental = card.incremental_authorization.status;
+        h.updatedAt = new Date().toISOString();
+      }
+      r.messages = r.messages || [];
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Order secured: we placed a ' + usd(cents / 100) + ' authorization HOLD on your card (authorized only — NOT charged yet). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
+      if (r.customerId) notify(r.customerId, 'payment', 'Authorization hold placed (' + usd(cents / 100) + ') on order ' + r.id + ' — not charged yet. Your order is secured.');
+      notifyAdmins('payment', 'Authorization HOLD ' + usd(cents / 100) + ' placed on menu order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — PI ' + piId + '.');
+      save();
+      return send(res, 200, { ok: true });
+    } catch (e) { console.error('menu hold confirm failed', e.message); return send(res, 502, { error: 'could not verify the authorization — if your card shows a hold, the Team will link it to your order shortly' }); }
   }
   // ---------- invoices (customer payment) ----------
   if (p === '/api/invoices/mine' && req.method === 'GET') {

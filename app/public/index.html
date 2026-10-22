@@ -500,6 +500,46 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <p class="mut">Your first scheduled visit includes the regular yard cut. If a yard needs work beyond normal maintenance (extreme overgrowth, debris), the Team quotes that separately before starting. Labor-only on handyman jobs — you buy materials/parts. Questions? Text or call (707) 862-3773.</p>
   </div>
 
+
+  <!-- MENU CHECKOUT (added 2026-10-22, v32) — public page at #order/<serviceId> -->
+  <div id="orderBox" style="display:none">
+    <div class="card">
+      <button class="ghost" onclick="exitOrder()" style="margin-bottom:10px">← Back</button>
+      <h3 style="margin:0 0 4px">Checkout</h3>
+      <p class="mut" style="margin:0 0 10px">General Handyman Solutions · Solano County</p>
+      <div id="orderSvc"></div>
+      <div id="orderExtras"></div>
+      <h4>When</h4>
+      <div class="pick" id="orderWhen">
+        <button type="button" data-w="ASAP">⚡ ASAP (+25%)</button>
+        <button type="button" data-w="Today" class="sel">Today</button>
+        <button type="button" data-w="Tomorrow">Tomorrow</button>
+      </div>
+      <label>Preferred time / details<input id="oWhenText" placeholder="e.g. after 3 PM — you propose, we confirm"></label>
+      <h4>Where &amp; notes</h4>
+      <label>Service address<input id="oAddress" placeholder="Street address" autocomplete="street-address"></label>
+      <label>City<input id="oCity" placeholder="Fairfield"></label>
+      <label>Notes for the technician<textarea id="oNotes" rows="2" placeholder="Gate code, TV size, parking…"></textarea></label>
+      <div id="orderAcct">
+        <h4>Your account</h4>
+        <label>Your name<input id="oName" autocomplete="name"></label>
+        <label>Email<input id="oEmail" type="email" autocomplete="email"></label>
+        <label>Phone<input id="oPhone" type="tel" autocomplete="tel"></label>
+        <label>Password<input id="oPass" type="password" autocomplete="current-password" placeholder="Create one (8+ characters) — or your account password"></label>
+        <p class="mut">New here? This creates your account. Already a customer? Use your account email + password and we log you in.</p>
+      </div>
+      <div id="orderUpsell"></div>
+      <div id="orderTotals"></div>
+      <h4>Payment</h4>
+      <p class="mut">$75 authorization hold today — NOT a charge. It comes off your total, and you are only charged the final amount when the job is done.</p>
+      <div id="orderCardElement" style="border:1px solid #d4d4d8;border-radius:10px;padding:12px;background:#fff"></div>
+      <p id="orderErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
+      <button id="orderBtn" onclick="submitOrder()" style="margin-top:10px;width:100%">Place order</button>
+      <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · You pay when the job is done</p>
+    </div>
+    <div class="card" id="orderDone" style="display:none"></div>
+  </div>
+
   <!-- TERMS & CONDITIONS (added 2026-10-21, v21) — public page at #terms -->
   <div id="termsBox" style="display:none">
     <p class="mut"><a href="#" onclick="exitInfoView();return false;">← Back to the app</a></p>
@@ -1633,6 +1673,22 @@ function render(){
   }
   // Memberships is a public page of its own (#memberships): while it is the
   // route, it replaces the auth/customer/technician/admin boxes.
+  // Menu checkout is a public page of its own (#order/<serviceId>): while
+  // it is the route, it replaces every other box (same pattern as the info
+  // pages and memberships above).
+  if (isOrderRoute()) {
+    const ob = document.getElementById('orderBox');
+    if (ob) ob.style.display = 'block';
+    const cgOrd = document.getElementById('compareGridBox'); if (cgOrd) cgOrd.style.display = 'none';
+    const mbOrd = document.getElementById('membershipsBox'); if (mbOrd) mbOrd.style.display = 'none';
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    const ybOrd = document.getElementById('yardCalendarBox'); if (ybOrd) ybOrd.style.display = 'none';
+    renderOrder();
+    return;
+  }
   const onMemberships = isMembershipRoute();
   const mb = document.getElementById('membershipsBox');
   if (mb) mb.style.display = onMemberships ? 'block' : 'none';
@@ -2911,6 +2967,220 @@ async function createJob(){
 }
 applyWorkerEntry();
 window.addEventListener('hashchange', function(){ render(); });
+// ---------- Menu checkout (added 2026-10-22, v32) ----------
+// The REAL checkout behind the website's Order buttons: the customer fills
+// their data right here, can add HomeCare (its own Stripe monthly
+// subscription, created + confirmed first through the existing inline
+// membership endpoints) and the 20% member price applies to THIS order at
+// once. One card entry, one tap: subscription (if added) + the $75
+// authorization hold are both confirmed with the same card. Gabriel
+// captures the final amount by hand when the job is done.
+const MENU_CATALOG = {
+  'tv-mounting': { name: 'TV Mounting (up to 65")', meta: '~2 h · Mount & level', price: 135, member: 108, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
+  'tv-mounting-large': { name: 'TV Mounting (over 65")', meta: '~2.5 h · Mount & level', price: 185, member: 148, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
+  'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 },
+  'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50 }] },
+  'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: null },
+  'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 },
+  'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 },
+  'furniture-assembly': { name: 'Furniture Assembly', meta: '~1.5 h · Standard piece', price: 135, member: 108 },
+  'door-slab-swap': { name: 'Door Slab Swap', meta: '~2 h · + lock install available', price: 135, member: 108, addons: [{ id: 'knob', name: 'Install a knob/lever on the new slab', price: 75 }, { id: 'deadbolt', name: 'Install a deadbolt on the new slab', price: 75 }] },
+  'closet-organizer': { name: 'Closet Organizer Install', meta: '~3 h · Kit systems', price: 225, member: 180 },
+  'drywall-patch-medium': { name: 'Drywall Patch — Medium', meta: 'Textured, ready to paint', price: 250, member: 200 },
+  'ceiling-fan': { name: 'Ceiling Fan Install', meta: '~1.5 h · Existing box', price: 135, member: 108 },
+  'ring-doorbell': { name: 'Ring Doorbell Install', meta: '~1 h · Setup included', price: 135, member: 108 },
+  'holiday-lights': { name: 'Holiday Lights Install', meta: 'Single story · Book early', price: 175, member: 140 },
+  'garage-opener': { name: 'Garage Door Opener Swap', meta: '~3 h · Standard access', price: 375, member: 300 },
+  'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 185, member: 148 },
+  'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
+  'dishwasher-swap': { name: 'Dishwasher Swap', meta: '~2 h · Same hookups', price: 200, member: 160 },
+  'vanity-swap': { name: 'Vanity Swap', meta: '~3 h · Standard vanity', price: 250, member: 200, addons: [{ id: 'haul-vanity', name: 'Haul away the old vanity', price: 50 }] },
+  'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 100, member: 80, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
+  'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 135, member: 108 },
+  'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 185, member: 148 },
+  'starter-replacement': { name: 'Starter Replacement', meta: 'By make & difficulty — final price $225–$300', price: 225, member: 180, from: true },
+  'junk-minimum': { name: 'Junk Removal — Minimum load', meta: 'One big piece or up to ~5 medium items', price: 225, member: null },
+  'junk-medium': { name: 'Junk Removal — Medium load', meta: 'One room of furniture or a garage corner', price: 325, member: null },
+  'junk-large': { name: 'Junk Removal — Large load', meta: 'About 2 rooms or half a one-car garage', price: 425, member: null },
+  'junk-full': { name: 'Junk Removal — Full load (truck & trailer)', meta: 'Full garage or house cleanout', price: 650, member: null },
+  'green-waste': { name: 'Green Waste Hauling', meta: 'Branches, brush & yard debris — per load', price: 225, member: null }
+};
+let orderState = null, orderCardEl = null, orderStripeTried = false;
+function isOrderRoute(){ return (location.hash || '').indexOf('#order') === 0; }
+function parseOrderHash(){
+  const m = /^#order\/([a-z0-9-]+)(?:\?(.*))?$/.exec(location.hash || '');
+  if (!m) return null;
+  const q = {};
+  (m[2] || '').split('&').forEach(function(part){ const i = part.indexOf('='); if (i > 0) { try { q[part.slice(0, i)] = decodeURIComponent(part.slice(i + 1)); } catch (e) { q[part.slice(0, i)] = part.slice(i + 1); } } });
+  return { id: m[1], q };
+}
+function exitOrder(){ location.hash = ''; }
+function orderWhenSel(){ const b = document.querySelector('#orderWhen button.sel'); return b ? (b.getAttribute('data-w') || 'Today') : 'Today'; }
+async function ensureOrderStripe(){
+  if (orderCardEl || orderStripeTried) return;
+  orderStripeTried = true;
+  try {
+    const cfg = await api('/api/stripe/config');
+    if (!cfg.publishableKey || typeof Stripe === 'undefined') { document.getElementById('orderCardElement').innerHTML = '<p class="mut">Online payment is still being connected — place your order and the Team will call to secure it.</p>'; if (orderState) orderState.noStripe = true; return; }
+    if (!stripeObj) stripeObj = Stripe(cfg.publishableKey);
+    orderCardEl = stripeObj.elements().create('card', { style: { base: { fontSize: '16px' } } });
+    orderCardEl.mount('#orderCardElement');
+  } catch (e) { if (orderState) orderState.noStripe = true; }
+}
+function renderOrder(){
+  const parsed = parseOrderHash();
+  const key = (location.hash || '') + '|' + (me ? me.id : 'guest');
+  if (orderState && orderState.key === key) return;
+  const svc = parsed && MENU_CATALOG[parsed.id];
+  document.getElementById('orderDone').style.display = 'none';
+  const btn0 = document.getElementById('orderBtn'); btn0.style.display = ''; btn0.disabled = false;
+  document.getElementById('orderErr').style.display = 'none';
+  if (!svc) {
+    orderState = { key: key, bad: true };
+    document.getElementById('orderSvc').innerHTML = '<p class="mut">That service is not on the menu anymore — <a href="https://generalhandymans.app">browse the menu</a> and pick your service.</p>';
+    document.getElementById('orderExtras').innerHTML = ''; document.getElementById('orderUpsell').innerHTML = ''; document.getElementById('orderTotals').innerHTML = '';
+    btn0.style.display = 'none';
+    return;
+  }
+  orderState = { key: key, svcId: parsed.id, svc: svc, extras: new Set((parsed.q.x || '').split(',').filter(function(x){ return x; })), join: false, memberActive: false, memberLoaded: false, noStripe: false, pmId: '' };
+  document.querySelectorAll('#orderWhen button').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-w') === (parsed.q.w || 'Today') || ((parsed.q.w || '') === 'asap' && b.getAttribute('data-w') === 'ASAP')); });
+  document.getElementById('orderSvc').innerHTML = '<div style="display:flex;justify-content:space-between;align-items:baseline"><b>' + svc.name + '</b><b>$' + svc.price + (svc.from ? ' – $300' : '') + '</b></div><p class="mut">' + svc.meta + '</p>' + (svc.member ? '<p class="mut">HomeCare members pay <b>$' + svc.member + '</b> for this service.</p>' : '');
+  document.getElementById('orderExtras').innerHTML = (svc.addons && svc.addons.length)
+    ? '<h4>Extras</h4>' + svc.addons.map(function(a){ return '<label style="display:block;margin:6px 0"><input type="checkbox" data-addon="' + a.id + '" ' + (orderState.extras.has(a.id) ? 'checked' : '') + ' onchange="orderAddon(this)"> ' + a.name + ' · +$' + a.price + '</label>'; }).join('')
+    : '';
+  document.getElementById('orderAcct').style.display = me ? 'none' : 'block';
+  if (me && me.serviceAddress) document.getElementById('oAddress').value = me.serviceAddress;
+  if (parsed.q.w === 'asap') { /* sel handled above */ }
+  orderMemberRefresh();
+  ensureOrderStripe();
+}
+async function orderMemberRefresh(){
+  if (!orderState || orderState.bad) return;
+  if (!me) { orderState.memberActive = false; orderState.memberLoaded = true; orderUpsell(); orderTotals(); return; }
+  try { const d = await api('/api/me/membership'); orderState.memberActive = !!((d.plan && d.plan.status === 'active') || me.homeCareStatus === 'active'); }
+  catch (e) { orderState.memberActive = me.homeCareStatus === 'active'; }
+  orderState.memberLoaded = true;
+  orderUpsell(); orderTotals();
+}
+function orderTotalsCalc(){
+  const svc = orderState.svc;
+  const extrasList = (svc.addons || []).filter(function(a){ return orderState.extras.has(a.id); });
+  const extrasSum = extrasList.reduce(function(s, a){ return s + a.price; }, 0);
+  const list = svc.price + extrasSum;
+  let member = list;
+  if (svc.member != null) member = svc.member + Math.round(extrasSum * 0.8);
+  const isMember = orderState.memberActive || orderState.join;
+  let due = isMember ? member : list;
+  const asap = orderWhenSel() === 'ASAP';
+  let asapFee = 0;
+  if (asap) { asapFee = Math.round(due * 0.25); due += asapFee; }
+  return { list: list, member: member, savings: list - member, due: due, asap: asap, asapFee: asapFee, extrasList: extrasList };
+}
+function orderUpsell(){
+  if (!orderState || orderState.bad) return;
+  const u = document.getElementById('orderUpsell');
+  const svc = orderState.svc;
+  if (orderState.memberActive) { u.innerHTML = '<div class="card" style="border-color:#2fbf71;margin:12px 0"><b>✓ HomeCare member price applied</b><p class="mut" style="margin:4px 0 0">Your 20% member savings are already in this order.</p></div>'; return; }
+  if (!svc.member) { u.innerHTML = ''; return; }
+  const t = orderTotalsCalc();
+  u.innerHTML = '<div class="card" style="border-color:#e42535;margin:12px 0"><label style="display:block"><input type="checkbox" id="oJoin" ' + (orderState.join ? 'checked' : '') + ' onchange="orderState.join=this.checked;orderTotals()"> <b>Add HomeCare — $49/mo</b></label><p class="mut" style="margin:6px 0 0">Join and <b>save $' + t.savings + ' (20%) on THIS order</b> — the discount applies right away. First in-person estimate free, priority scheduling, cancel anytime. The membership is a monthly Stripe subscription, confirmed in this same step: one card, one tap.</p></div>';
+}
+function orderTotals(){
+  if (!orderState || orderState.bad) return;
+  const t = orderTotalsCalc();
+  const isMember = orderState.memberActive || orderState.join;
+  let s = '<h4>Your order</h4>';
+  s += '<div style="display:flex;justify-content:space-between"><span>' + orderState.svc.name + '</span><span>$' + orderState.svc.price + '</span></div>';
+  t.extrasList.forEach(function(a){ s += '<div style="display:flex;justify-content:space-between"><span class="mut">+ ' + a.name + '</span><span>$' + a.price + '</span></div>'; });
+  if (isMember && t.savings > 0) s += '<div style="display:flex;justify-content:space-between;color:#16a34a"><span>HomeCare member price (−20%)</span><span>−$' + t.savings + '</span></div>';
+  if (orderState.join && !orderState.memberActive) s += '<div style="display:flex;justify-content:space-between"><span>HomeCare membership — first month</span><span>$49</span></div>';
+  if (t.asap) s += '<div style="display:flex;justify-content:space-between"><span>ASAP rush (+25%)</span><span>$' + t.asapFee + '</span></div>';
+  s += '<div style="display:flex;justify-content:space-between;border-top:1px solid #d4d4d8;padding-top:6px;margin-top:6px"><b>Total — pay when the job is done</b><b>$' + t.due + '</b></div>';
+  s += '<p class="mut">Due today: ' + (orderState.join && !orderState.memberActive ? '<b>$49</b> (first HomeCare month, charged) + ' : '') + '<b>$75 authorization hold</b> — not a charge; it comes off your total.</p>';
+  document.getElementById('orderTotals').innerHTML = s;
+  document.getElementById('orderBtn').textContent = (orderState.join && !orderState.memberActive ? 'Join HomeCare & place order' : 'Place order') + ' — $' + t.due + ' when done';
+}
+function orderAddon(cb){
+  const idAttr = cb.getAttribute('data-addon');
+  if (cb.checked) orderState.extras.add(idAttr); else orderState.extras.delete(idAttr);
+  orderUpsell(); orderTotals();
+}
+document.querySelectorAll('#orderWhen button').forEach(function(b){ b.addEventListener('click', function(){ setTimeout(function(){ orderUpsell(); orderTotals(); }, 0); }); });
+async function submitOrder(){
+  const err = document.getElementById('orderErr');
+  const btn = document.getElementById('orderBtn');
+  function showOErr(t){ err.textContent = t; err.style.display = t ? 'block' : 'none'; }
+  showOErr('');
+  if (!orderState || orderState.bad) return;
+  const svc = orderState.svc;
+  const address = document.getElementById('oAddress').value.trim();
+  const city = document.getElementById('oCity').value.trim();
+  const notes = document.getElementById('oNotes').value.trim();
+  const whenText = document.getElementById('oWhenText').value.trim();
+  if (!address) { showOErr('Enter the service address — where the technician will do the work.'); return; }
+  btn.disabled = true; btn.textContent = 'Placing your order…';
+  try {
+    if (!me) {
+      const name = document.getElementById('oName').value.trim();
+      const email = document.getElementById('oEmail').value.trim();
+      const phone = document.getElementById('oPhone').value.trim();
+      const password = document.getElementById('oPass').value;
+      if (!name || !email || password.length < 8) throw new Error('Add your name, email and a password of 8+ characters.');
+      try {
+        await api('/api/signup', { method: 'POST', body: JSON.stringify({ name: name, email: email, password: password, phone: phone, serviceAddress: address, role: 'customer' }) });
+      } catch (e) { if (e.status !== 409) throw e; /* account exists — log in below with the same password */ }
+      const l = await api('/api/login', { method: 'POST', body: JSON.stringify({ email: email, password: password }) });
+      me = l.user;
+    }
+    const t = orderTotalsCalc();
+    let joinedNow = false;
+    if (orderState.join && !orderState.memberActive) {
+      if (!orderCardEl) throw new Error('Online signup is still being connected — your account was created. Text (707) 862-3773 and the Team will finish your membership and order.');
+      btn.textContent = 'Starting your HomeCare membership…';
+      const s = await api('/api/stripe/homecare-subscribe', { method: 'POST', body: JSON.stringify({ source: campaignSource() }) });
+      const conf = await stripeObj.confirmCardPayment(s.clientSecret, { payment_method: { card: orderCardEl, billing_details: { name: me.name, email: me.email, phone: me.phone || '' } } });
+      if (conf.error) throw new Error(conf.error.message);
+      orderState.pmId = (conf.paymentIntent && conf.paymentIntent.payment_method) || '';
+      const chk = await api('/api/stripe/homecare-confirm', { method: 'POST' });
+      joinedNow = true;
+      if (chk.active) orderState.memberActive = true;
+    }
+    btn.textContent = 'Placing your order…';
+    const desc = svc.name + ' — ordered from the menu.' + (t.extrasList.length ? ' Extras: ' + t.extrasList.map(function(a){ return a.name + ' (+$' + a.price + ')'; }).join(', ') + '.' : '') + (notes ? ' Notes: ' + notes : '');
+    const rd = await api('/api/requests', { method: 'POST', body: JSON.stringify({
+      service: svc.name, description: desc, address: address, city: city,
+      when: orderWhenSel() + (whenText ? ' · ' + whenText : ''),
+      estimateType: 'menu', customerName: me.name, customerEmail: me.email, customerPhone: me.phone || '',
+      menuOrder: { serviceId: orderState.svcId, extras: t.extrasList.map(function(a){ return { name: a.name, price: a.price }; }), asap: t.asap, joinedMembership: joinedNow, totals: { list: t.list, member: t.member, due: t.due } }
+    }) });
+    const req = rd.request;
+    let holdOk = false, holdNote = '';
+    if (orderState.noStripe) {
+      holdNote = ' The Team will call you to secure the visit with the $75 authorization hold.';
+    } else {
+      try {
+        btn.textContent = 'Securing your visit (authorization hold)…';
+        const hd = await api('/api/orders/hold', { method: 'POST', body: JSON.stringify({ requestId: req.id }) });
+        let conf2;
+        if (orderState.pmId) conf2 = await stripeObj.confirmCardPayment(hd.clientSecret, { payment_method: orderState.pmId });
+        else conf2 = await stripeObj.confirmCardPayment(hd.clientSecret, { payment_method: { card: orderCardEl, billing_details: { name: me.name, email: me.email } } });
+        if (conf2.error) throw new Error(conf2.error.message);
+        await api('/api/orders/hold-confirm', { method: 'POST', body: JSON.stringify({ requestId: req.id, paymentIntentId: hd.paymentIntentId }) });
+        holdOk = true;
+      } catch (e) { holdNote = ' The authorization hold could not be placed (' + e.message + ') — your order is in, and the Team will call you to secure the visit.'; }
+    }
+    const done = document.getElementById('orderDone');
+    done.style.display = 'block';
+    done.innerHTML = '<h3>✅ Order placed — ' + req.id + '</h3><p><b>' + svc.name + '</b> · Total when the job is done: <b>$' + t.due + '</b>' + (joinedNow ? '<br>🎉 Welcome to HomeCare! Your membership is active and its 20% price is applied to this order.' : '') + (holdOk ? '<br>💳 A $75 authorization hold is on your card — not a charge.' : '') + holdNote + '</p><p class="mut">The Team confirms your time within minutes. Follow your order live — and message the Team — right here in the app.</p><button onclick="exitOrder()">Go to my orders</button>';
+    done.scrollIntoView({ behavior: 'smooth' });
+    btn.style.display = 'none';
+  } catch (e) {
+    showOErr(e.message);
+    btn.disabled = false;
+    orderTotals();
+  }
+}
+
 if (location.hash === '#join-homecare') { openMemberJoin(); }
 window.addEventListener('hashchange', checkResetHash);
 checkResetHash();

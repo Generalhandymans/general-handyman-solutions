@@ -190,6 +190,18 @@
     recalc();
   }));
   recalc();
+  // Checkout lives in the app (real account + Stripe): carry the chosen
+  // size, extras and rush over to the app's checkout for this service.
+  document.getElementById('cartbar').addEventListener('click', function(ev){
+    ev.preventDefault();
+    const id = base === 185 ? 'tv-mounting-large' : 'tv-mounting';
+    const xs = [];
+    document.querySelectorAll('#addonOpts .opt.sel').forEach(function(o){ xs.push(+o.dataset.addon === 50 ? 'raceway' : 'soundbar'); });
+    const qs = [];
+    if (xs.length) qs.push('x=' + xs.join(','));
+    if (rush) qs.push('w=asap');
+    location.href = 'https://app.generalhandymans.app/#order/' + id + (qs.length ? ('?' + qs.join('&')) : '');
+  });
 </script>
 </body>
 </html>
