@@ -1355,6 +1355,7 @@ function render(){
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   paintSoundBtn();
+  if (me) esStart(); else esClose(); // v23: live event stream follows the session
   const mlb = document.getElementById('memberLoginBtn');
   if (mlb) mlb.style.display = me ? 'none' : 'inline-block';
   // Public info pages (#terms, #how-it-works) are standalone public views:
@@ -1827,46 +1828,182 @@ function sndAdminRequests(reqs){
   for (const idv in set) if (!sndSeen.adminReqs[idv]) { playChime(); break; }
   sndSeen.adminReqs = set;
 }
+// ---------- Live event stream (added 2026-10-21, v23) ----------
+// SSE replaces poll-as-primary: the server pushes job.location /
+// job.status / job.new / request.new the moment they happen, scoped to
+// exactly what this account may see. The manager connects once the user
+// is known, reconnects with backoff on error, and feeds the SAME chime
+// bookkeeping as the render-diff watchers (events mark items as seen
+// before refreshing, so a transition chimes exactly once across both
+// paths; nothing chimes before the first list load sets the baseline).
+// The 20s tracking poll survives only as a silent fallback while the
+// stream is down (see updateLivePoll).
+let esStream = null, esConnected = false, esBackoffMs = 1000, esRetryTimer = null;
+function esStart(){
+  if (!me || esStream || typeof EventSource === 'undefined') return;
+  let es;
+  try { es = new EventSource('/api/events'); } catch(e) { esScheduleRetry(); return; }
+  esStream = es;
+  es.onopen = function(){ esConnected = true; esBackoffMs = 1000; updateLivePoll(trackJobsCache); };
+  es.onerror = function(){ esConnected = false; updateLivePoll(trackJobsCache); esClose(); esScheduleRetry(); };
+  es.addEventListener('job.location', function(ev){ try { onEsJobLocation(JSON.parse(ev.data)); } catch(e) {} });
+  es.addEventListener('job.status', function(ev){ try { onEsJobStatus(JSON.parse(ev.data)); } catch(e) {} });
+  es.addEventListener('job.new', function(ev){ try { onEsJobNew(JSON.parse(ev.data)); } catch(e) {} });
+  es.addEventListener('request.new', function(ev){ try { onEsRequestNew(JSON.parse(ev.data)); } catch(e) {} });
+}
+function esClose(){
+  if (esStream) { try { esStream.close(); } catch(e) {} esStream = null; }
+  esConnected = false;
+}
+function esScheduleRetry(){
+  if (esRetryTimer || !me) return;
+  esRetryTimer = setTimeout(function(){ esRetryTimer = null; esStart(); }, esBackoffMs);
+  esBackoffMs = Math.min(30000, esBackoffMs * 2);
+}
+function onEsJobLocation(d){
+  if (!d || !d.jobId) return;
+  if (d.stopped) { // sharing ended mid-route — refresh so the map block goes away
+    if (me && me.role === 'admin') loadAdmin(); else if (me && me.role === 'customer') loadMyJobs();
+    return;
+  }
+  const entry = trackMaps[d.jobId];
+  if (entry && entry.tech && entry.tech.setLatLng) { try { entry.tech.setLatLng([d.lat, d.lng]); } catch(e) {} }
+  const u = document.getElementById('trkupd-' + d.jobId);
+  if (u) u.textContent = 'updated ' + agoText(d.updatedAt);
+  // Keep the cached point fresh so a later re-render doesn't rewind the marker.
+  trackJobsCache.forEach(function(j){ if (j.id === d.jobId) j.liveLoc = { lat: d.lat, lng: d.lng, updatedAt: d.updatedAt }; });
+}
+function onEsJobStatus(d){
+  if (!d || !d.jobId || !me) return;
+  if (me.role === 'customer') {
+    if (sndSeen.custStatus && sndSeen.custStatus[d.jobId] !== undefined && sndSeen.custStatus[d.jobId] !== d.status) playChime();
+    if (sndSeen.custStatus) sndSeen.custStatus[d.jobId] = d.status;
+    loadMyJobs();
+  } else if (me.role === 'worker') {
+    loadJobs();
+  } else if (me.role === 'admin') {
+    loadAdmin();
+  }
+}
+function onEsJobNew(d){
+  if (!d || !d.jobId || !me) return;
+  if (me.role === 'worker') {
+    if (sndSeen.workerOpen && !sndSeen.workerOpen[d.jobId]) playChime();
+    if (sndSeen.workerOpen) sndSeen.workerOpen[d.jobId] = 1;
+    loadJobs();
+  } else if (me.role === 'admin') {
+    loadAdmin();
+  }
+}
+function onEsRequestNew(d){
+  if (!d || !d.requestId || !me || me.role !== 'admin') return;
+  if (sndSeen.adminReqs && !sndSeen.adminReqs[d.requestId]) playChime();
+  if (sndSeen.adminReqs) sndSeen.adminReqs[d.requestId] = 1;
+  loadAdmin();
+}
 // ---------- Live technician tracking (added 2026-10-21, v22) ----------
 // Worker side: tapping "On my way" starts a geolocation watch for THAT
 // job; positions post to /api/jobs/:id/location and the server keeps only
 // the latest point. Sharing stops on Arrived (the server wipes the point
 // on any non-en-route status), on "Mark done", or via the Stop button.
-// Platform truth: a web app cannot track while closed — if the worker
-// closes the app the watch dies, and the job card offers "Resume location
-// sharing" when they come back.
-let trackWatch = null; // { jobId, watchId, lastLat, lastLng, lastSent }
+// v23: posts are throttled (max 1 per 5s, only after moving >=15 m or
+// 30s elapsed), a Screen Wake Lock keeps the phone awake during the
+// trip, and coming back to the app auto-resumes a stale share. Platform
+// truth, unchanged: a web app cannot track while fully closed — if the
+// worker closes/swipes the app away the watch dies, and the job card
+// offers "Resume location sharing" when they come back.
+let trackWatch = null; // { jobId, watchId, postLat, postLng, postAt, fixLat, fixLng, fixAt }
+let trackWakeLock = null;
 function showTrackBanner(jobId, note){
   const b = document.getElementById('trackBanner'); if (!b) return;
   if (!jobId) { b.style.display = 'none'; b.innerHTML = ''; return; }
   b.style.display = 'block';
-  b.innerHTML = '📍 Sharing your location for job ' + escHtml(jobId) + ' — it stops when you tap Arrived.' + (note ? '<br><span style="font-weight:400">' + escHtml(note) + '</span>' : '');
+  b.innerHTML = '📍 Sharing your location for job ' + escHtml(jobId) + ' — sharing runs while the app is open; we keep your screen awake during the trip, and it stops when you tap Arrived.' + (note ? '<br><span style="font-weight:400">' + escHtml(note) + '</span>' : '');
+}
+function trackDistM(lat1, lng1, lat2, lng2){
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+// Post at most once per 5 seconds, and only when the phone actually
+// moved (>=15 m from the last POSTED point) or 30 s went by — a smooth
+// track for the customer without burning the worker's data.
+function trackShouldPost(st, lat, lng, now){
+  if (!st || !st.postAt || st.postLat == null || st.postLng == null) return true;
+  const elapsed = now - st.postAt;
+  if (elapsed < 5000) return false;
+  if (trackDistM(st.postLat, st.postLng, lat, lng) >= 15) return true;
+  return elapsed >= 30000;
+}
+function postTrackPosition(st, lat, lng){
+  st.postLat = lat; st.postLng = lng; st.postAt = Date.now();
+  return api('/api/jobs/' + st.jobId + '/location', { method: 'POST', body: JSON.stringify({ lat: lat, lng: lng }) }).catch(function(){});
+}
+async function acquireTrackWakeLock(jobId){
+  try {
+    if (!navigator.wakeLock || !navigator.wakeLock.request || trackWakeLock) return;
+    const wl = await navigator.wakeLock.request('screen');
+    // If sharing ended (or moved to another job) while the request was
+    // in flight, don't hold the screen awake for nothing.
+    if (!trackWatch || trackWatch.jobId !== jobId) { try { wl.release(); } catch(e) {} return; }
+    trackWakeLock = wl;
+    if (wl.addEventListener) wl.addEventListener('release', function(){ if (trackWakeLock === wl) trackWakeLock = null; });
+  } catch(e) { /* wake lock is best-effort — guarded everywhere, never throws */ }
+}
+function releaseTrackWakeLock(){
+  const wl = trackWakeLock; trackWakeLock = null;
+  if (wl && wl.release) { try { const pr = wl.release(); if (pr && pr.catch) pr.catch(function(){}); } catch(e) {} }
 }
 function stopWatchOnly(){
   if (trackWatch && trackWatch.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(trackWatch.watchId); } catch(e) {} }
   trackWatch = null;
+  releaseTrackWakeLock();
   showTrackBanner(null);
 }
 function startSharing(idv){
   stopWatchOnly();
   if (!navigator.geolocation || !navigator.geolocation.watchPosition) { showTrackBanner(idv, 'Location is not available on this device, so the live map cannot follow you — your status still updates for the Team.'); return; }
-  const st = { jobId: idv, watchId: null, lastLat: null, lastLng: null, lastSent: 0 };
+  const st = { jobId: idv, watchId: null, postLat: null, postLng: null, postAt: 0, fixLat: null, fixLng: null, fixAt: 0 };
   trackWatch = st;
   try {
     st.watchId = navigator.geolocation.watchPosition(function(pos){
       if (!trackWatch || trackWatch.jobId !== idv || !pos || !pos.coords) return;
       const lat = pos.coords.latitude, lng = pos.coords.longitude;
-      const now = Date.now();
-      const moved = st.lastLat == null || Math.abs(lat - st.lastLat) > 0.0002 || Math.abs(lng - st.lastLng) > 0.0002;
-      if (!moved && now - st.lastSent < 15000) return;
-      st.lastLat = lat; st.lastLng = lng; st.lastSent = now;
-      api('/api/jobs/' + idv + '/location', { method: 'POST', body: JSON.stringify({ lat: lat, lng: lng }) }).catch(function(){});
+      st.fixLat = lat; st.fixLng = lng; st.fixAt = Date.now();
+      if (trackShouldPost(st, lat, lng, Date.now())) postTrackPosition(st, lat, lng);
     }, function(){
       showTrackBanner(idv, 'Location permission is off — turn it on so your customer can follow your arrival.');
     }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
   } catch(e) {}
+  acquireTrackWakeLock(idv);
   showTrackBanner(idv);
 }
+// Foreground resume: when the app comes back to visible while still en
+// route, re-acquire the wake lock and — if the last posted point is
+// stale (>30 s) — push a fresh fix immediately (restarting a dead watch
+// if there is one). No tap required; the manual "Resume location
+// sharing" button stays as the backup.
+function resumeSharing(){
+  if (!trackWatch) return;
+  const st = trackWatch;
+  acquireTrackWakeLock(st.jobId);
+  const stale = !st.postAt || (Date.now() - st.postAt > 30000);
+  if (!stale) return;
+  if (st.watchId == null) { startSharing(st.jobId); return; }
+  if (navigator.geolocation && navigator.geolocation.getCurrentPosition) {
+    try {
+      navigator.geolocation.getCurrentPosition(function(pos){
+        if (!trackWatch || trackWatch.jobId !== st.jobId || !pos || !pos.coords) return;
+        postTrackPosition(st, pos.coords.latitude, pos.coords.longitude);
+      }, function(){}, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
+    } catch(e) {}
+  }
+}
+if (document && document.addEventListener) document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState !== 'visible') return;
+  if (trackWatch) resumeSharing();
+});
 async function stopSharing(idv){
   stopWatchOnly();
   try { await api('/api/jobs/' + idv + '/location/stop', { method: 'POST', body: JSON.stringify({}) }); } catch(e) {}
@@ -1899,6 +2036,7 @@ function workerJobBtns(j){
 const trackMaps = {}; // jobId -> { map, tech }
 let liveSig = '';
 let livePollTimer = null;
+let trackJobsCache = []; // last job list that fed initTrackMaps (v23: stream + poll share it)
 function agoText(iso){
   if (!iso) return 'just now';
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
@@ -1930,6 +2068,7 @@ function buildTrackMap(j, box){
   } catch(e) { box.innerHTML = trackFallbackHtml(j); }
 }
 function initTrackMaps(jobs){
+  trackJobsCache = jobs || [];
   for (const k in trackMaps) { try { trackMaps[k].map.remove(); } catch(e) {} delete trackMaps[k]; }
   (jobs || []).forEach(function(j){
     if (!j.liveLoc) return;
@@ -1940,9 +2079,12 @@ function initTrackMaps(jobs){
   updateLivePoll(jobs);
 }
 function updateLivePoll(jobs){
+  // v23: the poll is now ONLY a silent fallback — it runs while a tracked
+  // job is on screen AND the event stream is disconnected. While the
+  // stream is live, job.location events move the marker immediately.
   const any = (jobs || []).some(function(j){ return j.liveLoc; });
-  if (any && !livePollTimer) livePollTimer = setInterval(refreshLiveTracking, 20000);
-  if (!any && livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+  if (any && !esConnected && !livePollTimer) livePollTimer = setInterval(refreshLiveTracking, 20000);
+  if ((!any || esConnected) && livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
 }
 async function refreshLiveTracking(){
   try {

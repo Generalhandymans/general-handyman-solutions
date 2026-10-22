@@ -165,6 +165,72 @@ function jobCustomer(j) {
   return db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, '')) || null;
 }
 
+// ---------- Live event stream (SSE, added 2026-10-21, v23) ----------
+// GET /api/events pushes state changes to the open app the moment they
+// happen — the live map and the notification chime no longer wait for a
+// poll. Every mutation path emits EXACTLY ONE event through the helpers
+// below (one emit per mutation, no storms). Delivery is scoped per
+// connection by role, mirroring what each role can already see over REST:
+//   admin    -> everything
+//   customer -> only their own jobs (phone match or linked request)
+//   worker   -> the Open board + their own claimed jobs (active workers)
+// Heartbeats are SSE comment lines so proxies (Render) don't reap idle
+// streams; SSE_HEARTBEAT_MS tunes the interval (tests shorten it).
+const SSE_HEARTBEAT_MS = Math.max(250, Number(process.env.SSE_HEARTBEAT_MS) || 25000);
+const sseClients = new Set(); // { res, user }
+function sseCustomerOwnsJob(j, user) {
+  const c = jobCustomer(j);
+  if (c && c.id === user.id) return true;
+  if (j.requestId) { const r = db.requests.find(x => x.id === j.requestId); if (r && r.customerId === user.id) return true; }
+  if (j.customerId && j.customerId === user.id) return true;
+  return false;
+}
+function sseWrite(client, type, payload) {
+  try { client.res.write('event: ' + type + '\ndata: ' + JSON.stringify(payload) + '\n\n'); } catch (e) {}
+}
+function emitJobLocation(j) {
+  if (!j.liveLoc) return;
+  const payload = { jobId: j.id, lat: j.liveLoc.lat, lng: j.liveLoc.lng, updatedAt: j.liveLoc.updatedAt };
+  for (const c of sseClients) {
+    const u = c.user;
+    if (u.role === 'admin') sseWrite(c, 'job.location', payload);
+    else if (u.role === 'worker' && j.assignedWorkerId === u.id) sseWrite(c, 'job.location', payload);
+    else if (u.role === 'customer' && sseCustomerOwnsJob(j, u)) sseWrite(c, 'job.location', payload);
+  }
+}
+function emitJobLocationStopped(j) {
+  const payload = { jobId: j.id, stopped: true };
+  for (const c of sseClients) {
+    const u = c.user;
+    if (u.role === 'admin') sseWrite(c, 'job.location', payload);
+    else if (u.role === 'worker' && j.assignedWorkerId === u.id) sseWrite(c, 'job.location', payload);
+    else if (u.role === 'customer' && sseCustomerOwnsJob(j, u)) sseWrite(c, 'job.location', payload);
+  }
+}
+function emitJobStatus(j, prevStatus, statusOverride) {
+  const payload = { jobId: j.id, status: statusOverride || j.status, prevStatus: prevStatus || '' };
+  for (const c of sseClients) {
+    const u = c.user;
+    if (u.role === 'admin') sseWrite(c, 'job.status', payload);
+    else if (u.role === 'worker') {
+      if (u.status === 'active' && (j.assignedWorkerId === u.id || j.status === 'Open' || prevStatus === 'Open')) sseWrite(c, 'job.status', payload);
+    }
+    else if (u.role === 'customer' && sseCustomerOwnsJob(j, u)) sseWrite(c, 'job.status', payload);
+  }
+}
+function emitJobNew(j) {
+  const payload = { jobId: j.id, status: j.status, service: j.service || '', city: j.city || '' };
+  for (const c of sseClients) {
+    const u = c.user;
+    if (u.role === 'admin') sseWrite(c, 'job.new', payload);
+    else if (u.role === 'worker' && u.status === 'active') sseWrite(c, 'job.new', payload);
+  }
+}
+function emitRequestNew(r) {
+  const payload = { requestId: r.id, service: r.service || '', city: r.city || '' };
+  for (const c of sseClients) if (c.user.role === 'admin') sseWrite(c, 'request.new', payload);
+}
+
 // ---------- Gmail/Google automation ----------
 // The app does not hold Gabriel's Gmail password. It sends structured events to
 // a Google Apps Script web app that runs under his Google account. That script
@@ -1469,7 +1535,26 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
-  if (p === '/api/health') return send(res, 200, { ok: true, app: 'ghs-app' });
+  if (p === '/api/health') return send(res, 200, { ok: true, app: 'ghs-app', sseClients: sseClients.size });
+
+  // ---------- Live event stream (v23): server-sent events ----------
+  // Auth rides the normal session (cookie or bearer) — EventSource sends
+  // the session cookie automatically. Unauthenticated streams are refused.
+  if (p === '/api/events' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-transform', 'Connection': 'keep-alive', 'X-Accel-Buffering': 'no' });
+    const client = { res, user };
+    sseClients.add(client);
+    try { res.write(': connected\n\n'); } catch (e) {}
+    const hb = setInterval(() => { try { res.write(': hb ' + Date.now() + '\n\n'); } catch (e) {} }, SSE_HEARTBEAT_MS);
+    if (hb.unref) hb.unref();
+    let cleaned = false;
+    const cleanup = () => { if (cleaned) return; cleaned = true; clearInterval(hb); sseClients.delete(client); };
+    req.on('close', cleanup);
+    res.on('close', cleanup);
+    res.on('error', cleanup);
+    return; // the stream stays open — no res.end()
+  }
 
   // ---------- auth ----------
   if (p === '/setup' && req.method === 'GET') {
@@ -1719,7 +1804,7 @@ const server = http.createServer(async (req, res) => {
         ? 'Your free Yard Care estimate was applied to request ' + r.id + '.'
         : 'Your free HomeCare estimate was applied to request ' + r.id + '.');
     }
-    db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
+    db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); emitRequestNew(r); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
@@ -1887,6 +1972,7 @@ const server = http.createServer(async (req, res) => {
     if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
     const j = { id: id('JOB'), status: 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
     db.jobs.push(j);
+    emitJobNew(j);
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
@@ -1960,7 +2046,7 @@ const server = http.createServer(async (req, res) => {
     if (idx === -1) return send(res, 404, { error: 'worker not found' });
     const removed = db.users.splice(idx, 1)[0];
     // Free any jobs this worker had claimed so they go back to the open board.
-    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; } });
+    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { const prev = j.status; j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; if (prev !== 'Open') emitJobStatus(j, prev); } });
     for (const [token, uid] of sessions) { if (uid === removed.id) sessions.delete(token); }
     save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
@@ -2112,13 +2198,13 @@ const server = http.createServer(async (req, res) => {
       const r = db.requests.find(x => x.id === removed.requestId);
       if (r && r.jobId === removed.id) { r.status = 'Approved'; delete r.jobId; r.messages = r.messages || []; r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Job ' + removed.id + ' was cancelled by the Team.', at: new Date().toISOString() }); }
     }
-    save(); return send(res, 200, { ok: true, deleted: removed.id });
+    save(); emitJobStatus(removed, removed.status, 'Deleted'); return send(res, 200, { ok: true, deleted: removed.id });
   }
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
     const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
-    db.jobs.push(j); notifyWorkersForJob(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j)); save(); return send(res, 201, { job: publicJob(j, user) });
+    db.jobs.push(j); notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j)); save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
@@ -2184,13 +2270,14 @@ const server = http.createServer(async (req, res) => {
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
     if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.');
     fireAutomation('job_claimed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), customer: cust ? { name: cust.name, email: cust.email } : null, worker: { name: user.name, email: user.email }, job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', when: j.when || '', payOffer: j.payOffer || 0 } });
-    save(); return send(res, 200, { job: publicJob(j, user) });
+    save(); emitJobStatus(j, 'Open'); return send(res, 200, { job: publicJob(j, user) });
   }
   const jobMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
   if (jobMatch && req.method === 'PATCH') {
     const j = db.jobs.find(x => x.id === jobMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     const b = await readBody(req);
+    const prevJobStatus = j.status; // v23: one job.status event per PATCH, emitted at the end if it changed
     if (user && user.role === 'admin') {
       if (b.status) { applyJobStatus(j, b.status); if (b.status === 'On my way') geocodeJobDestination(j); if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
       if (b.address !== undefined) j.address = cleanText(b.address, 300);
@@ -2220,7 +2307,7 @@ const server = http.createServer(async (req, res) => {
       if (!handled) return send(res, 403, { error: 'not allowed' });
     }
     else return send(res, 403, { error: 'not allowed' });
-    save(); return send(res, 200, { job: publicJob(j, user) });
+    save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); return send(res, 200, { job: publicJob(j, user) });
   }
 
   // ---------- v22 live tracking: worker position posts ----------
@@ -2236,7 +2323,7 @@ const server = http.createServer(async (req, res) => {
     if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return send(res, 400, { error: 'invalid coordinates' });
     j.liveLoc = { lat, lng, updatedAt: new Date().toISOString() }; // latest point only — never a trail
     geocodeJobDestination(j); // no-op once cached; also covers a missed transition trigger
-    save(); return send(res, 200, { ok: true });
+    save(); emitJobLocation(j); return send(res, 200, { ok: true });
   }
   const locStopMatch = p.match(/^\/api\/jobs\/([\w-]+)\/location\/stop$/);
   if (locStopMatch && req.method === 'POST') {
@@ -2245,7 +2332,7 @@ const server = http.createServer(async (req, res) => {
     if (!j) return send(res, 404, { error: 'job not found' });
     if (j.assignedWorkerId !== user.id) return send(res, 403, { error: 'not your job' });
     delete j.liveLoc; // coordinates are deleted, never archived
-    save(); return send(res, 200, { ok: true });
+    save(); emitJobLocationStopped(j); return send(res, 200, { ok: true });
   }
 
   const jobMsgMatch = p.match(/^\/api\/jobs\/([\w-]+)\/messages$/);
