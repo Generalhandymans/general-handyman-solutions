@@ -284,6 +284,7 @@ header nav a:hover{border-color:var(--red)}
     </div>
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $49/mo total.</b> Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
+    <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword();return false;">Forgot my password</a></p>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
     <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e10600;border-radius:12px;background:#fff5f5">
@@ -294,6 +295,17 @@ header nav a:hover{border-color:var(--red)}
     </div>
     <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a General Handyman Solutions technician? <a href="#worker">Log in here →</a></p>
     <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
+  </div>
+
+  <!-- RESET PASSWORD (added 2026-10-21, v20) — shown when the app is
+       opened from an emailed #reset=<token> link -->
+  <div id="resetBox" class="card" style="display:none">
+    <h3 style="margin-top:0">Set a new password</h3>
+    <p class="mut">Choose a new password for your account (at least 8 characters). This signs you out everywhere else.</p>
+    <div id="resetErr" class="err"></div>
+    <label>New password</label><input id="rPass1" type="password" placeholder="New password" autocomplete="new-password">
+    <label>Confirm new password</label><input id="rPass2" type="password" placeholder="Type it again" autocomplete="new-password">
+    <button id="resetBtn" onclick="submitReset()" style="margin-top:10px">Set new password</button>
   </div>
 
   <!-- MEMBERSHIPS (added 2026-10-21) — public pages at #memberships and #yard-care -->
@@ -596,6 +608,8 @@ function mode(m){ curMode=m;
   document.getElementById('serviceAddressRow').style.display = (m==='customer' || m==='join') ? 'block':'none';
   const planSelRow = document.getElementById('planSelRow');
   if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare') ? 'block':'none';
+  const forgotRow = document.getElementById('forgotRow');
+  if (forgotRow) forgotRow.style.display = m==='login' ? 'block':'none';
   const serviceAddressHint = document.getElementById('serviceAddressHint');
   if (serviceAddressHint) serviceAddressHint.textContent = (pendingMembershipPlan || (pendingJoin && pendingJoin.kind !== 'homecare'))
     ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
@@ -923,11 +937,79 @@ function renderMyMembership(){
   if (p && p.status === 'active') {
     el.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
       ? '<div style="margin-top:6px">In-person estimates: <b>$60</b> — your member price.</div>'
-      : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">Request your FREE on-site estimate</button><div class="mut" style="margin-top:4px">One FREE in-person estimate is included with your membership.</div></div>') + '<div class="mut" style="margin-top:4px">Your plan renews monthly. To change or cancel it, text or call the Team at (707) 862-3773.</div></div>';
+      : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">Request your FREE on-site estimate</button><div class="mut" style="margin-top:4px">One FREE in-person estimate is included with your membership.</div></div>') + (p.cancelAt && new Date(p.cancelAt).getTime() > Date.now()
+      ? '<div style="margin-top:8px"><b>Cancels on ' + fmtDateLong(p.cancelAt) + '</b> — your membership stays active until then.<br><button style="margin-top:6px" onclick="doReactivateMembership()">Keep my membership</button> <button class="ghost" onclick="showChangePlan()">Change plan</button></div>'
+      : '<div style="margin-top:8px"><button onclick="showChangePlan()">Change plan</button> <button class="ghost" onclick="showCancelMembership()">Cancel membership</button></div>') + '<div id="membershipAction"></div>' + '<div class="mut" style="margin-top:6px">Your plan renews monthly. Questions? Call the Team at (707) 862-3773.</div></div>';
     if (p.type === 'yard' || p.type === 'plus') loadMyYardVisits();
   } else {
     el.innerHTML = '<div class="card"><h3 style="margin-top:0">My membership</h3><span class="mut">No active membership yet — members save 20% on labor, get $60 estimates, and can add monthly yard care.</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">View memberships</button></div>';
   }
+}
+// ---------- My membership: change plan / cancel / undo (added 2026-10-21, v20) ----------
+// Self-service from the dashboard card. A change needs the member's
+// explicit agreement on the confirm screen (Gabriel: "which they agree to
+// change"); Stripe prorates the difference. Cancellation takes effect at
+// the END of the already-paid month (Gabriel's decision) and can be
+// undone while the paid period is still running.
+const MEMBERSHIP_PLAN_ORDER = ['homecare','yard1','yard2','plus1','plus2'];
+function fmtDateLong(iso){ if (!iso) return ''; try { return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
+function planVisitsText(k){ return (k === 'yard1' || k === 'plus1') ? '1 yard visit/month' : ((k === 'yard2' || k === 'plus2') ? '2 yard visits/month' : 'no yard visits'); }
+function membershipActionBox(){ return document.getElementById('membershipAction'); }
+function cancelMembershipAction(){ const b = membershipActionBox(); if (b) b.innerHTML = ''; }
+function membershipActionErr(t){ const e = document.getElementById('membershipActionErr'); if (e) { e.textContent = t; e.classList.add('show'); } else alert(t); }
+function showChangePlan(){
+  const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
+  const cur = me.membershipPlan;
+  let h = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Change your plan</b><div class="mut" style="margin:4px 0">Your current plan: <b>' + escHtml(cur.name) + '</b> — $' + escHtml(cur.monthly) + '/mo (current)</div>';
+  for (const k of MEMBERSHIP_PLAN_ORDER){
+    if (k === cur.planKey) continue;
+    const i = JOIN_PLAN_INFO[k];
+    h += '<button class="ghost" style="display:block;width:100%;text-align:left;margin-top:6px" onclick="showChangeConfirm(\'' + k + '\')"><b>' + i.name + '</b> — $' + i.monthly + '/mo • ' + planVisitsText(k) + '</button>';
+  }
+  h += '<div style="margin-top:8px"><button class="ghost" onclick="cancelMembershipAction()">Back</button></div></div>';
+  box.innerHTML = h;
+}
+function showChangeConfirm(planKey){
+  const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
+  const cur = me.membershipPlan, info = JOIN_PLAN_INFO[planKey];
+  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Confirm your plan change</b>'
+    + '<p style="margin:6px 0">Switch from ' + escHtml(cur.name) + ' ($' + escHtml(cur.monthly) + '/mo) to ' + escHtml(info.name) + ' ($' + info.monthly + '/mo)? Stripe prorates the difference — you might see a prorated charge or credit today. Your new plan starts today and renews at $' + info.monthly + '/mo.</p>'
+    + '<button onclick="doChangePlan(\'' + planKey + '\')">Yes, change my plan</button> <button class="ghost" onclick="cancelMembershipAction()">Never mind</button>'
+    + '<div class="err" id="membershipActionErr"></div></div>';
+}
+async function doChangePlan(planKey){
+  try {
+    const d = await api('/api/me/membership/change', { method: 'POST', body: JSON.stringify({ plan: planKey }) });
+    if (d.user) me = d.user;
+    cancelMembershipAction();
+    renderMyMembership();
+    alert('Your plan is now ' + JOIN_PLAN_INFO[planKey].name + ' — $' + JOIN_PLAN_INFO[planKey].monthly + '/mo.');
+  } catch (e) { membershipActionErr(e.message); }
+}
+async function showCancelMembership(){
+  const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
+  const cur = me.membershipPlan;
+  let until = 'the end of your current paid period';
+  try { const d = await api('/api/me/membership'); if (d.currentPeriodEnd) until = fmtDateLong(d.currentPeriodEnd); } catch (e) {}
+  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Cancel your membership?</b>'
+    + '<p style="margin:6px 0">Your ' + escHtml(cur.name) + ' stays active until ' + escHtml(until) + '. After that it ends and you won\'t be charged again.</p>'
+    + '<button onclick="doCancelMembership()">Yes, cancel</button> <button class="ghost" onclick="cancelMembershipAction()">Keep my membership</button>'
+    + '<div class="err" id="membershipActionErr"></div></div>';
+}
+async function doCancelMembership(){
+  try {
+    const d = await api('/api/me/membership/cancel', { method: 'POST' });
+    if (d.user) me = d.user;
+    cancelMembershipAction();
+    renderMyMembership();
+  } catch (e) { membershipActionErr(e.message); }
+}
+async function doReactivateMembership(){
+  try {
+    const d = await api('/api/me/membership/reactivate', { method: 'POST' });
+    if (d.user) me = d.user;
+    renderMyMembership();
+  } catch (e) { alert(e.message); }
 }
 // ---------- Inline card charge for "New HomeCare member" (added 2026-10-19) ----------
 // One submit = account created + $49 charged right in the form (Stripe Elements
@@ -983,7 +1065,45 @@ async function chargeHomeCare(email){
 }
 mode('login');
 async function api(path, opts){ const r = await fetch(path, Object.assign({headers:{'Content-Type':'application/json'}}, opts||{})); const d = await r.json().catch(()=>({})); if(!r.ok) { const err = new Error(d.error||'Something failed'); err.code = d.code || ''; err.status = r.status; throw err; } return d; }
-function showErr(t){ const e=document.getElementById('authErr'); e.textContent=t; e.classList.add('show'); }
+function showErr(t){ const e=document.getElementById('authErr'); e.style.color=''; e.style.background=''; e.style.borderColor=''; e.textContent=t; e.classList.add('show'); }
+function showInfo(t){ const e=document.getElementById('authErr'); e.style.color='#14532d'; e.style.background='#f0fdf4'; e.style.borderColor='#86efac'; e.textContent=t; e.classList.add('show'); }
+// ---------- Forgot / reset password (added 2026-10-21, v20) ----------
+// The server answers /api/auth/forgot identically whether or not the
+// email has an account, so this form can never reveal who is registered.
+async function forgotPassword(){
+  const email = (document.getElementById('aEmail').value || '').trim();
+  if (!email) { showErr('Type your email above first, then tap "Forgot my password".'); return; }
+  try {
+    const d = await api('/api/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) });
+    showInfo(d.message || 'If that email has an account, we\'ve sent a reset link');
+  } catch (e) { showErr(e.message); }
+}
+let pendingResetToken = '';
+function checkResetHash(){
+  const m = /^#reset=([0-9a-f]{32,})$/.exec(location.hash || '');
+  const box = document.getElementById('resetBox');
+  if (!m) { if (box) box.style.display = 'none'; pendingResetToken = ''; return; }
+  pendingResetToken = m[1];
+  if (box) { box.style.display = 'block'; box.scrollIntoView({ behavior: 'smooth' }); }
+}
+function resetErrMsg(t){ const e = document.getElementById('resetErr'); if (e) { e.textContent = t; e.classList.add('show'); } }
+async function submitReset(){
+  const p1 = document.getElementById('rPass1').value || '';
+  const p2 = document.getElementById('rPass2').value || '';
+  if (p1.length < 8) { resetErrMsg('Your new password must be at least 8 characters.'); return; }
+  if (p1 !== p2) { resetErrMsg('The two passwords do not match — type the same password twice.'); return; }
+  const btn = document.getElementById('resetBtn');
+  try {
+    btn.disabled = true;
+    const d = await api('/api/auth/reset', { method: 'POST', body: JSON.stringify({ token: pendingResetToken, password: p1 }) });
+    pendingResetToken = '';
+    document.getElementById('resetBox').style.display = 'none';
+    if (location.hash) location.hash = '';
+    showLogin();
+    showInfo(d.message || 'Your password has been updated — log in with your new password.');
+  } catch (e) { resetErrMsg(e.message); }
+  finally { btn.disabled = false; }
+}
 document.querySelectorAll('.pick').forEach(function(g){
   g.addEventListener('click', function(e){ const b=e.target.closest('button'); if(!b) return;
     if(g.classList.contains('multi')) b.classList.toggle('sel');
@@ -1926,6 +2046,8 @@ async function createJob(){
 applyWorkerEntry();
 window.addEventListener('hashchange', function(){ render(); });
 if (location.hash === '#join-homecare') { openMemberJoin(); }
+window.addEventListener('hashchange', checkResetHash);
+checkResetHash();
 loadMe();
 </script>
 <script>

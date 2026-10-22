@@ -65,6 +65,33 @@ function auth(req) {
   return db.users.find(u => u.id === uid) || null;
 }
 function newSession(u) { const token = crypto.randomBytes(24).toString('hex'); sessions.set(token, u.id); return token; }
+function invalidateSessionsFor(userId) { for (const [token, uid] of sessions) { if (uid === userId) sessions.delete(token); } }
+// ---------- Password reset (added 2026-10-21, v20) ----------
+// "Forgot my password": the raw token only ever travels in the emailed
+// link; the user record keeps ONLY its sha256 hash + a 60-minute expiry
+// (u.pwReset = { hash, expiresAt }). A new request replaces the old token,
+// a successful reset consumes it, and every existing session for the
+// account is invalidated at reset. The endpoint answers identically
+// whether or not the email has an account — no account enumeration.
+function sha256hex(s) { return crypto.createHash('sha256').update(String(s)).digest('hex'); }
+const pwResetAttempts = new Map(); // email -> [ms timestamps], in-memory rate limit
+function pwResetRateOk(email) {
+  const now = Date.now();
+  const recent = (pwResetAttempts.get(email) || []).filter(ts => now - ts < 3600000);
+  if (recent.length >= 5) { pwResetAttempts.set(email, recent); return false; }
+  recent.push(now); pwResetAttempts.set(email, recent); return true;
+}
+const PW_RESET_GENERIC = 'If that email has an account, we\'ve sent a reset link';
+async function sendPasswordResetEmail(u, token) {
+  const link = appBase() + '/#reset=' + token;
+  const html = mailShell('Reset your password',
+    '<p style="margin:6px 0">Hi ' + escMail(u.name || 'there') + ', we got a request to reset the password for your General Handyman Solutions account.</p>'
+    + '<p style="margin:6px 0"><a href="' + link + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Set a new password</a></p>'
+    + '<p style="margin:6px 0">Or open this link: ' + escMail(link) + '</p>'
+    + '<p style="margin:6px 0">This link expires in 1 hour. If you did not request a password reset, you can ignore this email — your password will not change.</p>');
+  const text = ['General Handyman Solutions — reset your password', '', 'Hi ' + (u.name || 'there') + ', we got a request to reset the password for your account.', 'Open this link to set a new password: ' + link, 'This link expires in 1 hour. If you did not request a password reset, you can ignore this email — your password will not change.'].join('\n');
+  return sendMail({ to: [u.email], replyTo: OWNER_EMAIL, subject: 'Reset your password — General Handyman Solutions', html, text });
+}
 function requireRole(user, roles, res) { if (!user) { send(res, 401, { error: 'login required' }); return false; } if (!roles.includes(user.role)) { send(res, 403, { error: 'not allowed' }); return false; } return true; }
 // ---------- notifications ----------
 function notify(userId, type, text) {
@@ -367,11 +394,17 @@ function cancelMembershipPlan(u, planKey, opts) {
 }
 function planFromSubscription(obj, fallback) {
   const md = (obj && obj.metadata) || {};
-  if (md.plan && MEMBERSHIP_PLANS[md.plan]) return MEMBERSHIP_PLANS[md.plan];
   const items = (obj && obj.items && Array.isArray(obj.items.data)) ? obj.items.data : [];
   const firstItem = items[0] || {};
   const priceId = typeof firstItem.price === 'string' ? firstItem.price : (firstItem.price && firstItem.price.id) || '';
-  if (priceId) { const found = Object.keys(MEMBERSHIP_PLANS).map(k => MEMBERSHIP_PLANS[k]).find(pl => pl.priceId && pl.priceId === priceId); if (found) return found; }
+  const byPrice = priceId ? Object.keys(MEMBERSHIP_PLANS).map(k => MEMBERSHIP_PLANS[k]).find(pl => pl.priceId && pl.priceId === priceId) : null;
+  // The charged price is the truth (v20): subscription metadata can lag a
+  // plan change, so if the price names a DIFFERENT plan than the metadata,
+  // believe the price — a late/out-of-order subscription.updated webhook
+  // must never stomp a member's new plan back to the old one.
+  if (byPrice && md.plan && MEMBERSHIP_PLANS[md.plan] && MEMBERSHIP_PLANS[md.plan].key !== byPrice.key) return byPrice;
+  if (md.plan && MEMBERSHIP_PLANS[md.plan]) return MEMBERSHIP_PLANS[md.plan];
+  if (byPrice) return byPrice;
   if (md.kind === 'homecare') return MEMBERSHIP_PLANS.homecare;
   if (fallback && fallback.planKey && fallback.subscriptionId && obj && fallback.subscriptionId === obj.id) return MEMBERSHIP_PLANS[fallback.planKey];
   return null;
@@ -1445,6 +1478,41 @@ const server = http.createServer(async (req, res) => {
     const token = newSession(u);
     return send(res, 200, { user: pubUser(u), token }, { 'Set-Cookie': 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' });
   }
+  if (p === '/api/auth/forgot' && req.method === 'POST') {
+    const b = await readBody(req);
+    const email = (b.email || '').toLowerCase().trim();
+    // ALWAYS the same generic answer — whether the email has an account or
+    // not — so this endpoint can never be used to enumerate accounts.
+    if (email && pwResetRateOk(email)) {
+      const u = db.users.find(x => x.email === email);
+      if (u) {
+        const token = crypto.randomBytes(32).toString('hex');
+        u.pwReset = { hash: sha256hex(token), expiresAt: Date.now() + 3600000 }; // hash only, 60 minutes; replaces any previous token
+        save();
+        await sendPasswordResetEmail(u, token);
+      }
+    }
+    return send(res, 200, { ok: true, message: PW_RESET_GENERIC });
+  }
+  if (p === '/api/auth/reset' && req.method === 'POST') {
+    const b = await readBody(req);
+    const token = String(b.token || '');
+    const password = String(b.password || '');
+    if (!token) return send(res, 400, { error: 'This reset link is invalid or has already been used.' });
+    if (password.length < 8) return send(res, 400, { error: 'Your new password must be at least 8 characters.' });
+    const hash = sha256hex(token);
+    const u = db.users.find(x => x.pwReset && typeof x.pwReset.hash === 'string' && x.pwReset.hash.length === hash.length && crypto.timingSafeEqual(Buffer.from(x.pwReset.hash), Buffer.from(hash)));
+    if (!u) return send(res, 400, { error: 'This reset link is invalid or has already been used.' });
+    if (!u.pwReset.expiresAt || Number(u.pwReset.expiresAt) < Date.now()) {
+      delete u.pwReset; save();
+      return send(res, 400, { error: 'This reset link has expired — request a new one from the login form.' });
+    }
+    u.pw = hashPw(password);
+    delete u.pwReset; // single use: consumed
+    invalidateSessionsFor(u.id); // every prior session (any device) is signed out
+    save();
+    return send(res, 200, { ok: true, message: 'Your password has been updated — log in with your new password.' });
+  }
   if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; Max-Age=0' }); }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
   if (p === '/api/me/service-address' && req.method === 'POST') {
@@ -1470,6 +1538,100 @@ const server = http.createServer(async (req, res) => {
     if (b.startPreference !== undefined) user.startPreference = cleanStartPreference(b.startPreference);
     save();
     return send(res, 200, { ok: true, user: pubUser(user) });
+  }
+
+  // ---------- Membership self-service (added 2026-10-21, v20) ----------
+  // Logged-in members manage their own plan from the dashboard: change to
+  // another plan (Stripe prorates), cancel (Gabriel's rule: takes effect
+  // at the END of the already-paid month), and undo a pending cancellation.
+  // The /api/stripe/portal endpoint above stays as-is for card updates.
+  if (p === '/api/me/membership' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const plan = membershipPlanOf(user);
+    let currentPeriodEnd = null;
+    if (plan.subscriptionId && stripeReady()) {
+      try {
+        const sub = await stripeGet('/subscriptions/' + plan.subscriptionId);
+        if (sub && sub.current_period_end) currentPeriodEnd = new Date(Number(sub.current_period_end) * 1000).toISOString();
+      } catch (e) { /* the confirm screens fall back to generic wording */ }
+    }
+    return send(res, 200, { ok: true, plan, currentPeriodEnd });
+  }
+  if (p === '/api/me/membership/change' && req.method === 'POST') {
+    if (!requireRole(user, ['customer', 'admin'], res)) return;
+    const b = await readBody(req);
+    const current = membershipPlanOf(user);
+    if (current.status !== 'active' || !current.subscriptionId) return send(res, 403, { error: 'you do not have an active membership to change' });
+    const plan = MEMBERSHIP_PLANS[b.plan];
+    if (!plan) return send(res, 400, { error: 'unknown membership plan' });
+    if (plan.key === current.planKey) return send(res, 400, { error: 'you are already on that plan' });
+    if ((plan.type === 'yard' || plan.type === 'plus') && !cleanText(user.serviceAddress, 300)) return send(res, 400, { error: 'Add your service address in "My home" first — plans with yard visits need the address where we will do the work.', code: 'ADDRESS_REQUIRED' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — text or call the Team at (707) 862-3773' });
+    try {
+      const sub = await stripeGet('/subscriptions/' + current.subscriptionId);
+      const item = sub && sub.items && Array.isArray(sub.items.data) ? sub.items.data[0] : null;
+      if (!item || !item.id) return send(res, 502, { error: 'could not read your subscription — try again in a minute' });
+      const priceId = plan.key === 'homecare' ? await homeCarePriceId() : plan.priceId;
+      if (!priceId) return send(res, 400, { error: 'that plan is not available right now — text or call the Team at (707) 862-3773' });
+      await stripeApi('/subscriptions/' + current.subscriptionId, {
+        'items[0][id]': item.id, 'items[0][price]': priceId,
+        proration_behavior: 'create_prorations',
+        cancel_at_period_end: 'false', // a plan change also clears a pending cancellation
+        'metadata[userId]': user.id, 'metadata[kind]': plan.kind, 'metadata[plan]': plan.key
+      });
+      // Local record follows immediately (the subscription.updated webhook
+      // reconciles to the same plan afterwards — price wins over metadata).
+      setMembershipPlan(user, plan.key, { status: 'active', priceId, productId: plan.productId || '', subscriptionId: current.subscriptionId, since: current.since || null, cancelAt: null });
+      if (plan.type === 'homecare' || plan.type === 'plus') {
+        user.homeCareStatus = 'active';
+        if (!user.homeCareSince) user.homeCareSince = current.since || new Date().toISOString();
+        user.homeCareCancelAt = null;
+      } else if (current.type === 'homecare' || current.type === 'plus') {
+        user.homeCareStatus = 'none'; // yard-only plan: the HomeCare benefits go with the old plan
+        user.homeCareCancelAt = null;
+      }
+      // freeEstimateUsed is deliberately untouched: one free estimate per
+      // account, and switching plans never re-grants or removes it.
+      save();
+      notify(user.id, 'membership', 'Your membership is now ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo). Your new plan starts today.');
+      notifyAdmins('membership', user.name + ' (' + user.email + ') changed their plan from ' + current.name + ' ($' + current.monthly + '/mo) to ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo).');
+      return send(res, 200, { ok: true, user: pubUser(user), plan: membershipPlanOf(user) });
+    } catch (e) { console.error('membership change failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/me/membership/cancel' && req.method === 'POST') {
+    if (!requireRole(user, ['customer', 'admin'], res)) return;
+    const current = membershipPlanOf(user);
+    if (current.status !== 'active' || !current.subscriptionId) return send(res, 403, { error: 'you do not have an active membership to cancel' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — text or call the Team at (707) 862-3773' });
+    try {
+      // Gabriel's decision: cancellation takes effect at the END of the
+      // already-paid month — the member keeps every benefit until then.
+      const updated = await stripeApi('/subscriptions/' + current.subscriptionId, { cancel_at_period_end: 'true' });
+      const endSec = Number(updated && (updated.cancel_at || updated.current_period_end)) || 0;
+      const cancelAt = endSec ? new Date(endSec * 1000).toISOString() : (current.cancelAt || null);
+      setMembershipPlan(user, current.planKey, { status: 'active', subscriptionId: current.subscriptionId, since: current.since || null, priceId: current.priceId || undefined, cancelAt });
+      if (current.type === 'homecare' || current.type === 'plus') user.homeCareCancelAt = cancelAt;
+      save();
+      notify(user.id, 'membership', 'Your ' + current.name + ' membership will stay active until ' + (cancelAt ? new Date(cancelAt).toLocaleDateString('en-US') : 'the end of your paid period') + ', then it ends and you will not be charged again.');
+      notifyAdmins('membership', user.name + ' (' + user.email + ') cancelled ' + current.name + ' — active until ' + (cancelAt ? new Date(cancelAt).toLocaleDateString('en-US') : 'period end') + '.');
+      return send(res, 200, { ok: true, cancelAt, user: pubUser(user), plan: membershipPlanOf(user) });
+    } catch (e) { console.error('membership cancel failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/me/membership/reactivate' && req.method === 'POST') {
+    if (!requireRole(user, ['customer', 'admin'], res)) return;
+    const current = membershipPlanOf(user);
+    if (current.status !== 'active' || !current.subscriptionId) return send(res, 403, { error: 'you do not have an active membership' });
+    if (!current.cancelAt) return send(res, 400, { error: 'your membership is not set to cancel' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — text or call the Team at (707) 862-3773' });
+    try {
+      await stripeApi('/subscriptions/' + current.subscriptionId, { cancel_at_period_end: 'false' });
+      setMembershipPlan(user, current.planKey, { status: 'active', subscriptionId: current.subscriptionId, since: current.since || null, priceId: current.priceId || undefined, cancelAt: null });
+      if (current.type === 'homecare' || current.type === 'plus') user.homeCareCancelAt = null;
+      save();
+      notify(user.id, 'membership', 'Good news — your ' + current.name + ' membership will keep renewing as usual. The cancellation was undone.');
+      notifyAdmins('membership', user.name + ' (' + user.email + ') undid their ' + current.name + ' cancellation.');
+      return send(res, 200, { ok: true, user: pubUser(user), plan: membershipPlanOf(user) });
+    } catch (e) { console.error('membership reactivate failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
 
   // ---------- customer requests ----------
