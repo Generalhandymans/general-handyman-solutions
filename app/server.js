@@ -9,10 +9,14 @@ const crypto = require('crypto');
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
 const SETUP_CODE = process.env.SETUP_CODE || ''; // reserved; first-admin bootstrap is one-time while no admin exists
+const MAX_BODY_BYTES = 24 * 1024 * 1024; // hard cap on any request body (photos travel as data URLs; the client resizes them first)
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // server-side session lifetime — matches the cookie Max-Age
+const GHS_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://unpkg.com; script-src-attr 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://unpkg.com; style-src-attr 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https://api.stripe.com https://m.stripe.network https://m.stripe.com https://nominatim.openstreetmap.org; frame-src https://js.stripe.com https://hooks.stripe.com https://m.stripe.network; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://checkout.stripe.com https://billing.stripe.com; frame-ancestors 'none'";
 
 let db = { users: [], requests: [], jobs: [], notifications: [], invoices: [], yardVisits: [] };
 try { db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); } catch (e) {}
 if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+if (!Array.isArray(db.auditLog)) db.auditLog = [];
 // Permanent storage: when SUPABASE_URL + SUPABASE_SERVICE_KEY are set (Render),
 // the whole app state lives in Supabase table ghs_state (key 'app'), so accounts,
 // requests and jobs survive redeploys and restarts. Local file is the fallback.
@@ -40,11 +44,12 @@ async function loadFromSupabase() {
     if (!Array.isArray(db.notifications)) db.notifications = [];
     if (!Array.isArray(db.invoices)) db.invoices = [];
     if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+if (!Array.isArray(db.auditLog)) db.auditLog = [];
     if (!db.settings || typeof db.settings !== 'object') db.settings = {};
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
 }
-const sessions = new Map(); // token -> userId
+const sessions = new Map(); // token -> { uid, exp } — sessions expire server-side too, not just in the browser
 
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
@@ -55,17 +60,27 @@ function send(res, code, obj, headers) {
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
   res.end(body);
 }
-function readBody(req) { return new Promise(r => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { r(JSON.parse(b || '{}')); } catch (e) { r({}); } }); }); }
+function readBody(req) { return new Promise(r => { let b = ''; let over = false; req.on('data', c => { if (!over) { b += c; if (b.length > MAX_BODY_BYTES) { over = true; b = ''; } } }); req.on('end', () => { if (over) return r({ __tooLarge: true }); try { r(JSON.parse(b || '{}')); } catch (e) { r({}); } }); }); }
+function sessionUserId(token) {
+  if (!token) return null;
+  const s = sessions.get(token);
+  if (!s) return null;
+  if (Date.now() > s.exp) { sessions.delete(token); return null; }
+  return s.uid;
+}
 function auth(req) {
   const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (bearer) { const uid = sessions.get(bearer); if (uid) return db.users.find(u => u.id === uid) || null; }
+  if (bearer) { const uid = sessionUserId(bearer); if (uid) return db.users.find(u => u.id === uid) || null; }
   const cookie = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith('ghs_session='));
   if (!cookie) return null;
-  const uid = sessions.get(cookie.slice('ghs_session='.length));
+  const uid = sessionUserId(cookie.slice('ghs_session='.length));
   return db.users.find(u => u.id === uid) || null;
 }
-function newSession(u) { const token = crypto.randomBytes(24).toString('hex'); sessions.set(token, u.id); return token; }
-function invalidateSessionsFor(userId) { for (const [token, uid] of sessions) { if (uid === userId) sessions.delete(token); } }
+function newSession(u) { const token = crypto.randomBytes(32).toString('hex'); sessions.set(token, { uid: u.id, exp: Date.now() + SESSION_TTL_MS }); return token; }
+function invalidateSessionsFor(userId) { for (const [token, s] of sessions) { if (s && s.uid === userId) sessions.delete(token); } }
+function isHttpsReq(req) { return String((req.headers && req.headers['x-forwarded-proto']) || '').split(',')[0].trim() === 'https'; }
+function sessionCookie(token, req) { return 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' + (isHttpsReq(req) ? '; Secure' : ''); }
+function clientIp(req) { const xff = String((req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim(); return xff || (req.socket && req.socket.remoteAddress) || 'unknown'; }
 // ---------- Password reset (added 2026-10-21, v20) ----------
 // "Forgot my password": the raw token only ever travels in the emailed
 // link; the user record keeps ONLY its sha256 hash + a 60-minute expiry
@@ -82,6 +97,24 @@ function pwResetRateOk(email) {
   recent.push(now); pwResetAttempts.set(email, recent); return true;
 }
 const PW_RESET_GENERIC = 'If that email has an account, we\'ve sent a reset link';
+// ---------- Login throttle (v33 security) ----------
+// Failed sign-ins are counted per IP + email over a 15-minute window; past
+// the cap the endpoint answers 429 until the window slides. A successful
+// sign-in clears the record. In-memory like the reset limiter — a restart
+// forgives the counters, which is acceptable for v1.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000, LOGIN_MAX_FAILS = 10;
+function loginKey(req, email) { return clientIp(req) + '|' + String(email || '').toLowerCase(); }
+function loginBlockedSecs(req, email) {
+  const k = loginKey(req, email);
+  const rec = loginAttempts.get(k);
+  if (!rec) return 0;
+  const now = Date.now();
+  rec.fails = rec.fails.filter(ts => now - ts < LOGIN_WINDOW_MS);
+  if (!rec.fails.length) { loginAttempts.delete(k); return 0; }
+  return rec.fails.length >= LOGIN_MAX_FAILS ? Math.max(1, Math.ceil((rec.fails[0] + LOGIN_WINDOW_MS - now) / 1000)) : 0;
+}
+function noteLoginFailure(req, email) { const k = loginKey(req, email); const rec = loginAttempts.get(k) || { fails: [] }; rec.fails.push(Date.now()); loginAttempts.set(k, rec); }
 async function sendPasswordResetEmail(u, token) {
   const link = appBase() + '/#reset=' + token;
   const html = mailShell('Reset your password',
@@ -101,6 +134,15 @@ function notify(userId, type, text) {
   if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-2000);
 }
 function notifyAdmins(type, text) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text)); }
+// ---------- Admin audit log (v33 security) ----------
+// Every admin action and money movement lands here (who, what, which
+// record, when) so Gabriel can review the trail in his panel. Capped at
+// the newest 500 entries; served only by GET /api/admin/audit.
+function audit(actor, action, target, detail) {
+  if (!Array.isArray(db.auditLog)) db.auditLog = [];
+  db.auditLog.push({ id: id('AUD'), at: new Date().toISOString(), actorId: actor ? actor.id : null, actorEmail: actor ? (actor.email || '') : '', action: String(action || ''), target: String(target || ''), detail: String(detail || '').slice(0, 300) });
+  if (db.auditLog.length > 500) db.auditLog = db.auditLog.slice(-500);
+}
 function workerAreas(w) {
   const prof = w.profile || {};
   const raw = prof.areas || prof.serviceAreas || prof.wAreas || '';
@@ -535,6 +577,7 @@ function ensureYardVisitProposals(u) {
   const plan = membershipPlanOf(u);
   if (plan.status !== 'active' || !(plan.visitsPerMonth > 0)) return [];
   if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+if (!Array.isArray(db.auditLog)) db.auditLog = [];
   const period = yardPeriodKey(new Date());
   db.yardVisits.forEach(v => {
     if (v.userId === u.id && v.period === period && v.source === 'auto' && v.planKey !== plan.planKey && v.status === 'proposed') {
@@ -1658,6 +1701,17 @@ const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhan
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  // Security headers on EVERY response (v33). The CSP names exactly what
+  // the app loads — Stripe.js/Elements, Leaflet (unpkg), OSM tiles — and
+  // keeps everything else same-origin; frame-ancestors/X-Frame-Options
+  // stop clickjacking of the panel.
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(self), microphone=()');
+  res.setHeader('Content-Security-Policy', GHS_CSP);
+  if (isHttpsReq(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) && Number(req.headers['content-length'] || 0) > MAX_BODY_BYTES) return send(res, 413, { error: 'request too large' });
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
@@ -1724,12 +1778,14 @@ const server = http.createServer(async (req, res) => {
     if (db.users.some(u => u.role === 'admin')) return send(res, 409, { error: 'admin already exists' });
     const u = { id: id('USR'), name: b.name || 'Gabriel', email: (b.email || '').toLowerCase(), phone: b.phone || '', role: 'admin', status: 'active', pw: hashPw(b.password || ''), createdAt: new Date().toISOString() };
     if (!u.email || !b.password) return send(res, 400, { error: 'email and password required' });
+    if (String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
     db.users.push(u); save(); return send(res, 201, { user: pubUser(u) });
   }
   if (p === '/api/signup' && req.method === 'POST') {
     const b = await readBody(req);
     const email = (b.email || '').toLowerCase();
     if (!email || !b.password || !b.name) return send(res, 400, { error: 'name, email and password required' });
+    if (String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
     if (db.users.some(u => u.email === email)) return send(res, 409, { error: 'email already registered' });
     // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
     const role = b.role === 'worker' ? 'worker' : 'customer';
@@ -1753,10 +1809,15 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
-    const u = db.users.find(x => x.email === (b.email || '').toLowerCase());
-    if (!u || !checkPw(b.password || '', u.pw)) return send(res, 401, { error: 'wrong email or password' });
+    const email = (b.email || '').toLowerCase();
+    const blocked = loginBlockedSecs(req, email);
+    if (blocked > 0) return send(res, 429, { error: 'too many failed login attempts — try again in ' + Math.ceil(blocked / 60) + ' minute(s)' }, { 'Retry-After': String(blocked) });
+    const u = db.users.find(x => x.email === email);
+    if (!u || !checkPw(b.password || '', u.pw)) { noteLoginFailure(req, email); audit(null, 'auth.login_failed', email, 'from ' + clientIp(req)); return send(res, 401, { error: 'wrong email or password' }); }
+    loginAttempts.delete(loginKey(req, email));
+    if (u.role === 'admin') audit(u, 'auth.login', '', 'admin sign-in from ' + clientIp(req));
     const token = newSession(u);
-    return send(res, 200, { user: pubUser(u), token }, { 'Set-Cookie': 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' });
+    return send(res, 200, { user: pubUser(u), token }, { 'Set-Cookie': sessionCookie(token, req) });
   }
   if (p === '/api/auth/forgot' && req.method === 'POST') {
     const b = await readBody(req);
@@ -1789,11 +1850,12 @@ const server = http.createServer(async (req, res) => {
     }
     u.pw = hashPw(password);
     delete u.pwReset; // single use: consumed
+    audit(u, 'auth.password_reset', '', 'password changed; all sessions invalidated');
     invalidateSessionsFor(u.id); // every prior session (any device) is signed out
     save();
     return send(res, 200, { ok: true, message: 'Your password has been updated — log in with your new password.' });
   }
-  if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; Max-Age=0' }); }
+  if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') }); }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
   if (p === '/api/me/service-address' && req.method === 'POST') {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
@@ -1990,6 +2052,7 @@ const server = http.createServer(async (req, res) => {
     db.notifications = (db.notifications || []).filter(n => n.userId !== uid);
     const idx = db.users.findIndex(u => u.id === uid);
     if (idx !== -1) db.users.splice(idx, 1);
+    audit(user, 'account.delete', uid, user.role + ' · ' + (user.email || ''));
     invalidateSessionsFor(uid);
     save();
     return send(res, 200, { ok: true });
@@ -2000,7 +2063,7 @@ const server = http.createServer(async (req, res) => {
   // the request itself; logged-in customers keep member pricing + dashboard.
   if (p === '/api/requests' && req.method === 'POST') {
     const b = await readBody(req);
-    const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6) : [];
+    const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000).slice(0, 6) : [];
     const formName = cleanText(b.customerName, 80);
     const formEmail = cleanText(b.customerEmail, 160).toLowerCase();
     const formPhone = cleanText(b.customerPhone, 40);
@@ -2095,6 +2158,7 @@ const server = http.createServer(async (req, res) => {
       if (b.action === 'approve') await tryHoldIncrementAfterApproval(r); // increment only — never a capture; failures land on r.holdSync
       if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' })); }
     } else return send(res, 403, { error: 'not allowed' });
+    if (user && user.role === 'admin') { const parts = []; if (b.estimate || typeof b.quote === 'number') parts.push('quote $' + (r.quote || 0)); if (b.status) parts.push('status ' + b.status); audit(user, 'request.update', r.id, parts.join(' · ')); }
     save(); return send(res, 200, { request: r, automation });
   }
   if (reqMatch && req.method === 'DELETE') {
@@ -2102,6 +2166,7 @@ const server = http.createServer(async (req, res) => {
     const idx = db.requests.findIndex(x => x.id === reqMatch[1]);
     if (idx === -1) return send(res, 404, { error: 'request not found' });
     const removed = db.requests.splice(idx, 1)[0];
+    audit(user, 'request.delete', removed.id, removed.service || '');
     save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
 
@@ -2123,6 +2188,7 @@ const server = http.createServer(async (req, res) => {
       // Gabriel closes with his eyes open.
       const pool = holdsPool(r);
       r.status = 'Closed';
+      audit(user, 'hold.close', r.id, pool > 0 ? 'closed with ' + usd(pool / 100) + ' still authorized' : 'closed');
       save();
       return send(res, 200, { ok: true, status: r.status, warning: pool > 0 ? 'authorized_uncaptured' : null, poolCents: pool });
     }
@@ -2135,6 +2201,7 @@ const server = http.createServer(async (req, res) => {
         try { await stripeApi('/payment_intents/' + h.pi + '/cancel', {}); released.push(h.pi); }
         catch (e) { return send(res, 502, { error: 'Stripe release failed on ' + h.pi + ': ' + e.message, released }); }
       }
+      audit(user, 'hold.release', r.id, released.length + ' hold(s) released');
       // The payment_intent.canceled webhook flips each hold to 'released'.
       return send(res, 200, { ok: true, released });
     }
@@ -2149,6 +2216,7 @@ const server = http.createServer(async (req, res) => {
         visit.authorizedCents = Math.round(Number(out.amount) || totalCents);
         visit.updatedAt = new Date().toISOString();
         r.holdSync = { targetCents: totalCents, state: 'incremented', at: new Date().toISOString() };
+        audit(user, 'hold.increment', r.id, 'authorized ' + usd(visit.authorizedCents / 100));
         save();
         return send(res, 200, { ok: true, hold: visit, poolCents: holdsPool(r) });
       } catch (e) { return send(res, 502, { error: 'Stripe increment failed: ' + e.message }); }
@@ -2156,6 +2224,7 @@ const server = http.createServer(async (req, res) => {
     if (action === 'authorize-balance') {
       try {
         const out = await startBalanceAuthorization(r);
+        audit(user, 'hold.authorize_balance', r.id, '');
         return send(res, 200, out);
       } catch (e) {
         if (String(e.message).indexOf('stripe:') === 0) return send(res, 502, { error: 'payment service error — try again in a minute' });
@@ -2206,6 +2275,7 @@ const server = http.createServer(async (req, res) => {
           .catch(e => console.error('receipt email failed for request ' + r.id + ':', e.message));
       }
       notifyAdmins('payment', 'Manual capture started on request ' + r.id + ': ' + usd(finalCents / 100) + ' across ' + results.length + ' hold(s). The webhook confirms the final amounts.');
+      audit(user, 'hold.capture', r.id, 'captured ' + usd(finalCents / 100) + ' across ' + results.length + ' hold(s)');
       save();
       return send(res, 200, { ok: true, captured: results, finalCents });
     }
@@ -2246,6 +2316,7 @@ const server = http.createServer(async (req, res) => {
     notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.');
     notifyWorkersForJob(j);
     fireAutomation('job_posted', jobWorkerAutomationPayload(j));
+    audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer);
     save(); return send(res, 201, { job: publicJob(j, user), request: r });
   }
 
@@ -2305,6 +2376,7 @@ const server = http.createServer(async (req, res) => {
       if (typeof pf.notes === 'string') w.profile.notes = cleanText(pf.notes, 500);
       if (Array.isArray(pf.skills)) w.profile.skills = pf.skills.map(s => cleanText(String(s), 60)).filter(Boolean).slice(0, 30);
     }
+    { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.skillRanks) parts.push('skill ranks'); if (b.email || b.name || b.profile) parts.push('profile edit'); audit(user, 'worker.update', w.id, parts.join(' · ') || 'update'); }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -2314,7 +2386,8 @@ const server = http.createServer(async (req, res) => {
     const removed = db.users.splice(idx, 1)[0];
     // Free any jobs this worker had claimed so they go back to the open board.
     db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { const prev = j.status; j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; if (prev !== 'Open') emitJobStatus(j, prev); } });
-    for (const [token, uid] of sessions) { if (uid === removed.id) sessions.delete(token); }
+    audit(user, 'worker.delete', removed.id, removed.email || '');
+    invalidateSessionsFor(removed.id);
     save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
 
@@ -2341,6 +2414,7 @@ const server = http.createServer(async (req, res) => {
     if (!Array.isArray(db.invoices)) db.invoices = [];
     db.invoices.push(inv);
     notifyAdmins('invoice', 'Draft invoice ' + inv.id + ' created for ' + inv.customerName + ' (' + usd(inv.total) + ').');
+    audit(user, 'invoice.create', inv.id, usd(inv.total) + ' · ' + inv.customerName);
     save(); return send(res, 201, { invoice: publicInvoice(inv) });
   }
   if (p === '/api/admin/invoices' && req.method === 'GET') {
@@ -2358,6 +2432,7 @@ const server = http.createServer(async (req, res) => {
       if (inv.status !== 'draft') return send(res, 400, { error: 'only draft invoices can be sent' });
       if (!inv.customerEmail) return send(res, 400, { error: 'invoice has no customer email — add one first' });
       inv.status = 'sent'; inv.sentAt = new Date().toISOString();
+      audit(user, 'invoice.send', inv.id, usd(inv.total) + ' → ' + inv.customerEmail);
       notifyAdmins('invoice', 'Invoice ' + inv.id + ' sent to ' + inv.customerEmail + ' (' + usd(inv.total) + ').');
       save();
       const automation = await sendAutomation('invoice_sent', { invoice: publicInvoice(inv) });
@@ -2367,6 +2442,7 @@ const server = http.createServer(async (req, res) => {
       if (!['draft', 'sent'].includes(inv.status)) return send(res, 400, { error: 'only draft or sent invoices can be cancelled' });
       inv.status = 'cancelled';
       notifyAdmins('invoice', 'Invoice ' + inv.id + ' cancelled.');
+      audit(user, 'invoice.cancel', inv.id, '');
       save(); return send(res, 200, { invoice: publicInvoice(inv) });
     }
     if (action === 'mark-paid') {
@@ -2377,6 +2453,7 @@ const server = http.createServer(async (req, res) => {
       notifyAdmins('payment', 'Invoice ' + inv.id + ' marked PAID (' + usd(inv.total) + ', ' + inv.paidMethod + ').');
       const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
       if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + inv.total.toFixed(2) + ') was marked paid. Thank you!');
+      audit(user, 'invoice.mark_paid', inv.id, usd(inv.total) + ' · ' + inv.paidMethod);
       save();
       fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       return send(res, 200, { invoice: publicInvoice(inv) });
@@ -2391,6 +2468,7 @@ const server = http.createServer(async (req, res) => {
       inv.remindedAt = new Date().toISOString();
       if (cust) notify(cust.id, 'invoice_reminder', 'Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv));
       notifyAdmins('invoice', 'Payment reminder #' + inv.reminderCount + ' sent for invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ').');
+      audit(user, 'invoice.remind', inv.id, 'reminder #' + inv.reminderCount);
       save();
       const automation = await sendAutomation('invoice_reminder', { invoice: publicInvoice(inv) });
       return send(res, 200, { invoice: publicInvoice(inv), automation });
@@ -2432,6 +2510,7 @@ const server = http.createServer(async (req, res) => {
       if (b.notes !== undefined) inv.notes = cleanText(b.notes, 1000);
       if (b.dueDate !== undefined) inv.dueDate = cleanText(b.dueDate, 20);
     }
+    audit(user, 'invoice.update', inv.id, onlyConfirm ? 'schedule confirmed' : 'total ' + usd(inv.total));
     if (b.confirmedDate !== undefined) inv.confirmedDate = cleanText(b.confirmedDate, 40);
     if (b.confirmedTime !== undefined) inv.confirmedTime = cleanText(b.confirmedTime, 40);
     inv.updatedAt = new Date().toISOString();
@@ -2450,6 +2529,7 @@ const server = http.createServer(async (req, res) => {
     const idx = db.invoices.indexOf(inv);
     db.invoices.splice(idx, 1);
     notifyAdmins('invoice', 'Invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ') was deleted.');
+    audit(user, 'invoice.delete', inv.id, inv.customerName || '');
     save(); return send(res, 200, { ok: true, deleted: inv.id });
   }
 
@@ -2465,6 +2545,7 @@ const server = http.createServer(async (req, res) => {
       const r = db.requests.find(x => x.id === removed.requestId);
       if (r && r.jobId === removed.id) { r.status = 'Approved'; delete r.jobId; r.messages = r.messages || []; r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Job ' + removed.id + ' was cancelled by the Team.', at: new Date().toISOString() }); }
     }
+    audit(user, 'job.delete', removed.id, removed.service || '');
     save(); emitJobStatus(removed, removed.status, 'Deleted'); return send(res, 200, { ok: true, deleted: removed.id });
   }
   if (p === '/api/jobs' && req.method === 'POST') {
@@ -2492,6 +2573,7 @@ const server = http.createServer(async (req, res) => {
     } else {
       notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j));
     }
+    audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts();
@@ -2604,6 +2686,7 @@ const server = http.createServer(async (req, res) => {
       if (!handled) return send(res, 403, { error: 'not allowed' });
     }
     else return send(res, 403, { error: 'not allowed' });
+    if (user && user.role === 'admin') { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.infoReleased !== undefined) parts.push('infoReleased ' + !!b.infoReleased); if (b.reviewPublished !== undefined) parts.push('reviewPublished ' + !!b.reviewPublished); if (parts.length) audit(user, 'job.update', j.id, parts.join(' · ')); }
     save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') maybePayWorkerForJob(j); return send(res, 200, { job: publicJob(j, user) });
   }
 
@@ -2633,6 +2716,7 @@ const server = http.createServer(async (req, res) => {
     const j = db.jobs.find(x => x.id === payWorkerMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     await maybePayWorkerForJob(j, { force: true });
+    audit(user, 'job.pay_worker', j.id, 'payoutStatus ' + (j.payoutStatus || '—'));
     return send(res, 200, { ok: true, payoutStatus: j.payoutStatus || null, payoutTransferId: j.payoutTransferId || null, payoutError: j.payoutError || null });
   }
 
@@ -2660,6 +2744,10 @@ const server = http.createServer(async (req, res) => {
     save();
     notifyAdmins('rating', 'New ' + stars + '-star rating on job ' + j.id + ' (' + (j.service || '') + ').');
     return send(res, 200, { ok: true, rating: j.rating, reviewText: j.reviewText, ratedAt: j.ratedAt });
+  }
+  if (p === '/api/admin/audit' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, { entries: (db.auditLog || []).slice(-200).reverse() });
   }
   if (p === '/api/admin/ratings' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -3108,6 +3196,7 @@ const server = http.createServer(async (req, res) => {
   // notifies workers and never appears on /api/admin/calendar. Gabriel runs
   // the yard route himself; this is purely scheduling bookkeeping.
   if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+if (!Array.isArray(db.auditLog)) db.auditLog = [];
   const yardDateOk = (v) => { const s = cleanDate(v); if (!s) return ''; const d = new Date(s + 'T00:00:00Z'); return (!isNaN(d) && d.toISOString().slice(0, 10) === s) ? s : ''; };
   const publicYardVisit = (v) => {
     const u = db.users.find(x => x.id === v.userId);

@@ -750,6 +750,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div id="iMsg" class="mut"></div>
     </div>
     <div id="adminInvoices"></div>
+    <h3>Security &amp; activity log</h3>
+    <p class="mut">Every admin action and money movement is recorded here — quotes, status changes, captures, releases, payouts, worker changes, sign-ins. Only you see this.</p>
+    <div id="adminAudit"></div>
     <div id="delAcctSlotA"></div>
   </div>
 
@@ -2883,6 +2886,7 @@ async function loadAdmin(){
   initTrackMaps(jb.jobs);
   loadInvoices();
   loadAdminRatings();
+  loadAdminAudit();
 }
 // ---------- Admin ratings (v25, C1) ----------
 async function loadAdminRatings(){
@@ -2895,6 +2899,14 @@ async function loadAdminRatings(){
           (rv.text ? '<span>&ldquo;' + escHtml(rv.text) + '&rdquo;</span><br>' : '') +
           '<span class="pill">' + (rv.published ? 'Published' : 'Not published') + '</span> <button class="ghost" onclick="toggleReviewPublished(\'' + rv.jobId + '\',' + (!rv.published) + ')">' + (rv.published ? 'Unpublish' : 'Publish') + '</button></div>';
       }).join('');
+  }catch(e){}
+}
+async function loadAdminAudit(){
+  const el=document.getElementById('adminAudit'); if(!el) return;
+  try{
+    const d=await api('/api/admin/audit');
+    const es=d.entries||[];
+    el.innerHTML = es.length ? es.map(function(e){ return '<div class="card" style="padding:8px 12px;margin-bottom:6px"><span class="mut">'+escHtml(new Date(e.at).toLocaleString())+'</span> — <b>'+escHtml(e.action)+'</b>'+(e.target?' '+escHtml(e.target):'')+(e.detail?' · '+escHtml(e.detail):'')+'<br><span class="mut">'+escHtml(e.actorEmail||'system / customer action')+'</span></div>'; }).join('') : '<div class="empty"><p class="mut">No activity logged yet — actions you take in this panel will appear here.</p></div>';
   }catch(e){}
 }
 async function toggleReviewPublished(idv, pub){
