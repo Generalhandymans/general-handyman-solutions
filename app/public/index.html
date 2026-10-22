@@ -3059,8 +3059,11 @@ function renderOrder(){
 async function orderMemberRefresh(){
   if (!orderState || orderState.bad) return;
   if (!me) { orderState.memberActive = false; orderState.memberLoaded = true; orderUpsell(); orderTotals(); return; }
-  try { const d = await api('/api/me/membership'); orderState.memberActive = !!((d.plan && d.plan.status === 'active') || me.homeCareStatus === 'active'); }
-  catch (e) { orderState.memberActive = me.homeCareStatus === 'active'; }
+  // The 20% menu discount belongs to HomeCare / HomeCare Plus ONLY —
+  // homeCareStatus is set by exactly those plans. Yard Care members keep
+  // their own benefits (free first estimate, then $60 estimates) but do NOT
+  // get the 20% (Gabriel's call, 2026-10-22, matching the plans table).
+  orderState.memberActive = me.homeCareStatus === 'active';
   orderState.memberLoaded = true;
   orderUpsell(); orderTotals();
 }
