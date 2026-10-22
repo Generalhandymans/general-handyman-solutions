@@ -98,6 +98,29 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .cg-card button{width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;background:#e42535;color:#fff}
 .cg-card.free button{background:#2fbf71}
 .cg-foot{text-align:center;font-size:12px;color:#8f8a81;margin:14px 0 2px}
+.cg-foot a{color:#c9c2b8;font-weight:700}
+/* v21: public info pages — Terms (legal page) + How it works (step timelines) */
+.legal-card{max-width:760px;margin:14px auto}
+.legal-card h2{margin:2px 0 4px;font-size:24px;line-height:1.25}
+.legal-updated{color:var(--muted);font-size:13px;margin:0 0 4px}
+.clause{padding:13px 0;border-bottom:1px solid var(--line)}
+.clause:last-of-type{border-bottom:0}
+.clause h4{margin:0 0 5px;font-size:15.5px}
+.clause p{margin:0;font-size:14.5px;line-height:1.65;color:#26241f}
+.seg{display:flex;gap:8px;margin:12px 0 4px}
+.seg button{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line)}
+.seg button.on{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.steps{margin:16px 0 4px}
+.step-card{display:flex;gap:12px;position:relative;padding:0 0 18px}
+.step-card:last-child{padding-bottom:2px}
+.step-card::before{content:"";position:absolute;left:16px;top:36px;bottom:0;width:2px;background:var(--line)}
+.step-card:last-child::before{display:none}
+.step-badge{flex:0 0 34px;width:34px;height:34px;border-radius:50%;color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.step-badge.red{background:#e42535}
+.step-badge.green{background:#2fbf71}
+.step-body{flex:1;border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:#fff}
+.step-body b{display:block;font-size:15px;margin-bottom:2px}
+.step-body span{font-size:14px;line-height:1.55;color:#33302b}
 header nav a{color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a}
 header nav a:hover{border-color:var(--red)}
 </style>
@@ -195,6 +218,7 @@ header nav a:hover{border-color:var(--red)}
       </div>
     </div>
     <p class="cg-foot">General Handyman Solutions · v1.0</p>
+    <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a></p>
   </div>
 
   <!-- AUTH -->
@@ -284,6 +308,8 @@ header nav a:hover{border-color:var(--red)}
     </div>
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $49/mo total.</b> Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
+    <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
+    <p class="mut" id="workerAgreeRow" style="display:none;text-align:center;margin-top:8px">By applying you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword();return false;">Forgot my password</a></p>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
@@ -403,6 +429,63 @@ header nav a:hover{border-color:var(--red)}
       </div>
     </div>
     <p class="mut">Your first scheduled visit includes the regular yard cut. If a yard needs work beyond normal maintenance (extreme overgrowth, debris), the Team quotes that separately before starting. Labor-only on handyman jobs — you buy materials/parts. Questions? Text or call (707) 862-3773.</p>
+  </div>
+
+  <!-- TERMS & CONDITIONS (added 2026-10-21, v21) — public page at #terms -->
+  <div id="termsBox" style="display:none">
+    <p class="mut"><a href="#" onclick="exitInfoView();return false;">← Back to the app</a></p>
+    <div class="card legal-card">
+      <h2>General Handyman Solutions — Terms &amp; Conditions</h2>
+      <p class="legal-updated">Last updated: October 2026</p>
+      <div class="clause"><h4>1. Our services.</h4><p>General Handyman Solutions ("GHS", "we", "the Team") provides handyman, home-care membership, and yard-care services booked through generalhandymans.app and our app. Services are performed by GHS technicians — independent contractors coordinated by the Team.</p></div>
+      <div class="clause"><h4>2. Labor only — you buy materials.</h4><p>Unless we agree otherwise in writing, every price is <b>labor only</b>. You buy all materials and parts for your job. If a technician picks up materials on your behalf, that is arranged and priced separately before purchase.</p></div>
+      <div class="clause"><h4>3. Estimates.</h4><p>Photo estimates are free. An in-person estimate costs <b>$75 for non-members</b>: when you book the visit, we place an <b>authorization hold</b> (not a charge) for that amount, and the fee is <b>credited toward your repair</b> when you approve the work the same day. <b>Members:</b> your first in-person estimate is <b>FREE</b>; after that, member estimates are <b>$60</b>.</p></div>
+      <div class="clause"><h4>4. How payment works.</h4><p>Your card is authorized first and <b>charged when the job is completed</b>, for the exact approved amount. If your approved quote is higher than the initial hold, we may request an additional authorization for the difference before work begins. You can follow your payment status live in the app at all times (hold → authorized → charged/released).</p></div>
+      <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$49/mo</b>, Yard Care <b>$95/mo</b> (1 visit) or <b>$175/mo</b> (2 visits), HomeCare Plus <b>$135/mo</b> (1 yard visit) or <b>$199/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b>, one free first in-person estimate (then $60), and priority scheduling.</p></div>
+      <div class="clause"><h4>6. Changing or cancelling a membership.</h4><p>You can change plans anytime from your account; Stripe prorates the difference (you may see a prorated charge or credit). You can cancel anytime from your account or by contacting the Team; <b>cancellation takes effect at the end of the current paid month</b> — your plan stays active until then and you will not be charged again. Membership payments are charged in advance and are not refunded.</p></div>
+      <div class="clause"><h4>7. Yard visits.</h4><p>A standard visit includes mowing, edging, blowing, and light weeding of a standard residential yard. Your first scheduled visit includes the normal yard cut. Work beyond normal maintenance — extreme overgrowth, accumulated debris or junk, hauling — is quoted separately before we do it. <b>Unused visits do not roll over to the next month and are not refunded.</b></p></div>
+      <div class="clause"><h4>8. Scheduling.</h4><p>You propose dates and times; <b>the Team confirms</b> every appointment — nothing is final until we confirm it. Please provide safe access to the work area (gates, pets, parking) in your home notes. If you need to move a visit, message the Team and we will confirm a new time — visits are prepaid with your membership and are not refunded.</p></div>
+      <div class="clause"><h4>9. ASAP / Emergency.</h4><p>Urgent handyman jobs carry a <b>+25% urgency charge</b>, always shown to you before you book. (Yard visits are scheduled and are not subject to the urgency charge.)</p></div>
+      <div class="clause"><h4>10. Communication goes through the Team.</h4><p>All communication between customers and technicians runs through the GHS Team. <b>We never share your phone number with a technician, and never share a technician's number with you.</b> Messages about your job inside the app go to the Team, and the Team coordinates everything.</p></div>
+      <div class="clause"><h4>11. Live tracking.</h4><p>When your technician is on the way, the app may show their live location on a map <b>only during that job</b> and only so you can follow the arrival. Technicians share location only while en route to an active job.</p></div>
+      <div class="clause"><h4>12. Workmanship guarantee.</h4><p>If something we did fails within <b>30 days</b> of the completed job, tell the Team and we will make it right.</p></div>
+      <div class="clause"><h4>13. Changes to these terms.</h4><p>We may update these terms; the current version always lives in the app and at generalhandymans.app. Continuing to use the service after an update means you accept the new terms.</p></div>
+      <div class="clause"><h4>14. Contact.</h4><p>General Handyman Solutions · (707) 862-3773 · generalhandymans.app</p></div>
+      <p class="mut" style="margin-top:14px">See also: <a href="#how-it-works">How it works</a> — the step-by-step for customers and technicians.</p>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS (added 2026-10-21, v21) — public page at #how-it-works -->
+  <div id="howBox" style="display:none">
+    <p class="mut"><a href="#" onclick="exitInfoView();return false;">← Back to the app</a></p>
+    <h2 style="margin:2px 0 4px">How it works</h2>
+    <p class="mut">The step-by-step — pick your side. Full details in the <a href="#terms">Terms &amp; Conditions</a>.</p>
+    <div class="seg">
+      <button type="button" id="howTabCust" class="on" onclick="showHowSide('cust')">For customers</button>
+      <button type="button" id="howTabTech" onclick="showHowSide('tech')">For technicians</button>
+    </div>
+    <div id="howCust">
+      <div class="steps">
+        <div class="step-card"><div class="step-badge green">1</div><div class="step-body"><b>Create your account</b><span>(or start with a free photo estimate — no account needed).</span></div></div>
+        <div class="step-card"><div class="step-badge green">2</div><div class="step-body"><b>Request your estimate</b><span>— free with photos, or in person ($75 hold for non-members; members: first one FREE, then $60).</span></div></div>
+        <div class="step-card"><div class="step-badge green">3</div><div class="step-body"><b>Approve your price</b><span>— you see the exact total before anything happens.</span></div></div>
+        <div class="step-card"><div class="step-badge green">4</div><div class="step-body"><b>Authorize, don't pay</b><span>— your card hold is only captured when the job is done.</span></div></div>
+        <div class="step-card"><div class="step-badge green">5</div><div class="step-body"><b>The Team confirms</b><span>your day and time (you propose, we confirm).</span></div></div>
+        <div class="step-card"><div class="step-badge green">6</div><div class="step-body"><b>Watch your technician on the map</b><span>— live, while he's on the way to your home.</span></div></div>
+        <div class="step-card"><div class="step-badge green">7</div><div class="step-body"><b>Job done</b><span>— the exact amount is charged, and you can rate the work.</span></div></div>
+      </div>
+      <p class="mut">Questions at any step? <b>Message the Team</b> right in the app — we coordinate everything with your technician for you.</p>
+    </div>
+    <div id="howTech" style="display:none">
+      <div class="steps">
+        <div class="step-card"><div class="step-badge red">1</div><div class="step-body"><b>Apply in the app</b><span>— your account starts On review.</span></div></div>
+        <div class="step-card"><div class="step-badge red">2</div><div class="step-body"><b>The Team activates you</b><span>— until then you can't claim jobs.</span></div></div>
+        <div class="step-card"><div class="step-badge red">3</div><div class="step-body"><b>See open jobs with YOUR exact pay on each one</b><span>— you never see the customer's total.</span></div></div>
+        <div class="step-card"><div class="step-badge red">4</div><div class="step-body"><b>Claim the jobs you can do</b><span>— the moment you claim, you get the address and time.</span></div></div>
+        <div class="step-card"><div class="step-badge red">5</div><div class="step-body"><b>Run your job with the status buttons</b><span>— On my way (the customer watches the map) → Arrived → Completed.</span></div></div>
+        <div class="step-card"><div class="step-badge red">6</div><div class="step-body"><b>Your pay</b><span>— handyman work pays $50/hr (short jobs pay a $100 minimum); a standard yard visit pays $50 flat; your pay for every job is shown before you claim it, and it never changes after you accept.</span></div></div>
+      </div>
+    </div>
   </div>
 
   <!-- CUSTOMER -->
@@ -552,7 +635,7 @@ let me=null, curMode='login';
 let authRevealed = false;
 function showLogin(){
   authRevealed = true;
-  if (isMembershipRoute() || isYardCalendarRoute()) location.hash = '';
+  if (isMembershipRoute() || isYardCalendarRoute() || isInfoRoute()) location.hash = '';
   render();
   mode('login');
   document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
@@ -610,6 +693,10 @@ function mode(m){ curMode=m;
   if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare') ? 'block':'none';
   const forgotRow = document.getElementById('forgotRow');
   if (forgotRow) forgotRow.style.display = m==='login' ? 'block':'none';
+  const joinAgreeRow = document.getElementById('joinAgreeRow');
+  if (joinAgreeRow) joinAgreeRow.style.display = (m==='join' || m==='homecare') ? 'block':'none';
+  const workerAgreeRow = document.getElementById('workerAgreeRow');
+  if (workerAgreeRow) workerAgreeRow.style.display = m==='worker' ? 'block':'none';
   const serviceAddressHint = document.getElementById('serviceAddressHint');
   if (serviceAddressHint) serviceAddressHint.textContent = (pendingMembershipPlan || (pendingJoin && pendingJoin.kind !== 'homecare'))
     ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
@@ -820,6 +907,17 @@ const MEMBERSHIP_JOIN_HASHES = {
   '#join-plus2': { kind: 'homecare-plus', plan: 'plus2', which: 'plus', visits: 2 }
 };
 function membershipJoinHashConfig(){ return MEMBERSHIP_JOIN_HASHES[location.hash] || null; }
+function isTermsRoute(){ return location.hash === '#terms'; }
+function isHowRoute(){ return location.hash === '#how-it-works'; }
+function isInfoRoute(){ return isTermsRoute() || isHowRoute(); }
+function exitInfoView(){ if (location.hash) location.hash = ''; render(); }
+function showHowSide(side){
+  const tech = side === 'tech';
+  const c = document.getElementById('howCust'); if (c) c.style.display = tech ? 'none' : 'block';
+  const t2 = document.getElementById('howTech'); if (t2) t2.style.display = tech ? 'block' : 'none';
+  const bc = document.getElementById('howTabCust'); if (bc) bc.classList.toggle('on', !tech);
+  const bt = document.getElementById('howTabTech'); if (bt) bt.classList.toggle('on', tech);
+}
 function isMembershipRoute(){ return location.hash === '#memberships' || location.hash === '#yard-care' || !!membershipJoinHashConfig(); }
 async function copyShareLink(url, button){
   try {
@@ -1249,6 +1347,24 @@ function render(){
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   const mlb = document.getElementById('memberLoginBtn');
   if (mlb) mlb.style.display = me ? 'none' : 'inline-block';
+  // Public info pages (#terms, #how-it-works) are standalone public views:
+  // while one is the route, it replaces every other box — no login needed.
+  const tb = document.getElementById('termsBox');
+  if (tb) tb.style.display = isTermsRoute() ? 'block' : 'none';
+  const hb = document.getElementById('howBox');
+  if (hb) hb.style.display = isHowRoute() ? 'block' : 'none';
+  if (isInfoRoute()) {
+    const cgI = document.getElementById('compareGridBox'); if (cgI) cgI.style.display = 'none';
+    const mbI = document.getElementById('membershipsBox'); if (mbI) mbI.style.display = 'none';
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    const ybI = document.getElementById('yardCalendarBox'); if (ybI) ybI.style.display = 'none';
+    const infoBox = isTermsRoute() ? tb : hb;
+    if (infoBox) infoBox.scrollIntoView();
+    return;
+  }
   // Memberships is a public page of its own (#memberships): while it is the
   // route, it replaces the auth/customer/technician/admin boxes.
   const onMemberships = isMembershipRoute();
