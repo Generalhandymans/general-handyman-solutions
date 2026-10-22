@@ -17,7 +17,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root{--red:#e10600;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7}
+:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#a49d93;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
 header{background:#0b0b0b;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 header b{font-size:20px;letter-spacing:.02em;text-transform:uppercase} header b em{color:var(--red);font-style:normal}
@@ -143,6 +143,60 @@ header nav a{color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;pa
 header nav a:hover{border-color:var(--red)}
 .trk-pin{background:transparent;border:0}
 .leaflet-container{font:inherit}
+
+/* ===== v28 ACABADOS — design unification (visual only) =====
+   Tokens from the approved storefront system (.cg-card / .share-panel):
+   panel #141414, brand red #e42535, green #2fbf71, panel ink #f2f0ec,
+   panel muted #a49d93, radius 16px cards / 12px fields / 10px dark-card CTAs. */
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.card{border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(11,11,11,.06)}
+input,select,textarea{border-color:var(--field-line);border-radius:12px;padding:12px 13px}
+input::placeholder,textarea::placeholder{color:#9a958c}
+input:focus,select:focus,textarea:focus{border-color:var(--ink);outline:0;box-shadow:0 0 0 3px rgba(228,37,53,.16)}
+button{font-weight:800;letter-spacing:.01em;padding:12px 20px}
+button:hover{filter:brightness(1.06)}
+button.ghost{border-color:var(--field-line)}
+button.ghost:hover{border-color:var(--red);color:var(--red)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.tabs button{padding:10px 16px}
+.pick button{border-color:var(--field-line);padding:9px 14px;min-height:40px}
+.pill{border-color:var(--field-line)}
+.err{border-radius:12px;padding:12px 14px}
+.msg{border-color:var(--field-line)}
+.thumb{border-color:var(--field-line)}
+.est-summary{border-radius:12px}
+.estimate{border-radius:16px}
+.estimate th{background:#141414}
+.estimate-total{background:#141414!important}
+.cal-day{border-radius:12px}
+.cal-ev{border-radius:7px}
+.step-body{border-color:var(--field-line)}
+/* dark designed panels — membership status, promos, danger zone */
+.panel-dark{background:var(--panel);border:2px solid var(--red);color:var(--panel-ink);box-shadow:none}
+.panel-dark .mut{color:var(--panel-mut)}
+.panel-green{border-color:var(--green)}
+/* customer payment (hold) panel */
+.pay-panel{margin-top:10px;background:#fff8e6;border:1px solid #ecd28f;border-radius:12px;padding:12px 14px;line-height:1.5}
+/* designed empty states — same words, finished blocks */
+.empty{border:1.5px dashed var(--field-line);background:var(--soft);border-radius:14px;padding:18px 16px;text-align:center;margin:14px 0}
+.empty p{margin:0}
+.empty .mut{font-size:14px}
+.thread .empty{margin:0}
+/* memberships plan toggle cards — full dark standard, same language as .cg-card */
+.plan-card{background:var(--panel);border:2px solid var(--red);color:var(--panel-ink);padding:22px 18px 18px;text-align:center;box-shadow:none}
+.plan-card h3{color:#fff;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;margin:0 0 4px}
+.plan-card img{border:1px solid var(--panel-line)}
+.plan-card label{color:var(--panel-mut)}
+.plan-card .pick{justify-content:center;margin:6px 0 4px}
+.plan-card .pick button{background:#1f1f1f;color:var(--panel-ink);border-color:#3a3a3a}
+.plan-card .pick button.sel{background:var(--red);border-color:var(--red);color:#fff}
+.plan-card .plan-price{font-size:37px;color:var(--red);margin:10px 0 6px}
+.plan-card .plan-price span{font-size:37px;color:var(--red)}
+.plan-card .plan-price span:last-of-type{font-size:16px;color:var(--panel-mut);font-weight:600}
+.plan-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;font-size:14.5px;line-height:1.5;color:var(--panel-ink)}
+.plan-card ul li{padding:4px 0 4px 26px;position:relative}
+.plan-card ul li::before{content:"\2713";position:absolute;left:2px;top:4px;font-weight:900;color:var(--red)}
+.plan-card>button{width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;background:var(--red);color:#fff}
 </style>
 </head>
 <body>
@@ -151,7 +205,7 @@ header nav a:hover{border-color:var(--red)}
   <span style="display:flex;align-items:center;gap:10px">
     <nav style="display:flex;gap:8px;align-items:center"><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
-    <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e10600;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
+    <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e42535;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
     <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔔</button>
     <span id="who" class="mut" style="color:#ccc"></span>
   </span>
@@ -253,7 +307,7 @@ header nav a:hover{border-color:var(--red)}
       <button id="tabWorker" onclick="mode('worker')">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
-    <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px"></p>
+    <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
     <div id="planSelRow" style="display:none">
       <label>Choose your plan</label>
       <select id="aPlanSel" onchange="joinPlanChanged()">
@@ -291,7 +345,7 @@ header nav a:hover{border-color:var(--red)}
     </div>
     <div id="cardRow" style="display:none">
       <label id="cardChargeLabel">Card — charged $49 today, then $49/mo</label>
-      <div id="cardElement" style="background:#fff;border:1px solid #ddd;border-radius:10px;padding:12px"></div>
+      <div id="cardElement" style="background:#fff;border:1px solid #d8d2c8;border-radius:12px;padding:12px"></div>
       <p class="mut" style="font-size:12.5px">Secure payment via Stripe — your card number never touches our servers. Cancel anytime from your dashboard.</p>
     </div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
@@ -328,17 +382,17 @@ header nav a:hover{border-color:var(--red)}
       </div>
       <label>Anything the Team should know?</label><textarea id="wNotes" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
-    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $49/mo total.</b> Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
+    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $49/mo total.</b> Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <p class="mut" id="workerAgreeRow" style="display:none;text-align:center;margin-top:8px">By applying you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword();return false;">Forgot my password</a></p>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
-    <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e10600;border-radius:12px;background:#fff5f5">
+    <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e42535;border-radius:12px;background:#fff5f5">
       <b>Join HomeCare — $49/mo</b><br>
       <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
-      <button onclick="joinHomeCare()" style="margin-top:10px;background:#e10600;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%">Join now — $49/mo</button>
+      <button onclick="joinHomeCare()" style="margin-top:10px;background:#e42535;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%">Join now — $49/mo</button>
       <button class="ghost" onclick="location.hash='#memberships'" style="margin-top:8px;width:100%">Compare all memberships — Yard Care &amp; HomeCare Plus</button>
     </div>
     <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a General Handyman Solutions technician? <a href="#worker">Log in here →</a></p>
@@ -384,12 +438,12 @@ header nav a:hover{border-color:var(--red)}
         <div class="cg-card yard-card" data-plan="plus2"><img id="ycImg-plus2" src="" alt=""><h3>HomeCare Plus</h3><div class="cg-price">$199<span>/mo</span></div><div class="cg-subline">2 yard visits / month</div><ul><li>2 yard visits every month</li><li>Everything in HomeCare — 20% off labor (jobs under $1,000)</li><li>First in-person estimate FREE, then $60 member estimates</li><li>Mowing · edging · blowing at every visit</li><li>One total monthly charge — never a per-visit fee</li><li>Priority scheduling · Cancel anytime</li></ul><div class="grow"></div><button onclick="startMembershipCheckout('homecare-plus','plus2')">Join Plus</button></div>
       </div>
     </div>
-    <div id="yardCarePageLink" class="card" style="background:#f3fbf3;border-color:#bfe3bf">
+    <div id="yardCarePageLink" class="card panel-dark panel-green">
       <b>Here for the yard?</b> <span class="mut">Open the yard-focused page with Yard Care and HomeCare Plus — and the direct signup link for each plan.</span><br>
       <button type="button" style="margin-top:8px" onclick="location.hash='#yard-care'">View Yard Care memberships</button>
     </div>
     <div id="membershipPageState"></div>
-    <div id="membershipAddressBox" class="card" style="display:none;border-color:#e10600;background:#fffafa">
+    <div id="membershipAddressBox" class="card" style="display:none;border-color:#e42535;background:#fff5f5">
       <h3 style="margin-top:0">Service address needed</h3>
       <p class="mut">Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.</p>
       <label>Service address — where we'll do the work</label>
@@ -1175,7 +1229,7 @@ function renderMembershipPageState(){
   const el = document.getElementById('membershipPageState');
   if (!el) return;
   if (me && me.membershipPlan && me.membershipPlan.status === 'active') {
-    el.innerHTML = '<div class="card" style="background:#f3fbf3;border-color:#bfe3bf"><b>Your active plan:</b> ' + membershipPlanLine(me.membershipPlan) + '<br><span class="mut">See it anytime on your dashboard.</span></div>';
+    el.innerHTML = '<div class="card panel-dark panel-green"><b>Your active plan:</b> ' + membershipPlanLine(me.membershipPlan) + '<br><span class="mut">See it anytime on your dashboard.</span></div>';
   } else {
     el.innerHTML = '';
   }
@@ -1186,7 +1240,7 @@ function renderMyMembership(){
   if (!me || me.role !== 'customer') { el.innerHTML = ''; return; }
   const p = me.membershipPlan;
   if (p && p.status === 'active') {
-    el.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
+    el.innerHTML = '<div class="card panel-dark panel-green"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
       ? '<div style="margin-top:6px">In-person estimates: <b>$60</b> — your member price.</div>'
       : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">Request your FREE on-site estimate</button><div class="mut" style="margin-top:4px">One FREE in-person estimate is included with your membership.</div></div>') + (p.cancelAt && new Date(p.cancelAt).getTime() > Date.now()
       ? '<div style="margin-top:8px"><b>Cancels on ' + fmtDateLong(p.cancelAt) + '</b> — your membership stays active until then.<br><button style="margin-top:6px" onclick="doReactivateMembership()">Keep my membership</button> <button class="ghost" onclick="showChangePlan()">Change plan</button></div>'
@@ -1202,7 +1256,7 @@ function renderMyMembership(){
 // deletion while work is in flight; this UI explains and confirms.
 let delAcctPaintedFor = '';
 function deleteAccountHtml(sfx){
-  return '<div class="card" style="border-color:#e5b4b4;background:#fffafa;margin-top:12px">'
+  return '<div class="card panel-dark" style="margin-top:12px">'
     + '<h3 style="margin-top:0">Delete my account</h3>'
     + '<div id="delIntro-' + sfx + '"><p class="mut" style="margin-top:0">You can delete your account and personal information yourself, right here. This is permanent.</p>'
     + '<button class="ghost" onclick="showDeleteAccount(\'' + sfx + '\')">Delete my account</button></div>'
@@ -1542,9 +1596,9 @@ async function loadNotifs(){ if(!me) return; try{ const d=await api('/api/notifi
 function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(function(n){
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
-  if(urgent){ var m=String(n.text).match(/\/invoice\/([\w-]+)/); if(m) payBtn='<div style="margin-top:6px"><a href="/invoice/'+m[1]+'"><button style="background:#e10600;color:#fff;border:0;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer">Pay now</button></a></div>'; }
-  return '<div style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e10600;padding-left:10px;border-radius:6px':'')+'"><div>'+n.text+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
-}).join(''):'<p class="mut">No notifications yet.</p>'); }
+  if(urgent){ var m=String(n.text).match(/\/invoice\/([\w-]+)/); if(m) payBtn='<div style="margin-top:6px"><a href="/invoice/'+m[1]+'"><button style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer">Pay now</button></a></div>'; }
+  return '<div style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+n.text+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
+}).join(''):'<div class="empty"><p class="mut">No notifications yet.</p></div>'); }
 async function toggleNotifs(){ const p=document.getElementById('notifPanel'); const open=p.style.display==='block'; p.style.display=open?'none':'block'; if(!open){ renderNotifs(); try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); setTimeout(loadNotifs,600); }catch(e){} } }
 setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
@@ -1638,7 +1692,7 @@ function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const img=n
     const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg',0.78)); };
   img.onerror=reject; img.src=url; }); }
 let custAck=false;
-document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e10600':''; });
+document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e42535':''; });
 ['cService','cEst','cCity','cWhen','cMember'].forEach(function(gid){ const g=document.getElementById(gid); if(g) g.addEventListener('click', custSummary); });
 document.getElementById('rDate').addEventListener('change', custSummary);
 // Member pricing presentation (added 2026-10-21; policy updated same day):
@@ -1789,7 +1843,7 @@ async function checkStripeHealth(){
     const h=await api('/api/admin/stripe/health');
     el.innerHTML = h.ok
       ? '<span class="pill" style="border-color:#1a7f37;color:#1a7f37">💳 Stripe: payments live'+(h.live?'':' (test mode)')+'</span>'
-      : '<span class="pill" style="border-color:#e10600;color:#e10600">💳 Stripe: NOT WORKING</span><br><span class="mut">'+escHtml(h.reason||'unknown')+'</span>';
+      : '<span class="pill" style="border-color:#e42535;color:#e42535">💳 Stripe: NOT WORKING</span><br><span class="mut">'+escHtml(h.reason||'unknown')+'</span>';
   }catch(e){ el.innerHTML='<span class="mut">💳 Stripe status unknown.</span>'; }
 }
 function invItemRowHtml(it){
@@ -1817,7 +1871,7 @@ async function createInvoice(){
     msg.textContent='Draft invoice created.'; document.getElementById('invRows').innerHTML=''; addInvoiceItem(); document.getElementById('iDiscount').value='0'; document.getElementById('iNotes').value=''; updateInvoiceSummary(); loadInvoices();
   }catch(e){ msg.textContent=e.message; }
 }
-function invStatusBadge(s){ const c={draft:'#6b6762',sent:'#b26a00',paid:'#1a7f37',overdue:'#e10600',cancelled:'#6b6762'}[s]||'#6b6762'; return '<span class="pill" style="border-color:'+c+';color:'+c+'">'+escHtml(s)+'</span>'; }
+function invStatusBadge(s){ const c={draft:'#6b6762',sent:'#b26a00',paid:'#1a7f37',overdue:'#e42535',cancelled:'#6b6762'}[s]||'#6b6762'; return '<span class="pill" style="border-color:'+c+';color:'+c+'">'+escHtml(s)+'</span>'; }
 let adminInvoicesCache=[];
 async function loadInvoices(){
   checkStripeHealth();
@@ -1838,7 +1892,7 @@ async function loadInvoices(){
       ? '<div style="margin-top:8px;border-top:1px dashed #ddd;padding-top:8px"><b>📅 Scheduling request:</b> '+escHtml(inv.preferredDate||'—')+' • '+escHtml(inv.preferredTime||'—')+(inv.scheduleNotes?'<br><span class="mut">'+escHtml(inv.scheduleNotes)+'</span>':'')+(inv.confirmedDate?'<br><span style="color:#1a7f37"><b>✅ Confirmed: '+escHtml(inv.confirmedDate)+(inv.confirmedTime?' • '+escHtml(inv.confirmedTime):'')+'</b></span>':'<div class="row" style="margin-top:6px"><input type="date" id="cfd-'+inv.id+'" value="'+escHtml(inv.confirmedDate||'')+'" style="width:150px"><select id="cft-'+inv.id+'" style="width:150px"><option value="">Time…</option><option value="morning"'+(inv.confirmedTime==='morning'?' selected':'')+'>Morning</option><option value="afternoon"'+(inv.confirmedTime==='afternoon'?' selected':'')+'>Afternoon</option><option value="evening"'+(inv.confirmedTime==='evening'?' selected':'')+'>Evening</option></select><button class="black" onclick="confirmSchedule(\''+inv.id+'\')">Confirm schedule</button></div>')
       : '';
     return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br><span class="mut">'+escHtml(inv.customerName)+(inv.customerEmail?' • '+escHtml(inv.customerEmail):'')+(inv.jobId?' • Job '+escHtml(inv.jobId):'')+(inv.dueDate?' • Due '+escHtml(inv.dueDate):'')+'</span>'+remindLine+'<div style="margin:8px 0">'+items+'</div>'+(inv.discount?'<div class="mut">Discount: −'+moneyFmt(inv.discount)+'</div>':'')+'<div><b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b>'+(inv.paidMethod?' <span class="mut">• paid via '+escHtml(inv.paidMethod)+'</span>':'')+'</div>'+(inv.notes?'<div class="mut">Note: '+escHtml(inv.notes)+'</div>':'')+schedLine+'<div class="row" style="margin-top:10px">'+btns.join('')+'</div><div id="invEdit-'+inv.id+'"></div></div>';
-  }).join('') || '<p class="mut">No invoices yet.</p>';
+  }).join('') || '<div class="empty"><p class="mut">No invoices yet.</p></div>';
 }
 async function invoiceAct(idv, action){
   let body={};
@@ -1918,13 +1972,13 @@ async function loadMyInvoices(){
   el.innerHTML = d.invoices.map(function(inv){
     const unpaid=['draft','sent','overdue'].indexOf(inv.status)>=0;
     return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br>'+(inv.dueDate?'<span class="mut">Due '+escHtml(inv.dueDate)+' • </span>':'')+'<b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b><br>'+(unpaid?'<a href="/invoice/'+inv.id+'"><button style="margin-top:8px">View & pay invoice</button></a>':'<a href="/invoice/'+inv.id+'" class="mut">View invoice</a>')+'</div>';
-  }).join('') || '<p class="mut">No invoices yet.</p>';
+  }).join('') || '<div class="empty"><p class="mut">No invoices yet.</p></div>';
 }
 function threadHtml(r){
   const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||'Customer'); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
   const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="Job photo">'; }).join('');
   const canPost = !!me && (me.role==='admin' || r.customerId===me.id);
-  return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<span class="mut">No messages yet.</span>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="Message the '+(me.role==='admin'?'customer':'Team')+'..."><button onclick="sendMsg(\''+r.id+'\')">Send</button></div>':'');
+  return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<div class="empty"><span class="mut">No messages yet.</span></div>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="Message the '+(me.role==='admin'?'customer':'Team')+'..."><button onclick="sendMsg(\''+r.id+'\')">Send</button></div>':'');
 }
 async function sendMsg(idv){
   const inp=document.getElementById('m-'+idv); if(!inp) return;
@@ -1940,7 +1994,7 @@ async function loadRequests(){
     const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
     const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">Secure my appointment — authorize '+moneyFmt(r.estimateDue)+' hold (not a charge yet)</button></div>':'');
     return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+holdBlock+threadHtml(r)+'</div>';
-  }).join('') || '<p class="mut">No requests yet.</p>';
+  }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 function jobChatHtml(j){
@@ -1978,7 +2032,7 @@ async function submitRating(idv){
 async function loadMyJobs(){
   const d=await api('/api/jobs').catch(()=>({jobs:[]}));
   const el=document.getElementById('myJobs'); if(!el) return;
-  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -2351,7 +2405,7 @@ function holdStatusHtml(r){
     const st=h.status==='authorized'?'ON HOLD — not charged yet':(h.status==='captured'?'CHARGED '+moneyFmt((h.capturedCents||0)/100):h.status);
     return escHtml(h.key)+' hold: '+moneyFmt((h.authorizedCents||0)/100)+' — '+st+(h.captureBefore&&h.status==='authorized'?' &bull; hold valid until '+escHtml(String(h.captureBefore).slice(0,10)):'');
   });
-  return '<div style="margin-top:8px;background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:8px 10px"><b>💳 Your payment:</b> '+parts.join('<br>')+'<br><span class="mut">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</span></div>';
+  return '<div class="pay-panel"><b>💳 Your payment:</b> '+parts.join('<br>')+'<br><span class="mut">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</span></div>';
 }
 async function secureHold(idv){
   try{
@@ -2479,7 +2533,7 @@ function renderCalDay(){
   h+=evs.length? evs.map(function(e){
     return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escCal(e.title)+'</b> <span class="pill">'+escCal(e.kind)+'</span><br><span class="mut">'+
       escCal((e.time?e.time+' • ':'')+(e.location||''))+(e.customerName?' • '+escCal(e.customerName):'')+(e.workerName?' • '+escCal(e.workerName):'')+(e.status?' • '+escCal(e.status):'')+'</span></div>';
-  }).join('') : '<p class="mut">No jobs this day.</p>';
+  }).join('') : '<div class="empty"><p class="mut">No jobs this day.</p></div>';
   h+='<h3 style="margin-top:10px">Add job</h3><div class="row"><div><label>Service</label><input id="cService" placeholder="Door lock install"></div><div><label>Location / address</label><input id="cAddr" placeholder="123 Main St, Hercules"></div></div>'+
     '<div class="row"><div><label>Date</label><input id="cDate" type="date" value="'+escCal(calSel)+'"></div><div><label>Time</label><input id="cTime" placeholder="10:00 AM"></div></div>'+
     '<div class="row"><div><label>Pay offer to worker $ (optional)</label><input id="cPay" type="number" placeholder="120"></div><div><label>City</label><input id="cCity" placeholder="Hercules"></div></div>'+
@@ -2596,7 +2650,7 @@ function renderYcDay(){
       ((v.beforePhoto||v.afterPhoto)?'<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>':'')+
       (v.status==='done'?'<div class="mut" style="margin-top:4px">Completed '+(v.completedAt?escHtml(v.completedAt.slice(0,10)):'')+(v.workerPay?' • Worker pay: $'+v.workerPay+' (internal)':'')+'</div>':'')+
       '</div>';
-  }).join('') : '<p class="mut">No yard visits this day.</p>';
+  }).join('') : '<div class="empty"><p class="mut">No yard visits this day.</p></div>';
   h+='<h3 style="margin-top:12px">Add visit</h3>';
   if(!ycMembers.length){
     h+='<p class="mut">No active Yard Care / HomeCare Plus members yet.</p>';
@@ -2715,7 +2769,7 @@ async function loadWorkerYardVisits(){
         (v.status==='done'?'<span class="pill">Done'+(v.completedAt?' • '+escHtml(v.completedAt.slice(0,10)):'')+'</span>':'')+
         '</div></div>';
       return h;
-    }).join('') : '<p class="mut">No yard visits assigned to you right now.</p>';
+    }).join('') : '<div class="empty"><p class="mut">No yard visits assigned to you right now.</p></div>';
   }catch(e){}
 }
 async function yardVisitStatus(idv, status){
@@ -2734,7 +2788,7 @@ async function yardPhotoChange(idv, key, input){
 async function loadAdmin(){
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   sndAdminRequests(rq.requests);
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
@@ -2747,9 +2801,9 @@ async function loadAdmin(){
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
-    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
+    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   loadInvoices();
   loadAdminRatings();
