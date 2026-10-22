@@ -11,6 +11,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <title>General Handyman Solutions — App</title>
 <script src="https://js.stripe.com/v3/"></script>
+<!-- v22 live tracking map: Leaflet + OpenStreetMap tiles (no API key). If this
+     CDN ever fails, window.L stays undefined and the app falls back to a
+     plain status panel — the job view must never break over a map. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{--red:#e10600;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
@@ -123,6 +128,8 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .step-body span{font-size:14px;line-height:1.55;color:#33302b}
 header nav a{color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a}
 header nav a:hover{border-color:var(--red)}
+.trk-pin{background:transparent;border:0}
+.leaflet-container{font:inherit}
 </style>
 </head>
 <body>
@@ -132,6 +139,7 @@ header nav a:hover{border-color:var(--red)}
     <nav style="display:flex;gap:8px;align-items:center"><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e10600;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
+    <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔔</button>
     <span id="who" class="mut" style="color:#ccc"></span>
   </span>
 </header>
@@ -563,6 +571,7 @@ header nav a:hover{border-color:var(--red)}
   <div id="workerBox" style="display:none">
     <h2>Open job offers</h2>
     <p class="mut" id="workerStatus"></p>
+    <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
     <div id="jobList"></div>
   </div>
 
@@ -1345,6 +1354,7 @@ setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
+  paintSoundBtn();
   const mlb = document.getElementById('memberLoginBtn');
   if (mlb) mlb.style.display = me ? 'none' : 'inline-block';
   // Public info pages (#terms, #how-it-works) are standalone public views:
@@ -1745,15 +1755,214 @@ async function sendJobMsg(idv){
 async function loadMyJobs(){
   const d=await api('/api/jobs').catch(()=>({jobs:[]}));
   const el=document.getElementById('myJobs'); if(!el) return;
-  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
+  sndCustomerJobs(d.jobs);
+  initTrackMaps(d.jobs);
 }
 async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — these are the open job offers from the Team. Pick the ones you want: first pick wins, and the Team confirms the address and time with you here.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
-  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.mine?'<br>'+(j.infoReleased?'<b>Your job details (Team-confirmed):</b> '+escHtml(j.address||''):'<b>Address & exact time:</b> <span class="mut">the Team confirms them with you here before the job \u2014 you never need the customer\u2019s phone, the Team coordinates everything.</span>')+(j.notes?'<br><b>Team notes:</b> '+escHtml(j.notes):''):'')+'<br>'+(j.status==='Open'?'<button onclick="claimJob(\''+j.id+'\')">Pick this job</button>':(j.mine && !j.photosReceived ? '<button class="black" onclick="doneJob(\''+j.id+'\')">Mark done — photos sent</button>':''))+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
+  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.mine?'<br>'+(j.infoReleased?'<b>Your job details (Team-confirmed):</b> '+escHtml(j.address||''):'<b>Address & exact time:</b> <span class="mut">the Team confirms them with you here before the job \u2014 you never need the customer\u2019s phone, the Team coordinates everything.</span>')+(j.notes?'<br><b>Team notes:</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
+  sndWorkerJobs(d.jobs || []);
 }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
-async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); loadJobs(); }
+async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
+// ---------- Notification sound (added 2026-10-21, v22) ----------
+// A short synthesized WebAudio chime — no audio files. Browsers refuse
+// audio before a user gesture, so the AudioContext arms on the first
+// tap/click anywhere and nothing can sound before that. Chimes fire ONLY
+// for transitions observed while the app is open: the first load after
+// sign-in sets the baseline, never a chime for pre-existing state. The
+// mute toggle persists in localStorage ('ghsSound'), default ON.
+let audioCtx = null;
+let soundOn = true;
+try { soundOn = localStorage.getItem('ghsSound') !== 'off'; } catch(e) {}
+function armSound(){
+  if (audioCtx) { if (audioCtx.state === 'suspended' && audioCtx.resume) { try { audioCtx.resume(); } catch(e) {} } return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try { audioCtx = new AC(); } catch(e) {}
+}
+if (document && document.addEventListener) { document.addEventListener('pointerdown', armSound); document.addEventListener('click', armSound); }
+function playChime(){
+  if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+  try {
+    const t0 = audioCtx.currentTime;
+    [[880, 0], [1318.5, 0.13]].forEach(function(n){
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(n[0], t0 + n[1]);
+      g.gain.setValueAtTime(0.0001, t0 + n[1]);
+      g.gain.exponentialRampToValueAtTime(0.16, t0 + n[1] + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + n[1] + 0.24);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(t0 + n[1]); o.stop(t0 + n[1] + 0.26);
+    });
+  } catch(e) {}
+}
+function toggleSoundMute(){
+  soundOn = !soundOn;
+  try { localStorage.setItem('ghsSound', soundOn ? 'on' : 'off'); } catch(e) {}
+  if (soundOn) armSound();
+  paintSoundBtn();
+}
+function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔔' : '🔕'; }
+const sndSeen = { workerOpen: null, custStatus: null, adminReqs: null };
+function sndWorkerJobs(jobs){
+  const open = {}; (jobs || []).forEach(function(j){ if (j.status === 'Open') open[j.id] = 1; });
+  if (sndSeen.workerOpen === null) { sndSeen.workerOpen = open; return; }
+  for (const idv in open) if (!sndSeen.workerOpen[idv]) { playChime(); break; }
+  sndSeen.workerOpen = open;
+}
+function sndCustomerJobs(jobs){
+  const map = {}; (jobs || []).forEach(function(j){ map[j.id] = j.status; });
+  if (sndSeen.custStatus === null) { sndSeen.custStatus = map; return; }
+  let changed = false;
+  for (const idv in map) if (sndSeen.custStatus[idv] !== undefined && sndSeen.custStatus[idv] !== map[idv]) changed = true;
+  if (changed) playChime();
+  sndSeen.custStatus = map;
+}
+function sndAdminRequests(reqs){
+  const set = {}; (reqs || []).forEach(function(r){ set[r.id] = 1; });
+  if (sndSeen.adminReqs === null) { sndSeen.adminReqs = set; return; }
+  for (const idv in set) if (!sndSeen.adminReqs[idv]) { playChime(); break; }
+  sndSeen.adminReqs = set;
+}
+// ---------- Live technician tracking (added 2026-10-21, v22) ----------
+// Worker side: tapping "On my way" starts a geolocation watch for THAT
+// job; positions post to /api/jobs/:id/location and the server keeps only
+// the latest point. Sharing stops on Arrived (the server wipes the point
+// on any non-en-route status), on "Mark done", or via the Stop button.
+// Platform truth: a web app cannot track while closed — if the worker
+// closes the app the watch dies, and the job card offers "Resume location
+// sharing" when they come back.
+let trackWatch = null; // { jobId, watchId, lastLat, lastLng, lastSent }
+function showTrackBanner(jobId, note){
+  const b = document.getElementById('trackBanner'); if (!b) return;
+  if (!jobId) { b.style.display = 'none'; b.innerHTML = ''; return; }
+  b.style.display = 'block';
+  b.innerHTML = '📍 Sharing your location for job ' + escHtml(jobId) + ' — it stops when you tap Arrived.' + (note ? '<br><span style="font-weight:400">' + escHtml(note) + '</span>' : '');
+}
+function stopWatchOnly(){
+  if (trackWatch && trackWatch.watchId != null && navigator.geolocation) { try { navigator.geolocation.clearWatch(trackWatch.watchId); } catch(e) {} }
+  trackWatch = null;
+  showTrackBanner(null);
+}
+function startSharing(idv){
+  stopWatchOnly();
+  if (!navigator.geolocation || !navigator.geolocation.watchPosition) { showTrackBanner(idv, 'Location is not available on this device, so the live map cannot follow you — your status still updates for the Team.'); return; }
+  const st = { jobId: idv, watchId: null, lastLat: null, lastLng: null, lastSent: 0 };
+  trackWatch = st;
+  try {
+    st.watchId = navigator.geolocation.watchPosition(function(pos){
+      if (!trackWatch || trackWatch.jobId !== idv || !pos || !pos.coords) return;
+      const lat = pos.coords.latitude, lng = pos.coords.longitude;
+      const now = Date.now();
+      const moved = st.lastLat == null || Math.abs(lat - st.lastLat) > 0.0002 || Math.abs(lng - st.lastLng) > 0.0002;
+      if (!moved && now - st.lastSent < 15000) return;
+      st.lastLat = lat; st.lastLng = lng; st.lastSent = now;
+      api('/api/jobs/' + idv + '/location', { method: 'POST', body: JSON.stringify({ lat: lat, lng: lng }) }).catch(function(){});
+    }, function(){
+      showTrackBanner(idv, 'Location permission is off — turn it on so your customer can follow your arrival.');
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+  } catch(e) {}
+  showTrackBanner(idv);
+}
+async function stopSharing(idv){
+  stopWatchOnly();
+  try { await api('/api/jobs/' + idv + '/location/stop', { method: 'POST', body: JSON.stringify({}) }); } catch(e) {}
+  loadJobs();
+}
+async function setJobStatus(idv, status){
+  try {
+    await api('/api/jobs/' + idv, { method: 'PATCH', body: JSON.stringify({ status: status }) });
+    if (status === 'On my way') startSharing(idv);
+    if (status === 'Arrived' && trackWatch && trackWatch.jobId === idv) stopWatchOnly();
+    loadJobs();
+  } catch(e) { alert(e.message); }
+}
+function workerJobBtns(j){
+  if (j.status === 'Open') return '<button onclick="claimJob(\'' + j.id + '\')">Pick this job</button>';
+  if (!j.mine) return '';
+  let h = '';
+  if (j.status === 'Claimed') h += '<button class="black" onclick="setJobStatus(\'' + j.id + '\',\'On my way\')">🚗 On my way</button> ';
+  if (j.status === 'On my way') {
+    h += '<button class="black" onclick="setJobStatus(\'' + j.id + '\',\'Arrived\')">📍 Arrived</button> ';
+    if (trackWatch && trackWatch.jobId === j.id) h += '<span class="pill">📍 Sharing location</span> <button class="ghost" onclick="stopSharing(\'' + j.id + '\')">Stop sharing</button> ';
+    else h += '<button class="ghost" onclick="startSharing(\'' + j.id + '\')">Resume location sharing</button> ';
+  }
+  if (!j.photosReceived) h += '<button class="black" onclick="doneJob(\'' + j.id + '\')">Mark done — photos sent</button>';
+  return h;
+}
+// Customer/admin side: the live map block inside a job card. The customer
+// can SEE the technician coming — there is deliberately no way to contact
+// the technician from here (all contact runs through the Team chat).
+const trackMaps = {}; // jobId -> { map, tech }
+let liveSig = '';
+let livePollTimer = null;
+function agoText(iso){
+  if (!iso) return 'just now';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 45) return 'just now';
+  if (s < 90) return '1 min ago';
+  return Math.round(s / 60) + ' min ago';
+}
+function trackBlockHtml(j, audience){
+  if (!j || !j.liveLoc) return '';
+  const who = audience === 'admin' ? 'Technician is on the way' : 'Your technician is on the way';
+  return '<div class="trackbox" style="margin-top:10px">'
+    + '<div id="trkmap-' + j.id + '" style="height:220px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
+    + '<div class="mut" style="margin-top:6px">🚗 <b>' + who + '</b>' + (j.address ? ' — heading to ' + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">updated ' + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
+}
+function trackFallbackHtml(j){
+  return '<div style="padding:20px 14px;text-align:center">📍<br><b>Your technician is on the way</b>' + (j.address ? '<br><span class="mut">Heading to ' + escHtml(j.address) + '</span>' : '') + '<br><span class="mut">Location updated ' + agoText(j.liveLoc.updatedAt) + '</span></div>';
+}
+function pinIcon(txt){ return L.divIcon({ className: 'trk-pin', html: '<div style="font-size:24px;line-height:1">' + txt + '</div>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
+function buildTrackMap(j, box){
+  if (!(window.L && L.map)) { box.innerHTML = trackFallbackHtml(j); return; }
+  try {
+    const map = L.map(box);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+    const tech = L.marker([j.liveLoc.lat, j.liveLoc.lng], { icon: pinIcon('🚗') }).addTo(map);
+    const pts = [[j.liveLoc.lat, j.liveLoc.lng]];
+    if (j.destLat != null && j.destLng != null) { L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); pts.push([j.destLat, j.destLng]); }
+    if (pts.length > 1) map.fitBounds(pts, { padding: [28, 28] }); else map.setView(pts[0], 14);
+    trackMaps[j.id] = { map: map, tech: tech };
+  } catch(e) { box.innerHTML = trackFallbackHtml(j); }
+}
+function initTrackMaps(jobs){
+  for (const k in trackMaps) { try { trackMaps[k].map.remove(); } catch(e) {} delete trackMaps[k]; }
+  (jobs || []).forEach(function(j){
+    if (!j.liveLoc) return;
+    const box = document.getElementById('trkmap-' + j.id);
+    if (box) buildTrackMap(j, box);
+  });
+  liveSig = (jobs || []).filter(function(j){ return j.liveLoc; }).map(function(j){ return j.id; }).sort().join(',');
+  updateLivePoll(jobs);
+}
+function updateLivePoll(jobs){
+  const any = (jobs || []).some(function(j){ return j.liveLoc; });
+  if (any && !livePollTimer) livePollTimer = setInterval(refreshLiveTracking, 20000);
+  if (!any && livePollTimer) { clearInterval(livePollTimer); livePollTimer = null; }
+}
+async function refreshLiveTracking(){
+  try {
+    const d = await api('/api/jobs');
+    const jobs = d.jobs || [];
+    const sig = jobs.filter(function(j){ return j.liveLoc; }).map(function(j){ return j.id; }).sort().join(',');
+    if (sig !== liveSig) { // a job started or stopped sharing — re-render the visible list
+      if (me && me.role === 'admin') loadAdmin(); else if (me && me.role === 'worker') loadJobs(); else loadMyJobs();
+      return;
+    }
+    jobs.forEach(function(j){
+      if (!j.liveLoc) return;
+      const entry = trackMaps[j.id];
+      if (entry && entry.tech && entry.tech.setLatLng) { try { entry.tech.setLatLng([j.liveLoc.lat, j.liveLoc.lng]); } catch(e) {} }
+      const u = document.getElementById('trkupd-' + j.id);
+      if (u) u.textContent = 'updated ' + agoText(j.liveLoc.updatedAt);
+    });
+    updateLivePoll(jobs);
+  } catch(e) {}
+}
 async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
 // ---------- Estimate authorization holds (2026-10-20) ----------
 function holdsOf(r){ return Array.isArray(r.holds) ? r.holds : []; }
@@ -2070,6 +2279,7 @@ async function loadAdmin(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<p class="mut">No requests yet.</p>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
+  sndAdminRequests(rq.requests);
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
@@ -2082,7 +2292,8 @@ async function loadAdmin(){
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
+  initTrackMaps(jb.jobs);
   loadInvoices();
 }
 async function sendQuote(idv){ return sendEstimate(idv,false); }

@@ -122,9 +122,47 @@ function publicJob(j, viewer) {
     // it (infoReleased). Contact runs through the Team in the job chat.
     const view = Object.assign(base, { mine: true, infoReleased: !!j.infoReleased, notes: j.notes || '', messages: j.messages || [] });
     if (j.infoReleased) view.address = j.address || '';
+    // v22 live tracking: the assigned worker sees their OWN live point (it is
+    // their phone sharing it). Destination coords ride along with the address
+    // gate — coords of the customer's home never leak before infoReleased.
+    if (j.liveLoc) view.liveLoc = j.liveLoc;
+    if (j.infoReleased && j.destLat != null && j.destLng != null) { view.destLat = j.destLat; view.destLng = j.destLng; }
     return view;
   }
   return base; // workers who have not claimed see NO customer details
+}
+
+// ---------- Live technician tracking (added 2026-10-21, v22) ----------
+// DoorDash-style: while a job is in 'On my way' status, the assigned
+// worker's phone posts its position to POST /api/jobs/:id/location. Only
+// the LATEST point is kept (j.liveLoc = { lat, lng, updatedAt }) — never a
+// trail. Any status other than 'On my way' deletes the point entirely, so
+// arriving / completing / cancelling wipes the coordinates, not archives
+// them. The destination is geocoded ONCE per job from the service address
+// via OpenStreetMap Nominatim and cached on the job (j.destLat/j.destLng);
+// every geocode failure is swallowed — the flow never blocks on it.
+const NOMINATIM_BASE = process.env.NOMINATIM_BASE || 'https://nominatim.openstreetmap.org';
+const geoInFlight = new Set();
+function applyJobStatus(j, status) {
+  j.status = status;
+  if (status !== 'On my way') delete j.liveLoc;
+}
+async function geocodeJobDestination(j) {
+  if (!j || j.destLat != null || j.destLng != null || !j.address || geoInFlight.has(j.id)) return;
+  geoInFlight.add(j.id);
+  try {
+    const url = NOMINATIM_BASE + '/search?format=json&limit=1&q=' + encodeURIComponent(j.address);
+    const r = await fetch(url, { headers: { 'User-Agent': 'GeneralHandymanSolutions/1.0 (generalhandymans@gmail.com)' }, signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return;
+    const arr = await r.json().catch(() => null);
+    if (Array.isArray(arr) && arr.length && isFinite(Number(arr[0].lat)) && isFinite(Number(arr[0].lon))) {
+      j.destLat = Number(arr[0].lat); j.destLng = Number(arr[0].lon); save();
+    }
+  } catch (e) { /* geocoding is best-effort — it must never block the job flow */ }
+  finally { geoInFlight.delete(j.id); }
+}
+function jobCustomer(j) {
+  return db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, '')) || null;
 }
 
 // ---------- Gmail/Google automation ----------
@@ -1922,7 +1960,7 @@ const server = http.createServer(async (req, res) => {
     if (idx === -1) return send(res, 404, { error: 'worker not found' });
     const removed = db.users.splice(idx, 1)[0];
     // Free any jobs this worker had claimed so they go back to the open board.
-    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; } });
+    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; } });
     for (const [token, uid] of sessions) { if (uid === removed.id) sessions.delete(token); }
     save(); return send(res, 200, { ok: true, deleted: removed.id });
   }
@@ -2086,7 +2124,18 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
-      return send(res, 200, { jobs: mine.map(j => ({ id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] })) });
+      return send(res, 200, { jobs: mine.map(j => {
+        const view = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] };
+        // v22: the customer sees the live technician point ONLY while the
+        // worker is sharing it (j.liveLoc exists). It is their own job and
+        // their own address, so the destination coords ride along.
+        if (j.liveLoc) {
+          view.liveLoc = j.liveLoc;
+          view.address = j.address || '';
+          if (j.destLat != null && j.destLng != null) { view.destLat = j.destLat; view.destLng = j.destLng; }
+        }
+        return view;
+      }) });
     }
     if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
     if (user.role === 'worker') return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)) });
@@ -2143,7 +2192,7 @@ const server = http.createServer(async (req, res) => {
     if (!j) return send(res, 404, { error: 'job not found' });
     const b = await readBody(req);
     if (user && user.role === 'admin') {
-      if (b.status) { j.status = b.status; if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
+      if (b.status) { applyJobStatus(j, b.status); if (b.status === 'On my way') geocodeJobDestination(j); if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
       if (b.address !== undefined) j.address = cleanText(b.address, 300);
       if (b.when !== undefined) j.when = cleanText(b.when, 200);
       if (b.schedDate !== undefined) j.schedDate = cleanDate(b.schedDate);
@@ -2151,9 +2200,52 @@ const server = http.createServer(async (req, res) => {
       if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
       if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.'); }
     }
-    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && b.photosDone) { j.photosReceived = true; j.status = 'Done — photos sent'; notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); }
+    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && (b.photosDone || b.status)) {
+      // Worker status flow (v22): Claimed -> On my way -> Arrived, then the
+      // existing photos-done completion. Only the assigned worker can move
+      // their own job, and only along this chain — anything else is a 409.
+      let handled = false;
+      if (b.status) {
+        const next = { 'Claimed': ['On my way', 'Arrived'], 'On my way': ['Arrived'], 'Arrived': [] }[j.status] || [];
+        if (!next.includes(b.status)) return send(res, 409, { error: 'cannot move a job from "' + j.status + '" to "' + b.status + '"' });
+        applyJobStatus(j, b.status);
+        if (b.status === 'On my way') geocodeJobDestination(j);
+        notifyAdmins('job', user.name + ' set job ' + j.id + ' (' + (j.service || '') + ') to "' + b.status + '".');
+        const cust = jobCustomer(j);
+        if (cust && b.status === 'On my way') notify(cust.id, 'job', 'Your technician is on the way for your ' + (j.service || 'job') + ' in ' + (j.city || '') + ' — watch the live map in the app.');
+        if (cust && b.status === 'Arrived') notify(cust.id, 'job', 'Your technician has arrived for your ' + (j.service || 'job') + ' in ' + (j.city || '') + '.');
+        handled = true;
+      }
+      if (b.photosDone) { j.photosReceived = true; applyJobStatus(j, 'Done — photos sent'); notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); handled = true; }
+      if (!handled) return send(res, 403, { error: 'not allowed' });
+    }
     else return send(res, 403, { error: 'not allowed' });
     save(); return send(res, 200, { job: publicJob(j, user) });
+  }
+
+  // ---------- v22 live tracking: worker position posts ----------
+  const locMatch = p.match(/^\/api\/jobs\/([\w-]+)\/location$/);
+  if (locMatch && req.method === 'POST') {
+    if (!user || user.role !== 'worker') return send(res, 403, { error: 'workers only' });
+    const j = db.jobs.find(x => x.id === locMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    if (j.assignedWorkerId !== user.id) return send(res, 403, { error: 'not your job' });
+    if (j.status !== 'On my way') return send(res, 409, { error: 'job is not en route — location sharing is off' });
+    const b = await readBody(req);
+    const lat = Number(b.lat), lng = Number(b.lng);
+    if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return send(res, 400, { error: 'invalid coordinates' });
+    j.liveLoc = { lat, lng, updatedAt: new Date().toISOString() }; // latest point only — never a trail
+    geocodeJobDestination(j); // no-op once cached; also covers a missed transition trigger
+    save(); return send(res, 200, { ok: true });
+  }
+  const locStopMatch = p.match(/^\/api\/jobs\/([\w-]+)\/location\/stop$/);
+  if (locStopMatch && req.method === 'POST') {
+    if (!user || user.role !== 'worker') return send(res, 403, { error: 'workers only' });
+    const j = db.jobs.find(x => x.id === locStopMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    if (j.assignedWorkerId !== user.id) return send(res, 403, { error: 'not your job' });
+    delete j.liveLoc; // coordinates are deleted, never archived
+    save(); return send(res, 200, { ok: true });
   }
 
   const jobMsgMatch = p.match(/^\/api\/jobs\/([\w-]+)\/messages$/);
