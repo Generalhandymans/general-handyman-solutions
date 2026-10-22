@@ -109,12 +109,15 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .share-name{display:block;font-weight:800;color:#fff;font-size:15px}
 .share-url{display:block;color:#8f8a81;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .share-copy{flex:none;width:auto;background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;font-size:14px;cursor:pointer}
-#teamContactPill{position:fixed;left:12px;bottom:12px;z-index:1200;display:none;gap:8px}
+#teamContactPill{position:fixed;left:12px;right:12px;bottom:12px;z-index:1200;display:none;gap:8px;justify-content:space-between;align-items:center}
 #teamContactPill a{display:inline-block;background:#e42535;color:#fff;font-weight:800;font-size:14.5px;padding:12px 16px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
 #teamContactPill a.sms{background:#1a1a1a;border:1.5px solid #e42535}
-#photoFab{position:fixed;right:12px;bottom:70px;z-index:1200;display:none}
+#photoFab{display:none}
 #photoFab a{display:inline-block;background:#25d366;color:#fff;font-weight:800;font-size:14.5px;padding:12px 16px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
-@media(max-width:520px){#photoFab a{font-size:13.5px;padding:11px 13px}}
+@media(max-width:520px){#photoFab a{font-size:12.5px;padding:10px 10px}}
+#teamContactPill a{white-space:nowrap}
+#photoFab a{white-space:nowrap}
+@media(max-width:520px){#teamContactPill{gap:6px}#teamContactPill a{font-size:12.5px;padding:10px 10px}}
 @media(max-width:520px){#teamContactPill a{font-size:13.5px;padding:11px 13px}}
 .cg-card button{width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;background:#e42535;color:#fff}
 .cg-card.free button{background:#2fbf71}
@@ -214,8 +217,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
   </span>
 </header>
 <div id="notifPanel" class="card" style="display:none;max-width:880px;margin:10px auto"></div>
-<div id="teamContactPill"><a href="tel:+17078623773">📞 Call the Team</a><a class="sms" href="sms:+17078623773">💬 Text the Team</a></div>
-<div id="photoFab"><a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener">📸 Free photo estimate</a></div>
+<div id="teamContactPill"><a href="tel:+17078623773">📞 Call the Team</a><a class="sms" href="sms:+17078623773">💬 Text the Team</a><span id="photoFab"><a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener">📸 Free photo estimate</a></span></div>
 
 <div class="wrap">
   <!-- PLAN COMPARISON (added 2026-10-21) — front-page grid: no membership vs membership -->
