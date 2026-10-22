@@ -550,7 +550,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="clause"><h4>2. Labor only — you buy materials.</h4><p>Unless we agree otherwise in writing, every price is <b>labor only</b>. You buy all materials and parts for your job. If a technician picks up materials on your behalf, that is arranged and priced separately before purchase.</p></div>
       <div class="clause"><h4>3. Estimates.</h4><p>Photo estimates are free. An in-person estimate costs <b>$75 for non-members</b>: when you book the visit, we place an <b>authorization hold</b> (not a charge) for that amount, and the fee is <b>credited toward your repair</b> when you approve the work the same day. <b>Members:</b> your first in-person estimate is <b>FREE</b>; after that, member estimates are <b>$60</b>.</p></div>
       <div class="clause"><h4>4. How payment works.</h4><p>Your card is authorized first and <b>charged when the job is completed</b>, for the exact approved amount. If your approved quote is higher than the initial hold, we may request an additional authorization for the difference before work begins. You can follow your payment status live in the app at all times (hold → authorized → charged/released).</p></div>
-      <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$49/mo</b>, Yard Care <b>$95/mo</b> (1 visit) or <b>$175/mo</b> (2 visits), HomeCare Plus <b>$135/mo</b> (1 yard visit) or <b>$199/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b>, one free first in-person estimate (then $60), and priority scheduling.</p></div>
+      <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$49/mo</b>, Yard Care <b>$95/mo</b> (1 visit) or <b>$175/mo</b> (2 visits), HomeCare Plus <b>$135/mo</b> (1 yard visit) or <b>$199/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b> (the discount does not apply to junk removal, hauling or green-waste loads, or flat $75 services) and priority scheduling. Members of <b>every</b> plan get one free first in-person estimate (then $60).</p></div>
       <div class="clause"><h4>6. Changing or cancelling a membership.</h4><p>You can change plans anytime from your account; Stripe prorates the difference (you may see a prorated charge or credit). You can cancel anytime from your account or by contacting the Team; <b>cancellation takes effect at the end of the current paid month</b> — your plan stays active until then and you will not be charged again. Membership payments are charged in advance and are not refunded.</p></div>
       <div class="clause"><h4>7. Yard visits.</h4><p>A standard visit includes mowing, edging, blowing, and light weeding of a standard residential yard. Your first scheduled visit includes the normal yard cut. Work beyond normal maintenance — extreme overgrowth, accumulated debris or junk, hauling — is quoted separately before we do it. <b>Unused visits do not roll over to the next month and are not refunded.</b></p></div>
       <div class="clause"><h4>8. Scheduling.</h4><p>You propose dates and times; <b>the Team confirms</b> every appointment — nothing is final until we confirm it. Please provide safe access to the work area (gates, pets, parking) in your home notes. If you need to move a visit, message the Team and we will confirm a new time — visits are prepaid with your membership and are not refunded.</p></div>
@@ -2981,7 +2981,7 @@ const MENU_CATALOG = {
   'tv-mounting': { name: 'TV Mounting (up to 65")', meta: '~2 h · Mount & level', price: 135, member: 108, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
   'tv-mounting-large': { name: 'TV Mounting (over 65")', meta: '~2.5 h · Mount & level', price: 185, member: 148, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
   'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 },
-  'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50 }] },
+  'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50, nodisc: true }] },
   'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: null },
   'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 },
   'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 },
@@ -2996,7 +2996,7 @@ const MENU_CATALOG = {
   'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 185, member: 148 },
   'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
   'dishwasher-swap': { name: 'Dishwasher Swap', meta: '~2 h · Same hookups', price: 200, member: 160 },
-  'vanity-swap': { name: 'Vanity Swap', meta: '~3 h · Standard vanity', price: 250, member: 200, addons: [{ id: 'haul-vanity', name: 'Haul away the old vanity', price: 50 }] },
+  'vanity-swap': { name: 'Vanity Swap', meta: '~3 h · Standard vanity', price: 250, member: 200, addons: [{ id: 'haul-vanity', name: 'Haul away the old vanity', price: 50, nodisc: true }] },
   'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 100, member: 80, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
   'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 135, member: 108 },
   'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 185, member: 148 },
@@ -3070,7 +3070,14 @@ function orderTotalsCalc(){
   const extrasSum = extrasList.reduce(function(s, a){ return s + a.price; }, 0);
   const list = svc.price + extrasSum;
   let member = list;
-  if (svc.member != null) member = svc.member + Math.round(extrasSum * 0.8);
+  if (svc.member != null) {
+    // Member price: base at the member price + extras at 20% off — EXCEPT
+    // hauling add-ons (nodisc), which are never discounted (Gabriel's rule:
+    // no member discount on junk / hauling / $75 services).
+    const discSum = extrasList.filter(function(a){ return !a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
+    const nodiscSum = extrasList.filter(function(a){ return a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
+    member = svc.member + Math.round(discSum * 0.8) + nodiscSum;
+  }
   const isMember = orderState.memberActive || orderState.join;
   let due = isMember ? member : list;
   const asap = orderWhenSel() === 'ASAP';
