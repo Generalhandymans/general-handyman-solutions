@@ -230,6 +230,17 @@ function emitRequestNew(r) {
   const payload = { requestId: r.id, service: r.service || '', city: r.city || '' };
   for (const c of sseClients) if (c.user.role === 'admin') sseWrite(c, 'request.new', payload);
 }
+// v25 (B1): a yard visit assignment reaches ONLY the admin and the one
+// assigned worker — yard visits are not jobs and never touch the Open
+// board broadcast. Payload carries no member PII (no name/address).
+function emitYardAssigned(v) {
+  const payload = { visitId: v.id, date: v.date };
+  for (const c of sseClients) {
+    const u = c.user;
+    if (u.role === 'admin') sseWrite(c, 'yard.assigned', payload);
+    else if (u.role === 'worker' && v.assignedWorkerId === u.id) sseWrite(c, 'yard.assigned', payload);
+  }
+}
 
 // ---------- Gmail/Google automation ----------
 // The app does not hold Gabriel's Gmail password. It sends structured events to
@@ -501,8 +512,50 @@ function activateMembershipPlan(u, planKey, opts) {
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare Plus ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
     }
   }
+  if (plan.visitsPerMonth > 0) ensureYardVisitProposals(u); // v25 (B2)
   save();
   return mp;
+}
+// ---------- Yard visit proposals (v25, B2) ----------
+// When a membership with a yard entitlement (Yard Care / HomeCare Plus)
+// activates — first join, webhook restore, portal sync, or a plan CHANGE
+// into a yard plan — the current period's visits appear in the Yard
+// Calendar as status 'proposed': no worker, no confirmed date yet. Gabriel
+// confirms/adjusts the date himself (existing Yard Calendar flow). Dedupe
+// key: member + period month + plan — an auto proposal is generated at
+// most once per key, so re-activations and webhook replays never double
+// up. Proposals are NEVER silently deleted: if the plan changes
+// mid-period, the old plan's still-proposed auto visits are marked
+// 'cancelled' (visible to admin, with a note); a cancelled membership
+// simply stops new generation — its existing proposals stay on the
+// calendar, flagged with the membership state via the visit's plan view.
+function yardPeriodKey(d) { d = d || new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+function ensureYardVisitProposals(u) {
+  if (!u || u.role !== 'customer') return [];
+  const plan = membershipPlanOf(u);
+  if (plan.status !== 'active' || !(plan.visitsPerMonth > 0)) return [];
+  if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
+  const period = yardPeriodKey(new Date());
+  db.yardVisits.forEach(v => {
+    if (v.userId === u.id && v.period === period && v.source === 'auto' && v.planKey !== plan.planKey && v.status === 'proposed') {
+      v.status = 'cancelled';
+      v.notes = ((v.notes || '') + ' Superseded by plan change.').trim();
+    }
+  });
+  const existing = db.yardVisits.filter(v => v.userId === u.id && v.period === period && v.planKey === plan.planKey && v.source === 'auto');
+  if (existing.length >= plan.visitsPerMonth) return existing;
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  let baseDay = now.getDate();
+  const sp = normalizeStartPreference(u.startPreference);
+  if (sp && sp.type === 'date' && sp.date && sp.date.slice(0, 7) === period) baseDay = Number(sp.date.slice(8, 10)) || baseDay;
+  for (let i = existing.length; i < plan.visitsPerMonth; i++) {
+    const day = Math.min(baseDay + i * 14, lastDay);
+    const v = { id: id('YV'), userId: u.id, date: period + '-' + String(day).padStart(2, '0'), status: 'proposed', notes: '', createdAt: new Date().toISOString(),
+      source: 'auto', period, planKey: plan.planKey, assignedWorkerId: null, beforePhoto: null, afterPhoto: null, completedAt: null, workerPay: null };
+    db.yardVisits.push(v); existing.push(v);
+  }
+  return existing;
 }
 function cancelMembershipPlan(u, planKey, opts) {
   opts = opts || {};
@@ -570,6 +623,10 @@ function syncMembershipPlanFromSubscription(u, obj) {
   } else if (status === 'canceled') {
     if (plan.type === 'homecare' || plan.type === 'plus') { u.homeCareStatus = 'cancelled'; u.homeCareCancelAt = new Date().toISOString(); }
   }
+  // v25 (B2): a subscription sync that lands the member ACTIVE on a yard
+  // plan (portal upgrade, renewal rollover, reactivation) tops up the
+  // current period's visit proposals — dedupe makes repeats harmless.
+  if (status === 'active' && plan.visitsPerMonth > 0) ensureYardVisitProposals(u);
   return mp;
 }
 function publicMembershipPlan(plan) {
@@ -1739,6 +1796,10 @@ const server = http.createServer(async (req, res) => {
       }
       // freeEstimateUsed is deliberately untouched: one free estimate per
       // account, and switching plans never re-grants or removes it.
+      // v25 (B2): changing INTO a yard plan generates this period's visit
+      // proposals right away (the subscription.updated webhook sync that
+      // follows reconciles to the same deduped set).
+      if (plan.visitsPerMonth > 0) ensureYardVisitProposals(user);
       save();
       notify(user.id, 'membership', 'Your membership is now ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo). Your new plan starts today.');
       notifyAdmins('membership', user.name + ' (' + user.email + ') changed their plan from ' + current.name + ' ($' + current.monthly + '/mo) to ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo).');
@@ -2274,6 +2335,8 @@ const server = http.createServer(async (req, res) => {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
       return send(res, 200, { jobs: mine.map(j => {
         const view = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] };
+        // v25 (C1): the OWNING customer sees their own rating on the job.
+        if (j.rating) { view.rating = j.rating; view.reviewText = j.reviewText || ''; view.ratedAt = j.ratedAt || null; }
         // v22: the customer sees the live technician point ONLY while the
         // worker is sharing it (j.liveLoc exists). It is their own job and
         // their own address, so the destination coords ride along.
@@ -2286,7 +2349,13 @@ const server = http.createServer(async (req, res) => {
       }) });
     }
     if (user.role === 'worker' && user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
-    if (user.role === 'worker') return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)) });
+    if (user.role === 'worker') {
+      // v25 (C1): a worker sees his own rating AGGREGATE (average + count)
+      // — never individual customer comments.
+      const ratedMine = db.jobs.filter(x => x.assignedWorkerId === user.id && x.rating);
+      const workerRating = ratedMine.length ? { average: Math.round((ratedMine.reduce((s, x) => s + Number(x.rating), 0) / ratedMine.length) * 10) / 10, count: ratedMine.length } : { average: 0, count: 0 };
+      return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)), workerRating });
+    }
     return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
   }
   // ---------- Master calendar (admin): jobs + invoice schedules for one month ----------
@@ -2347,6 +2416,7 @@ const server = http.createServer(async (req, res) => {
       if (b.schedDate !== undefined) j.schedDate = cleanDate(b.schedDate);
       if (b.schedTime !== undefined) j.schedTime = cleanText(b.schedTime, 50);
       if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
+      if (b.reviewPublished !== undefined) j.reviewPublished = !!b.reviewPublished; // v25 (C1): admin-only review publish flag
       if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.'); }
     }
     else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && (b.photosDone || b.status)) {
@@ -2370,6 +2440,42 @@ const server = http.createServer(async (req, res) => {
     }
     else return send(res, 403, { error: 'not allowed' });
     save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); return send(res, 200, { job: publicJob(j, user) });
+  }
+
+  // ---------- Ratings (v25, C1) ----------
+  // A job is COMPLETE when it reaches the same terminal state the worker
+  // flow (and the job-side billing) keys on: the worker marked the photos
+  // sent. Only the job's OWNING customer can rate it, exactly once, and
+  // only after completion — all enforced here, never just in the UI.
+  const JOB_COMPLETED_STATUS = 'Done — photos sent';
+  const rateMatch = p.match(/^\/api\/jobs\/([\w-]+)\/rating$/);
+  if (rateMatch && req.method === 'POST') {
+    if (!requireRole(user, ['customer'], res)) return;
+    const j = db.jobs.find(x => x.id === rateMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    if (!sseCustomerOwnsJob(j, user)) return send(res, 403, { error: 'not your job' });
+    if (j.status !== JOB_COMPLETED_STATUS) return send(res, 400, { error: 'you can rate this job once it is completed' });
+    if (j.rating) return send(res, 409, { error: 'this job was already rated' });
+    const b = await readBody(req);
+    const stars = Number(b.stars);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) return send(res, 400, { error: 'stars must be a whole number from 1 to 5' });
+    j.rating = stars;
+    j.reviewText = cleanText(b.text, 1000);
+    j.ratedAt = new Date().toISOString();
+    if (j.reviewPublished === undefined) j.reviewPublished = false; // never public by default — Gabriel publishes by hand
+    save();
+    notifyAdmins('rating', 'New ' + stars + '-star rating on job ' + j.id + ' (' + (j.service || '') + ').');
+    return send(res, 200, { ok: true, rating: j.rating, reviewText: j.reviewText, ratedAt: j.ratedAt });
+  }
+  if (p === '/api/admin/ratings' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const rated = db.jobs.filter(j => j.rating);
+    const count = rated.length;
+    const average = count ? Math.round((rated.reduce((s, j) => s + Number(j.rating), 0) / count) * 10) / 10 : 0;
+    const reviews = rated.slice()
+      .sort((a, b) => (a.ratedAt || '') < (b.ratedAt || '') ? 1 : -1)
+      .map(j => ({ jobId: j.id, service: j.service || '', city: j.city || '', stars: j.rating, text: j.reviewText || '', ratedAt: j.ratedAt || null, published: !!j.reviewPublished, workerId: j.assignedWorkerId || null }));
+    return send(res, 200, { average, count, reviews });
   }
 
   // ---------- v22 live tracking: worker position posts ----------
@@ -2751,11 +2857,32 @@ const server = http.createServer(async (req, res) => {
   const publicYardVisit = (v) => {
     const u = db.users.find(x => x.id === v.userId);
     const plan = u ? membershipPlanOf(u) : null;
+    const w = v.assignedWorkerId ? db.users.find(x => x.id === v.assignedWorkerId) : null;
+    // ADMIN view (Gabriel only): everything, including the internal $50
+    // worker pay — this serializer is only used on admin endpoints.
     return { id: v.id, userId: v.userId, date: v.date, status: v.status, notes: v.notes || '', createdAt: v.createdAt,
+      source: v.source || 'manual', period: v.period || (v.date ? v.date.slice(0, 7) : ''), planKey: v.planKey || (plan ? plan.planKey : null),
+      assignedWorkerId: v.assignedWorkerId || null, assignedWorkerName: w ? (w.name || '') : '',
+      beforePhoto: v.beforePhoto || null, afterPhoto: v.afterPhoto || null, completedAt: v.completedAt || null, workerPay: (v.workerPay == null ? null : v.workerPay),
       memberName: u ? (u.name || '') : '', memberEmail: u ? (u.email || '') : '', serviceAddress: u ? (u.serviceAddress || '') : '',
       zipCode: u ? (u.zipCode || '') : '', homeType: u ? (u.homeType || '') : '', yardSize: u ? (u.yardSize || '') : '', homeNotes: u ? (u.homeNotes || '') : '', startPreference: u ? normalizeStartPreference(u.startPreference) : { type: 'asap', date: null },
       plan: plan ? { planKey: plan.planKey, type: plan.type, name: plan.name, visitsPerMonth: plan.visitsPerMonth, status: plan.status } : null };
   };
+  // WORKER view (v25, B1): only what the assigned worker needs to do the
+  // visit — date, the service address (released BY the assignment itself),
+  // plan type and status. NEVER the member's name, email or phone (the
+  // Team is the only middleman, same rule as jobs) and NEVER the internal
+  // worker pay.
+  const workerYardVisit = (v) => {
+    const u = db.users.find(x => x.id === v.userId);
+    const plan = u ? membershipPlanOf(u) : null;
+    return { id: v.id, date: v.date, status: v.status, notes: v.notes || '',
+      address: u ? (u.serviceAddress || '') : '', yardSize: u ? (u.yardSize || '') : '', homeNotes: u ? (u.homeNotes || '') : '',
+      planName: plan ? plan.name : '', visitsPerMonth: plan ? plan.visitsPerMonth : 0,
+      beforePhoto: v.beforePhoto || null, afterPhoto: v.afterPhoto || null, completedAt: v.completedAt || null };
+  };
+  const YARD_WORKER_FLOW = { assigned: ['on_the_way'], on_the_way: ['arrived'], arrived: ['done'] };
+  const YARD_WORKER_PAY = 50; // flat per standard visit — INTERNAL ONLY, never serialized to customers
   const isActiveYardMember = (u) => {
     if (!u || u.role !== 'customer') return false;
     const plan = membershipPlanOf(u);
@@ -2779,8 +2906,17 @@ const server = http.createServer(async (req, res) => {
     if (!isActiveYardMember(target)) return send(res, 400, { error: 'customer does not have an active Yard Care or HomeCare Plus membership' });
     const date = yardDateOk(b.date);
     if (!date) return send(res, 400, { error: 'valid date required as YYYY-MM-DD' });
-    const v = { id: id('YV'), userId: target.id, date, status: 'scheduled', notes: cleanText(b.notes, 500), createdAt: new Date().toISOString() };
+    const tPlan = membershipPlanOf(target);
+    const v = { id: id('YV'), userId: target.id, date, status: 'scheduled', notes: cleanText(b.notes, 500), createdAt: new Date().toISOString(),
+      source: 'manual', period: date.slice(0, 7), planKey: tPlan.planKey || null, assignedWorkerId: null, beforePhoto: null, afterPhoto: null, completedAt: null, workerPay: null };
+    let assignTo = null;
+    if (b.assignedWorkerId) {
+      assignTo = db.users.find(x => x.id === cleanText(b.assignedWorkerId, 60) && x.role === 'worker' && x.status === 'active') || null;
+      if (!assignTo) return send(res, 400, { error: 'worker not found or not active' });
+      v.assignedWorkerId = assignTo.id; v.status = 'assigned';
+    }
     db.yardVisits.push(v); save();
+    if (assignTo) { notify(assignTo.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.'); emitYardAssigned(v); }
     return send(res, 201, { visit: publicYardVisit(v) });
   }
   const yvMatch = p.match(/^\/api\/admin\/yard-visits\/([\w-]+)$/);
@@ -2795,11 +2931,32 @@ const server = http.createServer(async (req, res) => {
       v.date = date;
     }
     if (b.status !== undefined) {
-      if (!['scheduled', 'done', 'cancelled'].includes(b.status)) return send(res, 400, { error: 'status must be scheduled, done or cancelled' });
+      if (!['proposed', 'scheduled', 'assigned', 'on_the_way', 'arrived', 'done', 'cancelled'].includes(b.status)) return send(res, 400, { error: 'invalid yard visit status' });
       v.status = b.status;
+      if (b.status === 'done' && !v.completedAt) { v.completedAt = new Date().toISOString(); if (v.assignedWorkerId && v.workerPay == null) v.workerPay = YARD_WORKER_PAY; }
     }
     if (b.notes !== undefined) v.notes = cleanText(b.notes, 500);
+    // v25 (B1): assignment. Assigning IS the address release for yard
+    // visits (Gabriel's rule: address/time are released the moment a
+    // worker is on the job) — the worker's own view carries the address;
+    // no other worker ever sees the visit. Only ACTIVE workers qualify.
+    let assignedNow = null;
+    if (b.assignedWorkerId !== undefined) {
+      if (b.assignedWorkerId === null || b.assignedWorkerId === '') {
+        if (v.status === 'assigned') v.status = 'scheduled';
+        v.assignedWorkerId = null;
+      } else {
+        const w = db.users.find(x => x.id === cleanText(b.assignedWorkerId, 60) && x.role === 'worker' && x.status === 'active');
+        if (!w) return send(res, 400, { error: 'worker not found or not active' });
+        if (v.status === 'done' || v.status === 'cancelled') return send(res, 400, { error: 'cannot assign a ' + v.status + ' visit' });
+        const changed = v.assignedWorkerId !== w.id;
+        v.assignedWorkerId = w.id;
+        if (v.status === 'proposed' || v.status === 'scheduled') v.status = 'assigned';
+        if (changed) assignedNow = w;
+      }
+    }
     save();
+    if (assignedNow) { notify(assignedNow.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.'); emitYardAssigned(v); }
     return send(res, 200, { visit: publicYardVisit(v) });
   }
   if (yvMatch && req.method === 'DELETE') {
@@ -2811,10 +2968,62 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/me/yard-visits' && req.method === 'GET') {
     if (!user) return send(res, 401, { error: 'login required' });
+    // Customer view: dates + statuses only, plus the LAST completed visit
+    // with its AFTER photo as proof of service. The internal worker pay
+    // and the before photo are never part of this payload.
     const mine = db.yardVisits.filter(v => v.userId === user.id)
       .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt < b.createdAt ? -1 : 1))
       .map(v => ({ id: v.id, date: v.date, status: v.status, notes: v.notes || '' }));
+    const doneList = db.yardVisits.filter(v => v.userId === user.id && v.status === 'done')
+      .sort((a, b) => ((a.completedAt || a.date) < (b.completedAt || b.date) ? 1 : -1));
+    const last = doneList[0] || null;
+    return send(res, 200, { visits: mine, lastCompleted: last ? { id: last.id, date: last.date, completedAt: last.completedAt || null, afterPhoto: last.afterPhoto || null } : null });
+  }
+
+  // ---------- Yard visits: worker flow (v25, B1) ----------
+  // The assigned worker runs his visit from his own panel: Assigned ->
+  // On my way -> Arrived -> Done, strictly in that order, and Done is
+  // refused until a BEFORE and an AFTER photo are on the visit (same
+  // data-URL photo pattern the request flow uses). Completing stamps
+  // completedAt + the internal flat workerPay ($50) on the record — the
+  // pay is only ever exposed by the ADMIN serializer above.
+  if (p === '/api/worker/yard-visits' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const mine = db.yardVisits.filter(v => v.assignedWorkerId === user.id)
+      .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt < b.createdAt ? -1 : 1))
+      .map(workerYardVisit);
     return send(res, 200, { visits: mine });
+  }
+  const wYvMatch = p.match(/^\/api\/worker\/yard-visits\/([\w-]+)$/);
+  if (wYvMatch && req.method === 'PATCH') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const v = db.yardVisits.find(x => x.id === wYvMatch[1]);
+    if (!v) return send(res, 404, { error: 'yard visit not found' });
+    if (v.assignedWorkerId !== user.id) return send(res, 403, { error: 'not your yard visit' });
+    const b = await readBody(req);
+    const photoOk = (x) => typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000;
+    for (const key of ['beforePhoto', 'afterPhoto']) {
+      if (b[key] !== undefined) {
+        if (v.status === 'done') return send(res, 409, { error: 'this visit is already done' });
+        if (!photoOk(b[key])) return send(res, 400, { error: key + ' must be an image' });
+        v[key] = b[key];
+      }
+    }
+    if (b.status !== undefined) {
+      const next = YARD_WORKER_FLOW[v.status] || [];
+      if (!next.includes(b.status)) return send(res, 409, { error: 'cannot move a yard visit from "' + v.status + '" to "' + b.status + '"' });
+      if (b.status === 'done') {
+        if (!v.beforePhoto || !v.afterPhoto) return send(res, 400, { error: 'a BEFORE photo and an AFTER photo are required to finish a yard visit' });
+        v.completedAt = new Date().toISOString();
+        v.workerPay = YARD_WORKER_PAY;
+        notifyAdmins('yard', user.name + ' completed yard visit ' + v.id + ' (' + v.date + ') — photos are in the Yard Calendar.');
+        const member = db.users.find(x => x.id === v.userId);
+        if (member) notify(member.id, 'yard', 'Your yard visit on ' + v.date + ' is done — the after photo is in your membership card.');
+      }
+      v.status = b.status;
+    }
+    save();
+    return send(res, 200, { visit: workerYardVisit(v) });
   }
 
   // ---------- notifications ----------

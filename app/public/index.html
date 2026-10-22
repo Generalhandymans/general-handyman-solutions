@@ -70,6 +70,7 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .cal-ev.sched{background:#0b5c2e}
 .cal-ev.done{background:#0b5c2e}
 .cal-ev.canc{background:#e8e4de;color:var(--muted);text-decoration:line-through}
+.cal-ev.prop{background:#fdf3d7;color:#8a6d00;border:1px dashed #d9a441}
 .yc-over{color:var(--red);font-weight:700}
 @media(max-width:620px){.cal-day{min-height:48px;font-size:11px}.cal-ev{font-size:10px}}
 .membership-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
@@ -562,6 +563,9 @@ header nav a:hover{border-color:var(--red)}
     <p class="mut" id="workerStatus"></p>
     <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
     <div id="jobList"></div>
+    <h2>My yard visits</h2>
+    <p class="mut">Yard visits the Team assigns to you — the address appears here once you are assigned. To finish a visit you need a BEFORE photo and an AFTER photo.</p>
+    <div id="workerYardVisits"></div>
   </div>
 
   <!-- ADMIN -->
@@ -592,6 +596,8 @@ header nav a:hover{border-color:var(--red)}
     </div>
     <h3>My job offers</h3>
     <div id="adminJobs"></div>
+    <h3>Customer ratings</h3>
+    <div id="adminRatings"></div>
     <h3>Invoices — bill customers for finished jobs</h3>
     <div id="stripeHealth" class="mut" style="margin-bottom:8px">Checking payment connection…</div>
     <div class="card">
@@ -612,7 +618,7 @@ header nav a:hover{border-color:var(--red)}
        NOT jobs. They never reach the worker board or the master calendar. -->
   <div id="yardCalendarBox" style="display:none">
     <h2>Yard Calendar — member yard visits</h2>
-    <p class="mut">Yard Care and HomeCare Plus members only. A visit here is scheduling bookkeeping for the yard route — it is not a job and never notifies workers.</p>
+    <p class="mut">Yard Care and HomeCare Plus members only. A visit here is not a job and never reaches the job board — assign it to one worker and only that worker sees it, with the address, in his own panel.</p>
     <p><button class="ghost" onclick="exitYardCalendar()">&#8592; Back to control center</button></p>
     <div class="card">
       <div class="cal-head"><button class="ghost" onclick="ycMove(-1)">&#8249;</button><b id="ycTitle"></b><button class="ghost" onclick="ycMove(1)">&#8250;</button><button class="ghost" onclick="ycToday()">Today</button></div>
@@ -1527,7 +1533,7 @@ function render(){
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
   if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadMyJobs(); custSummary(); }
-  if(me && me.role==='worker') loadJobs();
+  if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); }
   if(me && me.role==='admin'){ loadAdmin(); }
   // Direct HomeCare join: after login/signup with a pending join, go straight
   // to the $49/mo Stripe checkout.
@@ -1852,16 +1858,39 @@ async function sendJobMsg(idv){
   try{ await api('/api/jobs/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me.role==='admin') loadAdmin(); else if(me.role==='worker') loadJobs(); else loadMyJobs(); }
   catch(e){ alert(e.message); }
 }
+// ---------- Ratings (v25, C1): the customer rates a completed job once ----------
+const ratePicks = {};
+function ratingHtml(j){
+  if (j.status !== 'Done — photos sent') return '';
+  if (j.rating) return '<div style="margin-top:8px"><b>Your rating:</b> <span style="color:#b26a00;font-size:18px">' + '★'.repeat(j.rating) + '☆'.repeat(5 - j.rating) + '</span>' + (j.reviewText ? '<br><span class="mut">&ldquo;' + escHtml(j.reviewText) + '&rdquo;</span>' : '') + '</div>';
+  let stars = '';
+  for (let s = 1; s <= 5; s++) stars += '<button type="button" class="ghost" id="star-' + j.id + '-' + s + '" style="font-size:20px;padding:2px 8px" onclick="pickStars(\'' + j.id + '\',' + s + ')">☆</button>';
+  return '<div style="margin-top:8px"><b>How did we do?</b><br>' + stars + '<br><input id="rateText-' + j.id + '" placeholder="Tell us about the work (optional)" style="width:100%"><button class="black" onclick="submitRating(\'' + j.id + '\')">Send rating</button> <span class="mut" id="rateMsg-' + j.id + '"></span></div>';
+}
+function pickStars(idv, s){
+  ratePicks[idv] = s;
+  for (let i = 1; i <= 5; i++) { const b = document.getElementById('star-' + idv + '-' + i); if (b) b.textContent = i <= s ? '★' : '☆'; }
+}
+async function submitRating(idv){
+  const msg = document.getElementById('rateMsg-' + idv);
+  const s = ratePicks[idv] || 0;
+  if (!s) { if (msg) msg.textContent = 'Tap the stars first.'; return; }
+  try {
+    await api('/api/jobs/' + idv + '/rating', { method: 'POST', body: JSON.stringify({ stars: s, text: (document.getElementById('rateText-' + idv) || {}).value || '' }) });
+    loadMyJobs();
+  } catch (e) { if (msg) msg.textContent = e.message; }
+}
 async function loadMyJobs(){
   const d=await api('/api/jobs').catch(()=>({jobs:[]}));
   const el=document.getElementById('myJobs'); if(!el) return;
-  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
 async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? 'You are ACTIVE — these are the open job offers from the Team. Pick the ones you want: first pick wins, and the Team confirms the address and time with you here.' : 'Your account is "'+me.status+'" — the Team must activate you before you can claim jobs.';
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
+  if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += ' Your customer rating: ★ ' + d.workerRating.average + ' (' + d.workerRating.count + ' rated job' + (d.workerRating.count === 1 ? '' : 's') + ').';
   document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>Pay offer: <span class="st">$'+j.payOffer+'</span>'+(j.mine?'<br>'+(j.infoReleased?'<b>Your job details (Team-confirmed):</b> '+escHtml(j.address||''):'<b>Address & exact time:</b> <span class="mut">the Team confirms them with you here before the job \u2014 you never need the customer\u2019s phone, the Team coordinates everything.</span>')+(j.notes?'<br><b>Team notes:</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">No open job offers right now — check back when the Team posts one.</p>');
   sndWorkerJobs(d.jobs || []);
 }
@@ -1906,7 +1935,7 @@ function toggleSoundMute(){
   paintSoundBtn();
 }
 function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔔' : '🔕'; }
-const sndSeen = { workerOpen: null, custStatus: null, adminReqs: null };
+const sndSeen = { workerOpen: null, custStatus: null, adminReqs: null, yardVisits: null };
 function sndWorkerJobs(jobs){
   const open = {}; (jobs || []).forEach(function(j){ if (j.status === 'Open') open[j.id] = 1; });
   if (sndSeen.workerOpen === null) { sndSeen.workerOpen = open; return; }
@@ -1949,6 +1978,7 @@ function esStart(){
   es.addEventListener('job.status', function(ev){ try { onEsJobStatus(JSON.parse(ev.data)); } catch(e) {} });
   es.addEventListener('job.new', function(ev){ try { onEsJobNew(JSON.parse(ev.data)); } catch(e) {} });
   es.addEventListener('request.new', function(ev){ try { onEsRequestNew(JSON.parse(ev.data)); } catch(e) {} });
+  es.addEventListener('yard.assigned', function(ev){ try { onEsYardAssigned(JSON.parse(ev.data)); } catch(e) {} });
 }
 function esClose(){
   if (esStream) { try { esStream.close(); } catch(e) {} esStream = null; }
@@ -1999,6 +2029,16 @@ function onEsRequestNew(d){
   if (sndSeen.adminReqs && !sndSeen.adminReqs[d.requestId]) playChime();
   if (sndSeen.adminReqs) sndSeen.adminReqs[d.requestId] = 1;
   loadAdmin();
+}
+function onEsYardAssigned(d){
+  if (!d || !d.visitId || !me) return;
+  if (me.role === 'worker') {
+    if (sndSeen.yardVisits && !sndSeen.yardVisits[d.visitId]) playChime();
+    if (sndSeen.yardVisits) sndSeen.yardVisits[d.visitId] = 1;
+    loadWorkerYardVisits();
+  } else if (me.role === 'admin' && isYardCalendarRoute()) {
+    loadYardCalendar();
+  }
 }
 // ---------- Live technician tracking (added 2026-10-21, v22) ----------
 // Worker side: tapping "On my way" starts a geolocation watch for THAT
@@ -2393,7 +2433,7 @@ async function calAddJob(){
 // SEPARATE from the master calendar above: this schedules the included
 // monthly yard visits of Yard Care / HomeCare Plus members. Visits are NOT
 // jobs — nothing here posts to the worker board or the master calendar.
-let ycY=0, ycM=0, ycVisits=[], ycMembers=[], ycSel='';
+let ycY=0, ycM=0, ycVisits=[], ycMembers=[], ycSel='', ycWorkers=[];
 function isYardCalendarRoute(){ return location.hash === '#yard-calendar'; }
 function exitYardCalendar(){ if (location.hash) location.hash=''; render(); }
 function ycInit(){ const d=new Date(); if(!ycY){ ycY=d.getFullYear(); ycM=d.getMonth(); } }
@@ -2410,6 +2450,8 @@ async function loadYardCalendar(){
   catch(e){ ycVisits=[]; }
   try{ const c=await api('/api/customers'); ycMembers=(c.customers||[]).filter(function(u){ const p=u.membershipPlan||{}; return p.status==='active' && (p.type==='yard'||p.type==='plus'); }); }
   catch(e){ ycMembers=[]; }
+  try{ const w=await api('/api/workers'); ycWorkers=(w.workers||[]).filter(function(x){ return x.status==='active'; }); }
+  catch(e){ ycWorkers=[]; }
   renderYardCalendar(); renderYcDay();
 }
 function renderYardCalendar(){
@@ -2428,7 +2470,7 @@ function renderYardCalendar(){
     const cls='cal-day'+(key===tkey?' today':'')+(key===ycSel?' sel':'');
     h+='<div class="'+cls+'" onclick="ycSelect(\''+key+'\')"><div class="dn">'+d+'</div>'+
       vs.slice(0,3).map(function(v){
-        const c=v.status==='done'?'cal-ev done':(v.status==='cancelled'?'cal-ev canc':'cal-ev');
+        const c=v.status==='done'?'cal-ev done':(v.status==='cancelled'?'cal-ev canc':(v.status==='proposed'?'cal-ev prop':'cal-ev'));
         return '<div class="'+c+'">'+escHtml(v.memberName||'Member')+'</div>';
       }).join('')+(vs.length>3?'<div class="mut">+'+(vs.length-3)+' more</div>':'')+'</div>';
   }
@@ -2445,10 +2487,20 @@ function renderYcDay(){
     return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escHtml(v.memberName||'Member')+'</b> <span class="pill">'+escHtml(v.status)+'</span><br><span class="mut">'+
       plan+(v.serviceAddress?' • '+escHtml(v.serviceAddress):' • no service address on file')+(v.yardSize?' • '+escHtml(v.yardSize)+' yard':'')+(v.homeNotes?' • Home notes: '+escHtml(v.homeNotes):'')+(v.notes?' • '+escHtml(v.notes):'')+'</span>'+
       '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
-      (v.status==='scheduled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'done\'})">Mark done</button>':'')+
+      (v.status!=='done'&&v.status!=='cancelled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'done\'})">Mark done</button>':'')+
+      (v.status==='proposed'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'scheduled\'})">Confirm proposal</button>':'')+
       (v.status!=='cancelled'?'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'cancelled\'})">Cancel visit</button>':'<button class="ghost" onclick="ycPatchVisit(\''+v.id+'\',{status:\'scheduled\'})">Restore</button>')+
       '<input type="date" id="yc-date-'+v.id+'" value="'+escCal(v.date)+'" style="width:auto;margin:0"><button class="ghost" onclick="ycReschedule(\''+v.id+'\')">Reschedule</button>'+
-      '<button class="ghost" onclick="ycDeleteVisit(\''+v.id+'\')">Delete</button></div></div>';
+      '<button class="ghost" onclick="ycDeleteVisit(\''+v.id+'\')">Delete</button></div>'+
+      '<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+
+      (v.assignedWorkerId?'<span class="pill">Worker: '+escHtml(v.assignedWorkerName||'')+'</span>':'<span class="mut">No worker assigned</span>')+
+      (v.status!=='done'&&v.status!=='cancelled'?'<select id="ycWorker-'+v.id+'" style="width:auto;margin:0"><option value="">— unassigned —</option>'+ycWorkers.map(function(w){ return '<option value="'+w.id+'"'+(v.assignedWorkerId===w.id?' selected':'')+'>'+escHtml(w.name)+'</option>'; }).join('')+'</select><button class="ghost" onclick="ycAssignVisit(\''+v.id+'\')">Assign</button>':'')+
+      '</div>'+
+      (v.source==='auto'?'<div class="mut" style="margin-top:4px">Auto-generated from the membership'+(v.planKey?' ('+escHtml(v.planKey)+(v.period?' • '+escHtml(v.period):'')+')':'')+' — confirm the date with the member.</div>':'')+
+      (v.plan&&v.plan.status!=='active'?'<div style="margin-top:4px;color:#b26a00"><b>⚠ Membership '+escHtml(v.plan.status)+'</b> — this proposal stays here for your review.</div>':'')+
+      ((v.beforePhoto||v.afterPhoto)?'<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>':'')+
+      (v.status==='done'?'<div class="mut" style="margin-top:4px">Completed '+(v.completedAt?escHtml(v.completedAt.slice(0,10)):'')+(v.workerPay?' • Worker pay: $'+v.workerPay+' (internal)':'')+'</div>':'')+
+      '</div>';
   }).join('') : '<p class="mut">No yard visits this day.</p>';
   h+='<h3 style="margin-top:12px">Add visit</h3>';
   if(!ycMembers.length){
@@ -2512,6 +2564,10 @@ async function ycPatchVisit(idv, patch){
   try{ await api('/api/admin/yard-visits/'+idv,{method:'PATCH', body:JSON.stringify(patch)}); await loadYardCalendar(); }
   catch(e){ alert(e.message); }
 }
+async function ycAssignVisit(idv){
+  const sel=document.getElementById('ycWorker-'+idv);
+  await ycPatchVisit(idv, {assignedWorkerId: sel && sel.value ? sel.value : null});
+}
 async function ycReschedule(idv){
   const inp=document.getElementById('yc-date-'+idv);
   const date=inp?inp.value:'';
@@ -2532,10 +2588,53 @@ async function loadMyYardVisits(){
   try{
     const d=await api('/api/me/yard-visits');
     const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
-    const upcoming=(d.visits||[]).filter(function(v){ return v.status==='scheduled' && v.date>=tkey; });
-    if(!upcoming.length){ el.innerHTML='<span class="mut">No yard visits scheduled yet — the Team schedules your included visits here.</span>'; return; }
-    el.innerHTML='<b>Next yard visit: '+escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">Also coming up: '+upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':'');
+    const upcoming=(d.visits||[]).filter(function(v){ return ['scheduled','assigned','on_the_way','arrived'].includes(v.status) && v.date>=tkey; });
+    let h='';
+    if(!upcoming.length){ h='<span class="mut">No yard visits scheduled yet — the Team schedules your included visits here.</span>'; }
+    else { h='<b>Next yard visit: '+escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">Also coming up: '+upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':''); }
+    // v25 (B1): proof of service — the last completed visit + its AFTER photo.
+    if (d.lastCompleted) {
+      h+='<div style="margin-top:8px"><b>Last visit done: '+escHtml(d.lastCompleted.date)+'</b>'+(d.lastCompleted.afterPhoto?'<div class="photos"><img class="thumb" src="'+d.lastCompleted.afterPhoto+'" alt="Your yard after the visit"></div>':'')+'</div>';
+    }
+    el.innerHTML=h;
   }catch(e){}
+}
+// ---------- Worker yard visits (v25, B1) ----------
+async function loadWorkerYardVisits(){
+  const el=document.getElementById('workerYardVisits'); if(!el || !me || me.role!=='worker') return;
+  try{
+    const d=await api('/api/worker/yard-visits');
+    const visits=d.visits||[];
+    const seen={}; visits.forEach(function(v){ seen[v.id]=1; });
+    if (sndSeen.yardVisits===null) sndSeen.yardVisits=seen;
+    el.innerHTML = visits.length ? visits.map(function(v){
+      const canPhoto = v.status!=='done';
+      let h='<div class="card"><b>'+escHtml(v.date)+'</b> — '+escHtml(v.planName||'Yard visit')+' <span class="pill">'+escHtml(v.status)+'</span><br>'+
+        '<b>Address:</b> '+escHtml(v.address||'—')+(v.yardSize?'<br><span class="mut">Yard: '+escHtml(v.yardSize)+'</span>':'')+(v.homeNotes?'<br><span class="mut">Home notes: '+escHtml(v.homeNotes)+'</span>':'')+(v.notes?'<br><span class="mut">Team notes: '+escHtml(v.notes)+'</span>':'');
+      if (v.beforePhoto||v.afterPhoto) h+='<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>';
+      if (canPhoto) h+='<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:130px">Before photo<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'beforePhoto\',this)"></label><label style="flex:1;min-width:130px">After photo<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'afterPhoto\',this)"></label></div>';
+      h+='<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+
+        (v.status==='assigned'?'<button class="black" onclick="yardVisitStatus(\''+v.id+'\',\'on_the_way\')">🚗 On my way</button>':'')+
+        (v.status==='on_the_way'?'<button class="black" onclick="yardVisitStatus(\''+v.id+'\',\'arrived\')">📍 Arrived</button>':'')+
+        (v.status==='arrived'?'<button class="black" onclick="yardVisitStatus(\''+v.id+'\',\'done\')">✅ Mark done</button>'+((!v.beforePhoto||!v.afterPhoto)?' <span class="mut">needs the BEFORE and AFTER photos first</span>':''):'')+
+        (v.status==='done'?'<span class="pill">Done'+(v.completedAt?' • '+escHtml(v.completedAt.slice(0,10)):'')+'</span>':'')+
+        '</div></div>';
+      return h;
+    }).join('') : '<p class="mut">No yard visits assigned to you right now.</p>';
+  }catch(e){}
+}
+async function yardVisitStatus(idv, status){
+  try{ await api('/api/worker/yard-visits/'+idv,{method:'PATCH', body:JSON.stringify({status:status})}); loadWorkerYardVisits(); }
+  catch(e){ alert(e.message); }
+}
+async function yardPhotoChange(idv, key, input){
+  const f=input && input.files && input.files[0]; if(!f) return;
+  try{
+    const data=await fileToDataUrl(f);
+    const body={}; body[key]=data;
+    await api('/api/worker/yard-visits/'+idv,{method:'PATCH', body:JSON.stringify(body)});
+    loadWorkerYardVisits();
+  }catch(e){ alert(e.message||'Photo failed'); }
 }
 async function loadAdmin(){
   loadCalendar();
@@ -2555,9 +2654,27 @@ async function loadAdmin(){
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<p class="mut">No workers yet.</p>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<p class="mut">No jobs yet.</p>';
   initTrackMaps(jb.jobs);
   loadInvoices();
+  loadAdminRatings();
+}
+// ---------- Admin ratings (v25, C1) ----------
+async function loadAdminRatings(){
+  const el=document.getElementById('adminRatings'); if(!el) return;
+  try{
+    const d=await api('/api/admin/ratings');
+    el.innerHTML = '<p class="mut">' + (d.count ? ('Average: <b>' + d.average + ' ★</b> across ' + d.count + ' rated job' + (d.count === 1 ? '' : 's') + '. Published reviews are the ones you flag for the future website reviews section.') : 'No ratings yet — they appear here when a customer rates a completed job.') + '</p>' +
+      (d.reviews || []).map(function(rv){
+        return '<div class="card"><b>' + '★'.repeat(rv.stars) + '☆'.repeat(5 - rv.stars) + '</b> — ' + escHtml(rv.service) + ' (' + escHtml(rv.city) + ')<br>' +
+          (rv.text ? '<span>&ldquo;' + escHtml(rv.text) + '&rdquo;</span><br>' : '') +
+          '<span class="pill">' + (rv.published ? 'Published' : 'Not published') + '</span> <button class="ghost" onclick="toggleReviewPublished(\'' + rv.jobId + '\',' + (!rv.published) + ')">' + (rv.published ? 'Unpublish' : 'Publish') + '</button></div>';
+      }).join('');
+  }catch(e){}
+}
+async function toggleReviewPublished(idv, pub){
+  try{ await api('/api/jobs/' + idv, { method: 'PATCH', body: JSON.stringify({ reviewPublished: pub }) }); loadAdmin(); }
+  catch(e){ alert(e.message); }
 }
 async function sendQuote(idv){ return sendEstimate(idv,false); }
 async function postFromRequest(idv, custPrice){
