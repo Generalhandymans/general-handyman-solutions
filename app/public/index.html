@@ -203,12 +203,23 @@ header nav a:hover{border-color:var(--red)}
     <div class="tabs">
       <button id="tabLogin" class="on" onclick="mode('login')">Log in</button>
       <button id="tabCustomer" onclick="mode('customer')">New customer</button>
-      <button id="tabHomecare" onclick="mode('homecare')">New HomeCare member</button>
+      <button id="tabHomecare" onclick="openMemberJoin()">New member — join a plan</button>
       <button id="tabWorker" onclick="mode('worker')">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px">Your card will be charged <b>$49 today</b>, then $49/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e10600;border-radius:8px;padding:10px"></p>
+    <div id="planSelRow" style="display:none">
+      <label>Choose your plan</label>
+      <select id="aPlanSel" onchange="joinPlanChanged()">
+        <option value="homecare">HomeCare — $49/mo</option>
+        <option value="yard1">Yard Care — $95/mo · 1 yard visit / month</option>
+        <option value="yard2">Yard Care — $175/mo · 2 yard visits / month</option>
+        <option value="plus1">HomeCare Plus — $135/mo · 1 yard visit / month</option>
+        <option value="plus2">HomeCare Plus — $199/mo · 2 yard visits / month</option>
+      </select>
+      <p class="mut" style="font-size:12.5px;margin:4px 0 0">Switch plans right here — every price in this form follows the plan you pick.</p>
+    </div>
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
@@ -534,31 +545,52 @@ function showLogin(){
   mode('login');
   document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
 }
-// Every price the auth/join form shows derives from JOIN_PLAN_INFO — the
-// plan the visitor actually selected — never from the static $49 HomeCare
+// Every price the member form shows derives from JOIN_PLAN_INFO — the plan
+// the visitor actually selected — never from the static $49 HomeCare
 // defaults baked into the HTML. (Gabriel caught the card label staying at
-// $49 during Yard/Plus joins, 2026-10-21.) Also: the HomeCare promo box at
-// the bottom of the form is hidden while a join for a chosen plan is up,
-// so the only price on screen is that plan's.
+// $49 during Yard/Plus joins, 2026-10-21.) v17: there is ONE member form
+// with an in-form plan selector, and the member tab opens that same form —
+// so BOTH red-box notes are re-rendered from the SELECTED plan's template
+// in every mode: #joinChargeNote (the visible note in join mode) and the
+// legacy #hcChargeNote ("el mensajito de abajo en rojo"). #hcChargeNote is
+// displayed only in the legacy homecare render; in join mode it stays
+// hidden, but its text still follows the selection — it can never show
+// $49 next to another plan's form. Also: the HomeCare promo box at the
+// bottom of the form is hidden while the member form is up, so the only
+// price on screen is the selected plan's.
+// The plan the member form is currently selling: the armed pending join if
+// there is one, else whatever the in-form selector shows, else HomeCare.
+function memberFormPlan(){
+  if (pendingJoin && JOIN_PLAN_INFO[pendingJoin.plan]) return pendingJoin.plan;
+  const sel = document.getElementById('aPlanSel');
+  if (sel && sel.value && JOIN_PLAN_INFO[sel.value]) return sel.value;
+  return 'homecare';
+}
 function syncAuthPriceTexts(m){
-  const hcInfo = JOIN_PLAN_INFO.homecare;
+  const info = (m === 'join' || m === 'homecare') ? JOIN_PLAN_INFO[memberFormPlan()] : null;
   const hc = document.getElementById('hcChargeNote');
-  if (hc) hc.innerHTML = 'Your card will be charged <b>$' + hcInfo.monthly + ' today</b>, then $' + hcInfo.monthly + '/mo. 20% off any job • Free first in-person estimate • Cancel anytime.';
-  const info = m === 'homecare' ? hcInfo : (m === 'join' && pendingJoin ? JOIN_PLAN_INFO[pendingJoin.plan] : null);
+  if (hc && info) hc.innerHTML = 'Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
   const lbl = document.getElementById('cardChargeLabel');
   if (lbl && info) lbl.textContent = 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
   const promo = document.getElementById('hcPromo');
   if (promo) promo.style.display = (m === 'join' || isWorkerEntry()) ? 'none' : 'block';
 }
 function mode(m){ curMode=m;
-  if (m !== 'join') pendingJoin = null;
+  // The member tab IS the join form now (v17): landing on it — via the tab
+  // ('join') or the legacy 'homecare' render — must never wipe the plan the
+  // visitor already picked. (Gabriel: picked Yard, tapped the member tab,
+  // and the form tried to sell him HomeCare at $49.) Only the
+  // login/customer/worker tabs clear a pending join, as before.
+  if (m !== 'join' && m !== 'homecare') pendingJoin = null;
   document.getElementById('tabLogin').classList.toggle('on', m==='login');
   document.getElementById('tabCustomer').classList.toggle('on', m==='customer');
-  document.getElementById('tabHomecare').classList.toggle('on', m==='homecare');
+  document.getElementById('tabHomecare').classList.toggle('on', m==='homecare' || m==='join');
   document.getElementById('tabWorker').classList.toggle('on', m==='worker');
   document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('serviceAddressRow').style.display = (m==='customer' || m==='join') ? 'block':'none';
+  const planSelRow = document.getElementById('planSelRow');
+  if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare') ? 'block':'none';
   const serviceAddressHint = document.getElementById('serviceAddressHint');
   if (serviceAddressHint) serviceAddressHint.textContent = (pendingMembershipPlan || (pendingJoin && pendingJoin.kind !== 'homecare'))
     ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
@@ -572,7 +604,7 @@ function mode(m){ curMode=m;
   document.getElementById('joinChargeNote').style.display = m==='join' ? 'block':'none';
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
   syncAuthPriceTexts(m);
-  document.getElementById('authBtn').textContent = m==='homecare' ? 'Create account & join — $' + JOIN_PLAN_INFO.homecare.monthly + '/mo' : (m==='login' ? 'Log in' : 'Create account');
+  document.getElementById('authBtn').textContent = (m==='homecare' || m==='join') ? 'Create account & join — $' + JOIN_PLAN_INFO[memberFormPlan()].monthly + '/mo' : (m==='login' ? 'Log in' : 'Create account');
   if (m==='homecare') ensureStripe();
 }
 // ---------- Separate worker entry (added 2026-10-19) ----------
@@ -619,10 +651,9 @@ async function startHomeCareCheckout(){
 }
 function joinHomeCare(){
   if (me) { startHomeCareCheckout(); return; }
-  authRevealed = true;
-  if (location.hash === '#join-homecare' || location.hash === '#memberships') location.hash = '';
-  mode('homecare');
-  document.getElementById('authBox').scrollIntoView({behavior:'smooth'});
+  // Guests land on the ONE member form with HomeCare preselected — the
+  // plan selector inside the form lets them switch before paying.
+  beginInlineJoin('homecare', 'homecare');
 }
 // ---------- Memberships page: Yard Care + HomeCare Plus (added 2026-10-21) ----------
 // Same rule as HomeCare: membership requires an account. Logged-out
@@ -638,23 +669,51 @@ let pendingAddressCheckout = null;
 // prices here are display-only; the server plan map stays authoritative.
 let pendingJoin = null;
 const JOIN_PLAN_INFO = {
-  homecare: { name: 'HomeCare', monthly: 49 },
-  yard1: { name: 'Yard Care', monthly: 95 },
-  yard2: { name: 'Yard Care', monthly: 175 },
-  plus1: { name: 'HomeCare Plus', monthly: 135 },
-  plus2: { name: 'HomeCare Plus', monthly: 199 }
+  homecare: { name: 'HomeCare', monthly: 49, kind: 'homecare', perks: '20% off any job • Free first in-person estimate • Cancel anytime.' },
+  yard1: { name: 'Yard Care', monthly: 95, kind: 'yardcare', perks: 'Monthly yard care • One total charge • Cancel anytime.' },
+  yard2: { name: 'Yard Care', monthly: 175, kind: 'yardcare', perks: 'Monthly yard care • One total charge • Cancel anytime.' },
+  plus1: { name: 'HomeCare Plus', monthly: 135, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.' },
+  plus2: { name: 'HomeCare Plus', monthly: 199, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 2 yard visits / month included • Cancel anytime.' }
 };
-function enterJoinMode(){
-  mode('join');
+// Re-render every price-bearing string of the member form from the plan
+// currently selected; the in-form selector and pendingJoin are kept in
+// lockstep so what the visitor sees is exactly what submit will charge.
+function renderJoinTexts(){
   syncAuthPriceTexts('join');
-  const info = pendingJoin ? JOIN_PLAN_INFO[pendingJoin.plan] : null;
+  const plan = memberFormPlan();
+  const info = JOIN_PLAN_INFO[plan];
+  const sel = document.getElementById('aPlanSel');
+  if (sel && sel.value !== plan) sel.value = plan;
   const note = document.getElementById('joinChargeNote');
-  if (note && info) note.innerHTML = 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, ' + (pendingJoin.kind === 'homecare' ? '' : 'service address and ') + 'payment together. Cancel anytime.';
+  if (note && info) note.innerHTML = 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, ' + (info.kind === 'homecare' ? '' : 'service address and ') + 'payment together. Cancel anytime.';
   const btn = document.getElementById('authBtn');
   if (btn && info) btn.textContent = 'Create account & join — $' + info.monthly + '/mo';
+}
+function enterJoinMode(){
+  mode('join');
+  renderJoinTexts();
   // NOTE: no ensureStripe() here — beginInlineJoin/finishInlineJoin await
   // it, and a concurrent un-awaited call would read the in-flight flag and
   // falsely report Stripe as unavailable.
+}
+// The in-form plan selector is the source of truth while the member form
+// is up: switching it re-points pendingJoin (the address gate and the
+// submit rails key off it) and instantly re-renders every price string.
+function joinPlanChanged(){
+  const sel = document.getElementById('aPlanSel');
+  const plan = (sel && JOIN_PLAN_INFO[sel.value]) ? sel.value : 'homecare';
+  pendingJoin = { kind: JOIN_PLAN_INFO[plan].kind, plan };
+  mode('join');
+  renderJoinTexts();
+}
+// The member tab ("New member — join a plan"): ONE signup for every plan.
+// Arriving with a plan already picked — grid CTA, deep link, memberships
+// page, or an armed Stripe.js-fallback selection — keeps THAT plan
+// selected in the form; entering cold defaults the selector to HomeCare.
+async function openMemberJoin(){
+  if (pendingJoin && JOIN_PLAN_INFO[pendingJoin.plan]) { await beginInlineJoin(pendingJoin.kind, pendingJoin.plan); return; }
+  if (pendingMembershipPlan && JOIN_PLAN_INFO[pendingMembershipPlan.plan]) { await beginInlineJoin(pendingMembershipPlan.kind, pendingMembershipPlan.plan); return; }
+  await beginInlineJoin('homecare', 'homecare');
 }
 async function beginInlineJoin(kind, plan){
   pendingJoin = { kind, plan };
@@ -678,6 +737,7 @@ async function finishInlineJoin(email){
   const btn = document.getElementById('authBtn');
   const pj = pendingJoin;
   const info = pj ? JOIN_PLAN_INFO[pj.plan] : null;
+  if (pj && pj.plan === 'homecare') { await chargeHomeCare(email); return; } // selector rails: HomeCare never goes through membership-subscribe (the API 400s it) — the homecare inline endpoints charge it
   try {
     const okS = await ensureStripe();
     if (!okS || !cardEl) {
@@ -1012,8 +1072,16 @@ async function doAuth(){
       const homePayload = (curMode==='customer' || curMode==='join' || curMode==='homecare') ? readHomeForm() : {};
       const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile}, homePayload))});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
-      if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // inline $49 charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks this tab: never let a tab switch turn it into a $49 HomeCare charge; the resume below takes the user to the selected plan's checkout instead
-      if(curMode==='join' && pendingJoin){ await finishInlineJoin(email); return; } // one-submit join: card charge + activation, then welcome
+      if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // legacy homecare-mode submit: inline $49 charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks it: never let it become a $49 HomeCare charge; the resume below takes the user to the selected plan's checkout instead
+      if(curMode==='join' && pendingJoin){
+        // One member form — the SELECTOR decides the rails: HomeCare charges
+        // via the homecare inline endpoints; Yard/Plus via membership-subscribe.
+        if (pendingJoin.plan === 'homecare'){
+          if (!(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')) { await chargeHomeCare(email); return; }
+          // else: a pending yard/plus join (Stripe.js fallback) outranks the
+          // selector — fall through to the membership resume below, never $49.
+        } else { await finishInlineJoin(email); return; } // one-submit join: card charge + activation, then welcome
+      }
     }
     // Memberships page join: account first, then straight to checkout.
     if (pendingMembershipPlan && me && me.role === 'customer') {
@@ -1827,7 +1895,7 @@ async function createJob(){
 }
 applyWorkerEntry();
 window.addEventListener('hashchange', function(){ render(); });
-if (location.hash === '#join-homecare') { mode('homecare'); }
+if (location.hash === '#join-homecare') { openMemberJoin(); }
 loadMe();
 </script>
 <script>
