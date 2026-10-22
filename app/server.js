@@ -218,12 +218,12 @@ function emitJobStatus(j, prevStatus, statusOverride) {
     else if (u.role === 'customer' && sseCustomerOwnsJob(j, u)) sseWrite(c, 'job.status', payload);
   }
 }
-function emitJobNew(j) {
+function emitJobNew(j, onlyWorkerId) {
   const payload = { jobId: j.id, status: j.status, service: j.service || '', city: j.city || '' };
   for (const c of sseClients) {
     const u = c.user;
     if (u.role === 'admin') sseWrite(c, 'job.new', payload);
-    else if (u.role === 'worker' && u.status === 'active') sseWrite(c, 'job.new', payload);
+    else if (u.role === 'worker' && u.status === 'active' && (!onlyWorkerId || u.id === onlyWorkerId)) sseWrite(c, 'job.new', payload);
   }
 }
 function emitRequestNew(r) {
@@ -453,10 +453,32 @@ function setMembershipPlan(u, planKey, patch) {
   if (next.subscriptionId) u.stripeSubscriptionId = next.subscriptionId;
   return membershipPlanOf(u);
 }
+// ---------- Campaign source (v24, A5) ----------
+// Join links may carry ?src=CODE (e.g. #join-plus1?src=INSTA1). The client
+// forwards it as `source` on the membership subscribe/checkout calls; it is
+// sanitized and stashed as u.pendingSource, then promoted to u.source AT
+// ACTIVATION TIME by the two activators below (and the checkout-webhook
+// HomeCare branch) — so every activation path records it exactly once, and
+// the FIRST source an account ever activates with wins (never overwritten).
+function sanitizeSource(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.trim();
+  return /^[A-Za-z0-9_-]{1,24}$/.test(s) ? s : null;
+}
+function stashPendingSource(u, raw) {
+  const s = sanitizeSource(raw);
+  if (u && s) u.pendingSource = s;
+}
+function applySourceAtActivation(u) {
+  if (!u) return;
+  if (!u.source) { const s = sanitizeSource(u.pendingSource); if (s) u.source = s; }
+  if (u.pendingSource) delete u.pendingSource;
+}
 function activateMembershipPlan(u, planKey, opts) {
   opts = opts || {};
   const plan = MEMBERSHIP_PLANS[planKey];
   if (!u || !plan) return null;
+  applySourceAtActivation(u);
   const before = membershipPlanOf(u);
   const now = new Date().toISOString();
   const sameActive = before.planKey === planKey && before.status === 'active' && (!opts.subscriptionId || !before.subscriptionId || before.subscriptionId === opts.subscriptionId);
@@ -785,6 +807,7 @@ function verifyStripeSig(payload, header) {
 // homecare-confirm endpoint (synchronous, right after the card is charged)
 // and by the invoice.payment_succeeded webhook (backup). Idempotent.
 function activateHomeCare(u, isFirst) {
+  applySourceAtActivation(u);
   const first = isFirst || !u.homeCareSince;
   // One free estimate per ACCOUNT (shared across all plans, 2026-10-21): if
   // this account ever held a membership before, (re)joining HomeCare does
@@ -933,6 +956,7 @@ async function handleStripeEvent(event) {
       u.stripeCustomerId = obj.customer || u.stripeCustomerId || '';
       u.stripeSubscriptionId = obj.subscription || u.stripeSubscriptionId || '';
       setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
+      applySourceAtActivation(u);
       notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
       fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
@@ -1938,6 +1962,23 @@ const server = http.createServer(async (req, res) => {
       }
       // Holds stay 'authorized' locally until the payment_intent.succeeded
       // webhook confirms each capture — the webhook is the source of truth.
+      // v24 (A3): exactly one receipt email per capture. The claim flag is
+      // set BEFORE sending, so a retried capture can never double-send; the
+      // send itself is fire-and-forget — sendMail logs its own failures and
+      // a mail problem can never fail or delay this capture response.
+      const capturedTotalCents = results.reduce((s, x) => s + (Number(x.capturedCents) || 0), 0);
+      if (capturedTotalCents > 0 && r.customerEmail && !r.captureReceiptSentAt) {
+        r.captureReceiptSentAt = new Date().toISOString();
+        const receiptLines = [
+          'Thank you — your payment for request ' + r.id + ' is complete.',
+          'Service: ' + (r.service || 'Handyman service'),
+          'Amount charged: ' + usd(capturedTotalCents / 100),
+          'Date: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        ];
+        sendMail({ to: [r.customerEmail], replyTo: OWNER_EMAIL, subject: 'Your receipt — General Handyman Solutions', html: eventEmail('Your receipt', receiptLines), text: receiptLines.join('\n') })
+          .then(m => { if (!m.sent) console.error('receipt email not sent for request ' + r.id + ': ' + (m.reason || 'unknown')); })
+          .catch(e => console.error('receipt email failed for request ' + r.id + ':', e.message));
+      }
       notifyAdmins('payment', 'Manual capture started on request ' + r.id + ': ' + usd(finalCents / 100) + ' across ' + results.length + ' hold(s). The webhook confirms the final amounts.');
       save();
       return send(res, 200, { ok: true, captured: results, finalCents });
@@ -2203,8 +2244,29 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
-    const j = { id: id('JOB'), status: 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId: null, messages: [], createdAt: new Date().toISOString() };
-    db.jobs.push(j); notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j)); save(); return send(res, 201, { job: publicJob(j, user) });
+    // v24 (E2): a job may be created PRE-ASSIGNED to one active worker.
+    // With silent:true the broadcast fan-out is skipped entirely — no
+    // notification records for the other workers, no job_posted email
+    // automation, and the job.new stream event reaches only the assigned
+    // worker (+ admin). The assigned worker is told directly and sees the
+    // job as his own (status Claimed, exactly as if he had claimed it).
+    // Without silent — or without an assignee — behavior is unchanged.
+    let assignedWorkerId = null;
+    if (b.assignedWorkerId) {
+      const w = db.users.find(u => u.id === b.assignedWorkerId && u.role === 'worker' && u.status === 'active');
+      if (w) assignedWorkerId = w.id;
+    }
+    const silent = !!(b.silent && assignedWorkerId);
+    const j = { id: id('JOB'), status: assignedWorkerId ? 'Claimed' : 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId, messages: [], createdAt: new Date().toISOString() };
+    if (assignedWorkerId) j.claimedAt = j.createdAt;
+    db.jobs.push(j);
+    if (silent) {
+      notify(assignedWorkerId, 'job', 'The Team assigned you a job: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + '. It is in your jobs list.');
+      emitJobNew(j, assignedWorkerId);
+    } else {
+      notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j));
+    }
+    save(); return send(res, 201, { job: publicJob(j, user) });
   }
   if (p === '/api/jobs' && req.method === 'GET') {
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
@@ -2387,6 +2449,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
     const b = await readBody(req);
+    if (user && b) stashPendingSource(user, b.source); // v24 A5: campaign code rides the join call, lands at activation
     // Membership plans (added 2026-10-21): the plan key is validated
     // server-side FIRST, so an unknown plan is always a clean 400 and the
     // price only ever comes from the fixed MEMBERSHIP_PLANS map — a
@@ -2469,6 +2532,8 @@ const server = http.createServer(async (req, res) => {
   // backup (activateHomeCare is idempotent).
   if (p === '/api/stripe/homecare-subscribe' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    stashPendingSource(user, b && b.source); // v24 A5
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
     if (user.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
@@ -2499,6 +2564,7 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/stripe/membership-subscribe' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
     const b = await readBody(req);
+    stashPendingSource(user, b.source); // v24 A5
     const plan = MEMBERSHIP_PLANS[b.plan];
     if (!plan || plan.key === 'homecare') return send(res, 400, { error: 'unknown membership plan' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
@@ -2653,7 +2719,7 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const customers = db.users.filter(u => u.role === 'customer').map(u => {
       const reqs = db.requests.filter(r => r.customerId === u.id).length;
-      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, requests: reqs, createdAt: u.createdAt };
+      return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, source: u.source || null, requests: reqs, createdAt: u.createdAt };
     });
     return send(res, 200, { customers });
   }
