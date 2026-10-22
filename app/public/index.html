@@ -3072,6 +3072,9 @@ function renderOrder(){
     : '';
   document.getElementById('orderAcct').style.display = me ? 'none' : 'block';
   if (me && me.serviceAddress) document.getElementById('oAddress').value = me.serviceAddress;
+  // Website handoff prefill (v34): the service page carries the details the
+  // customer already typed (n/nm/ph/ad/cy/wt) — .value assignment only.
+  [['n', 'oNotes'], ['nm', 'oName'], ['ph', 'oPhone'], ['ad', 'oAddress'], ['cy', 'oCity'], ['wt', 'oWhenText']].forEach(function(pair){ const el = document.getElementById(pair[1]); if (el && parsed.q[pair[0]]) el.value = parsed.q[pair[0]]; });
   if (parsed.q.w === 'asap') { /* sel handled above */ }
   orderMemberRefresh();
   ensureOrderStripe();
