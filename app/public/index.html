@@ -209,7 +209,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 <header>
   <b>General <em>Handyman</em> Solutions</b>
   <span style="display:flex;align-items:center;gap:10px">
-    <nav style="display:flex;gap:8px;align-items:center"><a href="#">Inicio</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
+    <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app">Inicio</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e42535;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
     <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔔</button>
@@ -221,87 +221,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 
 <div class="wrap">
   <!-- PLAN COMPARISON (added 2026-10-21) — front-page grid: no membership vs membership -->
-  <div id="compareGridBox">
-    <h2 class="cg-title">Memberships</h2>
-    <p class="cg-sub">With or without a membership — you choose.</p>
-    <div class="compare-grid">
-      <div class="cg-card free">
-        <h3>FREE</h3>
-        <div class="cg-price">$0</div>
-        <div class="cg-subline">No membership</div>
-        <ul>
-          <li>Free photo estimate</li>
-          <li>Pay per job</li>
-          <li>In-person estimate $75</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="goFreeEstimate()">Get my free estimate</button>
-      </div>
-      <div class="cg-card">
-        <h3>HomeCare Plus</h3>
-        <div class="cg-price">$135<span>/mo</span></div>
-        <div class="cg-subline">1 yard visit / month</div>
-        <ul>
-          <li>1 yard visit every month</li>
-          <li>Everything in HomeCare</li>
-          <li>Mowing · edging · blowing · light weeding</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="startMembershipCheckout('homecare-plus','plus1')">Join Plus</button>
-      </div>
-      <div class="cg-card">
-        <h3>HomeCare Plus</h3>
-        <div class="cg-price">$199<span>/mo</span></div>
-        <div class="cg-subline">2 yard visits / month</div>
-        <ul>
-          <li>2 yard visits every month</li>
-          <li>Everything in HomeCare</li>
-          <li>Mowing · edging · blowing · light weeding</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="startMembershipCheckout('homecare-plus','plus2')">Join Plus</button>
-      </div>
-      <div class="cg-card">
-        <h3>HomeCare</h3>
-        <div class="cg-price">$49<span>/mo</span></div>
-        <div class="cg-subline">No yard</div>
-        <ul>
-          <li>20% off labor (jobs under $1,000)</li>
-          <li>First in-person estimate FREE, then $60</li>
-          <li>Priority scheduling</li>
-          <li>Cancel anytime</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="joinHomeCare()">Join HomeCare</button>
-      </div>
-      <div class="cg-card">
-        <h3>Yard Care</h3>
-        <div class="cg-price">$95<span>/mo</span></div>
-        <div class="cg-subline">1 visit / month</div>
-        <ul>
-          <li>1 yard visit every month</li>
-          <li>Mowing · edging · blowing · light weeding</li>
-          <li>One monthly charge · cancel anytime</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="startMembershipCheckout('yardcare','yard1')">Join Yard Care</button>
-      </div>
-      <div class="cg-card">
-        <h3>Yard Care</h3>
-        <div class="cg-price">$175<span>/mo</span></div>
-        <div class="cg-subline">2 visits / month</div>
-        <ul>
-          <li>2 yard visits every month</li>
-          <li>Mowing · edging · blowing · light weeding</li>
-          <li>One monthly charge · cancel anytime</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="startMembershipCheckout('yardcare','yard2')">Join Yard Care</button>
-      </div>
-    </div>
-    <p class="cg-foot">General Handyman Solutions · v1.0</p>
-    <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a> · <a href="#privacy">Privacy Policy</a></p>
-  </div>
 
   <!-- AUTH -->
   <div id="authBox" class="card">
@@ -421,6 +340,85 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <p class="mut"><a href="#" onclick="exitMemberships();return false;">← Back to the app</a></p>
     <h2 id="membershipsHeading">Memberships</h2>
     <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
+  <div id="compareGridBox">
+    <div class="compare-grid">
+      <div class="cg-card free">
+        <h3>FREE</h3>
+        <div class="cg-price">$0</div>
+        <div class="cg-subline">No membership</div>
+        <ul>
+          <li>Free photo estimate</li>
+          <li>Pay per job</li>
+          <li>In-person estimate $75</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="goFreeEstimate()">Get my free estimate</button>
+      </div>
+      <div class="cg-card">
+        <h3>HomeCare Plus</h3>
+        <div class="cg-price">$135<span>/mo</span></div>
+        <div class="cg-subline">1 yard visit / month</div>
+        <ul>
+          <li>1 yard visit every month</li>
+          <li>Everything in HomeCare</li>
+          <li>Mowing · edging · blowing · light weeding</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="startMembershipCheckout('homecare-plus','plus1')">Join Plus</button>
+      </div>
+      <div class="cg-card">
+        <h3>HomeCare Plus</h3>
+        <div class="cg-price">$199<span>/mo</span></div>
+        <div class="cg-subline">2 yard visits / month</div>
+        <ul>
+          <li>2 yard visits every month</li>
+          <li>Everything in HomeCare</li>
+          <li>Mowing · edging · blowing · light weeding</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="startMembershipCheckout('homecare-plus','plus2')">Join Plus</button>
+      </div>
+      <div class="cg-card">
+        <h3>HomeCare</h3>
+        <div class="cg-price">$49<span>/mo</span></div>
+        <div class="cg-subline">No yard</div>
+        <ul>
+          <li>20% off labor (jobs under $1,000)</li>
+          <li>First in-person estimate FREE, then $60</li>
+          <li>Priority scheduling</li>
+          <li>Cancel anytime</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="joinHomeCare()">Join HomeCare</button>
+      </div>
+      <div class="cg-card">
+        <h3>Yard Care</h3>
+        <div class="cg-price">$95<span>/mo</span></div>
+        <div class="cg-subline">1 visit / month</div>
+        <ul>
+          <li>1 yard visit every month</li>
+          <li>Mowing · edging · blowing · light weeding</li>
+          <li>One monthly charge · cancel anytime</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="startMembershipCheckout('yardcare','yard1')">Join Yard Care</button>
+      </div>
+      <div class="cg-card">
+        <h3>Yard Care</h3>
+        <div class="cg-price">$175<span>/mo</span></div>
+        <div class="cg-subline">2 visits / month</div>
+        <ul>
+          <li>2 yard visits every month</li>
+          <li>Mowing · edging · blowing · light weeding</li>
+          <li>One monthly charge · cancel anytime</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="startMembershipCheckout('yardcare','yard2')">Join Yard Care</button>
+      </div>
+    </div>
+    <p class="cg-foot">General Handyman Solutions · v1.0</p>
+    <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a> · <a href="#privacy">Privacy Policy</a></p>
+  </div>
     <div class="share-panel" id="shareLinksPanel">
       <h3>Share a signup link</h3>
       <p class="share-sub">Send a customer straight to one exact plan — they join in one step. Tap Copy and paste the link anywhere.</p>
@@ -1129,6 +1127,8 @@ function renderMembershipRouteMode(){
   if (homeCareCard) homeCareCard.style.display = yardRoute ? 'none' : '';
   const grid = document.getElementById('membershipGrid');
   if (grid) grid.style.display = yardRoute ? 'none' : '';
+  const cg = document.getElementById('compareGridBox');
+  if (cg) cg.style.display = yardRoute ? 'none' : 'block';
   if (yardRoute) syncYardCardImgs();
 }
 function queueMembershipDeepLink(){
@@ -1780,11 +1780,10 @@ function render(){
   const onMemberships = isMembershipRoute();
   const mb = document.getElementById('membershipsBox');
   if (mb) mb.style.display = onMemberships ? 'block' : 'none';
-  // The plan comparison grid lives on the front page (the landing view);
-  // dedicated routes (#memberships, #yard-care, #yard-calendar, #worker)
-  // replace it with their own content.
+  // The plan comparison grid (the six boxes) lives in the membership area
+  // (#memberships); other routes replace it with their own content.
   const cgBox = document.getElementById('compareGridBox');
-  if (cgBox) cgBox.style.display = onMemberships ? 'none' : 'block';
+  if (cgBox) cgBox.style.display = onMemberships ? 'block' : 'none';
   if (onMemberships) {
     document.getElementById('authBox').style.display = 'none';
     document.getElementById('customerBox').style.display = 'none';
