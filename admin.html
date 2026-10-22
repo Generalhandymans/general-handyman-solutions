@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GHS Admin — Orders & job offers (design mock)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { background:#0a0a0c; color:#f2f2f4; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; max-width:480px; margin:0 auto; padding:0 0 26px; }
+  .top { padding:18px 16px 4px; }
+  .top .eb { font-size:10.5px; font-weight:900; letter-spacing:1.6px; color:#ff4655; text-transform:uppercase; }
+  .top h1 { font-size:22px; font-weight:900; margin-top:4px; }
+  .top p { color:#9a9aa2; font-size:13px; margin-top:3px; line-height:1.45; }
+  .ord { background:#15151a; border:1px solid #26262d; border-radius:16px; margin:14px 16px 0; padding:14px; }
+  .ord .oh { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .ord .svc { font-weight:900; font-size:15.5px; line-height:1.3; }
+  .ord .meta { color:#9a9aa2; font-size:12.5px; margin-top:3px; line-height:1.5; }
+  .ord .tot { background:#e42535; border-radius:10px; padding:6px 10px; font-weight:900; font-size:14px; white-space:nowrap; }
+  .pill { display:inline-block; font-size:11px; font-weight:900; border-radius:999px; padding:4px 9px; margin-top:9px; }
+  .p-new { background:#3a2c07; color:#ffcf4d; border:1px solid #6b5518; }
+  .p-live { background:#0d2c18; color:#5eeaa0; border:1px solid #1d5c38; }
+  .p-done { background:#232329; color:#c9c9cf; border:1px solid #3a3a42; }
+  .form { margin-top:12px; border-top:1px dashed #2c2c34; padding-top:12px; display:none; }
+  .form .row { display:flex; gap:9px; }
+  .form .fld { flex:1; }
+  .form label { display:block; font-size:11px; font-weight:800; color:#9a9aa2; margin-bottom:5px; text-transform:uppercase; letter-spacing:.6px; }
+  .form input { width:100%; background:#0e0e11; border:1px solid #33333c; border-radius:10px; color:#fff; padding:10px; font-size:15px; font-weight:800; font-family:inherit; }
+  .pub { margin-top:11px; width:100%; background:#e42535; color:#fff; border:none; border-radius:11px; padding:12px; font-weight:900; font-size:14.5px; cursor:pointer; font-family:inherit; }
+  .open { margin-top:11px; width:100%; background:#232329; color:#fff; border:1px solid #3a3a42; border-radius:11px; padding:12px; font-weight:900; font-size:14.5px; cursor:pointer; font-family:inherit; }
+  .flow { display:none; margin-top:12px; border-top:1px dashed #2c2c34; padding-top:11px; font-size:13px; line-height:1.65; color:#c9c9cf; }
+  .flow b { color:#fff; }
+  .note { color:#55555e; font-size:11px; text-align:center; margin:18px 24px 0; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="eb">Admin · Solo tú</div>
+  <h1>Orders & job offers</h1>
+  <p>Customer orders land here. You turn each one into a job offer for the team — set the pay, publish it, and the flow runs itself.</p>
+</div>
+
+<div class="ord" id="ord1">
+  <div class="oh">
+    <div>
+      <div class="svc">📺 TV Mounting (up to 65") + raceway + soundbar</div>
+      <div class="meta">Order #GHS-2481 · Customer in <b>Fairfield</b><br>Proposed: tomorrow, 10:00 AM · $75 hold placed ✓</div>
+    </div>
+    <div class="tot">$260</div>
+  </div>
+  <span class="pill p-new" id="pill1">● NEW ORDER — needs an offer</span>
+  <button class="open" id="openBtn">✏️ Create the job offer</button>
+  <div class="form" id="form1">
+    <div class="row">
+      <div class="fld"><label>Job pays (technician)</label><input id="payIn" type="text" value="$100"></div>
+      <div class="fld"><label>When</label><input type="text" value="Tomorrow 10 AM"></div>
+      <div class="fld"><label>City</label><input type="text" value="Fairfield"></div>
+    </div>
+    <button class="pub" id="pubBtn">📣 Publish offer to the team</button>
+  </div>
+  <div class="flow" id="flow1"></div>
+</div>
+
+<div class="ord">
+  <div class="oh">
+    <div>
+      <div class="svc">🗑️ Junk — Large load</div>
+      <div class="meta">Order #GHS-2480 · Customer in <b>Vacaville</b><br>Proposed: Friday, 9:00 AM · $75 hold placed ✓</div>
+    </div>
+    <div class="tot">$425</div>
+  </div>
+  <span class="pill p-new">● NEW ORDER — needs an offer</span>
+  <button class="open" disabled style="opacity:.5">✏️ Create the job offer</button>
+</div>
+
+<p class="note">GHS system — your side of the counter. The customer never sees the technician's pay, and the technician never sees the customer's total.</p>
+
+<script>
+const openBtn = document.getElementById('openBtn');
+const form = document.getElementById('form1');
+const pub = document.getElementById('pubBtn');
+const flow = document.getElementById('flow1');
+const pill = document.getElementById('pill1');
+openBtn.addEventListener('click', () => { form.style.display = 'block'; openBtn.style.display = 'none'; });
+pub.addEventListener('click', () => {
+  const pay = document.getElementById('payIn').value || '$100';
+  form.style.display = 'none';
+  flow.style.display = 'block';
+  pill.className = 'pill p-live'; pill.textContent = '● OFFER LIVE — ' + pay + ' · waiting for a technician';
+  flow.innerHTML = '📣 <b>Offer published:</b> “TV Mounting job · Fairfield · tomorrow 10 AM · pays <b>' + pay + '</b>” — the team sees only the pay, never the $260.';
+  setTimeout(() => {
+    pill.className = 'pill p-live'; pill.textContent = '● CLAIMED — customer notified';
+    flow.innerHTML += '<br>🤝 <b>Claimed.</b> The customer just got: “This will be your technician ✓” — with his card, no map yet.';
+  }, 2600);
+  setTimeout(() => {
+    pill.className = 'pill p-done'; pill.textContent = '● ON MY WAY — customer map is LIVE 🔨';
+    flow.innerHTML += '<br>🚗 <b>On my way.</b> The technician tapped it — the customer\'s live map just turned on, and on that map your available handymen show as 🔨 across the area.';
+  }, 5400);
+});
+</script>
+
+</body>
+</html>
