@@ -414,7 +414,7 @@ header nav a:hover{border-color:var(--red)}
       </div>
     </div>
     <h2>Request a handyman</h2>
-    <p class="mut">Pick a service, add pictures, choose when — no account needed. In-person estimate is $75 flat (HomeCare members: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
+    <p class="mut">Pick a service, add pictures, choose when — no account needed. In-person estimate is $75 flat (members of any plan: first estimate free, then $60). Free photo estimate available. Labor-only — you buy materials/parts.</p>
     <div class="card">
       <div id="anonContact" style="display:none;border-bottom:1px dashed #ddd;margin-bottom:10px;padding-bottom:10px">
         <label>Your name</label><input id="rName" placeholder="Full name" style="width:100%;max-width:420px">
@@ -557,8 +557,8 @@ function showLogin(){
 // just above the submit button — VISIBLE in both member modes (join and
 // the legacy homecare render), naming the selected plan, its total
 // monthly price and its included perks (the yard visit is named for the
-// Yard/Plus plans; Yard perks include the free in-person estimate — the
-// member already gets the visit, so the estimate is free). Its text
+// Yard/Plus plans; Yard perks include the free FIRST in-person estimate —
+// members of every plan get their first on-site estimate free). Its text
 // always follows the selection — it can never show $49 next to another
 // plan's form. Also: the HomeCare promo box at the bottom of the form is
 // hidden while the member form is up, so the only price on screen is the
@@ -675,8 +675,8 @@ let pendingAddressCheckout = null;
 let pendingJoin = null;
 const JOIN_PLAN_INFO = {
   homecare: { name: 'HomeCare', monthly: 49, kind: 'homecare', perks: '20% off any job • Free first in-person estimate • Cancel anytime.' },
-  yard1: { name: 'Yard Care', monthly: 95, kind: 'yardcare', perks: 'Monthly yard care • Free in-person estimate • One total charge • Cancel anytime.' },
-  yard2: { name: 'Yard Care', monthly: 175, kind: 'yardcare', perks: 'Monthly yard care • Free in-person estimate • One total charge • Cancel anytime.' },
+  yard1: { name: 'Yard Care', monthly: 95, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
+  yard2: { name: 'Yard Care', monthly: 175, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
   plus1: { name: 'HomeCare Plus', monthly: 135, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.' },
   plus2: { name: 'HomeCare Plus', monthly: 199, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 2 yard visits / month included • Cancel anytime.' }
 };
@@ -784,6 +784,17 @@ function goFreeEstimate(){
   if (location.hash) location.hash = ''; else render();
   const g = document.getElementById('cEst');
   if (g) g.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === 'photo'));
+  if (typeof custSummary === 'function') custSummary();
+  setTimeout(() => { const el = document.getElementById('customerBox'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
+}
+// Dashboard CTA (2026-10-21): a member who still has their one free
+// estimate opens the request form with the IN-PERSON estimate preselected;
+// syncMemberPicker shows the FREE state from their account before they send.
+function requestFreeEstimate(){
+  if (location.hash) location.hash = ''; else render();
+  const g = document.getElementById('cEst');
+  if (g) g.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === 'inperson'));
+  if (typeof syncMemberPicker === 'function') syncMemberPicker();
   if (typeof custSummary === 'function') custSummary();
   setTimeout(() => { const el = document.getElementById('customerBox'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
 }
@@ -910,7 +921,9 @@ function renderMyMembership(){
   if (!me || me.role !== 'customer') { el.innerHTML = ''; return; }
   const p = me.membershipPlan;
   if (p && p.status === 'active') {
-    el.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + '<div class="mut" style="margin-top:4px">Your plan renews monthly. To change or cancel it, text or call the Team at (707) 862-3773.</div></div>';
+    el.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
+      ? '<div style="margin-top:6px">In-person estimates: <b>$60</b> — your member price.</div>'
+      : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">Request your FREE on-site estimate</button><div class="mut" style="margin-top:4px">One FREE in-person estimate is included with your membership.</div></div>') + '<div class="mut" style="margin-top:4px">Your plan renews monthly. To change or cancel it, text or call the Team at (707) 862-3773.</div></div>';
     if (p.type === 'yard' || p.type === 'plus') loadMyYardVisits();
   } else {
     el.innerHTML = '<div class="card"><h3 style="margin-top:0">My membership</h3><span class="mut">No active membership yet — members save 20% on labor, get $60 estimates, and can add monthly yard care.</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">View memberships</button></div>';
@@ -1181,25 +1194,37 @@ let custAck=false;
 document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e10600':''; });
 ['cService','cEst','cCity','cWhen','cMember'].forEach(function(gid){ const g=document.getElementById(gid); if(g) g.addEventListener('click', custSummary); });
 document.getElementById('rDate').addEventListener('change', custSummary);
-// Member pricing presentation (added 2026-10-21): a logged-in customer's
-// membership picker is set FROM THE ACCOUNT, never left on the $75 default —
-// HomeCare / HomeCare Plus members see their $60 member estimate (or FREE
-// while their first estimate is unused) BEFORE submitting. Yard Care-only
-// members keep $75: their plan has no handyman benefits (the server applies
-// the same rule authoritatively; this keeps the display honest).
+// Member pricing presentation (added 2026-10-21; policy updated same day):
+// a logged-in customer's membership picker is set FROM THE ACCOUNT, never
+// left on the $75 default — members of EVERY plan (HomeCare, HomeCare Plus,
+// Yard Care) see FREE while their one free estimate is unused, then the $60
+// member estimate, BEFORE submitting. The estimate-type button shows the
+// same price state. (The server applies the same rule authoritatively; this
+// keeps the display honest.)
 function syncMemberPicker(){
   const g = document.getElementById('cMember');
   if (!g) return;
   const lbl = (g.previousElementSibling && g.previousElementSibling.tagName === 'LABEL') ? g.previousElementSibling : null;
-  if (!me || me.role !== 'customer') { if (lbl) lbl.textContent = 'HomeCare membership — $49/mo'; return; }
+  if (!me || me.role !== 'customer') { if (lbl) lbl.textContent = 'HomeCare membership — $49/mo'; setEstTypePrice(false, false); return; }
   const hcActive = me.homeCareStatus === 'active';
   const p = me.membershipPlan || {};
-  const yardOnly = !hcActive && p.status === 'active' && p.type === 'yard';
-  const want = hcActive ? (me.freeEstimateUsed ? 'member' : 'new') : 'none';
+  const anyMember = hcActive || (p.status === 'active' && !!p.planKey);
+  const want = anyMember ? (me.freeEstimateUsed ? 'member' : 'new') : 'none';
   g.querySelectorAll('button').forEach(function(b){ b.classList.toggle('sel', b.dataset.v === want); b.disabled = true; });
-  if (lbl) lbl.textContent = hcActive
+  if (lbl) lbl.textContent = anyMember
     ? (me.freeEstimateUsed ? 'Your membership — $60 member estimate applied' : 'Your membership — first in-person estimate FREE')
-    : (yardOnly ? 'Your Yard Care plan — handyman estimates are the regular $75' : 'HomeCare membership — $49/mo');
+    : 'HomeCare membership — $49/mo';
+  setEstTypePrice(anyMember, !me.freeEstimateUsed);
+}
+// The in-person choice in the estimate-type selector carries the visitor's
+// own price state: $75 regular, $60 member, FREE while the member's one
+// free estimate is unused.
+function setEstTypePrice(anyMember, freeUnused){
+  const g = document.getElementById('cEst');
+  if (!g) return;
+  g.querySelectorAll('button').forEach(function(b){
+    if (b.dataset.v === 'inperson') b.textContent = anyMember ? (freeUnused ? 'In-person estimate — FREE with your membership' : 'In-person estimate — $60 member price') : 'In-person estimate — $75';
+  });
 }
 function custState(){
   const est=pickOne('cEst')||'inperson', member=pickOne('cMember')||'none', when=(pickOne('cWhen')==='Pick a date' && document.getElementById('rDate').value) ? 'On '+document.getElementById('rDate').value : (pickOne('cWhen')||'');

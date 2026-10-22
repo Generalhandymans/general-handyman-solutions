@@ -337,7 +337,7 @@ function activateMembershipPlan(u, planKey, opts) {
     u.homeCareStatus = 'active';
     if (!u.homeCareSince) u.homeCareSince = mp.since || now;
     u.homeCareCancelAt = null;
-    if (first) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
+    if (first && !before.since) u.freeEstimateUsed = false; // one free estimate per ACCOUNT: 'since' survives plan switches and rejoins, so they never re-grant it (only a genuinely first membership resets the flag)
   }
   if (!sameActive) {
     if (plan.type === 'yard') {
@@ -649,12 +649,17 @@ function verifyStripeSig(payload, header) {
 // and by the invoice.payment_succeeded webhook (backup). Idempotent.
 function activateHomeCare(u, isFirst) {
   const first = isFirst || !u.homeCareSince;
+  // One free estimate per ACCOUNT (shared across all plans, 2026-10-21): if
+  // this account ever held a membership before, (re)joining HomeCare does
+  // NOT resurrect a consumed free estimate. The Team can still re-grant it
+  // by hand from the admin customer panel.
+  const hadMembership = !!(u.homeCareSince || (u.membershipPlan && u.membershipPlan.since));
   u.homeCareStatus = 'active';
   if (!u.homeCareSince) u.homeCareSince = new Date().toISOString();
   u.homeCareCancelAt = null;
   setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
   if (first) {
-    u.freeEstimateUsed = false; // fresh membership gets its free first estimate
+    if (!hadMembership) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
     notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
     fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
@@ -783,10 +788,11 @@ async function handleStripeEvent(event) {
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
     if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
     if (kind === 'homecare') {
+      const hadMembership = !!(u.homeCareSince || (u.membershipPlan && u.membershipPlan.since));
       u.homeCareStatus = 'active';
       u.homeCareSince = new Date().toISOString();
       u.homeCareCancelAt = null;
-      u.freeEstimateUsed = false; // fresh membership gets its free first estimate
+      if (!hadMembership) u.freeEstimateUsed = false; // one free estimate per account — switches/rejoins never re-grant it
       u.stripeCustomerId = obj.customer || u.stripeCustomerId || '';
       u.stripeSubscriptionId = obj.subscription || u.stripeSubscriptionId || '';
       setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
@@ -1483,19 +1489,35 @@ const server = http.createServer(async (req, res) => {
     // Link to an existing customer account by email when one exists.
     if (!customerId && email) { const c = db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email); if (c) customerId = c.id; }
     // Estimate pricing is authoritative from Stripe-verified membership, NOT from
-    // what the customer picked in the form: active members get $60 (or $0 for
-    // their one free estimate, applied below), everyone else pays $75.
+    // what the customer picked in the form: active members of ANY plan
+    // (HomeCare, HomeCare Plus, Yard Care) get $60 (or $0 for their one free
+    // estimate, applied below), everyone else pays $75. (Policy 2026-10-21:
+    // the free first on-site estimate is a once-per-account member benefit —
+    // the same u.freeEstimateUsed flag HomeCare always used, now shared by
+    // every plan; after it, Yard members pay the $60 member price like every
+    // member. Canceled/lapsed members fall back to the regular $75 rules.)
     const hcActive = !!user && user.role === 'customer' && user.homeCareStatus === 'active';
-    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: hcActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (hcActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
-    // HomeCare free estimate (one per membership): first in-person request from an
-    // active member with the freebie unused consumes it automatically.
-    if (user && user.role === 'customer' && user.homeCareStatus === 'active' && !user.freeEstimateUsed && r.estimateType === 'inperson') {
+    const userPlan = (user && user.role === 'customer') ? membershipPlanOf(user) : null;
+    const memberActive = hcActive || !!(userPlan && userPlan.planKey && userPlan.status === 'active');
+    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (memberActive ? 60 : 75), status: 'New', quote: null, quoteNote: '', estimate: null, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    // Member free estimate (ONE per customer account, shared across plans):
+    // first in-person request from an active member of any kind with the
+    // freebie unused consumes it automatically. Stored exactly like the
+    // HomeCare free estimate always was (estimateDue 0 + freeEstimateClaim,
+    // no holds array), so no $75 hold is ever created for it and the admin
+    // lists and the "Your payment" panel render it the same way.
+    if (user && user.role === 'customer' && memberActive && !user.freeEstimateUsed && r.estimateType === 'inperson') {
       user.freeEstimateUsed = true;
       r.membership = 'member';
       r.estimateDue = 0;
       r.freeEstimateClaim = true;
-      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your FREE HomeCare estimate was applied to this request. No estimate charge — just approve the work when the quote arrives.', at: new Date().toISOString() });
-      notify(user.id, 'membership', 'Your free HomeCare estimate was applied to request ' + r.id + '.');
+      const yardFree = !hcActive && !!userPlan && userPlan.type === 'yard';
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: yardFree
+        ? 'Your FREE Yard Care member estimate was applied to this request. No estimate charge — just approve the work when the quote arrives.'
+        : 'Your FREE HomeCare estimate was applied to this request. No estimate charge — just approve the work when the quote arrives.', at: new Date().toISOString() });
+      notify(user.id, 'membership', yardFree
+        ? 'Your free Yard Care estimate was applied to request ' + r.id + '.'
+        : 'Your free HomeCare estimate was applied to request ' + r.id + '.');
     }
     db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
   }
@@ -2060,13 +2082,15 @@ const server = http.createServer(async (req, res) => {
         if (!owns) return send(res, 403, { error: 'not allowed' });
         if (!r.estimate || !(r.estimate.bookingDue > 0)) return send(res, 400, { error: 'this request has nothing due to book' });
         if (r.estimatePaid) return send(res, 400, { error: 'already paid' });
-        // $60 member estimate: only for ACTIVE HomeCare members, and only when the
-        // amount due really is the $60 member rate — otherwise use the normal pay button.
+        // $60 member estimate: only for ACTIVE members of any plan (HomeCare,
+        // HomeCare Plus, Yard Care), and only when the amount due really is
+        // the $60 member rate — otherwise use the normal pay button.
         let amountCents, kind = 'estimate', label = 'In-person estimate payment — request ' + r.id + ' — General Handyman Solutions';
         if (b.kind === 'member-estimate') {
-          if (user.homeCareStatus !== 'active') return send(res, 403, { error: 'the $60 member estimate is only for active HomeCare members' });
+          const payPlan = membershipPlanOf(user);
+          if (!(user.homeCareStatus === 'active' || (payPlan.planKey && payPlan.status === 'active'))) return send(res, 403, { error: 'the $60 member estimate is only for active members' });
           if (Math.abs(r.estimate.bookingDue - 60) > 0.01) return send(res, 400, { error: 'use the normal pay button for this amount' });
-          amountCents = 6000; kind = 'member-estimate'; label = 'HomeCare member estimate — $60 — request ' + r.id;
+          amountCents = 6000; kind = 'member-estimate'; label = 'Member estimate — $60 — request ' + r.id;
         } else {
           amountCents = Math.round(r.estimate.bookingDue * 100);
         }
