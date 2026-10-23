@@ -2352,6 +2352,73 @@ function estimatePageHtml(r, user, langOverride) {
 // ?lang= overrides; stored choice wins on the client via localStorage).
 // Item names are Gabriel's quote data, not UI chrome — the per-service
 // EN/ES name dictionary is the v45 menu build, not this page.
+
+// ---------- public install page (v49): THE install link ----------
+// app.generalhandymans.app/instalar (alias /install) — one shareable
+// link whose whole job is installing the PWA: native prompt when the
+// browser offers it, platform steps otherwise. One language at a time.
+function installPageHtml(langOverride) {
+  const lang = langOverride === 'es' ? 'es' : 'en';
+  const T = lang === 'es' ? {
+    title: 'Instala la app', sub: 'General Handyman Solutions en tu pantalla — pide servicios, sigue tu orden y paga, como una app de verdad.',
+    btn: '📲 Instalar la app', open: 'Abrir la app', already: '✅ Ya tienes la app instalada', alreadyBody: 'Ábrela desde el martillo en tu pantalla de inicio.',
+    done: '✅ ¡Instalada!', doneBody: 'Busca el martillo en tu pantalla de inicio.',
+    androidH: 'En Android (Chrome)', androidSteps: 'Toca el botón Instalar de arriba. Si no sale la ventana: menú ⋮ del navegador → «Instalar app».',
+    iosH: 'En iPhone / iPad (Safari)', iosSteps: '1) Toca el botón Compartir (el cuadro con la flecha hacia arriba). 2) Elige «Agregar a pantalla de inicio». 3) Toca «Agregar».',
+    otherH: '¿Otro navegador?', otherSteps: 'Abre esta misma página en Chrome (Android) o Safari (iPhone) y sigue los pasos.',
+    foot: 'Gratis — sin tienda de apps. ¿Dudas? Texto o llamada al (707) 862-3773.'
+  } : {
+    title: 'Install the app', sub: 'General Handyman Solutions on your home screen — book services, follow your order and pay, like a real app.',
+    btn: '📲 Install the app', open: 'Open the app', already: '✅ You already have the app', alreadyBody: 'Open it from the hammer on your home screen.',
+    done: '✅ Installed!', doneBody: 'Look for the hammer on your home screen.',
+    androidH: 'On Android (Chrome)', androidSteps: 'Tap the Install button above. If no window pops up: browser menu ⋮ → "Install app".',
+    iosH: 'On iPhone / iPad (Safari)', iosSteps: '1) Tap the Share button (the square with the arrow pointing up). 2) Choose "Add to Home Screen". 3) Tap "Add".',
+    otherH: 'Another browser?', otherSteps: 'Open this same page in Chrome (Android) or Safari (iPhone) and follow the steps.',
+    foot: 'Free — no app store needed. Questions? Text or call (707) 862-3773.'
+  };
+  const other = lang === 'es' ? 'en' : 'es';
+  return '<!doctype html><html lang="' + lang + '"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>' + T.title + ' — General Handyman Solutions</title>'
+    + '<link rel="manifest" href="/manifest.json">'
+    + '<meta name="theme-color" content="#0b0b0b">'
+    + '<link rel="apple-touch-icon" href="/icons/icon-192.png">'
+    + '<meta name="apple-mobile-web-app-capable" content="yes">'
+    + '<style>body{margin:0;background:#0a0a0c;color:#f2f2f2;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}'
+    + '.wrap{max-width:430px;margin:0 auto;padding:28px 20px 40px;text-align:center}'
+    + '.icon{width:96px;height:96px;border-radius:22px;box-shadow:0 10px 30px rgba(0,0,0,.5)}'
+    + 'h1{font-size:26px;margin:16px 0 6px}.sub{color:#bdbdc4;line-height:1.5;margin:0 0 22px}'
+    + '#instBtn{display:none;width:100%;background:#e42535;color:#fff;border:none;border-radius:14px;padding:16px;font-size:18px;font-weight:800;cursor:pointer}'
+    + '.card{background:#141416;border:1px solid #26262b;border-radius:14px;padding:14px 16px;text-align:left;margin-top:14px}'
+    + '.card h3{margin:0 0 6px;font-size:15px}.card p{margin:0;color:#c9c9cf;line-height:1.55;font-size:14px}'
+    + '.lang{margin-top:20px;color:#8a8a92;font-size:14px}.lang a{color:#f2f2f2;font-weight:700;text-decoration:none}'
+    + '.foot{margin-top:22px;color:#8a8a92;font-size:13px;line-height:1.5}'
+    + '#doneBox{display:none;background:#12260f;border:1px solid #2c5b21;border-radius:14px;padding:14px;margin-bottom:14px}'
+    + '#alreadyBox{display:none;background:#141416;border:1px solid #2c5b21;border-radius:14px;padding:14px;margin-bottom:14px}'
+    + '.openBtn{display:inline-block;margin-top:8px;background:#26262b;color:#fff;border-radius:10px;padding:10px 18px;font-weight:700;text-decoration:none}</style></head>'
+    + '<body><div class="wrap" id="ghsInstallPage">'
+    + '<img class="icon" src="/icons/icon-512.png" alt="General Handyman Solutions">'
+    + '<h1>' + T.title + '</h1><p class="sub">' + T.sub + '</p>'
+    + '<div id="alreadyBox"><b>' + T.already + '</b><p style="color:#c9c9cf;margin:6px 0 0">' + T.alreadyBody + '</p><a class="openBtn" href="/">' + T.open + '</a></div>'
+    + '<div id="doneBox"><b>' + T.done + '</b><p style="color:#c9c9cf;margin:6px 0 0">' + T.doneBody + '</p></div>'
+    + '<button id="instBtn">' + T.btn + '</button>'
+    + '<div class="card"><h3>' + T.androidH + '</h3><p>' + T.androidSteps + '</p></div>'
+    + '<div class="card"><h3>' + T.iosH + '</h3><p>' + T.iosSteps + '</p></div>'
+    + '<div class="card"><h3>' + T.otherH + '</h3><p>' + T.otherSteps + '</p></div>'
+    + '<div class="lang"><a href="?lang=' + other + '">' + (lang === 'es' ? 'View in English' : 'Ver en español') + '</a></div>'
+    + '<p class="foot">' + T.foot + '</p>'
+    + '</div><script>(function(){try{'
+    + 'var btn=document.getElementById("instBtn"),done=document.getElementById("doneBox"),already=document.getElementById("alreadyBox");'
+    + 'var standalone=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;'
+    + 'if(standalone){already.style.display="block";return;}'
+    + 'var deferred=null;var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);'
+    + 'window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferred=e;btn.style.display="block";});'
+    + 'if(isIOS){btn.style.display="block";}'
+    + 'btn.addEventListener("click",function(){if(deferred){deferred.prompt();deferred.userChoice.then(function(){deferred=null;});}else{window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});}});'
+    + 'window.addEventListener("appinstalled",function(){btn.style.display="none";done.style.display="block";});'
+    + '}catch(e){}})();</script></body></html>';
+}
+
 function cartPageHtml(c, user, langOverride) {
   const sessionMember = !!(user && user.role === 'customer' && user.homeCareStatus === 'active');
   const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : (c.lang === 'es' ? 'es' : 'en');
@@ -4655,6 +4722,11 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, invoicePageHtml(inv));
   }
 
+
+  // ---------- public install page (v49) ----------
+  if ((p === '/instalar' || p === '/install') && req.method === 'GET') {
+    return send(res, 200, installPageHtml(url.searchParams.get('lang')));
+  }
   // ---------- public cart page (v44) ----------
   const cartPageMatch = p.match(/^\/cart\/([\w-]+)$/);
   if (cartPageMatch && req.method === 'GET') {
