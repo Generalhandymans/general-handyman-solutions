@@ -4397,6 +4397,8 @@ if (window.Notification && Notification.permission === 'default') { Notification
  if(es){btn.textContent='\uD83D\uDCF2 Instalar app';}
  var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
  if(standalone)return;
+ var wantInstall=false; try{wantInstall=new URLSearchParams(location.search).get('install')==='1';}catch(e){}
+ if(wantInstall){btn.style.display='block';}
  var deferred=null;
  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e;btn.style.display='block';});
  var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
