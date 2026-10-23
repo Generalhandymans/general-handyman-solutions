@@ -140,6 +140,13 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .seg button.on{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
 .steps{margin:16px 0 4px}
 .step-card{display:flex;gap:12px;position:relative;padding:0 0 18px}
+.trade-row{display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap}
+.trade-row .trade-name{flex:1;min-width:150px;font-weight:600}
+.trade-row select{width:190px}
+.trade-row .trade-tools{font-size:13px;white-space:nowrap}
+.trade-lvl{display:inline-flex;gap:4px}
+.trade-lvl button{padding:3px 9px;min-width:0}
+.trade-lvl button.sel{background:#e42535;color:#fff;border-color:#e42535}
 .step-card:last-child{padding-bottom:2px}
 .step-card::before{content:"";position:absolute;left:16px;top:36px;bottom:0;width:2px;background:var(--line)}
 .step-card:last-child::before{display:none}
@@ -290,6 +297,16 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       </div>
       <label>Rate yourself 1&ndash;10 in each skill <span class="mut">(10 = pro level, 1 = beginner)</span></label>
       <div id="wSelfRate"></div>
+      <label>Tus oficios — tu nivel en cada uno / Your trades — your level in each <span class="mut">(1 = no sabe nada / knows nothing · 3 = bueno, trabaja solo / good, works solo · 5 = master) — y marca si tienes la herramienta / and check if you have the tools</span></label>
+      <div id="wTrades">
+        <div class="trade-row"><span class="trade-name">Handyman (general)</span><select id="ts-level-handyman"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-handyman"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">Carpintería / Carpentry</span><select id="ts-level-carpentry"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-carpentry"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">Electricidad / Electrical</span><select id="ts-level-electrical"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-electrical"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">Plomería / Plumbing</span><select id="ts-level-plumbing"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-plumbing"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">Jardinería / Gardening</span><select id="ts-level-gardening"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-gardening"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">HVAC</span><select id="ts-level-hvac"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-hvac"> 🔧 Herramienta / Tools</label></div>
+        <div class="trade-row"><span class="trade-name">Mecánica / Mechanic</span><select id="ts-level-mechanic"><option value="">—</option><option value="1">1 — Nada / Nothing</option><option value="2">2 — Ayudante / Helper</option><option value="3">3 — Bueno / Good</option><option value="4">4 — Avanzado / Advanced</option><option value="5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-mechanic"> 🔧 Herramienta / Tools</label></div>
+      </div>
       <label>What do you have? — tap all that apply</label>
       <div class="pick multi" id="wGear">
         <button type="button" data-v="Basic hand tools">Basic hand tools</button><button type="button" data-v="Power tools">Power tools</button><button type="button" data-v="Drill/driver">Drill/driver</button><button type="button" data-v="Saws">Saws</button><button type="button" data-v="Ladder">Ladder</button><button type="button" data-v="Truck bed/toolbox">Truck bed/toolbox</button><button type="button" data-v="Trailer">Trailer</button><button type="button" data-v="PPE/safety gear">PPE/safety gear</button><button type="button" data-v="No tools yet">No tools yet</button>
@@ -701,6 +718,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
   <div id="workerBox" style="display:none">
     <h2>Open job offers</h2>
     <p class="mut" id="workerStatus"></p>
+    <div id="workerLocLine" style="margin:6px 0"></div>
+    <div id="workerSkillBanner"></div>
+    <div id="workerProfile"></div>
     <div id="workerPayouts"></div>
     <div id="workerCaptain" style="display:none"></div>
     <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
@@ -728,6 +748,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <h3>Capitanes — Area Captains</h3>
     <p class="mut">Un capitán por área (solo técnicos ACTIVE). El override del capitán es 5% fijo del labor cobrado, lo paga la casa — nunca sale del pago del técnico — y solo se acumula cuando el trabajo termina (Done — photos sent) con el pago capturado. Servicios de $75, junk removal y hauling/green waste no acumulan. Fairfield lo comanda El General — no se asigna.</p>
     <div id="adminCaptains"></div>
+    <div id="adminMapBox"></div>
     <div class="card">
       <b>New area</b>
       <div class="row"><div><label>Area name</label><input id="capAreaName" placeholder="e.g. Richmond"></div><div><label>Cities it covers (comma-separated)</label><input id="capAreaCities" placeholder="Richmond, El Cerrito"></div></div>
@@ -742,6 +763,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="row"><div><label>Customer name</label><input id="jName"></div><div><label>Customer phone</label><input id="jPhone"></div></div>
       <label>Full address (private)</label><input id="jAddr">
       <label>Private notes</label><input id="jNotes">
+      <label>Offer directly to one worker (optional) — si lo dejas en el board, lo ven todos los activos de la zona</label>
+      <select id="jWorker"><option value="">— Open board (todos) —</option></select>
+      <div id="jCand" class="mut" style="margin:6px 0">Escribe el servicio arriba y aquí salen los mejores para ese oficio (nivel verificado o el que él dice, 🔧 = tiene herramienta, ⏸ = en pausa). / Type the service above — best matches for that trade show here.</div>
       <button onclick="createJob()">Post job to board</button>
       <div id="jMsg" class="mut"></div>
     </div>
@@ -1627,6 +1651,19 @@ function pickSelfRatings(){
   });
   return r;
 }
+// v41: the 7 trade boxes (level 1-5 + has-tools) from the application form.
+const TRADE_KEYS_CLIENT = ['handyman','carpentry','electrical','plumbing','gardening','hvac','mechanic'];
+const TRADE_NAMES_CLIENT = { handyman:'Handyman (general)', carpentry:'Carpintería / Carpentry', electrical:'Electricidad / Electrical', plumbing:'Plomería / Plumbing', gardening:'Jardinería / Gardening', hvac:'HVAC', mechanic:'Mecánica / Mechanic' };
+function pickTradeSkills(){
+  const r={};
+  TRADE_KEYS_CLIENT.forEach(function(k){
+    const sel=document.getElementById('ts-level-'+k);
+    const chk=document.getElementById('ts-tools-'+k);
+    const v=sel?parseInt(sel.value,10):NaN;
+    if(v>=1 && v<=5) r[k]={level:v, tools:!!(chk&&chk.checked)};
+  });
+  return r;
+}
 renderSelfRate();
 // ---------- Home details + start preference (added 2026-10-21) ----------
 // Optional facts about the home (ZIP is never required) and a start-date
@@ -1700,7 +1737,7 @@ async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
-    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings() } : {};
+    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
@@ -1829,7 +1866,11 @@ function render(){
   document.getElementById('authBox').style.display = showAuth ? 'block' : 'none';
   if (cgBox) cgBox.style.display = isWorkerEntry() ? 'none' : 'block';
   // Quote form is public — no account needed. "My ..." sections need a customer login.
-  const showCust = !me || me.role==='customer';
+  // v41: worker entry (#worker) shows ONLY the worker login/application —
+  // the customer request form and storefront sections never squeeze it
+  // (owner screenshot 2026-10-23: "no veo el login bien"). Once a worker is
+  // logged in, only the worker panel shows, as before.
+  const showCust = (!me || me.role==='customer') && !isWorkerEntry();
   document.getElementById('customerBox').style.display = showCust ? 'block':'none';
   document.getElementById('anonContact').style.display = !me ? 'block':'none';
   document.querySelectorAll('#customerBox .custAccountOnly').forEach(function(el){ el.style.display = (me && me.role==='customer') ? '' : 'none'; });
@@ -1840,7 +1881,8 @@ function render(){
   document.getElementById('workerBox').style.display = me && me.role==='worker' ? 'block':'none';
   document.getElementById('adminBox').style.display = me && me.role==='admin' ? 'block':'none';
   if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadMyJobs(); custSummary(); }
-  if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadCaptainArea(); }
+  if(!(me && me.role==='worker' && me.status==='active')) stopDutySharing();
+  if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadCaptainArea(); loadWorkerProfile(); initDutySharing(); }
   if(me && me.role==='admin'){ loadAdmin(); }
   // Direct HomeCare join: after login/signup with a pending join, go straight
   // to the $49/mo Stripe checkout.
@@ -1853,6 +1895,7 @@ let custAck=false;
 document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e42535':''; });
 ['cService','cEst','cCity','cWhen','cMember'].forEach(function(gid){ const g=document.getElementById(gid); if(g) g.addEventListener('click', custSummary); });
 document.getElementById('rDate').addEventListener('change', custSummary);
+['jService', 'jCity'].forEach(function(gid){ const g = document.getElementById(gid); if (g) { g.addEventListener('input', queueJobCandidates); g.addEventListener('change', queueJobCandidates); } });
 // Member pricing presentation (added 2026-10-21; policy updated same day):
 // a logged-in customer's membership picker is set FROM THE ACCOUNT, never
 // left on the $75 default — members of EVERY plan (HomeCare, HomeCare Plus,
@@ -2190,7 +2233,7 @@ async function submitRating(idv){
 async function loadMyJobs(){
   const d=await api('/api/jobs').catch(()=>({jobs:[]}));
   const el=document.getElementById('myJobs'); if(!el) return;
-  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -2202,12 +2245,180 @@ async function loadJobs(){
   sndWorkerJobs(d.jobs || []);
 }
 function workerPayoutLine(j){ if(!j.mine||!j.payoutStatus) return ''; if(j.payoutStatus==='paid') return '<br><span class="st">\u{1F4B3} Payout sent to your bank \u2713</span>'; return '<br><span class="mut">\u{1F4B3} Payout: '+String(j.payoutStatus).replace(/_/g,' ')+'</span>'; }
+// ---------- Mi dinero / My money (v41) ----------
+// One consolidated money view over the existing payout records: Connect
+// state (with the setup button up front when payouts are not live), the
+// paid-out and pending totals, and the per-job list. Data: /api/worker/money.
 async function loadPayouts(){ const box=document.getElementById('workerPayouts'); if(!box||!me||me.role!=='worker'||me.status!=='active'){ if(box) box.innerHTML=''; return; }
-  let st=null; try{ st=await api('/api/worker/connect/status'); }catch(e){}
-  if(st&&st.ready){ box.innerHTML='<div class="card" style="border:1.5px solid #1d5c38;background:#0b2013"><b>\u{1F4B3} Payouts are ON</b><p class="mut">When you finish a job, your pay is sent automatically to your bank via Stripe. Nothing else to do.</p></div>'; return; }
-  box.innerHTML='<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>\u{1F4B3} Set up your payouts</b><p class="mut">Get paid automatically the moment you finish a job — Stripe sends your pay straight to your bank. One-time setup, about 2 minutes: your ID and your bank.</p><button onclick="startConnect()">Set up payouts with Stripe</button></div>';
+  let d=null; try{ d=await api('/api/worker/money'); }catch(e){}
+  if(!d){ // fall back to the Connect-status banner if the money read fails
+    let st=null; try{ st=await api('/api/worker/connect/status'); }catch(e){}
+    if(st&&st.ready){ box.innerHTML='<div class="card" style="border:1.5px solid #1d5c38;background:#0b2013"><b>\u{1F4B3} Payouts are ON</b><p class="mut">When you finish a job, your pay is sent automatically to your bank via Stripe. Nothing else to do.</p></div>'; return; }
+    box.innerHTML='<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>\u{1F4B3} Set up your payouts</b><p class="mut">Get paid automatically the moment you finish a job — Stripe sends your pay straight to your bank. One-time setup, about 2 minutes: your ID and your bank.</p><button onclick="startConnect()">Set up payouts with Stripe</button></div>';
+    return;
+  }
+  const conn=d.connect||{};
+  const setupCard = conn.ready
+    ? '<div class="card" style="border:1.5px solid #1d5c38;background:#0b2013"><b>\u{1F4B3} Payouts are ON</b><p class="mut">When you finish a job, your pay is sent automatically to your bank via Stripe. Nothing else to do.</p></div>'
+    : '<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>\u{1F4B3} '+(conn.connected?'Finish your payout setup':'Set up your payouts')+'</b><p class="mut">Get paid automatically the moment you finish a job — Stripe sends your pay straight to your bank. One-time setup, about 2 minutes: your ID and your bank.</p><button onclick="startConnect()">'+(conn.connected?'Continue setup with Stripe':'Set up payouts with Stripe')+'</button></div>';
+  const tot=d.totals||{paidOut:0,pending:0};
+  const stLabel=function(s){ return ({paid:'Pagado / Paid', awaiting_capture:'Esperando el pago del cliente / Awaiting capture', awaiting_worker_setup:'Falta tu setup de Stripe / Awaiting your setup', pending_funds:'Fondos en camino / Pending funds', pending:'Pendiente / Pending', error:'Error — habla con el Team', stripe_off:'Stripe no conectado / Stripe off'})[s] || String(s||'').replace(/_/g,' '); };
+  const rows=(d.entries||[]).map(function(e){ return '<div style="padding:6px 0;border-bottom:1px dashed #333"><b>'+escHtml(e.jobId)+'</b> — '+escHtml(e.service||'Job')+(e.city?' <span class="mut">'+escHtml(e.city)+'</span>':'')+'<br><span class="st">$'+Number(e.amount||0).toFixed(2)+'</span> <span class="pill">'+escHtml(stLabel(e.status))+'</span>'+(e.date?' <span class="mut">'+escHtml(String(e.date).slice(0,10))+'</span>':'')+'</div>'; }).join('');
+  box.innerHTML='<h2>Mi dinero / My money</h2>'+setupCard
+    + '<div class="card"><b>Pagado a tu banco / Paid out to you: <span class="st">$'+Number(tot.paidOut||0).toFixed(2)+'</span></b><br><b>Pendiente / Pending: $'+Number(tot.pending||0).toFixed(2)+'</b>'
+    + (rows ? '<div style="margin-top:8px">'+rows+'</div>' : '<p class="mut">Todavía no hay pagos registrados / No payouts yet — when you finish a job, its pay shows up here.</p>') + '</div>';
 }
 async function startConnect(){ try{ const r=await api('/api/worker/connect/start',{method:'POST'}); if(r&&r.url){ location.href=r.url; } else alert('Could not start Stripe setup — try again.'); }catch(e){ alert(e.message); } }
+// ---------- Worker avatars (v41) ----------
+// One avatar treatment everywhere (worker profile, customer technician
+// card, admin cards, captain team, map pins): the worker's photo in a
+// circle with the brand-red ring — or, when he has no photo, an initials
+// circle in brand colors. Never a broken-image icon.
+function initialsOf(name){
+  const p = String(name || '').trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return '?';
+  return (p[0].charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase();
+}
+function avatarHtml(photo, name, size){
+  size = size || 40;
+  if (photo) return '<img src="' + escAttr(photo) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid #e42535;vertical-align:middle;background:#fff">';
+  return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:#e42535;color:#fff;font-weight:800;font-size:' + Math.max(11, Math.round(size * 0.4)) + 'px;vertical-align:middle">' + escHtml(initialsOf(name)) + '</span>';
+}
+// The customer's technician line on their job card: avatar + name. The
+// payload carries ONLY name + photo for the worker — never phone or pay.
+function techCardHtml(j){
+  if (!j || !j.technician) return '';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-top:8px">' + avatarHtml(j.technicianPhoto, j.technician, 36) + '<span>Tu técnico / Your technician: <b>' + escHtml(j.technician) + '</b></span></div>';
+}
+// ---------- Mi perfil + Mis oficios + Disponibilidad (v41) ----------
+// EVERY worker edits his full profile here — including accounts created
+// under the old model: the form is prefilled from his stored profile
+// (name, phone, city, areas, skills text) and nothing is gated on when
+// the account was created. The section is built once per session so
+// re-renders never wipe what he is typing; saving rebuilds it fresh.
+let workerProfileFor = null;
+let myTradeEdits = null; // { key: { level: 0..5 (0 = unrated), tools: bool, was: bool } }
+function tradeEditsFromMe(){
+  const out = {};
+  TRADE_KEYS_CLIENT.forEach(function(k){
+    const e = (me.tradeSkills || {})[k];
+    out[k] = { level: e && e.level ? e.level : 0, tools: !!(e && e.tools), was: !!e };
+  });
+  return out;
+}
+function loadWorkerProfile(){
+  const banner = document.getElementById('workerSkillBanner');
+  const box = document.getElementById('workerProfile');
+  if (!box || !me || me.role !== 'worker') { if (banner) banner.innerHTML = ''; if (box) box.innerHTML = ''; workerProfileFor = null; return; }
+  const rated = me.skillsRated != null ? me.skillsRated : TRADE_KEYS_CLIENT.filter(function(k){ const e=(me.tradeSkills||{})[k]; return e && e.level; }).length;
+  if (banner) banner.innerHTML = rated < 7
+    ? '<div class="card" style="border:1.5px solid #e42535;background:#2a0d10"><b>⚠️ Califica tus oficios / Rate your trades</b><p class="mut">Te faltan ' + (7 - rated) + ' de 7 oficios por calificar. El Team te manda trabajos según tu nivel en cada oficio — califícalos en <b>Mis oficios</b> aquí abajo. / ' + (7 - rated) + ' of 7 trades still unrated — the Team matches jobs to your level in each trade.</p><button class="ghost" onclick="document.getElementById(\'workerTradesCard\').scrollIntoView({behavior:\'smooth\'})">Ir a Mis oficios / Go to My trades</button></div>'
+    : '';
+  if (workerProfileFor === me.id && myTradeEdits) return; // already built — never clobber typing
+  workerProfileFor = me.id;
+  myTradeEdits = tradeEditsFromMe();
+  const pf = me.profile || {};
+  const av = me.availability || { preset: 'anytime', days: [], paused: false };
+  const dayNames = ['Dom/Sun', 'Lun/Mon', 'Mar/Tue', 'Mié/Wed', 'Jue/Thu', 'Vie/Fri', 'Sáb/Sat'];
+  const daysHtml = [0, 1, 2, 3, 4, 5, 6].map(function(d){ return '<label style="display:inline-block;margin:2px 8px 2px 0;font-size:13px"><input type="checkbox" id="wp-day-' + d + '"' + ((av.days || []).includes(d) ? ' checked' : '') + '> ' + dayNames[d] + '</label>'; }).join('');
+  box.innerHTML = '<h2>Mi perfil / My profile</h2>'
+    + '<div class="card">'
+    + '<div id="wpPhotoBox"></div>'
+    + '<label>Nombre / Name</label><input id="wp-name" value="' + escAttr(me.name || '') + '">'
+    + '<label>Teléfono / Phone</label><input id="wp-phone" value="' + escAttr(me.phone || '') + '">'
+    + '<div class="row"><div><label>Ciudad donde vives / City you live in</label><input id="wp-city" value="' + escAttr(pf.city || '') + '"></div>'
+    + '<div><label>Áreas que cubres / Areas you can work</label><input id="wp-areas" value="' + escAttr(pf.areas || '') + '" placeholder="Fairfield, Vacaville, Vallejo..."></div></div>'
+    + '<label>Habilidades (texto) / Skills (words)</label><input id="wp-skills" value="' + escAttr(((pf.skills || me.skills || []).join(', '))) + '" placeholder="Plumbing, Carpentry, Paint & drywall...">'
+    + '<h3 style="margin-bottom:4px">Disponibilidad / Availability</h3>'
+    + '<select id="wp-avail-preset" onchange="wpAvailPresetChange()"><option value="anytime"' + (av.preset === 'anytime' ? ' selected' : '') + '>Cuando sea / Anytime</option><option value="weekdays"' + (av.preset === 'weekdays' ? ' selected' : '') + '>Entre semana / Weekdays</option><option value="weekends"' + (av.preset === 'weekends' ? ' selected' : '') + '>Fines de semana / Weekends</option><option value="custom"' + (av.preset === 'custom' ? ' selected' : '') + '>Días específicos / Specific days</option></select>'
+    + '<div id="wp-avail-days" style="margin-top:6px;' + (av.preset === 'custom' ? '' : 'display:none') + '">' + daysHtml + '</div>'
+    + '<label style="display:block;margin-top:10px"><input type="checkbox" id="wp-paused"' + (av.paused ? ' checked' : '') + '> ⏸ <b>No disponible por ahora / Paused</b> — no me manden trabajos nuevos / don\'t send me new jobs</label>'
+    + '<div style="margin-top:10px"><button onclick="saveWorkerProfile()">Guardar perfil / Save profile</button> <span id="wpMsg" class="mut"></span></div>'
+    + '</div>'
+    + '<div class="card" id="workerTradesCard"><h3 style="margin-top:0">Mis oficios / My trades</h3>'
+    + '<p class="mut" style="margin-top:0">Tu nivel en cada oficio: <b>1</b> no sabe nada · <b>2</b> ayudante · <b>3</b> bueno, trabaja solo · <b>4</b> avanzado · <b>5</b> master. Marca 🔧 si tienes la herramienta de ese oficio. El Team puede verificar tu nivel con el tiempo. / Your level in each trade — the Team may verify it over time.</p>'
+    + '<div id="wpTradesRows"></div>'
+    + '<div style="margin-top:10px"><button onclick="saveWorkerTrades()">Guardar oficios / Save trades</button> <span id="wtMsg" class="mut"></span></div>'
+    + '</div>';
+  paintWorkerPhotoBox();
+  repaintWorkerTrades();
+}
+// The profile-photo editor (top of Mi perfil): round avatar preview, a
+// file input, and a remove button. Uploads save IMMEDIATELY (same
+// pattern as the yard-visit photos) through the worker-profile endpoint
+// — the worker can only ever change his OWN photo.
+function paintWorkerPhotoBox(){
+  const box = document.getElementById('wpPhotoBox'); if (!box || !me) return;
+  box.innerHTML = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">'
+    + avatarHtml(me.photo, me.name, 64)
+    + '<div><b>Foto de perfil / Profile photo</b><br><span class="mut">El cliente ve tu foto en su tarjeta del técnico y en el mapa en vivo. / Customers see your photo on their technician card and on the live map.</span><br>'
+    + '<input type="file" id="wp-photo" accept="image/*" onchange="wpPhotoChange(this)" style="margin-top:6px">'
+    + (me.photo ? ' <button type="button" class="ghost" onclick="wpPhotoRemove()">Quitar foto / Remove photo</button>' : '')
+    + ' <span id="wpPhotoMsg" class="mut"></span></div></div>';
+}
+async function wpPhotoChange(input){
+  const f = input && input.files && input.files[0]; if (!f) return;
+  try {
+    const data = await fileToDataUrl(f);
+    const r = await api('/api/me/worker-profile', { method: 'POST', body: JSON.stringify({ photo: data }) });
+    if (r && r.user) { me.photo = r.user.photo || null; if (!me.profile) me.profile = {}; if (me.photo) me.profile.photo = me.photo; else delete me.profile.photo; }
+    paintWorkerPhotoBox();
+    const m = document.getElementById('wpPhotoMsg'); if (m) m.textContent = 'Foto guardada ✓ / Photo saved ✓';
+  } catch(e) { const m = document.getElementById('wpPhotoMsg'); if (m) m.textContent = e.message; else alert(e.message); }
+}
+async function wpPhotoRemove(){
+  try {
+    const r = await api('/api/me/worker-profile', { method: 'POST', body: JSON.stringify({ photo: null }) });
+    if (r && r.user) { me.photo = r.user.photo || null; if (me.profile) delete me.profile.photo; }
+    paintWorkerPhotoBox();
+    const m = document.getElementById('wpPhotoMsg'); if (m) m.textContent = 'Foto eliminada / Photo removed';
+  } catch(e) { alert(e.message); }
+}
+function wpAvailPresetChange(){ const s = document.getElementById('wp-avail-preset'); const d = document.getElementById('wp-avail-days'); if (s && d) d.style.display = s.value === 'custom' ? '' : 'none'; }
+function repaintWorkerTrades(){
+  const rows = document.getElementById('wpTradesRows'); if (!rows || !myTradeEdits) return;
+  rows.innerHTML = TRADE_KEYS_CLIENT.map(function(k){
+    const ed = myTradeEdits[k];
+    const src = (me.tradeSkills || {})[k];
+    let btns = '';
+    for (let i = 1; i <= 5; i++) btns += '<button type="button" class="' + (ed.level === i ? 'sel' : '') + '" onclick="wpSetLevel(\'' + k + '\',' + i + ')">' + i + '</button>';
+    const ver = src && src.verified ? ' <span class="pill">Verificado / Verified: ' + src.verified + '</span>' : '';
+    return '<div class="trade-row"><span class="trade-name">' + TRADE_NAMES_CLIENT[k] + ver + '</span><span class="trade-lvl">' + btns + '</span>'
+      + '<button type="button" class="ghost" style="padding:3px 8px;min-width:0" title="Borrar / Clear" onclick="wpSetLevel(\'' + k + '\',0)">✕</button>'
+      + '<label class="trade-tools"><input type="checkbox" ' + (ed.tools ? 'checked' : '') + ' onchange="wpSetTools(\'' + k + '\',this.checked)"> 🔧 Herramienta / Tools</label></div>';
+  }).join('');
+}
+function wpSetLevel(k, lv){ if (!myTradeEdits) return; myTradeEdits[k].level = lv; repaintWorkerTrades(); }
+function wpSetTools(k, on){ if (!myTradeEdits) return; myTradeEdits[k].tools = !!on; }
+async function saveWorkerProfile(){
+  const msg = document.getElementById('wpMsg');
+  const v = function(i){ const el = document.getElementById(i); return el ? el.value : ''; };
+  try {
+    await api('/api/me/worker-profile', { method: 'POST', body: JSON.stringify({ name: v('wp-name'), phone: v('wp-phone'), city: v('wp-city'), areas: v('wp-areas'), skills: v('wp-skills') }) });
+    const days = [0, 1, 2, 3, 4, 5, 6].filter(function(d){ const c = document.getElementById('wp-day-' + d); return c && c.checked; });
+    const pausedEl = document.getElementById('wp-paused');
+    await api('/api/me/availability', { method: 'POST', body: JSON.stringify({ preset: v('wp-avail-preset') || 'anytime', days: days, paused: !!(pausedEl && pausedEl.checked) }) });
+    if (msg) msg.textContent = 'Guardado ✓ / Saved ✓';
+    workerProfileFor = null; myTradeEdits = null;
+    loadMe();
+  } catch (e) { if (msg) msg.textContent = e.message; }
+}
+async function saveWorkerTrades(){
+  const msg = document.getElementById('wtMsg');
+  if (!myTradeEdits) return;
+  const payload = {};
+  TRADE_KEYS_CLIENT.forEach(function(k){
+    const ed = myTradeEdits[k];
+    if (ed.level > 0) payload[k] = { level: ed.level, tools: !!ed.tools };
+    else if (ed.was) payload[k] = null; // he cleared a rating he had — server keeps any Team verification
+  });
+  try {
+    await api('/api/me/trades', { method: 'POST', body: JSON.stringify({ tradeSkills: payload }) });
+    if (msg) msg.textContent = 'Guardado ✓ / Saved ✓';
+    workerProfileFor = null; myTradeEdits = null;
+    loadMe();
+  } catch (e) { if (msg) msg.textContent = e.message; }
+}
 function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_capture:'Payout waiting — customer payment not captured yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
 async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdmin(); }catch(e){ alert(e.message); } }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
@@ -2464,13 +2675,83 @@ async function stopSharing(idv){
   try { await api('/api/jobs/' + idv + '/location/stop', { method: 'POST', body: JSON.stringify({}) }); } catch(e) {}
   loadJobs();
 }
+// Gabriel's rule: starting a trip REQUIRES the worker's live location.
+// Tapping "On my way" first asks the phone for a fix; if permission is
+// denied or location is unavailable, the bilingual notice shows and the
+// status is NEVER set — no silent un-shared trip.
+function requireTripLocation(){
+  return new Promise(function(resolve){
+    const deny = function(){ alert('Debes compartir tu ubicación para marcar On my way / You must share your location to tap On My Way'); resolve(false); };
+    if (typeof navigator === 'undefined' || !navigator.geolocation || !navigator.geolocation.getCurrentPosition) { deny(); return; }
+    try { navigator.geolocation.getCurrentPosition(function(){ resolve(true); }, deny, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }); }
+    catch(e) { deny(); }
+  });
+}
 async function setJobStatus(idv, status){
   try {
+    if (status === 'On my way') { const ok = await requireTripLocation(); if (!ok) return; }
     await api('/api/jobs/' + idv, { method: 'PATCH', body: JSON.stringify({ status: status }) });
     if (status === 'On my way') startSharing(idv);
     if (status === 'Arrived' && trackWatch && trackWatch.jobId === idv) stopWatchOnly();
     loadJobs();
   } catch(e) { alert(e.message); }
+}
+// ---------- Duty location sharing (v41) ----------
+// Gabriel's rule: a worker shares his location WHILE LOGGED IN to the
+// app — not only during a trip — because the Team dispatches from it.
+// The feed runs only while the app is open on his phone, only for
+// ACTIVE workers, and stops when he is PAUSED (off duty) or logs out
+// (the server clears his point on logout; points older than ~10 min
+// read as offline on the admin master map). If permission is denied or
+// unavailable, the requirement notice stays in his panel and we NEVER
+// fake a position — he can still view jobs per the normal rules, his
+// pin simply does not exist.
+let dutyWatch = null; // { watchId, postLat, postLng, postAt }
+let dutyState = 'off'; // off | on | denied | unavailable | paused
+function paintWorkerLocLine(){
+  const el = document.getElementById('workerLocLine'); if (!el) return;
+  if (!me || me.role !== 'worker') { el.innerHTML = ''; return; }
+  if (dutyState === 'on') el.innerHTML = '<span class="pill">📍 Compartiendo ubicación / Sharing location</span>';
+  else if (dutyState === 'paused') el.innerHTML = '<span class="pill">⏸ En pausa — tu ubicación no se comparte / Paused — your location is not shared</span>';
+  else if (dutyState === 'denied' || dutyState === 'unavailable') el.innerHTML = '<div class="card" style="border:1.5px solid #e42535;background:#2a0d10"><b>📍 Debes compartir tu ubicación mientras estás conectado para trabajar / You must share your location while logged in to work jobs</b><br><span class="mut">El Team lo necesita para despacharte trabajos. Activa el permiso de ubicación del navegador/app y recarga la app. / The Team needs it to dispatch you jobs — turn on the browser/app location permission and reload the app.</span></div>';
+  else el.innerHTML = '';
+}
+function postDutyPosition(lat, lng){
+  return api('/api/me/location', { method: 'POST', body: JSON.stringify({ lat: lat, lng: lng }) }).catch(function(){});
+}
+function initDutySharing(){
+  if (!me || me.role !== 'worker' || me.status !== 'active') { stopDutySharing(); return; }
+  const av = me.availability || {};
+  if (av.paused) {
+    const was = dutyState;
+    stopDutySharing();
+    dutyState = 'paused';
+    if (was === 'on') api('/api/me/location', { method: 'POST', body: JSON.stringify({ clear: true }) }).catch(function(){});
+    paintWorkerLocLine();
+    return;
+  }
+  if (dutyWatch) { paintWorkerLocLine(); return; } // already running
+  if (dutyState === 'denied') { paintWorkerLocLine(); return; } // don't re-prompt on every render
+  if (typeof navigator === 'undefined' || !navigator.geolocation || !navigator.geolocation.watchPosition) { dutyState = 'unavailable'; paintWorkerLocLine(); return; }
+  const st = { watchId: null, postLat: null, postLng: null, postAt: 0 };
+  dutyWatch = st;
+  try {
+    st.watchId = navigator.geolocation.watchPosition(function(pos){
+      if (dutyWatch !== st || !pos || !pos.coords) return;
+      if (dutyState !== 'on') { dutyState = 'on'; paintWorkerLocLine(); }
+      const lat = pos.coords.latitude, lng = pos.coords.longitude, now = Date.now();
+      if (!st.postAt || now - st.postAt >= 30000 || trackDistM(st.postLat, st.postLng, lat, lng) >= 25) { st.postLat = lat; st.postLng = lng; st.postAt = now; postDutyPosition(lat, lng); }
+    }, function(){
+      if (dutyWatch === st) { dutyWatch = null; dutyState = 'denied'; paintWorkerLocLine(); }
+    }, { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 });
+  } catch(e) { dutyWatch = null; dutyState = 'unavailable'; }
+  paintWorkerLocLine();
+}
+function stopDutySharing(){
+  if (dutyWatch && dutyWatch.watchId != null && typeof navigator !== 'undefined' && navigator.geolocation) { try { navigator.geolocation.clearWatch(dutyWatch.watchId); } catch(e) {} }
+  dutyWatch = null;
+  if (dutyState === 'on') dutyState = 'off';
+  paintWorkerLocLine();
 }
 function workerJobBtns(j){
   if (j.status === 'Open') return '<button onclick="claimJob(\'' + j.id + '\')">Pick this job</button>';
@@ -2504,18 +2785,30 @@ function trackBlockHtml(j, audience){
   const who = audience === 'admin' ? 'Technician is on the way' : 'Your technician is on the way';
   return '<div class="trackbox" style="margin-top:10px">'
     + '<div id="trkmap-' + j.id + '" style="height:220px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
-    + '<div class="mut" style="margin-top:6px">🚗 <b>' + who + '</b>' + (j.address ? ' — heading to ' + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">updated ' + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
+    + '<div class="mut" style="margin-top:6px">🔨 <b>' + who + '</b>' + (j.address ? ' — heading to ' + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">updated ' + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
 }
 function trackFallbackHtml(j){
   return '<div style="padding:20px 14px;text-align:center">📍<br><b>Your technician is on the way</b>' + (j.address ? '<br><span class="mut">Heading to ' + escHtml(j.address) + '</span>' : '') + '<br><span class="mut">Location updated ' + agoText(j.liveLoc.updatedAt) + '</span></div>';
 }
 function pinIcon(txt){ return L.divIcon({ className: 'trk-pin', html: '<div style="font-size:24px;line-height:1">' + txt + '</div>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
+// Technician pins (v41): OUR tech is identified by the brand — his round
+// photo avatar with the red ring and a small hammer badge (the hammer
+// is the app logo). With no photo, the fallback is a HAMMER pin: a 🔨
+// glyph on a brand-red circle. The glyph (not the icon file) is used so
+// the pin renders reliably inside a Leaflet divIcon with no extra fetch.
+function photoIcon(photo){
+  return L.divIcon({ className: 'trk-pin', html: '<div style="position:relative;width:40px;height:40px"><img src="' + escAttr(photo) + '" alt="" style="width:40px;height:40px;border-radius:50%;border:3px solid #e42535;object-fit:cover;display:block;background:#fff;box-sizing:border-box;box-shadow:0 1px 6px rgba(0,0,0,.45)"><span style="position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;background:#e42535;color:#fff;font-size:10px;line-height:14px;text-align:center;border:2px solid #fff">🔨</span></div>', iconSize: [40, 40], iconAnchor: [20, 20] });
+}
+function hammerPinIcon(){
+  return L.divIcon({ className: 'trk-pin', html: '<div style="width:36px;height:36px;border-radius:50%;background:#e42535;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.45);color:#fff;font-size:17px;line-height:29px;text-align:center">🔨</div>', iconSize: [36, 36], iconAnchor: [18, 18] });
+}
+function techPinIcon(j){ return (j && j.technicianPhoto) ? photoIcon(j.technicianPhoto) : hammerPinIcon(); }
 function buildTrackMap(j, box){
   if (!(window.L && L.map)) { box.innerHTML = trackFallbackHtml(j); return; }
   try {
     const map = L.map(box);
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
-    const tech = L.marker([j.liveLoc.lat, j.liveLoc.lng], { icon: pinIcon('🚗') }).addTo(map);
+    const tech = L.marker([j.liveLoc.lat, j.liveLoc.lng], { icon: techPinIcon(j) }).addTo(map);
     const pts = [[j.liveLoc.lat, j.liveLoc.lng]];
     if (j.destLat != null && j.destLng != null) { L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); pts.push([j.destLat, j.destLng]); }
     if (pts.length > 1) map.fitBounds(pts, { padding: [28, 28] }); else map.setView(pts[0], 14);
@@ -2933,7 +3226,14 @@ async function loadCaptainArea(){
       + '<h3>Trabajos en mi área / Jobs in my area</h3>'
       + ((d.jobs || []).map(function(j){ return '<div class="card"><b>' + escHtml(j.id) + '</b> — ' + escHtml(j.service) + ' <span class="pill">' + escHtml(j.status) + '</span><br><span class="mut">' + escHtml(j.city || '') + (j.when ? ' • ' + escHtml(j.when) : '') + '</span><br>Técnico / Technician: ' + (j.technician ? escHtml(j.technician) : '<span class="mut">sin asignar / unassigned</span>') + '</div>'; }).join('') || '<p class="mut">No jobs in your area yet.</p>')
       + '<h3>Equipo en mi área / Team in my area</h3>'
-      + ((d.team || []).map(function(w){ return '<div class="card"><b>' + escHtml(w.name) + '</b><br><span class="mut">' + escHtml(w.city || '') + ((w.skills && w.skills.length) ? ' • ' + escHtml(w.skills.join(', ')) : '') + '</span></div>'; }).join('') || '<p class="mut">No other technicians cover this area yet.</p>');
+      + ((d.team || []).map(function(w){
+          // v41: route planning by trade + tools + availability.
+          const tops = TRADE_KEYS_CLIENT.map(function(k){ const e = (w.trades || {})[k]; return e && e.effective ? { k: k, lv: e.effective, tools: !!e.tools } : null; }).filter(Boolean).filter(function(x){ return x.lv >= 3; }).sort(function(a, b){ return b.lv - a.lv; });
+          const topsLine = tops.length ? '<br>' + tops.map(function(x){ return escHtml(TRADE_NAMES_CLIENT[x.k].split(' / ')[0]) + ' ★' + x.lv + (x.tools ? ' 🔧' : ''); }).join(' · ') : '';
+          const av = w.availability || {};
+          const avLine = '<br><span class="mut">' + (av.paused ? '⏸ En pausa / Paused · ' : '') + 'Disponibilidad / Availability: ' + escHtml(av.preset || 'anytime') + (av.preset === 'custom' && (av.days || []).length ? ' (' + av.days.join(',') + ')' : '') + '</span>';
+          return '<div class="card">' + avatarHtml(w.photo, w.name, 36) + ' <b>' + escHtml(w.name) + '</b><br><span class="mut">' + escHtml(w.city || '') + ((w.skills && w.skills.length) ? ' • ' + escHtml(w.skills.join(', ')) : '') + '</span>' + topsLine + avLine + '</div>';
+        }).join('') || '<p class="mut">No other technicians cover this area yet.</p>');
   }catch(e){ box.style.display = 'none'; }
 }
 async function loadWorkerYardVisits(){
@@ -2982,20 +3282,61 @@ async function loadAdmin(){
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
-    return '<div class="card"><b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>'
+    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>'
     + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
     + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
-    + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w)
-    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button><div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
+    + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w) + workerTradesHtml(w)
+    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')+'<div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   loadInvoices();
   loadAdminRatings();
   loadAdminCaptains();
+  loadAdminMap();
   loadAdminAudit();
+}
+// ---------- Admin master map (v41) ----------
+// Gabriel's master map: ONE Leaflet map with every ACTIVE worker who is
+// currently sharing his logged-in location (feed: /api/admin/worker-
+// locations — fresh points only, stale/offline excluded server-side)
+// plus the destinations of today's active jobs. Worker pins use the
+// same brand treatment as the customer tracking map: photo avatar with
+// the hammer badge, or the hammer pin when he has no photo. This feed
+// is ADMIN-ONLY — customers never see it.
+let adminMasterMap = null;
+async function loadAdminMap(){
+  const box = document.getElementById('adminMapBox'); if (!box || !me || me.role !== 'admin') return;
+  let wk = [];
+  try { const d = await api('/api/admin/worker-locations'); wk = (d && d.workers) || []; } catch(e) {}
+  let jobs = [];
+  try { const jd = await api('/api/jobs'); jobs = (jd && jd.jobs) || []; } catch(e) {}
+  const today = new Date().toISOString().slice(0, 10);
+  const jobPins = jobs.filter(function(j){ return j.destLat != null && j.destLng != null && ['Done — photos sent', 'Cancelled', 'Canceled'].indexOf(j.status) === -1 && (!j.schedDate || j.schedDate === today); });
+  const listHtml = wk.length
+    ? wk.map(function(w){ return '<div style="padding:4px 0">' + avatarHtml(w.photo, w.name, 28) + ' <b>' + escHtml(w.name) + '</b> <span class="mut">📍 ' + escHtml(agoText(w.updatedAt)) + '</span></div>'; }).join('')
+    : '<p class="mut">Ningún técnico está compartiendo ubicación ahora / No technician is sharing location right now.</p>';
+  box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card">'
+    + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
+    + '<div style="margin-top:8px">' + listHtml + '</div>'
+    + (jobPins.length ? '<p class="mut">🏠 = destino de un trabajo activo de hoy / an active job destination today (' + jobPins.length + ')</p>' : '')
+    + '</div>';
+  if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
+  const mapEl = document.getElementById('adminMap');
+  if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>'; return; }
+  try {
+    const map = L.map(mapEl);
+    adminMasterMap = map;
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+    const pts = [];
+    wk.forEach(function(w){ const m = L.marker([w.lat, w.lng], { icon: w.photo ? photoIcon(w.photo) : hammerPinIcon() }).addTo(map); m.bindPopup('<b>' + escHtml(w.name) + '</b><br>📍 ' + escHtml(agoText(w.updatedAt))); pts.push([w.lat, w.lng]); });
+    jobPins.forEach(function(j){ const m = L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); m.bindPopup('<b>' + escHtml(j.service || 'Job') + '</b><br>' + escHtml(j.city || '') + ' · ' + escHtml(j.status || '')); pts.push([j.destLat, j.destLng]); });
+    if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30] });
+    else if (pts.length === 1) map.setView(pts[0], 12);
+    else map.setView([38.2499, -122.0369], 10);
+  } catch(e) {}
 }
 // ---------- Admin captains (v40) ----------
 function capUsd(n){ return '$' + Number(n || 0).toFixed(2); }
@@ -3118,7 +3459,36 @@ async function rankSkill(wid, skill, stars){
   catch(e){ alert(e.message); }
   loadAdmin();
 }
+// ---------- Worker trade boxes in the admin card (v41) ----------
+// The worker's 7 self-rated boxes (level + tools) with the Team's
+// VERIFIED level beside them ("dice 4 · verificado 3"). Gabriel sets or
+// clears the verified level per trade; effective = verified ?? self.
+function workerTradesHtml(w){
+  const view = w.tradeSkills || {};
+  const av = w.availability || { preset: 'anytime', days: [], paused: false };
+  const dayShort = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const avLine = '<br><span class="mut">Disponibilidad:</span> ' + (av.paused ? '<span class="pill">⏸ EN PAUSA</span> ' : '') + escHtml(av.preset || 'anytime') + (av.preset === 'custom' && (av.days || []).length ? ' (' + av.days.map(function(d){ return dayShort[d]; }).join(', ') + ')' : '');
+  const anyRated = TRADE_KEYS_CLIENT.some(function(k){ return !!view[k]; });
+  if (!anyRated) return avLine + '<br><span class="mut">Oficios (1–5):</span> <b>Sin calificar</b> <span class="mut">— el trabajador todavía no se califica en la app</span>';
+  const rows = TRADE_KEYS_CLIENT.map(function(k){
+    const e = view[k];
+    if (!e) return '<span style="display:inline-block;margin:3px 10px 3px 0;white-space:nowrap"><b>' + TRADE_NAMES_CLIENT[k].split(' / ')[0] + '</b> <span class="mut">—</span></span>';
+    const dice = (e.verified != null && e.level != null && e.verified !== e.level) ? ' <span class="mut">· dice ' + e.level + ' · verificado ' + e.verified + '</span>' : (e.verified != null ? ' <span class="mut">· verificado ✓</span>' : '');
+    let opts = '<option value="0">verif: —</option>';
+    for (let i = 1; i <= 5; i++) opts += '<option value="' + i + '"' + (e.verified === i ? ' selected' : '') + '>' + i + '</option>';
+    return '<span style="display:inline-block;margin:3px 10px 3px 0;white-space:nowrap"><b>' + TRADE_NAMES_CLIENT[k].split(' / ')[0] + '</b> ★' + (e.effective != null ? e.effective : '—') + (e.tools ? ' 🔧' : '') + dice + ' <select style="width:86px;display:inline-block" onchange="adminSetVerified(\'' + w.id + '\',\'' + k + '\',this.value)">' + opts + '</select></span>';
+  }).join('');
+  return avLine + '<br><span class="mut">Oficios (★ = nivel efectivo, 🔧 = tiene herramienta; el Team verifica):</span><br>' + rows;
+}
+async function adminSetVerified(wid, key, val){
+  const body = { tradeVerified: {} };
+  body.tradeVerified[key] = parseInt(val, 10) || 0;
+  try{ await api('/api/workers/' + wid, { method: 'PATCH', body: JSON.stringify(body) }); }
+  catch(e){ alert(e.message); }
+  loadAdmin();
+}
 async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdmin(); }
+async function removeWorkerPhoto(wid){ if(!confirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdmin(); }catch(e){ alert(e.message); } }
 function escAttr(v){ return (''+(v||'')).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function editWorkerForm(idv){
   const w = adminWorkersCache.find(function(x){return x.id===idv;});
@@ -3151,9 +3521,42 @@ async function saveWorkerEdit(idv){
 async function delRequest(idv){ if(!confirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
 async function delJob(idv){ if(!confirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); loadAdmin(); }
 async function delWorker(idv, name){ if(!confirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdmin(); }
+// ---------- Dispatch picker (v41) ----------
+// For the service typed in the Create-a-job card, the server ranks the
+// ACTIVE workers by their effective level + tools in that job's trade.
+// Display + sort only — Gabriel picks; nothing auto-dispatches. Picking a
+// worker makes it a DIRECT offer (silent): he alone is alerted in-app and
+// by email. A paused worker triggers a clear warning, never a hard block.
+let jCandCache = [];
+let jCandTimer = null;
+async function refreshJobCandidates(){
+  const svcEl = document.getElementById('jService'); const sel = document.getElementById('jWorker'); const box = document.getElementById('jCand');
+  if (!svcEl || !sel || !box || !me || me.role !== 'admin') return;
+  const svc = svcEl.value.trim();
+  if (!svc) { box.textContent = 'Escribe el servicio arriba y aquí salen los mejores para ese oficio. / Type the service above — best matches for that trade show here.'; return; }
+  let d = null;
+  try { d = await api('/api/admin/worker-candidates?service=' + encodeURIComponent(svc)); } catch (e) { return; }
+  jCandCache = d.candidates || [];
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">— Open board (todos) —</option>' + jCandCache.map(function(c){ return '<option value="' + c.id + '">' + escHtml(c.name) + ' — ★' + (c.level != null ? c.level : '—') + (c.tools ? ' 🔧' : '') + (c.paused ? ' ⏸ EN PAUSA' : '') + '</option>'; }).join('');
+  if (prev && jCandCache.some(function(c){ return c.id === prev; })) sel.value = prev;
+  const tradeName = TRADE_NAMES_CLIENT[d.trade] || d.trade;
+  box.innerHTML = '<b>Oficio / Trade: ' + escHtml(tradeName) + '</b><br>' + (jCandCache.map(function(c){
+    const dice = (c.verified != null && c.selfLevel != null && c.verified !== c.selfLevel) ? ' (dice ' + c.selfLevel + ' · verificado ' + c.verified + ')' : (c.verified != null ? ' (verificado ✓)' : '');
+    return '★' + (c.level != null ? c.level : '—') + (c.tools ? ' 🔧' : '') + dice + ' — ' + escHtml(c.name) + (c.city ? ' (' + escHtml(c.city) + ')' : '') + (c.paused ? ' <b>⏸ EN PAUSA</b>' : '');
+  }).join('<br>') || 'Sin trabajadores activos todavía.');
+}
+function queueJobCandidates(){ if (jCandTimer) clearTimeout(jCandTimer); jCandTimer = setTimeout(refreshJobCandidates, 350); }
 async function createJob(){
-  try{ await api('/api/jobs',{method:'POST', body:JSON.stringify({service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, schedDate:document.getElementById('jSchedDate').value, schedTime:document.getElementById('jSchedTime').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value})});
-    document.getElementById('jMsg').textContent='Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; loadAdmin();
+  const wid = (document.getElementById('jWorker') || {}).value || '';
+  const body = {service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, schedDate:document.getElementById('jSchedDate').value, schedTime:document.getElementById('jSchedTime').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value};
+  if (wid) {
+    const cand = jCandCache.find(function(c){ return c.id === wid; });
+    if (cand && cand.paused && !confirm('⚠️ ' + cand.name + ' está EN PAUSA (él mismo se puso no disponible).\n\n¿Ofrecerle el trabajo de todos modos? / He is PAUSED — offer anyway?')) return;
+    body.assignedWorkerId = wid; body.silent = true; // direct offer: only he is alerted (in-app + email)
+  }
+  try{ await api('/api/jobs',{method:'POST', body:JSON.stringify(body)});
+    document.getElementById('jMsg').textContent = wid ? 'Job offered directly to the selected worker.' : 'Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; loadAdmin();
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
 applyWorkerEntry();

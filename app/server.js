@@ -54,7 +54,7 @@ const sessions = new Map(); // token -> { uid, exp } — sessions expire server-
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -148,6 +148,131 @@ function workerAreas(w) {
   const raw = prof.areas || prof.serviceAreas || prof.wAreas || '';
   const list = Array.isArray(raw) ? raw : String(raw).split(/[,;]/);
   return list.map(s => String(s).toLowerCase().trim()).filter(Boolean);
+}
+// ---------- Worker trade skills + availability (v41 — owner design 2026-10-23) ----------
+// Seven skill boxes, handyman (general) first. HVAC is a RATING CATEGORY
+// ONLY — it is not a customer service and never enters the menu. Each box:
+// the worker's SELF rating 1..5 (1 = knows nothing, 2 = a little/helper,
+// 3 = good, works solo, 4 = advanced, 5 = master) + whether he HAS THE
+// TOOLS for that trade. The Team (admin) may stamp a VERIFIED level per
+// trade; the effective level used for dispatch is verified ?? self.
+// Storage: u.tradeSkills = { key: { level, tools, verified } } — a fresh
+// field, deliberately NOT the legacy u.skills name-list / profile.skills
+// text (those stay untouched for the application form + admin cards).
+// Nothing here is gated on account age: accounts created under the old
+// model edit the same fields from the worker panel, prefilled from their
+// existing profile. Skill numbers are NEVER customer-facing.
+const TRADE_SKILLS = [
+  { key: 'handyman', en: 'Handyman (general)', es: 'Handyman (general)' },
+  { key: 'carpentry', en: 'Carpentry', es: 'Carpintería' },
+  { key: 'electrical', en: 'Electrical', es: 'Electricidad' },
+  { key: 'plumbing', en: 'Plumbing', es: 'Plomería' },
+  { key: 'gardening', en: 'Gardening / Yard', es: 'Jardinería' },
+  { key: 'hvac', en: 'HVAC', es: 'HVAC (aire / calefacción)' },
+  { key: 'mechanic', en: 'Mechanic', es: 'Mecánica' }
+];
+const TRADE_KEYS = TRADE_SKILLS.map(t => t.key);
+function cleanLevel(v) { const n = parseInt(v, 10); return (n >= 1 && n <= 5) ? n : null; }
+// Merge a worker-supplied ratings object into the stored shape. Verified
+// levels are Team-only: worker input can never create or erase them, and
+// clearing a self rating (key: null) keeps the Team's verification.
+function mergeTradeSkills(existing, input) {
+  const out = {};
+  const prev = (existing && typeof existing === 'object') ? existing : {};
+  for (const k of TRADE_KEYS) {
+    const p = prev[k] || null;
+    let level = p ? cleanLevel(p.level) : null;
+    let tools = p ? !!p.tools : false;
+    const verified = p ? cleanLevel(p.verified) : null;
+    if (input && Object.prototype.hasOwnProperty.call(input, k)) {
+      const v = input[k];
+      if (v === null) { level = null; tools = false; }
+      else if (v && typeof v === 'object') {
+        const lv = cleanLevel(v.level);
+        if (lv !== null) level = lv;
+        if (v.tools !== undefined) tools = !!v.tools;
+      }
+    }
+    if (level !== null || verified !== null) out[k] = { level, tools, verified };
+  }
+  return out;
+}
+// Normalized 7-box view for API payloads (worker panel, admin, captains).
+// Every key is present; unrated boxes are null. effective = verified ?? self.
+function tradeSkillsOf(u) {
+  const stored = (u && u.tradeSkills && typeof u.tradeSkills === 'object') ? u.tradeSkills : {};
+  const out = {};
+  for (const k of TRADE_KEYS) {
+    const e = stored[k];
+    if (!e) { out[k] = null; continue; }
+    const level = cleanLevel(e.level);
+    const verified = cleanLevel(e.verified);
+    if (level === null && verified === null) { out[k] = null; continue; }
+    out[k] = { level, tools: !!e.tools, verified, effective: verified !== null ? verified : level };
+  }
+  return out;
+}
+function skillsRatedCount(u) { const v = tradeSkillsOf(u); return TRADE_KEYS.filter(k => v[k] && v[k].level !== null).length; }
+function effectiveSkill(u, key) { const v = tradeSkillsOf(u)[key]; return v ? v.effective : null; }
+// ---------- Availability (v41) ----------
+// u.availability = { preset: 'anytime'|'weekdays'|'weekends'|'custom',
+// days: [0..6] (JS getDay: 0 = Sunday), paused: bool }. Legacy accounts
+// have none — the default view is anytime / not paused, and their old
+// free-text profile.availability stays as application history.
+const AVAIL_PRESETS = ['anytime', 'weekdays', 'weekends', 'custom'];
+function cleanAvailability(input, existing) {
+  const out = { preset: 'anytime', days: [], paused: false };
+  const prev = (existing && typeof existing === 'object') ? existing : {};
+  if (AVAIL_PRESETS.includes(prev.preset)) out.preset = prev.preset;
+  if (Array.isArray(prev.days)) out.days = prev.days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6);
+  out.paused = !!prev.paused;
+  if (input && typeof input === 'object') {
+    if (input.preset !== undefined) {
+      if (!AVAIL_PRESETS.includes(input.preset)) return { error: 'unknown availability preset' };
+      out.preset = input.preset;
+    }
+    if (input.days !== undefined) {
+      if (!Array.isArray(input.days)) return { error: 'days must be a list' };
+      out.days = Array.from(new Set(input.days.map(d => parseInt(d, 10)).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))).sort();
+    }
+    if (input.paused !== undefined) out.paused = !!input.paused;
+  }
+  return { value: out };
+}
+function publicAvailability(u) { const c = cleanAvailability(null, u && u.availability); return c.value; }
+function workerPaused(u) { return !!publicAvailability(u).paused; }
+// ---------- Worker profile photo + duty location (v41) ----------
+// The profile photo lives on u.profile.photo as a data URL. It is set
+// ONLY from the worker's own profile editor (POST /api/me/worker-profile)
+// or cleared by the Team (PATCH /api/workers/:id with photo: null) —
+// never at signup. Validation mirrors the yard-visit photo rule exactly
+// (data:image/ prefix, <= 5,000,000 chars).
+function isPhotoDataUrl(x) { return typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000; }
+function workerPhotoOf(u) { const p = u && u.profile && u.profile.photo; return isPhotoDataUrl(p) ? p : null; }
+// Duty location feed: a worker shares his position WHILE LOGGED IN
+// (u.liveLoc, separate from the job-trip j.liveLoc). The admin master
+// map treats points older than this as offline.
+const WORKER_LOC_FRESH_MS = 10 * 60 * 1000;
+// ---------- Trade inference for dispatch (v41) ----------
+// Which of the 7 boxes a job belongs to: known menu service ids first,
+// then keywords on the free-text service. Unknown → handyman (general).
+const MENU_TRADE = {
+  'toilet-replacement': 'plumbing', 'faucet-replacement': 'plumbing', 'drain-unclog': 'plumbing', 'dishwasher-swap': 'plumbing', 'water-heater': 'plumbing', 'vanity-swap': 'plumbing',
+  'ceiling-fan': 'electrical', 'ring-doorbell': 'electrical',
+  'brake-pads': 'mechanic', 'battery-replacement': 'mechanic', 'alternator-replacement': 'mechanic', 'starter-replacement': 'mechanic', 'oil-change': 'mechanic',
+  'yard-cleanup': 'gardening', 'green-waste': 'gardening',
+  'door-slab-swap': 'carpentry', 'closet-organizer': 'carpentry'
+};
+function tradeForService(service, serviceId) {
+  if (serviceId && MENU_TRADE[serviceId]) return MENU_TRADE[serviceId];
+  const s = String(service || '').toLowerCase();
+  if (/hvac|furnace|air\s?condition|heating|thermostat|calefac/.test(s)) return 'hvac';
+  if (/plumb|faucet|drain|toilet|sink|water heater|pipe|sewer|disposal|plom/.test(s)) return 'plumbing';
+  if (/electric|ceiling fan|doorbell|outlet|switch|light|elec/.test(s)) return 'electrical';
+  if (/brake|alternator|starter|battery|oil change|mechanic|engine|transmission|mecán|mecan/.test(s)) return 'mechanic';
+  if (/yard|lawn|garden|landscap|green waste|sprinkler|jard/.test(s)) return 'gardening';
+  if (/carpentr|deck|fence|cabinet|door|carpint/.test(s)) return 'carpentry';
+  return 'handyman';
 }
 // ---------- Area captains (v40 — MODELO-CAPITANES.md, owner-confirmed) ----------
 // Gabriel is Nivel 1 "El General" — the title is his alone, never assigned
@@ -529,6 +654,7 @@ async function resendAutomation(type, payload) {
   if (type === 'worker_activated') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions worker account is ACTIVE', html: eventEmail('You are active - welcome to the team', ['Hi ' + (w.name || 'there') + ',', 'Your worker account is now ACTIVE. You can log into the app and see the open jobs in your area.', 'Every job shows exactly what it pays before you claim it, so you only take the ones that work for you. First active worker to claim gets the job.', 'The Team coordinates everything with the customer and confirms the address and time with you in the app. Questions during a job? Message us right in the job chat.'], WORKER_FOOTER), text: 'Your worker account is ACTIVE. Open the app to see open jobs - every job shows its pay before you claim it.' }); }
   if (type === 'worker_removed') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; const first = String(w.name || '').trim().split(/\s+/)[0] || ''; const en = "Hi " + (first || 'there') + " — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at app.generalhandymans.app."; const es = "Hola" + (first ? ' ' + first : '') + " — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en app.generalhandymans.app."; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, es, '— The Team'], WORKER_FOOTER), text: en + '\n\n' + es + '\n\n— The Team · (707) 862-3773' }); }
   if (type === 'job_posted') { const j = p.job || {}; const ws = (p.workers || []).filter(w => w.email); if (!ws.length) return { attempted: true, sent: false, reason: 'no matching worker emails' }; let sentCount = 0; for (const w of ws) { const r = await sendMail({ to: [w.email], subject: 'New job posted: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('New job in your area', ['Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app to claim it - first active worker to claim gets it.'], WORKER_FOOTER), text: 'New job pays ' + usd(j.payOffer) }); if (r.sent) sentCount++; } return { attempted: true, sent: sentCount > 0, via: 'resend', emailed: sentCount }; }
+  if (type === 'job_direct_offer') { const j = p.job || {}; const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Direct job offer for you: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('The Team offered you a job directly', ['Hi ' + (w.name || 'there') + ',', 'This job was assigned to YOU — it is not on the open board.', 'Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app — the job is already in your jobs list. The Team confirms the address and time with you there.'], WORKER_FOOTER), text: 'Direct job offer: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pays ' + usd(j.payOffer) + '. It is already in your jobs list in the app.' }); }
   if (type === 'job_claimed') { const j = p.job || {}; const to = owner.slice(); if (p.customer && p.customer.email) to.push(p.customer.email); return sendMail({ to: to, subject: 'Job claimed: ' + (j.service || '') + (j.city ? ' - ' + j.city : ''), html: eventEmail('A worker claimed the job', ['Job: ' + (j.service || '') + ' in ' + (j.city || ''), 'Worker: ' + ((p.worker || {}).name || ''), 'Status: ' + (j.status || 'Claimed'), 'Open the app for the job chat with the Team and your worker.']), text: 'Job claimed.' }); }
   if (type === 'quote_decision') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'Customer ' + (p.decision || 'answered') + ' the quote on ' + rq.id, html: eventEmail('Quote ' + (p.decision || ''), ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Service: ' + (rq.service || '') + ' ' + (rq.city || ''), 'Quote: ' + usd(rq.quote || (rq.estimate && rq.estimate.total) || 0)], OWNER_FOOTER), text: 'Quote ' + (p.decision || '') }); }
   if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
@@ -1834,7 +1960,10 @@ async function googleAutomation(type, payload) {
 function adminEmails() { return db.users.filter(u => u.role === 'admin' && u.email).map(u => u.email); }
 function matchedWorkersForJob(j) {
   const city = (j.city || '').toLowerCase();
-  return db.users.filter(u => u.role === 'worker' && u.status === 'active').filter(w => {
+  // v41: a PAUSED worker ("No disponible por ahora") is not pinged about new
+  // board jobs — no in-app alert, no job_posted email. He can still open
+  // the app and browse the board himself; pausing never blocks his panel.
+  return db.users.filter(u => u.role === 'worker' && u.status === 'active' && !workerPaused(u)).filter(w => {
     const areas = workerAreas(w);
     return !city || areas.some(a => a === 'any' || a.includes(city) || city.includes(a) || (a.includes('solano') && ['fairfield', 'vacaville', 'vallejo', 'suisun city', 'napa', 'dixon', 'benicia'].includes(city)));
   });
@@ -1961,12 +2090,19 @@ const server = http.createServer(async (req, res) => {
       }
       prof.selfRatings = cleanSR;
     } else { delete prof.selfRatings; }
+    // v41: the 7 trade skill boxes (level 1-5 + tools) ride the application
+    // as tradeSkills (top-level or inside profile) and land on the record.
+    const tradeSkillsIn = (b.tradeSkills && typeof b.tradeSkills === 'object' && !Array.isArray(b.tradeSkills)) ? b.tradeSkills
+      : ((prof.tradeSkills && typeof prof.tradeSkills === 'object' && !Array.isArray(prof.tradeSkills)) ? prof.tradeSkills : null);
+    delete prof.tradeSkills;
+    delete prof.photo; // v41: the profile photo is set ONLY from the worker's profile editor, never at signup
+    const tradeSkills = role === 'worker' ? mergeTradeSkills(null, tradeSkillsIn) : {};
     const serviceAddress = role === 'customer' ? cleanText(b.serviceAddress, 300) : '';
     // Optional home details + start preference (customers only, never
     // required — ZIP included: Gabriel's "no obligatorio" rule).
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -2017,7 +2153,7 @@ const server = http.createServer(async (req, res) => {
     save();
     return send(res, 200, { ok: true, message: 'Your password has been updated — log in with your new password.' });
   }
-  if (p === '/api/logout' && req.method === 'POST') { return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') }); }
+  if (p === '/api/logout' && req.method === 'POST') { if (user && user.role === 'worker' && user.liveLoc) { delete user.liveLoc; save(); } return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') }); }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
   if (p === '/api/me/service-address' && req.method === 'POST') {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
@@ -2042,6 +2178,88 @@ const server = http.createServer(async (req, res) => {
     if (b.startPreference !== undefined) user.startPreference = cleanStartPreference(b.startPreference);
     save();
     return send(res, 200, { ok: true, user: pubUser(user) });
+  }
+
+  // ---------- Worker self-service (v41) ----------
+  // The worker maintains his OWN profile from the worker panel — including
+  // accounts created under the old model: every field below is editable
+  // post-login for pre-existing workers, prefilled from their stored
+  // profile (name, phone, city, areas, skills text). Nothing is gated on
+  // when or how the account was created.
+  if (p === '/api/me/worker-profile' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const b = await readBody(req);
+    user.profile = user.profile || {};
+    if (b.name !== undefined) { const n = cleanText(b.name, 80); if (!n) return send(res, 400, { error: 'name cannot be empty' }); user.name = n; }
+    if (b.phone !== undefined) user.phone = cleanText(b.phone, 40);
+    if (b.city !== undefined) user.profile.city = cleanText(b.city, 80);
+    if (b.areas !== undefined) user.profile.areas = cleanText(b.areas, 300);
+    if (b.skills !== undefined) {
+      const list = (Array.isArray(b.skills) ? b.skills : String(b.skills || '').split(',')).map(s => cleanText(String(s), 60)).filter(Boolean).slice(0, 30);
+      user.profile.skills = list; user.skills = list; // keep the legacy name-list in sync (signup does the same)
+    }
+    // v41: profile photo — a data URL string sets it, null removes it.
+    // Only ever the worker's OWN photo (this endpoint is session-scoped).
+    if (b.photo !== undefined) {
+      if (b.photo === null) delete user.profile.photo;
+      else if (isPhotoDataUrl(b.photo)) user.profile.photo = b.photo;
+      else return send(res, 400, { error: 'photo must be an image' });
+    }
+    save();
+    return send(res, 200, { ok: true, user: pubUser(user) });
+  }
+  // ---------- Duty location feed (v41) ----------
+  // Gabriel's rule: a worker shares his location WHILE LOGGED IN — the
+  // Team dispatches from it. Stored on u.liveLoc, SEPARATE from the
+  // job-trip j.liveLoc (which stays On-my-way-only). Only the Team ever
+  // reads this feed (admin master map); customers NEVER see it. Paused
+  // = off duty: a post while paused clears instead of storing, and
+  // logout clears it too.
+  if (p === '/api/me/location' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const b = await readBody(req);
+    if (b.clear === true) { if (user.liveLoc) { delete user.liveLoc; save(); } return send(res, 200, { ok: true, sharing: false }); }
+    if (workerPaused(user)) { if (user.liveLoc) { delete user.liveLoc; save(); } return send(res, 200, { ok: true, sharing: false, paused: true }); }
+    const lat = Number(b.lat), lng = Number(b.lng);
+    if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return send(res, 400, { error: 'invalid coordinates' });
+    user.liveLoc = { lat, lng, updatedAt: new Date().toISOString() };
+    save();
+    return send(res, 200, { ok: true, sharing: true });
+  }
+  // The 7 trade boxes: partial merge — only the boxes sent change, and the
+  // Team's verified levels are never touched by worker input.
+  if (p === '/api/me/trades' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const b = await readBody(req);
+    const input = (b.tradeSkills && typeof b.tradeSkills === 'object' && !Array.isArray(b.tradeSkills)) ? b.tradeSkills : (b.skills && typeof b.skills === 'object' && !Array.isArray(b.skills) ? b.skills : null);
+    if (!input) return send(res, 400, { error: 'tradeSkills object required' });
+    user.tradeSkills = mergeTradeSkills(user.tradeSkills, input);
+    save();
+    return send(res, 200, { ok: true, user: pubUser(user), tradeSkills: tradeSkillsOf(user), skillsRated: skillsRatedCount(user) });
+  }
+  // Availability: preset + custom days + the pause toggle. The covered
+  // cities are the profile areas (editable via /api/me/worker-profile).
+  if (p === '/api/me/availability' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const b = await readBody(req);
+    const c = cleanAvailability(b, user.availability);
+    if (c.error) return send(res, 400, { error: c.error });
+    user.availability = c.value;
+    save();
+    return send(res, 200, { ok: true, user: pubUser(user), availability: publicAvailability(user) });
+  }
+  // Money view (v41): one consolidated read over the EXISTING payout
+  // records — job payout stamps (payoutStatus / payoutAt / payOffer) and
+  // the worker's Connect state. No new money mechanics.
+  if (p === '/api/worker/money' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    sweepPendingPayouts();
+    const mine = db.jobs.filter(j => j.assignedWorkerId === user.id && (j.payoutStatus || j.status === 'Done — photos sent'))
+      .slice().sort((a, b) => String(b.payoutAt || b.claimedAt || b.createdAt || '') < String(a.payoutAt || a.claimedAt || a.createdAt || '') ? -1 : 1)
+      .map(j => ({ jobId: j.id, service: j.service || '', city: j.city || '', amount: money(j.payOffer), status: j.payoutStatus || 'pending', payoutAt: j.payoutAt || null, date: j.payoutAt || j.claimedAt || j.createdAt || null }));
+    const paidOut = money(mine.filter(e => e.status === 'paid').reduce((s, e) => s + e.amount, 0));
+    const pending = money(mine.filter(e => e.status !== 'paid').reduce((s, e) => s + e.amount, 0));
+    return send(res, 200, { ok: true, connect: { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted }, totals: { paidOut, pending, jobs: mine.length }, entries: mine });
   }
 
   // ---------- Membership self-service (added 2026-10-21, v20) ----------
@@ -2505,6 +2723,34 @@ const server = http.createServer(async (req, res) => {
     // teamRanks is Team-private: attached here on the admin-only endpoint, never in pubUser.
     return send(res, 200, { workers: db.users.filter(u => u.role === 'worker').map(u => Object.assign(pubUser(u), { teamRanks: (u.internal && u.internal.skillRanks) || {} })) });
   }
+  // v41 dispatch picker data: for a job's trade, every ACTIVE worker with
+  // his effective level + tools for that trade, best matches first
+  // (effective level desc, tools first, then name). Display + sort ONLY —
+  // Gabriel still chooses; nothing auto-dispatches. Paused workers are
+  // listed with their flag (the UI warns; the Team may still override).
+  if (p === '/api/admin/worker-candidates' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const trade = tradeForService(url.searchParams.get('service') || '', url.searchParams.get('serviceId') || '');
+    const candidates = db.users.filter(u => u.role === 'worker' && u.status === 'active').map(w => {
+      const view = tradeSkillsOf(w);
+      const e = view[trade];
+      const g = view.handyman;
+      return { id: w.id, name: w.name, city: (w.profile || {}).city || '', areas: workerAreas(w), paused: workerPaused(w), availability: publicAvailability(w), trade, level: e ? e.effective : null, selfLevel: e ? e.level : null, verified: e ? e.verified : null, tools: e ? !!e.tools : false, handymanLevel: g ? g.effective : null };
+    });
+    candidates.sort((a, b) => ((b.level || 0) - (a.level || 0)) || ((b.tools ? 1 : 0) - (a.tools ? 1 : 0)) || String(a.name).localeCompare(String(b.name)));
+    return send(res, 200, { trade, candidates });
+  }
+  // v41: the admin MASTER MAP feed — every ACTIVE, not-paused worker who
+  // is currently sharing his logged-in location (fresh = <= ~10 min).
+  // Photo rides along for the avatar pin. Admin-only: no customer ever
+  // sees another worker's position.
+  if (p === '/api/admin/worker-locations' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const nowMs = Date.now();
+    const workers = db.users.filter(u => u.role === 'worker' && u.status === 'active' && u.liveLoc && (nowMs - new Date(u.liveLoc.updatedAt).getTime()) <= WORKER_LOC_FRESH_MS && !workerPaused(u))
+      .map(u => ({ id: u.id, name: u.name, photo: workerPhotoOf(u), lat: u.liveLoc.lat, lng: u.liveLoc.lng, updatedAt: u.liveLoc.updatedAt }));
+    return send(res, 200, { ok: true, workers });
+  }
   const workerMatch = p.match(/^\/api\/workers\/([\w-]+)$/);
   if (workerMatch && req.method === 'PATCH') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -2522,6 +2768,23 @@ const server = http.createServer(async (req, res) => {
       }
       w.internal.skillRanks = clean;
     }
+    // v41: Team-VERIFIED trade levels (admin only). Body tradeVerified:
+    // { plumbing: 3 } stamps it, { plumbing: 0 } or null clears it. The
+    // worker's self rating is preserved; effective = verified ?? self.
+    if (b.tradeVerified && typeof b.tradeVerified === 'object' && !Array.isArray(b.tradeVerified)) {
+      w.tradeSkills = (w.tradeSkills && typeof w.tradeSkills === 'object') ? w.tradeSkills : {};
+      for (const k of TRADE_KEYS) {
+        if (!Object.prototype.hasOwnProperty.call(b.tradeVerified, k)) continue;
+        const v = b.tradeVerified[k];
+        const cur = w.tradeSkills[k] || null;
+        if (v === null || v === 0) {
+          if (cur) { cur.verified = null; if (cleanLevel(cur.level) === null) delete w.tradeSkills[k]; }
+        } else {
+          const lv = cleanLevel(v);
+          if (lv !== null) w.tradeSkills[k] = { level: cur ? cleanLevel(cur.level) : null, tools: cur ? !!cur.tools : false, verified: lv };
+        }
+      }
+    }
     // Admin editing of worker profile data (name, phone, email, profile fields).
     if (typeof b.name === 'string' && cleanText(b.name, 80)) w.name = cleanText(b.name, 80);
     if (typeof b.phone === 'string') w.phone = cleanText(b.phone, 40);
@@ -2538,7 +2801,11 @@ const server = http.createServer(async (req, res) => {
       if (typeof pf.notes === 'string') w.profile.notes = cleanText(pf.notes, 500);
       if (Array.isArray(pf.skills)) w.profile.skills = pf.skills.map(s => cleanText(String(s), 60)).filter(Boolean).slice(0, 30);
     }
-    { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.skillRanks) parts.push('skill ranks'); if (b.email || b.name || b.profile) parts.push('profile edit'); audit(user, 'worker.update', w.id, parts.join(' · ') || 'update'); }
+    // v41: the Team can REMOVE a worker's profile photo (e.g. an
+    // unprofessional one) — body photo: null clears it. Setting a photo
+    // is the worker's own action in his profile editor, never the admin's.
+    if (b.photo === null) { w.profile = w.profile || {}; delete w.profile.photo; }
+    { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.skillRanks) parts.push('skill ranks'); if (b.tradeVerified) parts.push('verified skills'); if (b.photo === null) parts.push('photo removed'); if (b.email || b.name || b.profile) parts.push('profile edit'); audit(user, 'worker.update', w.id, parts.join(' · ') || 'update'); }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -2746,6 +3013,11 @@ const server = http.createServer(async (req, res) => {
     db.jobs.push(j);
     if (silent) {
       notify(assignedWorkerId, 'job', 'The Team assigned you a job: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + '. It is in your jobs list.');
+      // v41: a DIRECT offer also emails the one worker (never a board
+      // broadcast). fireAutomation swallows every failure — email can
+      // never block or fail the assignment.
+      const dw = db.users.find(u => u.id === assignedWorkerId);
+      if (dw) fireAutomation('job_direct_offer', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: dw.name, email: dw.email }, job: { id: j.id, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0 } });
       emitJobNew(j, assignedWorkerId);
     } else {
       notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j));
@@ -2759,6 +3031,11 @@ const server = http.createServer(async (req, res) => {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
       return send(res, 200, { jobs: mine.map(j => {
         const view = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] };
+        // v41: the technician card — the assigned worker's NAME and, when
+        // he has one, his profile PHOTO. Nothing else about the worker
+        // ever rides this payload (no phone, no pay).
+        const tech = db.users.find(u => u.id === j.assignedWorkerId);
+        if (tech) { view.technician = tech.name || ''; const tp = workerPhotoOf(tech); if (tp) view.technicianPhoto = tp; }
         // v25 (C1): the OWNING customer sees their own rating on the job.
         if (j.rating) { view.rating = j.rating; view.reviewText = j.reviewText || ''; view.ratedAt = j.ratedAt || null; }
         // v22: the customer sees the live technician point ONLY while the
@@ -2780,7 +3057,9 @@ const server = http.createServer(async (req, res) => {
       const workerRating = ratedMine.length ? { average: Math.round((ratedMine.reduce((s, x) => s + Number(x.rating), 0) / ratedMine.length) * 10) / 10, count: ratedMine.length } : { average: 0, count: 0 };
       return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)), workerRating });
     }
-    return send(res, 200, { jobs: db.jobs.map(j => publicJob(j, user)) });
+    // Admin view: same jobs, plus the assigned tech's profile photo so
+    // the live-tracking map can pin his avatar (photo only).
+    return send(res, 200, { jobs: db.jobs.map(j => { const v = publicJob(j, user); const w = j.assignedWorkerId && db.users.find(u => u.id === j.assignedWorkerId); const tp = w ? workerPhotoOf(w) : null; if (tp) v.technicianPhoto = tp; return v; }) });
   }
   // ---------- Master calendar (admin): jobs + invoice schedules for one month ----------
   if (p === '/api/admin/calendar' && req.method === 'GET') {
@@ -3047,7 +3326,9 @@ const server = http.createServer(async (req, res) => {
       .slice().sort((x, y) => (x.createdAt || '') < (y.createdAt || '') ? 1 : -1).slice(0, 100)
       .map(j => ({ id: j.id, service: j.service || '', city: j.city || '', status: j.status, when: j.when || '', createdAt: j.createdAt || null, technician: techName(j.assignedWorkerId), mine: j.assignedWorkerId === user.id }));
     const team = db.users.filter(u => u.role === 'worker' && u.status === 'active' && u.id !== user.id && workerOverlapsArea(u, area))
-      .map(u => ({ name: u.name, city: (u.profile || {}).city || '', skills: (u.profile || {}).skills || [] }));
+      // v41: captains plan routes by trade + tools + zone, so each tech
+      // carries his 7-box view (effective levels + tools) and availability.
+      .map(u => ({ name: u.name, photo: workerPhotoOf(u), city: (u.profile || {}).city || '', skills: (u.profile || {}).skills || [], trades: tradeSkillsOf(u), availability: publicAvailability(u) }));
     const entries = db.captainLedger.filter(e => e.captainId === user.id).slice(-50).reverse()
       .map(e => ({ id: e.id, jobId: e.jobId, areaName: e.areaName || area.name, charged: e.charged, amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status, at: e.at }));
     const payouts = db.captainPayouts.filter(x => x.captainId === user.id).slice(-20).reverse();
