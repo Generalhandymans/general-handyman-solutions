@@ -54,7 +54,7 @@ const sessions = new Map(); // token -> { uid, exp } — sessions expire server-
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, createdAt: u.createdAt }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -149,6 +149,130 @@ function workerAreas(w) {
   const list = Array.isArray(raw) ? raw : String(raw).split(/[,;]/);
   return list.map(s => String(s).toLowerCase().trim()).filter(Boolean);
 }
+// ---------- Area captains (v40 — MODELO-CAPITANES.md, owner-confirmed) ----------
+// Gabriel is Nivel 1 "El General" — the title is his alone, never assigned
+// or delegated. Captains command ONE area under him; Fairfield is his own
+// base (seeded fixed: captain shows as "El General", NOT assignable, and
+// accrues nothing). A captain's override is 5% FIXED of the job's charged
+// labor total, paid from the HOUSE side — never deducted from the
+// technician's pay — and accrues only when the job reaches
+// 'Done — photos sent' with the payment actually captured. Exclusions
+// mirror the client menu's member-discount exclusion set (the catalog's
+// member:null entries): flat $75 services, junk removal and
+// hauling / green waste. Captains never touch money, never set prices,
+// never see other areas and never contact customers directly. Payouts are
+// manual (the owner marks them paid); no Connect auto-transfers, no
+// sign-up bounties (not signed yet), no customer-facing captain display.
+const CAPTAIN_OVERRIDE_RATE = 0.05;
+const CAPTAIN_EXCLUDED_SERVICE_IDS = ['oil-change', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste'];
+const CAPTAIN_AREA_SEED = [
+  { name: 'Fairfield', cities: ['Fairfield', 'Suisun City', 'Dixon', 'Rio Vista', 'Benicia'], fixed: true },
+  { name: 'Vacaville', cities: ['Vacaville'] },
+  { name: 'Vallejo', cities: ['Vallejo'] },
+  { name: 'Napa', cities: ['Napa', 'Yountville', 'St Helena', 'American Canyon'] },
+  { name: 'Antioch / Concord', cities: ['Antioch', 'Concord'] },
+  { name: 'Santa Rosa / Marin', cities: ['Santa Rosa', 'Petaluma', 'San Rafael', 'Novato'] },
+  { name: 'San Jose', cities: ['San Jose', 'Sunnyvale'] }
+];
+function ensureCaptainState() {
+  if (!Array.isArray(db.captainLedger)) db.captainLedger = [];
+  if (!Array.isArray(db.captainPayouts)) db.captainPayouts = [];
+  if (!Array.isArray(db.areas) || !db.areas.length) {
+    db.areas = CAPTAIN_AREA_SEED.map((s, i) => ({ id: 'AREA-' + (i + 1), name: s.name, cities: s.cities.slice(), fixed: !!s.fixed, captainId: s.fixed ? 'general' : null, createdAt: new Date().toISOString() }));
+  }
+}
+function normAreaCity(s) { return String(s || '').trim().toLowerCase().replace(/\s+/g, ' '); }
+function areaForCity(city) {
+  ensureCaptainState();
+  const c = normAreaCity(city);
+  if (!c) return null;
+  return db.areas.find(a => (a.cities || []).some(x => normAreaCity(x) === c)) || null;
+}
+function areaById(areaId) { ensureCaptainState(); return db.areas.find(a => a.id === areaId) || null; }
+function captainAreaOf(workerId) { ensureCaptainState(); return db.areas.find(a => a.captainId && a.captainId === workerId) || null; }
+function captainOutstanding(captainId) {
+  ensureCaptainState();
+  return money(db.captainLedger.filter(e => e.captainId === captainId).reduce((s, e) => s + (Number(e.amount) || 0) - (Number(e.paidAmount) || 0), 0));
+}
+function captainPaidOut(captainId) {
+  ensureCaptainState();
+  return money(db.captainPayouts.filter(x => x.captainId === captainId).reduce((s, x) => s + (Number(x.amount) || 0), 0));
+}
+// The job's charged labor total, from money that ACTUALLY landed: captured
+// request holds first (the Stripe trail), else a PAID invoice linked to the
+// job/request (the manual cash/Zelle trail). 0 = not captured yet.
+function captainChargedAmount(j) {
+  const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
+  if (r && Array.isArray(r.holds)) {
+    const capCents = r.holds.filter(h => h && h.status === 'captured').reduce((s, h) => s + (Number(h.capturedCents) || 0), 0);
+    if (capCents > 0) return money(capCents / 100);
+  }
+  const inv = (db.invoices || []).find(x => x.status === 'paid' && ((x.jobId && x.jobId === j.id) || (j.requestId && x.requestId && x.requestId === j.requestId)));
+  if (inv) return money(inv.paidAmount || inv.total || 0);
+  return 0;
+}
+function captainJobExclusion(j, r, charged) {
+  const sid = r && r.menuOrder && r.menuOrder.serviceId;
+  if (sid && CAPTAIN_EXCLUDED_SERVICE_IDS.includes(sid)) return 'excluded service';
+  const svc = String(j.service || (r && r.service) || '').toLowerCase();
+  if (/junk|green[\s-]?waste|hauling|haul[\s-]?away/.test(svc)) return 'excluded service';
+  if (money(charged) === 75) return 'flat $75 service';
+  return '';
+}
+// Idempotent: j.captainOverride stamps the final decision (accrued entry, or
+// a permanent skip: no matching area / El General's own area / excluded
+// service). "No captain yet" and "not captured yet" are NOT stamped — the
+// payout-style sweep retries them, so a late capture or a later assignment
+// still accrues, exactly once.
+function accrueCaptainOverride(j) {
+  try {
+    if (!j || j.captainOverride || j.status !== 'Done — photos sent') return false;
+    ensureCaptainState();
+    const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
+    const area = areaForCity(j.city || (r && r.city) || '');
+    if (!area) { j.captainOverride = { skipped: 'no matching area', at: new Date().toISOString() }; return false; }
+    if (area.fixed) { j.captainOverride = { skipped: 'El General commands this area', at: new Date().toISOString() }; return false; }
+    if (!area.captainId) return false;
+    const charged = captainChargedAmount(j);
+    if (!(charged > 0)) return false;
+    const ex = captainJobExclusion(j, r, charged);
+    if (ex) { j.captainOverride = { skipped: ex, charged, at: new Date().toISOString() }; return false; }
+    const amount = money(charged * CAPTAIN_OVERRIDE_RATE);
+    const entry = { id: id('CAP'), captainId: area.captainId, areaId: area.id, areaName: area.name, jobId: j.id, requestId: j.requestId || null, charged, amount, paidAmount: 0, status: 'accrued', at: new Date().toISOString() };
+    db.captainLedger.push(entry);
+    j.captainOverride = { entryId: entry.id, captainId: entry.captainId, areaId: area.id, amount, charged, at: entry.at };
+    notify(entry.captainId, 'captain', 'Captain override accrued: ' + usd(amount) + ' — 5% of the ' + usd(charged) + ' charged on job ' + j.id + ' (' + area.name + '). The Team pays overrides out by hand.');
+    notifyAdmins('captain', 'Captain override accrued in ' + area.name + ': ' + usd(amount) + ' on job ' + j.id + ' (5% of ' + usd(charged) + ').');
+    save();
+    return true;
+  } catch (e) { return false; }
+}
+let lastCaptainSweep = 0;
+function sweepCaptainOverrides() {
+  const nowMs = Date.now();
+  if (nowMs - lastCaptainSweep < 15000) return;
+  lastCaptainSweep = nowMs;
+  ensureCaptainState();
+  for (const j of db.jobs) { if (j.status === 'Done — photos sent' && !j.captainOverride) accrueCaptainOverride(j); }
+}
+function captainsAdminPayload() {
+  ensureCaptainState(); sweepCaptainOverrides();
+  const workers = db.users.filter(u => u.role === 'worker' && u.status === 'active').map(u => ({ id: u.id, name: u.name }));
+  const areas = db.areas.map(a => {
+    const cap = (!a.fixed && a.captainId) ? db.users.find(u => u.id === a.captainId) : null;
+    return { id: a.id, name: a.name, cities: a.cities || [], fixed: !!a.fixed, captainId: a.fixed ? 'general' : (cap ? cap.id : null), captainName: a.fixed ? 'El General' : (cap ? cap.name : null), accrued: cap ? captainOutstanding(cap.id) : 0, paidOut: cap ? captainPaidOut(cap.id) : 0 };
+  });
+  const ledger = db.captainLedger.slice(-100).reverse().map(e => ({ id: e.id, captainId: e.captainId, captainName: (db.users.find(u => u.id === e.captainId) || {}).name || '', areaName: e.areaName || '', jobId: e.jobId, charged: e.charged, amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status, at: e.at }));
+  const payouts = db.captainPayouts.slice(-50).reverse();
+  return { areas, workers, ledger, payouts };
+}
+function workerOverlapsArea(u, area) {
+  const cities = new Set((area.cities || []).map(normAreaCity));
+  if (workerAreas(u).some(t => cities.has(normAreaCity(t)))) return true;
+  const pc = normAreaCity((u.profile || {}).city || '');
+  return !!pc && cities.has(pc);
+}
+
 function notifyWorkersForJob(j) {
   matchedWorkersForJob(j).forEach(w => {
     notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.');
@@ -408,7 +532,7 @@ async function resendAutomation(type, payload) {
   if (type === 'job_claimed') { const j = p.job || {}; const to = owner.slice(); if (p.customer && p.customer.email) to.push(p.customer.email); return sendMail({ to: to, subject: 'Job claimed: ' + (j.service || '') + (j.city ? ' - ' + j.city : ''), html: eventEmail('A worker claimed the job', ['Job: ' + (j.service || '') + ' in ' + (j.city || ''), 'Worker: ' + ((p.worker || {}).name || ''), 'Status: ' + (j.status || 'Claimed'), 'Open the app for the job chat with the Team and your worker.']), text: 'Job claimed.' }); }
   if (type === 'quote_decision') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'Customer ' + (p.decision || 'answered') + ' the quote on ' + rq.id, html: eventEmail('Quote ' + (p.decision || ''), ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Service: ' + (rq.service || '') + ' ' + (rq.city || ''), 'Quote: ' + usd(rq.quote || (rq.estimate && rq.estimate.total) || 0)], OWNER_FOOTER), text: 'Quote ' + (p.decision || '') }); }
   if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
-  if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($49/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $60 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($49/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
+  if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($29/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $50 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($29/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
   if (type === 'homecare_cancelled') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'HomeCare membership cancelled', html: eventEmail('HomeCare cancelled', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership has been cancelled.', 'You can rejoin anytime from your dashboard — we would love to have you back.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Your HomeCare membership has been cancelled. Rejoin anytime from your dashboard.' }); }
   if (type === 'invoice_sent') {
     const inv = p.invoice || {};
@@ -439,7 +563,7 @@ function fireAutomation(type, payload) { sendAutomation(type, payload).catch(() 
 // ---------- Stripe payments (added 2026-10-10) ----------
 // Env: STRIPE_SECRET_KEY (required for payments), STRIPE_WEBHOOK_SECRET (verifies
 // /api/stripe/webhook signatures), STRIPE_PRICE_HOMECARE (optional; when absent and
-// the secret key is set, a $49/mo HomeCare price is auto-created once via the API
+// the secret key is set, a $29/mo HomeCare price is auto-created once via the API
 // and its id is saved in db.settings so it is reused instead of duplicated).
 // Estimate payments use dynamic price_data (exact "due to book" amount), so no
 // per-amount price ids are needed. Everything degrades gracefully when keys are
@@ -450,20 +574,20 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 // STRIPE_API_BASE exists so local tests can point the Stripe client at a
 // mock; production leaves it unset and always talks to api.stripe.com.
 const STRIPE_API = process.env.STRIPE_API_BASE || 'https://api.stripe.com/v1';
-const HOMECARE_MONTHLY_CENTS = 4900;
+const HOMECARE_MONTHLY_CENTS = 2900;
 // Membership plans (added 2026-10-21): one active plan is stored on the user
 // as u.membershipPlan = { planKey, type, visitsPerMonth, priceId, productId,
 // status, subscriptionId, since, cancelAt }. HomeCare remains the legacy
 // benefit flag: HomeCare and HomeCare Plus set homeCareStatus='active' (so
-// every existing isMember path — 20% labor discount, $60 estimates, the free
+// every existing isMember path — 20% labor discount, $50 estimates, the free
 // first estimate — applies to Plus exactly as it does to HomeCare), while
 // Yard Care records ONLY the yard plan and grants no HomeCare benefits.
 const MEMBERSHIP_PLANS = {
-  homecare: { key: 'homecare', type: 'homecare', kind: 'homecare', name: 'HomeCare', monthlyCents: 4900, visitsPerMonth: 0, priceId: '', productId: '' },
-  yard1: { key: 'yard1', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 9500, visitsPerMonth: 1, priceId: 'price_1UT2thLu9cCIcixBDpOWl0YO', productId: 'prod_VU0voRBxqFjPoE' },
-  yard2: { key: 'yard2', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 17500, visitsPerMonth: 2, priceId: 'price_1UT2thLu9cCIcixBnC849V1o', productId: 'prod_VU0voRBxqFjPoE' },
-  plus1: { key: 'plus1', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 13500, visitsPerMonth: 1, priceId: 'price_1UT2roLu9cCIcixB4swTI5MS', productId: 'prod_VU0t2nkCsauZe1' },
-  plus2: { key: 'plus2', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 19900, visitsPerMonth: 2, priceId: 'price_1UT2roLu9cCIcixBiIlrfJia', productId: 'prod_VU0t2nkCsauZe1' }
+  homecare: { key: 'homecare', type: 'homecare', kind: 'homecare', name: 'HomeCare', monthlyCents: 2900, visitsPerMonth: 0, priceId: '', productId: '' },
+  yard1: { key: 'yard1', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 7500, visitsPerMonth: 1, priceId: 'price_1UTmMwLu9cCIcixBELdMhHh3', productId: 'prod_VU0voRBxqFjPoE' },
+  yard2: { key: 'yard2', type: 'yard', kind: 'yardcare', name: 'Yard Care', monthlyCents: 15000, visitsPerMonth: 2, priceId: 'price_1UTmQtLu9cCIcixBkCpLd2k2', productId: 'prod_VU0voRBxqFjPoE' },
+  plus1: { key: 'plus1', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 10000, visitsPerMonth: 1, priceId: 'price_1UTmS6Lu9cCIcixB312eNpYF', productId: 'prod_VU0t2nkCsauZe1' },
+  plus2: { key: 'plus2', type: 'plus', kind: 'homecare-plus', name: 'HomeCare Plus', monthlyCents: 17500, visitsPerMonth: 2, priceId: 'price_1UTmSKLu9cCIcixBmcSF51Cm', productId: 'prod_VU0t2nkCsauZe1' }
 };
 function membershipPlanPriceId(plan, source) {
   if (!plan) return '';
@@ -551,7 +675,7 @@ function activateMembershipPlan(u, planKey, opts) {
       notify(u.id, 'membership', 'Welcome to Yard Care! Your plan is active — ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month included. The Team will schedule your visits with you.');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined Yard Care ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
     } else if (plan.type === 'plus') {
-      notify(u.id, 'membership', 'Welcome to HomeCare Plus! Your membership is active: all HomeCare benefits (first in-person estimate FREE, then $60 member estimates, 20% off labor on jobs under $1,000, priority scheduling) PLUS ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month.');
+      notify(u.id, 'membership', 'Welcome to HomeCare Plus! Your membership is active: all HomeCare benefits (first in-person estimate FREE, then $50 member estimates, 20% off labor on jobs under $1,000, priority scheduling) PLUS ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month.');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare Plus ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
     }
   }
@@ -620,7 +744,11 @@ function planFromSubscription(obj, fallback) {
   const items = (obj && obj.items && Array.isArray(obj.items.data)) ? obj.items.data : [];
   const firstItem = items[0] || {};
   const priceId = typeof firstItem.price === 'string' ? firstItem.price : (firstItem.price && firstItem.price.id) || '';
-  const byPrice = priceId ? Object.keys(MEMBERSHIP_PLANS).map(k => MEMBERSHIP_PLANS[k]).find(pl => pl.priceId && pl.priceId === priceId) : null;
+  // Match the configured price id OR the resolver's cached id (v40) — a
+  // subscription created through membershipPriceIdFor carries the resolved
+  // price, which must still name its plan here.
+  const planPriceIds = (pl) => [pl.priceId, db.settings && db.settings['stripePrice_' + pl.key], pl.key === 'homecare' ? ((db.settings && db.settings.stripeHomeCarePrice) || process.env.STRIPE_PRICE_HOMECARE || '') : ''].filter(Boolean);
+  const byPrice = priceId ? Object.keys(MEMBERSHIP_PLANS).map(k => MEMBERSHIP_PLANS[k]).find(pl => planPriceIds(pl).includes(priceId)) : null;
   // The charged price is the truth (v20): subscription metadata can lag a
   // plan change, so if the price names a DIFFERENT plan than the metadata,
   // believe the price — a late/out-of-order subscription.updated webhook
@@ -754,7 +882,7 @@ function sweepPendingPayouts() {
     && j.status === 'Done — photos sent'
     && !(j.payoutTriedAt && (now - new Date(j.payoutTriedAt).getTime() < 2 * 60 * 1000)))
     .slice(0, 10)
-    .forEach(j => { maybePayWorkerForJob(j); });
+    .forEach(j => { maybePayWorkerForJob(j); accrueCaptainOverride(j); });
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
@@ -778,7 +906,7 @@ async function homeCarePriceId() {
   const cached = db.settings.stripeHomeCarePrice;
   if (cached) {
     // Self-healing (added 2026-10-19, refined same day): Stripe prices are
-    // immutable — if the cached price doesn't match the $49/mo the business
+    // immutable — if the cached price doesn't match the monthly amount the business
     // charges (e.g. a $40 test price cached earlier), first check the
     // product's DEFAULT price (the dashboard is the source of truth now) and
     // only create a new price if no correct one exists. Never blocks checkout.
@@ -810,13 +938,45 @@ async function homeCarePriceId() {
       return np.id;
     } catch (e) { console.error('stripe: HomeCare price check failed, keeping cached price:', e.message); return cached; }
   }
-  console.log('stripe: creating HomeCare $49/mo product + price (set STRIPE_PRICE_HOMECARE to skip this)');
-  const product = await stripeApi('/products', { name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $60 member estimates after, 20% off labor under $1,000, priority scheduling.' });
+  console.log('stripe: creating HomeCare $' + (HOMECARE_MONTHLY_CENTS / 100) + '/mo product + price (set STRIPE_PRICE_HOMECARE to skip this)');
+  const product = await stripeApi('/products', { name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $50 member estimates after, 20% off labor under $1,000, priority scheduling.' });
   const price = await stripeApi('/prices', { product: product.id, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
   db.settings.stripeHomeCarePrice = price.id;
   console.log('stripe: HomeCare price created: ' + price.id + ' — save it as STRIPE_PRICE_HOMECARE in Render env');
   save();
   return price.id;
+}
+// Yard/Plus price resolution (v40): MEMBERSHIP_PLANS.monthlyCents is the
+// price TRUTH; plan.priceId is only a hint. A configured price is used for a
+// charge ONLY after Stripe confirms its amount matches the plan — otherwise
+// the resolver finds the product's matching price, or creates it on the
+// plan's existing product (the same self-healing pattern as homeCarePriceId
+// above), and caches the winner in db.settings. Any Stripe failure falls
+// back to the configured id, so a join is never blocked by the check. This
+// keeps every charge at the current plan price even while plan.priceId
+// still points at a superseded price (e.g. yard1's old $95 id).
+async function membershipPriceIdFor(plan) {
+  if (!plan) return '';
+  if (plan.key === 'homecare') return homeCarePriceId();
+  if (!stripeReady()) return plan.priceId || '';
+  db.settings = db.settings || {};
+  const cacheKey = 'stripePrice_' + plan.key;
+  const isGood = (p) => p && Number(p.unit_amount) === plan.monthlyCents && p.recurring && p.recurring.interval === 'month' && p.active !== false;
+  const candidates = [];
+  if (db.settings[cacheKey]) candidates.push(db.settings[cacheKey]);
+  if (plan.priceId && !candidates.includes(plan.priceId)) candidates.push(plan.priceId);
+  for (const cand of candidates) {
+    try { const p = await stripeGet('/prices/' + cand); if (isGood(p)) { if (db.settings[cacheKey] !== cand) { db.settings[cacheKey] = cand; save(); } return cand; } } catch (e) {}
+  }
+  try {
+    const list = await stripeGet('/prices?product=' + plan.productId + '&active=true&limit=100');
+    const found = ((list && list.data) || []).find(isGood);
+    if (found) { db.settings[cacheKey] = found.id; save(); console.log('stripe: ' + plan.key + ' price resolved to existing ' + found.id + ' ($' + (plan.monthlyCents / 100) + '/mo)'); return found.id; }
+    const np = await stripeApi('/prices', { product: plan.productId, unit_amount: plan.monthlyCents, currency: 'usd', 'recurring[interval]': 'month' });
+    db.settings[cacheKey] = np.id; save();
+    console.log('stripe: created ' + plan.key + ' price ' + np.id + ' ($' + (plan.monthlyCents / 100) + '/mo)');
+    return np.id;
+  } catch (e) { console.error('stripe: ' + plan.key + ' price resolution failed, using configured price:', e.message); return plan.priceId || ''; }
 }
 function appBase() { return APP_URL.replace(/\/$/, ''); }
 async function createCheckoutSession(kind, user, opts) {
@@ -846,14 +1006,14 @@ async function createCheckoutSession(kind, user, opts) {
     const plan = MEMBERSHIP_PLANS[opts.plan];
     if (!plan || plan.kind !== kind) throw new Error('unknown membership plan');
     params.mode = 'subscription';
-    params['line_items[0][price]'] = plan.priceId;
+    params['line_items[0][price]'] = await membershipPriceIdFor(plan);
     params['line_items[0][quantity]'] = '1';
     params['metadata[plan]'] = plan.key;
     params['subscription_data[metadata][userId]'] = user.id;
     params['subscription_data[metadata][kind]'] = kind;
     params['subscription_data[metadata][plan]'] = plan.key;
   } else if (kind === 'estimate' || kind === 'member-estimate') {
-    // 'member-estimate' is a fixed $60 one-time payment for active members;
+    // 'member-estimate' is a fixed $50 one-time payment for active members;
     // the session is a normal one-time payment, the kind is kept in metadata.
     params.mode = 'payment';
     params['line_items[0][price_data][currency]'] = 'usd';
@@ -937,7 +1097,7 @@ async function createInlineSubscription(user, plan) {
     } catch (e) {}
     user.stripeSubscriptionId = '';
   }
-  const priceId = plan.key === 'homecare' ? await homeCarePriceId() : plan.priceId;
+  const priceId = await membershipPriceIdFor(plan);
   const sub = await stripeApi('/subscriptions', {
     customer: customerId,
     'items[0][price]': priceId,
@@ -997,7 +1157,7 @@ function activateHomeCare(u, isFirst) {
   if (first) {
     if (!hadMembership) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
-    notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
+    notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
     fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
   } else {
     notify(u.id, 'membership', 'Your HomeCare payment went through — your membership is active again with all member benefits.');
@@ -1006,7 +1166,7 @@ function activateHomeCare(u, isFirst) {
   save();
 }
 // ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
-// Gabriel's payment model: the in-person estimate fee ($75 regular / $60
+// Gabriel's payment model: the in-person estimate fee ($75 regular / $50
 // member) is AUTHORIZED (a hold) when the customer books — never charged up
 // front and NEVER captured automatically anywhere in this app. After the
 // customer approves the estimate, the authorization is raised to the
@@ -1134,7 +1294,7 @@ async function handleStripeEvent(event) {
       setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
       applySourceAtActivation(u);
       notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
-      notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($49/mo).');
+      notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
       fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
     } else if (kind === 'yardcare' || kind === 'homecare-plus') {
       // Plan key comes from the checkout session metadata WE set server-side
@@ -1721,6 +1881,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const user = auth(req);
+  ensureCaptainState();
 
   // ---------- static ----------
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
@@ -1914,7 +2075,7 @@ const server = http.createServer(async (req, res) => {
       const sub = await stripeGet('/subscriptions/' + current.subscriptionId);
       const item = sub && sub.items && Array.isArray(sub.items.data) ? sub.items.data[0] : null;
       if (!item || !item.id) return send(res, 502, { error: 'could not read your subscription — try again in a minute' });
-      const priceId = plan.key === 'homecare' ? await homeCarePriceId() : plan.priceId;
+      const priceId = await membershipPriceIdFor(plan);
       if (!priceId) return send(res, 400, { error: 'that plan is not available right now — text or call the Team at (707) 862-3773' });
       await stripeApi('/subscriptions/' + current.subscriptionId, {
         'items[0][id]': item.id, 'items[0][price]': priceId,
@@ -2077,11 +2238,11 @@ const server = http.createServer(async (req, res) => {
     if (!customerId && email) { const c = db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email); if (c) customerId = c.id; }
     // Estimate pricing is authoritative from Stripe-verified membership, NOT from
     // what the customer picked in the form: active members of ANY plan
-    // (HomeCare, HomeCare Plus, Yard Care) get $60 (or $0 for their one free
+    // (HomeCare, HomeCare Plus, Yard Care) get $50 (or $0 for their one free
     // estimate, applied below), everyone else pays $75. (Policy 2026-10-21:
     // the free first on-site estimate is a once-per-account member benefit —
     // the same u.freeEstimateUsed flag HomeCare always used, now shared by
-    // every plan; after it, Yard members pay the $60 member price like every
+    // every plan; after it, Yard members pay the $50 member price like every
     // member. Canceled/lapsed members fall back to the regular $75 rules.)
     const hcActive = !!user && user.role === 'customer' && user.homeCareStatus === 'active';
     const userPlan = (user && user.role === 'customer') ? membershipPlanOf(user) : null;
@@ -2098,7 +2259,7 @@ const server = http.createServer(async (req, res) => {
         totals: { list: num(mo.totals && mo.totals.list, 100000), member: num(mo.totals && mo.totals.member, 100000), due: num(mo.totals && mo.totals.due, 100000) }
       };
     }
-    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 60 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     // Member free estimate (ONE per customer account, shared across plans):
     // first in-person request from an active member of any kind with the
     // freebie unused consumes it automatically. Stored exactly like the
@@ -2387,6 +2548,9 @@ const server = http.createServer(async (req, res) => {
     const removed = db.users.splice(idx, 1)[0];
     // Free any jobs this worker had claimed so they go back to the open board.
     db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { const prev = j.status; j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; if (prev !== 'Open') emitJobStatus(j, prev); } });
+    // A deleted worker cannot remain a captain — free his area.
+    ensureCaptainState();
+    db.areas.forEach(a => { if (a.captainId === removed.id) a.captainId = null; });
     // v36: ONE bilingual removal notice to the worker (name + email captured
     // above, before the record went away). A send failure NEVER blocks or
     // fails the deletion — the outcome is recorded in the audit entry.
@@ -2462,6 +2626,11 @@ const server = http.createServer(async (req, res) => {
       const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
       if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + inv.total.toFixed(2) + ') was marked paid. Thank you!');
       audit(user, 'invoice.mark_paid', inv.id, usd(inv.total) + ' · ' + inv.paidMethod);
+      // A hand-marked paid invoice is captured money for captain-override
+      // purposes — accrue now if its job is already Done (the sweep covers
+      // every other ordering).
+      const paidJob = (inv.jobId && db.jobs.find(x => x.id === inv.jobId)) || (inv.requestId && db.jobs.find(x => x.requestId === inv.requestId));
+      if (paidJob) accrueCaptainOverride(paidJob);
       save();
       fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       return send(res, 200, { invoice: publicInvoice(inv) });
@@ -2584,7 +2753,7 @@ const server = http.createServer(async (req, res) => {
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts();
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepCaptainOverrides();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
@@ -2695,7 +2864,7 @@ const server = http.createServer(async (req, res) => {
     }
     else return send(res, 403, { error: 'not allowed' });
     if (user && user.role === 'admin') { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.infoReleased !== undefined) parts.push('infoReleased ' + !!b.infoReleased); if (b.reviewPublished !== undefined) parts.push('reviewPublished ' + !!b.reviewPublished); if (parts.length) audit(user, 'job.update', j.id, parts.join(' · ')); }
-    save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') maybePayWorkerForJob(j); return send(res, 200, { job: publicJob(j, user) });
+    save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') { maybePayWorkerForJob(j); accrueCaptainOverride(j); } return send(res, 200, { job: publicJob(j, user) });
   }
 
 
@@ -2756,6 +2925,133 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/admin/audit' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, { entries: (db.auditLog || []).slice(-200).reverse() });
+  }
+
+  // ---------- Area captains (v40) ----------
+  if (p === '/api/admin/captains' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, captainsAdminPayload());
+  }
+  if (p === '/api/admin/captains/areas' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const name = cleanText(b.name, 60);
+    const cities = (Array.isArray(b.cities) ? b.cities : String(b.cities || '').split(',')).map(c => cleanText(c, 60)).filter(Boolean);
+    if (!name) return send(res, 400, { error: 'area name required' });
+    if (!cities.length) return send(res, 400, { error: 'list at least one city the area covers' });
+    ensureCaptainState();
+    if (db.areas.some(a => a.name.toLowerCase() === name.toLowerCase())) return send(res, 400, { error: 'an area with that name already exists' });
+    const area = { id: id('AREA'), name, cities, fixed: false, captainId: null, createdAt: new Date().toISOString() };
+    db.areas.push(area);
+    audit(user, 'captain.area_create', area.id, name + ' — ' + cities.join(', '));
+    save(); return send(res, 201, { ok: true, area, captains: captainsAdminPayload() });
+  }
+  const capAreaMatch = p.match(/^\/api\/admin\/captains\/areas\/([\w-]+)$/);
+  if (capAreaMatch && req.method === 'PATCH') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const area = areaById(capAreaMatch[1]);
+    if (!area) return send(res, 404, { error: 'area not found' });
+    const b = await readBody(req);
+    const parts = [];
+    if (b.name !== undefined) { const n = cleanText(b.name, 60); if (!n) return send(res, 400, { error: 'area name cannot be empty' }); area.name = n; parts.push('name → ' + n); }
+    if (b.cities !== undefined) {
+      const cities = (Array.isArray(b.cities) ? b.cities : String(b.cities || '').split(',')).map(c => cleanText(c, 60)).filter(Boolean);
+      if (!cities.length) return send(res, 400, { error: 'an area must cover at least one city' });
+      area.cities = cities; parts.push('cities → ' + cities.join(', '));
+    }
+    if (!parts.length) return send(res, 400, { error: 'nothing to update' });
+    audit(user, 'captain.area_update', area.id, parts.join(' · '));
+    save(); return send(res, 200, { ok: true, area, captains: captainsAdminPayload() });
+  }
+  if (capAreaMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const area = areaById(capAreaMatch[1]);
+    if (!area) return send(res, 404, { error: 'area not found' });
+    if (area.fixed) return send(res, 400, { error: 'Fairfield is El General\'s own base — it cannot be deleted' });
+    const idx = db.areas.indexOf(area);
+    db.areas.splice(idx, 1);
+    audit(user, 'captain.area_delete', area.id, area.name);
+    save(); return send(res, 200, { ok: true, deleted: area.id, captains: captainsAdminPayload() });
+  }
+  if (p === '/api/admin/captains/assign' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const area = areaById(cleanText(b.areaId, 60));
+    if (!area) return send(res, 404, { error: 'area not found' });
+    if (area.fixed) return send(res, 400, { error: 'Fairfield is commanded by El General himself — it is not assignable' });
+    const w = db.users.find(u => u.id === cleanText(b.workerId, 60));
+    if (!w || w.role !== 'worker') return send(res, 400, { error: 'captain must be a worker account' });
+    if (w.status !== 'active') return send(res, 400, { error: 'only ACTIVE workers can be captains (this account is ' + (w.status || 'review') + ')' });
+    // One captain per area; one area per worker — reassigning MOVES him.
+    const prevArea = captainAreaOf(w.id);
+    if (prevArea && prevArea.id !== area.id) prevArea.captainId = null;
+    const prevCaptain = area.captainId && area.captainId !== w.id ? db.users.find(u => u.id === area.captainId) : null;
+    area.captainId = w.id;
+    audit(user, 'captain.assign', area.id, w.name + ' → Capitán de ' + area.name + (prevArea && prevArea.id !== area.id ? ' (moved from ' + prevArea.name + ')' : '') + (prevCaptain ? ' (replaces ' + prevCaptain.name + ')' : ''));
+    notify(w.id, 'captain', 'You are now Capitán / Captain of ' + area.name + '. Open "Mi área / My area" in your worker panel to see your area, your team and your 5% override balance.');
+    if (prevCaptain) notify(prevCaptain.id, 'captain', 'The Team reassigned the captaincy of ' + area.name + ' to ' + w.name + '. Any override you already accrued stays yours.');
+    save(); return send(res, 200, { ok: true, captains: captainsAdminPayload() });
+  }
+  if (p === '/api/admin/captains/unassign' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const area = areaById(cleanText(b.areaId, 60));
+    if (!area) return send(res, 404, { error: 'area not found' });
+    if (area.fixed) return send(res, 400, { error: 'Fairfield is commanded by El General himself — nothing to unassign' });
+    if (!area.captainId) return send(res, 400, { error: 'this area has no captain' });
+    const prev = db.users.find(u => u.id === area.captainId);
+    area.captainId = null;
+    audit(user, 'captain.unassign', area.id, (prev ? prev.name : 'captain') + ' removed from ' + area.name);
+    if (prev) notify(prev.id, 'captain', 'The Team removed you as Capitán of ' + area.name + '. Any override you already accrued stays yours.');
+    save(); return send(res, 200, { ok: true, captains: captainsAdminPayload() });
+  }
+  if (p === '/api/admin/captains/payout' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const captainId = cleanText(b.captainId, 60);
+    const cap = db.users.find(u => u.id === captainId && u.role === 'worker');
+    if (!cap) return send(res, 404, { error: 'captain not found' });
+    const amount = money(b.amount);
+    if (!(amount > 0)) return send(res, 400, { error: 'enter the amount you paid out' });
+    const outstanding = captainOutstanding(captainId);
+    if (amount > outstanding) return send(res, 400, { error: 'amount exceeds the accrued override balance (' + usd(outstanding) + ')' });
+    // Manual payout by the owner — applied FIFO across the captain's
+    // accrued entries; who/when/amount is recorded in state + audit.
+    let left = amount;
+    const nowIso = new Date().toISOString();
+    for (const e of db.captainLedger.filter(x => x.captainId === captainId && (Number(x.amount) || 0) > (Number(x.paidAmount) || 0))) {
+      if (left <= 0) break;
+      const due = money((Number(e.amount) || 0) - (Number(e.paidAmount) || 0));
+      const pay = Math.min(due, left);
+      e.paidAmount = money((Number(e.paidAmount) || 0) + pay);
+      if (e.paidAmount >= Number(e.amount)) { e.status = 'paid'; e.paidAt = nowIso; }
+      left = money(left - pay);
+    }
+    const payout = { id: id('CPO'), captainId, captainName: cap.name, amount, at: nowIso, byId: user.id, byName: user.name, byEmail: user.email || '' };
+    db.captainPayouts.push(payout);
+    audit(user, 'captain.payout', captainId, usd(amount) + ' → ' + cap.name + ' (manual) · balance now ' + usd(captainOutstanding(captainId)));
+    notify(captainId, 'captain', 'The Team marked ' + usd(amount) + ' of your captain override as PAID. Remaining accrued balance: ' + usd(captainOutstanding(captainId)) + '.');
+    save(); return send(res, 200, { ok: true, payout, totals: { accrued: captainOutstanding(captainId), paidOut: captainPaidOut(captainId) }, captains: captainsAdminPayload() });
+  }
+  // The captain's own view: his area ONLY — area jobs (id, service, city,
+  // status, assigned technician), the technicians whose coverage overlaps
+  // his area, and his override balance. No customer phone numbers, no
+  // customer totals, no other areas, no money handling.
+  if (p === '/api/me/captain' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'sign in required' });
+    ensureCaptainState(); sweepCaptainOverrides();
+    const area = db.areas.find(a => a.captainId && a.captainId === user.id);
+    if (!area) return send(res, 200, { captain: false });
+    const techName = (wid) => { const w = wid && db.users.find(u => u.id === wid); return w ? w.name : null; };
+    const jobs = db.jobs.filter(j => { const a2 = areaForCity(j.city || ''); return a2 && a2.id === area.id; })
+      .slice().sort((x, y) => (x.createdAt || '') < (y.createdAt || '') ? 1 : -1).slice(0, 100)
+      .map(j => ({ id: j.id, service: j.service || '', city: j.city || '', status: j.status, when: j.when || '', createdAt: j.createdAt || null, technician: techName(j.assignedWorkerId), mine: j.assignedWorkerId === user.id }));
+    const team = db.users.filter(u => u.role === 'worker' && u.status === 'active' && u.id !== user.id && workerOverlapsArea(u, area))
+      .map(u => ({ name: u.name, city: (u.profile || {}).city || '', skills: (u.profile || {}).skills || [] }));
+    const entries = db.captainLedger.filter(e => e.captainId === user.id).slice(-50).reverse()
+      .map(e => ({ id: e.id, jobId: e.jobId, areaName: e.areaName || area.name, charged: e.charged, amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status, at: e.at }));
+    const payouts = db.captainPayouts.filter(x => x.captainId === user.id).slice(-20).reverse();
+    return send(res, 200, { captain: true, area: { id: area.id, name: area.name, cities: area.cities || [] }, jobs, team, override: { rate: CAPTAIN_OVERRIDE_RATE, accrued: captainOutstanding(user.id), paidOut: captainPaidOut(user.id), entries, payouts } });
   }
   if (p === '/api/admin/ratings' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -2882,15 +3178,15 @@ const server = http.createServer(async (req, res) => {
         if (!owns) return send(res, 403, { error: 'not allowed' });
         if (!r.estimate || !(r.estimate.bookingDue > 0)) return send(res, 400, { error: 'this request has nothing due to book' });
         if (r.estimatePaid) return send(res, 400, { error: 'already paid' });
-        // $60 member estimate: only for ACTIVE members of any plan (HomeCare,
+        // $50 member estimate: only for ACTIVE members of any plan (HomeCare,
         // HomeCare Plus, Yard Care), and only when the amount due really is
-        // the $60 member rate — otherwise use the normal pay button.
+        // the $50 member rate — otherwise use the normal pay button.
         let amountCents, kind = 'estimate', label = 'In-person estimate payment — request ' + r.id + ' — General Handyman Solutions';
         if (b.kind === 'member-estimate') {
           const payPlan = membershipPlanOf(user);
-          if (!(user.homeCareStatus === 'active' || (payPlan.planKey && payPlan.status === 'active'))) return send(res, 403, { error: 'the $60 member estimate is only for active members' });
-          if (Math.abs(r.estimate.bookingDue - 60) > 0.01) return send(res, 400, { error: 'use the normal pay button for this amount' });
-          amountCents = 6000; kind = 'member-estimate'; label = 'Member estimate — $60 — request ' + r.id;
+          if (!(user.homeCareStatus === 'active' || (payPlan.planKey && payPlan.status === 'active'))) return send(res, 403, { error: 'the $50 member estimate is only for active members' });
+          if (Math.abs(r.estimate.bookingDue - 50) > 0.01) return send(res, 400, { error: 'use the normal pay button for this amount' });
+          amountCents = 5000; kind = 'member-estimate'; label = 'Member estimate — $50 — request ' + r.id;
         } else {
           amountCents = Math.round(r.estimate.bookingDue * 100);
         }
@@ -2905,7 +3201,7 @@ const server = http.createServer(async (req, res) => {
       if (b.kind === 'estimate-hold') {
         // Authorization hold for the in-person estimate fee. The amount
         // ALWAYS comes from the request server-side (estimateDue: $75
-        // regular / $60 member) — the client can never name a price.
+        // regular / $50 member) — the client can never name a price.
         const r = db.requests.find(x => x.id === b.requestId);
         if (!r) return send(res, 404, { error: 'request not found' });
         if (user && user.role === 'customer' && r.customerId && r.customerId !== user.id) return send(res, 403, { error: 'not allowed' });
@@ -2921,7 +3217,7 @@ const server = http.createServer(async (req, res) => {
   }
   // ---------- Inline "New HomeCare member" card flow (added 2026-10-19) ----------
   // The member types their card right in the signup form (Stripe Elements keeps
-  // the number off our servers). Step 1 creates an incomplete $49/mo
+  // the number off our servers). Step 1 creates an incomplete $29/mo
   // subscription and returns the PaymentIntent client secret; the app confirms
   // the card with Stripe.js; step 2 verifies the charge and activates the
   // membership synchronously. The invoice.payment_succeeded webhook stays as
