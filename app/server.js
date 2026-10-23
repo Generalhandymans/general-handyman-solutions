@@ -594,34 +594,65 @@ function mailShell(title, inner, footer) {
 const WORKER_FOOTER = 'Questions? Text or call the Team: (707) 862-3773.';
   const OWNER_FOOTER = 'General Handyman Solutions Team - internal notification.';
 function eventEmail(title, lines, footer) { return mailShell(title, lines.map(l => '<p style="margin:6px 0">' + escMail(l) + '</p>').join(''), footer); }
+function estimateItemsRowsHtml(items) {
+  let rows = '';
+  (items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#888;font-size:11px">(material)</span>' : '') + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
+  return rows;
+}
 function estimateEmailHtml(rq) {
   const e = rq.estimate || {};
-  let rows = '';
-  (e.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
+  let rows = estimateItemsRowsHtml(e.items);
   let adj = '';
   if (e.asapAmount > 0) adj += '<p>ASAP / Emergency (+25%): <b>' + usd(e.asapAmount) + '</b></p>';
   if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
   if (e.credit > 0) adj += '<p>Appointment credit: <b>-' + usd(e.credit) + '</b></p>';
   const inner = '<p>Hi ' + escMail(rq.customerName || 'there') + ', here is your estimate for <b>' + escMail(rq.service || 'your job') + '</b>' + (rq.city ? ' in <b>' + escMail(rq.city) + '</b>' : '') + '.</p>'
     + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Work</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(e.subtotal) + '</b></p>' + adj
+    + '<p>Subtotal: <b>' + usd(e.subtotal) + '</b></p>'
+    + (estimateHasMaterials(e) ? '<p>Materials included: <b>' + usd(e.materialSubtotal) + '</b></p>' : '') + adj
     + '<p style="font-size:18px">Total: <b>' + usd(e.total) + '</b></p>'
     + '<p>Due to book: <b>' + usd(e.bookingDue) + '</b> \u2022 Balance at completion: <b>' + usd(e.balanceDue) + '</b></p>'
+    + (e.validUntil ? '<p>Valid until: <b>' + escMail(e.validUntil) + '</b></p>' : '')
     + (rq.quoteNote ? '<p>' + escMail(rq.quoteNote) + '</p>' : '')
     + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & approve online</a></p>'
     + '<p style="color:#666;font-size:13px">Or open this link — no account needed:<br>' + escMail(estimatePageLink(rq)) + '</p>'
     + '<p>The same estimate is attached as a PDF.</p>';
-  return mailShell('Your estimate from General Handyman Solutions', inner);
+  return mailShell('Your estimate from General Handyman Solutions', inner, estimateHasMaterials(e) ? 'Questions? Text or call (707) 862-3773. Materials are included in this estimate.' : undefined);
 }
 function estimateEmailText(rq) {
   const e = rq.estimate || {};
   const lines = ['General Handyman Solutions — your estimate (' + rq.id + ')', 'Service: ' + (rq.service || '') + (rq.city ? ' in ' + rq.city : ''), ''];
   (e.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
   lines.push('', 'Subtotal: ' + usd(e.subtotal));
+  if (estimateHasMaterials(e)) lines.push('Materials included: ' + usd(e.materialSubtotal));
   if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
   if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
   if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
-  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue), '', 'Review & approve online (no account needed): ' + estimatePageLink(rq), 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
+  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue));
+  if (e.validUntil) lines.push('Valid until: ' + e.validUntil);
+  lines.push('', 'Review & approve online (no account needed): ' + estimatePageLink(rq), estimateHasMaterials(e) ? 'Materials are included in this estimate. Text/call (707) 862-3773.' : 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
+  return lines.join('\n');
+}
+// ---------- v45: the one-shot 48-hour estimate reminder email ----------
+// Gabriel approved this exact exception to his automation stop: ONE
+// reminder per estimate, sent by the app server itself, never two.
+function estimateReminderEmailHtml(rq) {
+  const e = rq.estimate || {};
+  const inner = '<p>Hi ' + escMail(rq.customerName || 'there') + ',</p>'
+    + '<p>Just a friendly nudge — your estimate for <b>' + escMail(rq.service || 'your job') + '</b>' + (rq.city ? ' in <b>' + escMail(rq.city) + '</b>' : '') + ' is still waiting for you.</p>'
+    + '<p style="font-size:18px">Estimate total: <b>' + usd(e.total) + '</b></p>'
+    + (e.validUntil ? '<p>It stays valid until <b>' + escMail(e.validUntil) + '</b> — after that the Team would need to re-quote it.</p>' : '')
+    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & approve your estimate</a></p>'
+    + '<p style="color:#666;font-size:13px">No account needed — approve and pay right from the link. Already taken care of, or changed your mind? No problem at all — just ignore this email; we will not send another one.</p>';
+  return mailShell('Your estimate is still here — General Handyman Solutions', inner, estimateHasMaterials(e) ? 'Questions? Text or call (707) 862-3773. Materials are included in this estimate.' : undefined);
+}
+function estimateReminderEmailText(rq) {
+  const e = rq.estimate || {};
+  const lines = ['General Handyman Solutions — a quick reminder about your estimate (' + rq.id + ')', '',
+    'Your estimate for ' + (rq.service || 'your job') + (rq.city ? ' in ' + rq.city : '') + ' is still waiting.',
+    'Estimate total: ' + usd(e.total)];
+  if (e.validUntil) lines.push('Valid until: ' + e.validUntil);
+  lines.push('', 'Review & approve online (no account needed): ' + estimatePageLink(rq), '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.');
   return lines.join('\n');
 }
 function pdfEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
@@ -635,7 +666,10 @@ function buildEstimatePdf(rq) {
   if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
   if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
   if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
-  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + '    Balance at completion: ' + usd(e.balanceDue), '', 'Labor only - you buy materials/parts unless agreed otherwise.', 'Approve in the app: ' + APP_URL);
+  if (estimateHasMaterials(e)) lines.push('Materials included: ' + usd(e.materialSubtotal));
+  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + '    Balance at completion: ' + usd(e.balanceDue));
+  if (e.validUntil) lines.push('Valid until: ' + e.validUntil);
+  lines.push('', estimateHasMaterials(e) ? 'Materials are included in this estimate.' : 'Labor only - you buy materials/parts unless agreed otherwise.', 'Approve in the app: ' + APP_URL);
   let content = 'BT /F1 13 Tf 50 750 Td ';
   lines.forEach((l, i) => { content += (i === 0 ? '' : '0 -17 Td ') + '(' + pdfEsc(l) + ') Tj '; });
   content += 'ET';
@@ -685,6 +719,11 @@ async function resendAutomation(type, payload) {
     if (inv.customerEmail) out.push(await sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — invoice ' + inv.id + ' paid in full', html: eventEmail('Invoice paid — thank you', ['Invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is now PAID IN FULL.', 'Payment method: ' + (inv.paidMethod || 'card') + '.', 'Thank you for your business! If you need anything else, just reply to this email or text (707) 862-3773.']), text: 'Invoice ' + inv.id + ' paid in full (' + usd(inv.total || 0) + '). Thank you!' }));
     out.push(await sendMail({ to: [OWNER_EMAIL], subject: 'Invoice PAID: ' + inv.id + ' — ' + usd(inv.total || 0), html: eventEmail('Invoice paid', ['Invoice ' + inv.id, 'Customer: ' + (inv.customerName || '') + ' ' + (inv.customerEmail || ''), 'Amount: ' + usd(inv.total || 0), 'Method: ' + (inv.paidMethod || 'card')], OWNER_FOOTER), text: 'Invoice ' + inv.id + ' paid: ' + usd(inv.total || 0) }));
     return { attempted: true, sent: out.some(x => x.sent), via: 'resend' };
+  }
+  if (type === 'estimate_reminder') {
+    const rq = p.request || {};
+    if (!rq.customerEmail) return { attempted: true, sent: false, reason: 'customer has no email on file' };
+    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Reminder: your estimate (' + rq.id + ') is still waiting — General Handyman Solutions', html: estimateReminderEmailHtml(rq), text: estimateReminderEmailText(rq) });
   }
   if (type === 'invoice_reminder') {
     const inv = p.invoice || {};
@@ -1027,6 +1066,43 @@ function sweepPendingPayouts() {
     && !(j.payoutTriedAt && (now - new Date(j.payoutTriedAt).getTime() < 2 * 60 * 1000)))
     .slice(0, 10)
     .forEach(j => { maybePayWorkerForJob(j); accrueCaptainOverride(j); });
+}
+// ---------- v45: ONE-SHOT 48-hour estimate reminder sweep ----------
+// Gabriel approved this exact automation by name (2026-10-23); his STOP
+// TOTAL stands for everything else. It runs INSIDE the app server on
+// ordinary request activity (same pattern as the payout sweep above) —
+// no external cron, no background agent. An estimate earns exactly ONE
+// reminder: sent >= 48h ago (estimateEmailSentAt, or the builder save
+// stamp), still 'Quoted' (no approval / no payment), not expired, with
+// a customer email on file. The send stamps e.remindedAt + an audit
+// entry; a failed send leaves remindedAt clear so a later sweep retries.
+let lastEstRemindSweep = 0;
+function sweepEstimateReminders() {
+  const throttle = Number(process.env.EST_REMIND_THROTTLE_MS) || 5 * 60 * 1000;
+  const now = Date.now();
+  if (now - lastEstRemindSweep < throttle) return;
+  lastEstRemindSweep = now;
+  (async () => {
+    const due = (db.requests || []).filter(r => {
+      const e = r.estimate;
+      if (!e || r.status !== 'Quoted' || e.remindedAt) return false;
+      const sentAt = r.estimateEmailSentAt || e.sentAt;
+      if (!sentAt || now - new Date(sentAt).getTime() < 48 * 3600 * 1000) return false;
+      if (estimateIsExpired(e)) return false;
+      if (!(r.customerEmail || '').includes('@')) return false;
+      return true;
+    }).slice(0, 10);
+    for (const r of due) {
+      try {
+        const res = await sendAutomation('estimate_reminder', requestAutomationPayload(r));
+        if (res && res.sent) {
+          r.estimate.remindedAt = new Date().toISOString();
+          audit(null, 'estimate.reminder', r.id, 'one-shot 48h reminder emailed to ' + (r.customerEmail || ''));
+        }
+      } catch (err) { console.error('estimate reminder failed', r.id, err.message); }
+    }
+    if (due.length) save();
+  })().catch(e => console.error('estimate reminder sweep failed', e.message));
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
@@ -1736,52 +1812,110 @@ function cleanStartPreference(v) {
   if (n.type === 'date' && n.date < todayInLA()) return { type: 'asap', date: null };
   return n;
 }
-function normalizeEstimate(input, request) {
-  const raw = input && typeof input === 'object' ? input : {};
-  const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
+// ---------- v45: typed estimate lines, option bundles, expiry ----------
+// Every estimate line carries a type: 'labor' | 'material' (legacy lines
+// with no type default to labor). The member discount and the ASAP
+// surcharge are computed on the LABOR subtotal only — materials are a
+// hard cost and always bill at full price (Gabriel's standing rule:
+// "20% off labor"). An estimate may carry TWO option bundles (raw.options,
+// e.g. Básico vs Completo); the top-level totals always mirror the
+// SELECTED bundle and each bundle keeps its own display snapshot.
+function normalizeEstItems(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : []).map(it => {
     const qty = Math.max(0, Math.min(999, Number(it && it.qty) || 0));
     const unitPrice = clampMoney(it && it.unitPrice);
     const description = cleanText(it && (it.description || it.desc || it.name), 180);
-    return { description, qty, unitPrice, lineTotal: money(qty * unitPrice) };
+    const type = (it && it.type === 'material') ? 'material' : 'labor';
+    return { description, qty, unitPrice, type, lineTotal: money(qty * unitPrice) };
   }).filter(it => it.description && it.qty > 0);
+}
+function estCoreTotals(items, flags) {
+  const labor = money(items.filter(it => it.type !== 'material').reduce((s, it) => s + it.lineTotal, 0));
+  const material = money(items.filter(it => it.type === 'material').reduce((s, it) => s + it.lineTotal, 0));
+  const subtotal = money(labor + material);
+  const asapAmount = flags && flags.asap ? money(labor * 0.25) : 0;
+  const discountAmount = money(labor * Math.max(0, Math.min(90, Number(flags && flags.discountPct) || 0)) / 100);
+  return { laborSubtotal: labor, materialSubtotal: material, subtotal, asapAmount, discountAmount };
+}
+// Recomputes every derived number on an estimate from its selected items
+// + flags, and refreshes each option bundle's display snapshot. Shared by
+// the builder save, the member-discount paths and the option switch.
+function settleEstimateTotals(est) {
+  const t = estCoreTotals(est.items || [], est);
+  est.laborSubtotal = t.laborSubtotal; est.materialSubtotal = t.materialSubtotal; est.subtotal = t.subtotal;
+  est.asapAmount = t.asapAmount; est.discountAmount = t.discountAmount;
+  est.asapRate = est.asap ? 0.25 : 0;
+  const credit = Math.min(clampMoney(est.credit == null ? 0 : est.credit), money(est.subtotal + est.asapAmount - est.discountAmount));
+  est.credit = credit;
+  est.total = Math.max(0, money(est.subtotal + est.asapAmount - est.discountAmount - credit));
+  est.bookingDue = est.bookingAuto ? est.total : Math.min(clampMoney(est.bookingDue || 0), est.total);
+  est.balanceDue = money(est.total - est.bookingDue);
+  (est.options || []).forEach(o => {
+    const ot = estCoreTotals(o.items || [], est);
+    o.laborSubtotal = ot.laborSubtotal; o.materialSubtotal = ot.materialSubtotal; o.subtotal = ot.subtotal; o.asapAmount = ot.asapAmount;
+    o.listTotal = money(ot.subtotal + ot.asapAmount);
+    o.memberTotal = money(ot.laborSubtotal * 0.8 + ot.materialSubtotal + ot.asapAmount);
+  });
+  return est;
+}
+// Expiry rule (v45): validUntil is a YYYY-MM-DD day; the estimate is
+// expired once that day has fully passed (UTC end-of-day).
+function estimateIsExpired(est) {
+  if (!est || !est.validUntil) return false;
+  const t = Date.parse(String(est.validUntil) + 'T00:00:00Z');
+  if (isNaN(t)) return false;
+  return Date.now() > t + 24 * 3600 * 1000;
+}
+function estimateHasMaterials(est) { return !!est && (Number(est.materialSubtotal) || 0) > 0; }
+function normalizeEstimate(input, request) {
+  const raw = input && typeof input === 'object' ? input : {};
+  const asap = !!raw.asap;
+  const discountPct = Math.max(0, Math.min(90, Number(raw.discountPct) || 0));
+  let options = null;
+  let items;
+  let selectedOption = 0;
+  if (Array.isArray(raw.options) && raw.options.length >= 2) {
+    options = raw.options.slice(0, 2).map((o, i) => ({ label: cleanText(o && o.label, 60) || ('Option ' + (i + 1)), items: normalizeEstItems(o && o.items) }));
+    options = options.filter(o => o.items.length);
+    if (options.length >= 2) {
+      selectedOption = Math.max(0, Math.min(options.length - 1, Math.round(Number(raw.selectedOption) || 0)));
+      items = options[selectedOption].items;
+    } else { options = null; items = normalizeEstItems(raw.items); }
+  } else {
+    items = normalizeEstItems(raw.items);
+  }
   if (!items.length && typeof raw.total === 'number') {
     const total = clampMoney(raw.total);
-    items.push({ description: 'Labor', qty: 1, unitPrice: total, lineTotal: total });
+    items.push({ description: 'Labor', qty: 1, unitPrice: total, type: 'labor', lineTotal: total });
+    if (options) { options[selectedOption].items = items; }
   }
-  const subtotal = money(items.reduce((sum, it) => sum + it.lineTotal, 0));
-  const asap = !!raw.asap;
-  const asapRate = asap ? 0.25 : 0;
-  const asapAmount = money(subtotal * asapRate);
-  const discountPct = Math.max(0, Math.min(90, Number(raw.discountPct) || 0));
-  const discountAmount = money(subtotal * discountPct / 100);
+  const subtotal0 = money(items.reduce((sum, it) => sum + it.lineTotal, 0));
   const defaultCredit = request && request.estimateType === 'inperson' ? (Number(request.estimateDue) || 0) : 0;
-  const credit = Math.min(clampMoney(raw.credit == null ? defaultCredit : raw.credit), money(subtotal + asapAmount - discountAmount));
-  const total = Math.max(0, money(subtotal + asapAmount - discountAmount - credit));
+  const credit = Math.min(clampMoney(raw.credit == null ? defaultCredit : raw.credit), subtotal0);
+  const vu = typeof raw.validUntil === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(raw.validUntil) ? raw.validUntil : '';
+  const photos = (Array.isArray(raw.photos) ? raw.photos : []).filter(isPhotoDataUrl).slice(0, 6);
   // v44 (pay in full): the amount due to book defaults to the FULL total —
   // Gabriel still overrides it by hand in the builder whenever he wants.
-  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? total : clampMoney(raw.bookingDue);
-  bookingDue = Math.min(bookingDue, total);
-  return { items, subtotal, asap, asapRate, asapAmount, discountPct, discountAmount, credit, total, bookingDue, balanceDue: money(total - bookingDue), bookingAuto: raw.bookingDue == null || raw.bookingDue === '', currency: 'USD', updatedAt: new Date().toISOString() };
+  const est = { items, options, selectedOption, asap, discountPct, credit, memberDiscount: !!raw.memberDiscount,
+    validUntil: vu, photos, sentAt: null, remindedAt: null,
+    bookingAuto: raw.bookingDue == null || raw.bookingDue === '',
+    bookingDue: raw.bookingDue == null || raw.bookingDue === '' ? 0 : clampMoney(raw.bookingDue),
+    currency: 'USD', updatedAt: new Date().toISOString() };
+  return settleEstimateTotals(est);
 }
 // HomeCare benefit (2026-10-10 refinement): ONLY active members get the 20% labor
 // discount on jobs under $1,000. Non-members always see normal pricing. Applied
 // automatically when the admin builds the estimate unless the admin set their own
-// discount — the admin's manual choice always wins.
+// discount — the admin's manual choice always wins. v45: the 20% is taken
+// on the LABOR subtotal only; materials never discount.
 function applyMemberDiscount(est, request, customer) {
   const subtotal = est.subtotal || 0;
   const isMember = customer && customer.homeCareStatus === 'active';
   if (!isMember || subtotal <= 0 || subtotal >= 1000) return est;
   if (est.discountPct > 0) return est; // admin set their own discount — respect it
-  const d = Math.round(subtotal * 0.20 * 100) / 100;
   est.discountPct = 20;
-  est.discountAmount = d;
   est.memberDiscount = true;
-  const credit = est.credit || 0;
-  est.total = Math.max(0, Math.round((subtotal + (est.asapAmount || 0) - d - credit) * 100) / 100);
-  if (est.bookingAuto) est.bookingDue = est.total; // v44: pay in full to book
-  else est.bookingDue = Math.min(est.bookingDue, est.total);
-  est.balanceDue = Math.round((est.total - est.bookingDue) * 100) / 100;
-  return est;
+  return settleEstimateTotals(est);
 }
 // ---------- Invoices (added 2026-10-12) ----------
 // Standalone invoices for completed jobs: the admin creates a draft with line
@@ -1942,7 +2076,22 @@ function invoicePageHtml(inv) {
 // "Your payment" panel for the public estimate page (added 2026-10-20):
 // the customer watches their authorization live — hold placed, approved
 // total authorized, final charge — in plain language, no account needed.
-function estimatePayPanelHtml(r) {
+// "Your payment" panel for the public estimate page (added 2026-10-20):
+// the customer watches their authorization live — hold placed, approved
+// total authorized, final charge — in plain language, no account needed.
+// v45: the panel speaks the page's language (EN | ES, one at a time).
+function estimatePayPanelHtml(r, lang) {
+  const PP = lang === 'es' ? {
+    h: 'Tu pago', visit: 'Visita del estimado', balance: 'Autorización del saldo', charged: 'Cobrado', onHold: 'En espera — aún no se cobra',
+    approvedTotal: 'Total aprobado', authorizedSoFar: 'autorizado hasta ahora', finalCharge: 'Cargo final', chargedWord: 'cobrado', on: 'el',
+    releasedTail: ' que no se usó se liberó de la autorización.', pending: 'Pendiente', pendingBody: 'solo se te cobra cuando el trabajo está terminado, y solo el monto final.',
+    note: 'Una retención reserva el dinero pero no lo cobra. Solo se te cobra el monto final cuando el trabajo está terminado.', opening: 'Abriendo la autorización segura…', failed: 'falló', authorize: 'Autoriza el saldo de '
+  } : {
+    h: 'Your payment', visit: 'Estimate visit', balance: 'Balance authorization', charged: 'Charged', onHold: 'On hold — not charged yet',
+    approvedTotal: 'Approved total', authorizedSoFar: 'authorized so far', finalCharge: 'Final charge', chargedWord: 'charged', on: 'on',
+    releasedTail: ' that was not used was released from the authorization.', pending: 'Pending', pendingBody: 'you are charged only when the work is done, and only the final amount.',
+    note: 'A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.', opening: 'Opening secure authorization…', failed: 'failed', authorize: 'Authorize '
+  };
   const holds = requestHolds(r);
   if (!holds.length && !r.holdSync) return '';
   const visit = holds.find(h => h.key === 'visit');
@@ -1950,79 +2099,247 @@ function estimatePayPanelHtml(r) {
   const pool = holdsPool(r);
   const captured = holds.reduce((s, h) => s + (Number(h.capturedCents) || 0), 0);
   const target = holdTargetCents(r);
-  const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString('en-US') : '';
-  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString('en-US') : '';
-  const holdState = (h) => h.status === 'captured' ? '<b>Charged</b>' : h.status === 'authorized' ? '<b>On hold — not charged yet</b>' : '<b>' + escMail(h.status) + '</b>';
+  const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString(lang === 'es' ? 'es-US' : 'en-US') : '';
+  const fmtDT = (iso) => iso ? new Date(iso).toLocaleString(lang === 'es' ? 'es-US' : 'en-US') : '';
+  const holdState = (h) => h.status === 'captured' ? '<b>' + PP.charged + '</b>' : h.status === 'authorized' ? '<b>' + PP.onHold + '</b>' : '<b>' + escMail(h.status) + '</b>';
   let lines = '';
-  if (visit) lines += '<p style="margin:6px 0">Estimate visit — ' + usd(visit.authorizedCents / 100) + ': ' + holdState(visit) + (visit.status === 'authorized' && visit.captureBefore ? ' <span style="color:#666">(hold valid until ' + fmtD(visit.captureBefore) + ')</span>' : '') + '</p>';
-  if (bal && bal.status !== 'released' && bal.status !== 'expired') lines += '<p style="margin:6px 0">Balance authorization — ' + usd(bal.authorizedCents / 100) + ': ' + holdState(bal) + '</p>';
-  if (target > 0) lines += '<p style="margin:6px 0">Approved total: <b>' + usd(target / 100) + '</b> — authorized so far: <b>' + usd(Math.max(pool, captured) / 100) + '</b></p>';
+  if (visit) lines += '<p style="margin:6px 0">' + PP.visit + ' — ' + usd(visit.authorizedCents / 100) + ': ' + holdState(visit) + (visit.status === 'authorized' && visit.captureBefore ? ' <span style="color:#666">(hold valid until ' + fmtD(visit.captureBefore) + ')</span>' : '') + '</p>';
+  if (bal && bal.status !== 'released' && bal.status !== 'expired') lines += '<p style="margin:6px 0">' + PP.balance + ' — ' + usd(bal.authorizedCents / 100) + ': ' + holdState(bal) + '</p>';
+  if (target > 0) lines += '<p style="margin:6px 0">' + PP.approvedTotal + ': <b>' + usd(target / 100) + '</b> — ' + PP.authorizedSoFar + ': <b>' + usd(Math.max(pool, captured) / 100) + '</b></p>';
   if (captured > 0) {
     const lastCap = holds.filter(h => h.status === 'captured').slice(-1)[0];
-    lines += '<p style="margin:6px 0">Final charge: <b>' + usd(captured / 100) + ' charged</b>' + (lastCap ? ' on ' + fmtDT(lastCap.updatedAt) : '') + (target > captured ? ' — the ' + usd((target - captured) / 100) + ' that was not used was released from the authorization.' : '') + '</p>';
+    lines += '<p style="margin:6px 0">' + PP.finalCharge + ': <b>' + usd(captured / 100) + ' ' + PP.chargedWord + '</b>' + (lastCap ? ' ' + PP.on + ' ' + fmtDT(lastCap.updatedAt) : '') + (target > captured ? ' — ' + usd((target - captured) / 100) + PP.releasedTail : '') + '</p>';
   } else if (pool > 0) {
-    lines += '<p style="margin:6px 0">Final charge: <b>Pending</b> — you are charged only when the work is done, and only the final amount.</p>';
+    lines += '<p style="margin:6px 0">' + PP.finalCharge + ': <b>' + PP.pending + '</b> — ' + PP.pendingBody + '</p>';
   }
   let balanceBtn = '';
   if (r.status === 'Approved' && r.holdSync && (r.holdSync.state === 'needs_balance' || r.holdSync.state === 'increment_failed')) {
     const missing = Math.max(0, target - pool - captured);
-    if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">Authorize ' + usd(missing / 100) + ' balance</button> <span id="balMsg" style="color:#666"></span></p>'
-      + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent="Opening secure authorization…";fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||"failed";}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
+    if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">' + PP.authorize + usd(missing / 100) + '</button> <span id="balMsg" style="color:#666"></span></p>'
+      + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent=' + JSON.stringify(PP.opening) + ';fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||' + JSON.stringify(PP.failed) + ';}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
   }
   // Live refresh while the customer watches — skipped while the estimate
   // is still awaiting their decision so a typed reply is never wiped.
   const refresh = r.status !== 'Quoted' ? '<script>setTimeout(function(){location.reload();},30000);</scr' + 'ipt>' : '';
-  return '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">Your payment</h3>' + lines
-    + '<p style="color:#666;font-size:13px;margin:8px 0 0">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</p>' + balanceBtn + '</div>' + refresh;
+  return '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + PP.h + '</h3>' + lines
+    + '<p style="color:#666;font-size:13px;margin:8px 0 0">' + PP.note + '</p>' + balanceBtn + '</div>' + refresh;
 }
 function estimatePageLink(r) { return appBase() + '/estimate/' + r.id; }
-function estimatePageHtml(r) {
+// What this estimate costs as a HomeCare member: the 20% member discount
+// on the LABOR subtotal only (materials never discount). Returns the
+// estimate untouched when the member math would not improve the total
+// (e.g. Gabriel set a better manual discount himself).
+function memberVariantOfEstimate(est) {
+  const d = money((Number(est && est.laborSubtotal) || 0) * 0.2);
+  if (!(d > 0) || (Number(est.discountAmount) || 0) >= d) return est;
+  const v = Object.assign({}, est);
+  v.discountPct = 20; v.discountAmount = d; v.memberDiscount = true;
+  const credit = Number(est.credit) || 0;
+  v.total = Math.max(0, money((Number(est.subtotal) || 0) + (Number(est.asapAmount) || 0) - d - credit));
+  v.bookingDue = est.bookingAuto ? v.total : Math.min(Number(est.bookingDue) || 0, v.total);
+  v.balanceDue = money(v.total - v.bookingDue);
+  return v;
+}
+// ---------- Public estimate page (v45 rebuild) ----------
+// Same shape as the v44 cart page: ONE language at a time (EN | ES toggle
+// in the header band, localStorage-persisted, ?lang= override), the
+// HomeCare join-and-save block (join right on the page through the
+// existing signup -> homecare-subscribe -> confirm machinery; the
+// discount then reprices LABOR only), photos Gabriel attached, a hard
+// expiry, and — when the estimate carries two option bundles — the
+// customer's pick between them. Item descriptions are Gabriel's quote
+// data, not UI chrome.
+function estimatePageHtml(r, user, langOverride) {
   const e = r.estimate || {};
-  const rows = (e.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  const EI = {
+    en: {
+      titleEst: 'Estimate', forWord: 'for', thWork: 'Work', thQty: 'Qty', thEach: 'Each', thLine: 'Line',
+      laborSubtotal: 'Labor subtotal', materials: 'Materials', subtotal: 'Subtotal', total: 'Total',
+      asap: 'ASAP / Emergency (+25%)', memberDisc: 'HomeCare member discount', discount: 'Discount', credit: 'Appointment credit',
+      dueToBook: 'Due to book:', balanceAt: 'Balance at completion:', teamNote: 'Team note:',
+      validUntil: 'Valid until', expiredH: 'This estimate has expired', expiredBody: 'The price window on this estimate closed. Text or call (707) 862-3773 and the Team will send you a fresh one — usually the same day.',
+      laborNote: 'Labor only — you buy materials/parts unless the Team says otherwise in writing.', materialsNote: 'Materials are included in this estimate.',
+      photosH: 'Photos from the Team', optionsH: 'Choose your option', regularWord: 'Regular', memberWord: 'HomeCare member',
+      questions: 'Questions? Text or call (707) 862-3773.',
+      memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings on labor are already in this estimate.',
+      joinLabel: 'Become a HomeCare member — $29/mo — and save 20% on the labor in this estimate',
+      joinBody: 'Join right here and this estimate drops from {list} to {member} (you save {save} — the 20% comes off labor; materials stay at cost). First in-person estimate FREE, priority scheduling, cancel anytime. Or skip it and approve at the regular price — your choice.',
+      emailLabel: 'Email for your account', passLabel: 'Create your account password (8+ characters) — or your existing account password',
+      joinBtn: 'Join HomeCare — save {save}', joining: 'Joining HomeCare…',
+      approveH: 'Approve this estimate?', approveBody: 'Approving creates your invoice right away — then you pay online with a card. No account needed.',
+      decReasonPh: 'Optional: reason or change request…', approveBtn: 'Approve estimate', declineBtn: 'Decline / request changes',
+      sending: 'Sending…', approvedOpening: 'Approved! Opening your secure payment page…', declineConfirm: 'Decline this estimate?',
+      approvedH: 'Estimate approved', invoiceReadyA: 'Your invoice', invoiceReadyB: 'is ready.', invoicePaid: 'It is paid in full — thank you!',
+      viewInvoice: 'View invoice', payNow: 'Pay {amt} now', invoicePrep: 'Your invoice is being prepared — the Team will send your payment link shortly.',
+      declinedH: 'Estimate declined', declinedBody: 'No problem — if anything changes, just text or call (707) 862-3773 and we will rework it.',
+      badgeAwaiting: 'awaiting approval', badgeExpired: 'expired',
+      errPass: 'Create a password (8+ characters) — it is your account for this estimate and your membership.', errSignup: 'could not create your account',
+      errLogin: 'That email already has an account — type its password above to log in and join.', errMemberFail: 'membership signup failed',
+      errMemberPay: 'Your membership payment did not complete — check the card and try again.', errLoading: 'Online payment is still loading — give it a second and try again.',
+      errEmail: 'Add a valid email for your account.'
+    },
+    es: {
+      titleEst: 'Estimado', forWord: 'para', thWork: 'Trabajo', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe',
+      laborSubtotal: 'Subtotal de mano de obra', materials: 'Materiales', subtotal: 'Subtotal', total: 'Total',
+      asap: 'ASAP / Emergencia (+25%)', memberDisc: 'Descuento de miembro HomeCare', discount: 'Descuento', credit: 'Crédito de la cita',
+      dueToBook: 'Para apartar:', balanceAt: 'Saldo al terminar:', teamNote: 'Nota del Equipo:',
+      validUntil: 'Válido hasta el', expiredH: 'Este estimado ya venció', expiredBody: 'La ventana de precio de este estimado cerró. Manda un texto o llama al (707) 862-3773 y el Equipo te envía uno nuevo — normalmente el mismo día.',
+      laborNote: 'Solo mano de obra — tú compras los materiales y piezas, a menos que el Equipo diga lo contrario por escrito.', materialsNote: 'Los materiales están incluidos en este estimado.',
+      photosH: 'Fotos del Equipo', optionsH: 'Elige tu opción', regularWord: 'Normal', memberWord: 'Miembro HomeCare',
+      questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.',
+      memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% en mano de obra ya está aplicado en este estimado.',
+      joinLabel: 'Hazte miembro de HomeCare — $29/mes — y ahorra 20% en la mano de obra de este estimado',
+      joinBody: 'Únete aquí mismo y este estimado baja de {list} a {member} (ahorras {save} — el 20% sale de la mano de obra; los materiales quedan a costo). Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O sáltalo y aprueba al precio normal — tú decides.',
+      emailLabel: 'Correo para tu cuenta', passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
+      joinBtn: 'Unirme a HomeCare — ahorrar {save}', joining: 'Uniéndote a HomeCare…',
+      approveH: '¿Apruebas este estimado?', approveBody: 'Al aprobar se crea tu factura al momento — luego pagas en línea con tarjeta. No necesitas cuenta.',
+      decReasonPh: 'Opcional: motivo o cambio que pides…', approveBtn: 'Aprobar estimado', declineBtn: 'Rechazar / pedir cambios',
+      sending: 'Enviando…', approvedOpening: '¡Aprobado! Abriendo tu página segura de pago…', declineConfirm: '¿Rechazar este estimado?',
+      approvedH: 'Estimado aprobado', invoiceReadyA: 'Tu factura', invoiceReadyB: 'está lista.', invoicePaid: 'Está pagada por completo — ¡gracias!',
+      viewInvoice: 'Ver factura', payNow: 'Pagar {amt} ahora', invoicePrep: 'Tu factura se está preparando — el Equipo te enviará tu enlace de pago muy pronto.',
+      declinedH: 'Estimado rechazado', declinedBody: 'Sin problema — si algo cambia, manda un texto o llama al (707) 862-3773 y lo ajustamos.',
+      badgeAwaiting: 'esperando aprobación', badgeExpired: 'vencido',
+      errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para este estimado y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
+      errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y unirte.', errMemberFail: 'la membresía no se pudo activar',
+      errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.', errLoading: 'El pago en línea todavía está cargando — espera un segundo e inténtalo de nuevo.',
+      errEmail: 'Agrega un correo válido para tu cuenta.'
+    }
+  };
+  const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : 'en';
+  const S = EI[initLang];
+  const fillS = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
+  const expired = r.status === 'Quoted' && estimateIsExpired(e);
+  const memberUser = cartMemberUserFor(user || null, r.customerEmail || '');
+  const isMember = !!memberUser || !!e.memberDiscount;
+  const disp = isMember && !e.memberDiscount ? memberVariantOfEstimate(e) : e;
+  const memberDisp = memberVariantOfEstimate(e);
+  const joinAmounts = { list: usd(e.total), member: usd(memberDisp.total), save: usd(money((Number(e.total) || 0) - (Number(memberDisp.total) || 0))) };
+  const canJoin = !isMember && money((Number(e.total) || 0) - (Number(memberDisp.total) || 0)) > 0;
+  const fmtDate = (dstr) => { const t = Date.parse(String(dstr || '') + 'T00:00:00Z'); return isNaN(t) ? String(dstr || '') : new Date(t).toLocaleDateString(initLang === 'es' ? 'es-US' : 'en-US', { timeZone: 'UTC' }); };
+  const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleEst + ' ' + escMail(r.id) + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+    + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
+    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
+  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<script>var I18N=' + JSON.stringify(EI) + ';var LANG=' + JSON.stringify(initLang) + ';'
+    + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
+    + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsEstLang", l); }catch(e){}'
+    + ' document.documentElement.lang=l;'
+    + ' document.querySelectorAll("[data-i18n]").forEach(function(n){ var v=T(n.getAttribute("data-i18n")); if(v) n.innerHTML=v; });'
+    + ' document.querySelectorAll("[data-i18n-ph]").forEach(function(n){ var v=T(n.getAttribute("data-i18n-ph")); if(v) n.setAttribute("placeholder", v); });'
+    + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; });'
+    + ' if(typeof mountCard==="function") mountCard(); }'
+    + 'document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang-btn")); }); });'
+    + 'try{ var sv=localStorage.getItem("ghsEstLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
+    + '</scr' + 'ipt></body>';
+  // --- items table for the SELECTED option (or the single estimate) ---
+  const rowOf = (it) => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#888;font-size:11px">(' + S.materials.toLowerCase() + ')</span>' : '') + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>';
+  const rows = (disp.items || []).map(rowOf).join('');
   let adj = '';
-  if (e.asapAmount > 0) adj += '<p>ASAP / Emergency (+25%): <b>' + usd(e.asapAmount) + '</b></p>';
-  if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
-  if (e.credit > 0) adj += '<p>Appointment credit: <b>-' + usd(e.credit) + '</b></p>';
-  const badge = { Quoted: '#b26a00', Approved: '#1a7f37', Declined: '#6b6762' }[r.status] || '#6b6762';
-  const badgeLabel = r.status === 'Quoted' ? 'awaiting approval' : String(r.status || '').toLowerCase();
+  if (disp.asapAmount > 0) adj += '<p><span data-i18n="asap">' + S.asap + '</span>: <b>' + usd(disp.asapAmount) + '</b></p>';
+  if (disp.discountAmount > 0) adj += '<p>' + (disp.memberDiscount ? '<span data-i18n="memberDisc">' + S.memberDisc + '</span>' : '<span data-i18n="discount">' + S.discount + '</span>') + ' (' + escMail(disp.discountPct) + '%): <b>-' + usd(disp.discountAmount) + '</b></p>';
+  if (disp.credit > 0) adj += '<p><span data-i18n="credit">' + S.credit + '</span>: <b>-' + usd(disp.credit) + '</b></p>';
+  const sums = (estimateHasMaterials(disp) ? '<p><span data-i18n="laborSubtotal">' + S.laborSubtotal + '</span>: <b>' + usd(disp.laborSubtotal) + '</b> • <span data-i18n="materials">' + S.materials + '</span>: <b>' + usd(disp.materialSubtotal) + '</b></p>' : '')
+    + '<p><span data-i18n="subtotal">' + S.subtotal + '</span>: <b>' + usd(disp.subtotal) + '</b></p>' + adj
+    + '<p style="font-size:22px"><span data-i18n="total">' + S.total + '</span>: <b>' + usd(disp.total) + '</b></p>'
+    + '<p><b data-i18n="dueToBook">' + S.dueToBook + '</b> ' + usd(disp.bookingDue) + ' • <b data-i18n="balanceAt">' + S.balanceAt + '</b> ' + usd(disp.balanceDue) + '</p>';
+  // --- two-option picker ---
+  let optionsBlock = '';
+  if (Array.isArray(e.options) && e.options.length >= 2 && r.status === 'Quoted' && !expired) {
+    const cards = e.options.map((o, i) => {
+      const sel = i === (Number(e.selectedOption) || 0);
+      return '<label style="display:block;border:2px solid ' + (sel ? '#e42535' : '#ddd') + ';border-radius:10px;padding:12px;margin:8px 0;cursor:pointer;background:' + (sel ? '#fff5f5' : '#fff') + '">'
+        + '<input type="radio" name="estOpt" value="' + i + '" ' + (sel ? 'checked' : '') + ' onchange="pickOption(' + i + ')"> <b>' + escMail(o.label) + '</b>'
+        + '<span style="float:right;text-align:right"><b>' + usd(o.listTotal) + '</b>' + (o.memberTotal < o.listTotal ? '<br><span style="color:#1a7f37;font-size:13px">' + S.memberWord + ': <b>' + usd(o.memberTotal) + '</b></span>' : '') + '</span>'
+        + '<span style="display:block;color:#666;font-size:13px;margin-top:4px">' + (o.items || []).map(it => escMail(it.description)).join(' • ') + '</span></label>';
+    }).join('');
+    optionsBlock = '<div style="margin-top:14px"><h3 style="margin-bottom:4px" data-i18n="optionsH">' + S.optionsH + '</h3>' + cards + '</div>'
+      + '<script>function pickOption(i){ fetch("/estimate/' + r.id + '/option",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({index:i})}).then(function(res){ return res.json(); }).then(function(d){ if(d && d.ok) location.reload(); }).catch(function(){}); }</scr' + 'ipt>';
+  }
+  // --- photos Gabriel attached ---
+  const photosBlock = (Array.isArray(e.photos) && e.photos.length)
+    ? '<div style="margin-top:14px"><h3 style="margin-bottom:6px" data-i18n="photosH">' + S.photosH + '</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' + e.photos.map(ph => '<img src="' + ph + '" alt="" style="width:31%;min-width:120px;border-radius:10px;border:1px solid #ddd">').join('') + '</div></div>'
+    : '';
+  // --- membership block ---
+  let memberBlock = '';
+  if (isMember) {
+    memberBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="memberAppliedH">' + S.memberAppliedH + '</b><p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>';
+  } else if (canJoin) {
+    memberBlock = '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
+      + '<b style="font-size:16px" data-i18n="joinLabel">' + S.joinLabel + '</b>'
+      + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0">' + fillS(S.joinBody, joinAmounts) + '</p>'
+      + '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="emailLabel">' + S.emailLabel + '</span><input id="eJoinEmail" type="email" autocomplete="email" value="' + escMail(r.customerEmail || (user ? user.email : '')) + '" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>'
+      + ((user) ? '' : '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="eJoinPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>')
+      + '<div id="cardEl" style="border:1px solid #ccc;border-radius:10px;padding:12px;background:#fff"></div>'
+      + '<button id="estJoinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:13px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%;margin-top:10px">' + fillS(S.joinBtn, joinAmounts) + '</button>'
+      + '<p id="joinMsg" style="color:#666;margin:6px 0 0"></p></div>'
+      + '<script src="https://js.stripe.com/v3/"></scr' + 'ipt>'
+      + '<script>var EST_ID=' + JSON.stringify(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ', stripeObj=null, cardEl=null, pmId="";'
+      + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();}'
+      + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
+      + 'function mountCard(){ if(!stripeObj) return; try{ if(cardEl) cardEl.destroy(); }catch(e){} cardEl=stripeObj.elements({locale: LANG==="es"?"es":"en"}).create("card",{style:{base:{fontSize:"16px"}}}); cardEl.mount("#cardEl"); }'
+      + 'fetch("/api/stripe/config").then(function(r){return r.json();}).then(function(cfg){ if(cfg.publishableKey && typeof Stripe!=="undefined"){ stripeObj=Stripe(cfg.publishableKey); mountCard(); } }).catch(function(){});'
+      + 'if($("eJoinEmail")){ $("eJoinEmail").addEventListener("blur",function(){ var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/estimate/"+EST_ID+"/member-apply",{email:em}).then(function(o){ if(o.ok && o.d.member) location.reload(); }).catch(function(){}); }); }'
+      + 'async function joinNow(){'
+      + ' var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) throw new Error(T("errEmail"));'
+      + ' if(!loggedIn){ var pw=$("eJoinPass").value; if(pw.length<8) throw new Error(T("errPass"));'
+      + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:' + JSON.stringify(r.customerName || 'Customer') + ',email:em,password:pw,phone:' + JSON.stringify(r.customerPhone || '') + ',serviceAddress:' + JSON.stringify(r.address || '') + ',role:"customer"})});'
+      + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
+      + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});'
+      + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
+      + ' var o=await jpost("/api/stripe/homecare-subscribe",{}); if(!o.ok) throw new Error(o.d.error||T("errMemberFail"));'
+      + ' var conf=await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:' + JSON.stringify(r.customerName || '') + ',email:em}}});'
+      + ' if(conf.error) throw new Error(conf.error.message); pmId=(conf.paymentIntent&&conf.paymentIntent.payment_method)||"";'
+      + ' var c2=await jpost("/api/stripe/homecare-confirm",{}); if(!c2.ok || !c2.d.active) throw new Error(T("errMemberPay"));'
+      + ' var ap=await jpost("/estimate/"+EST_ID+"/member-apply",{email:em}); if(!ap.ok || !ap.d.member) throw new Error(T("errMemberFail"));'
+      + ' location.reload(); }'
+      + '$("estJoinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("estJoinBtn"); if(!stripeObj || !cardEl){ m.textContent=T("errLoading"); return; } btn.disabled=true; btn.textContent=T("joining"); m.textContent=""; try{ await joinNow(); }catch(e){ m.textContent=e.message; btn.disabled=false; btn.textContent=' + JSON.stringify(fillS(S.joinBtn, joinAmounts)) + '; } };'
+      + '</scr' + 'ipt>';
+  }
+  // --- approve / decline / status blocks ---
+  const badge = expired ? '#c81e1e' : ({ Quoted: '#b26a00', Approved: '#1a7f37', Declined: '#6b6762' }[r.status] || '#6b6762');
+  const badgeLabel = expired ? S.badgeExpired : (r.status === 'Quoted' ? S.badgeAwaiting : String(r.status || '').toLowerCase());
   const inv = (db.invoices || []).find(x => x.requestId === r.id);
   let actionBlock = '';
-  if (r.status === 'Quoted') {
+  if (expired) {
+    actionBlock = '<div style="background:#fde2e2;border:1px solid #e5a3a3;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#c81e1e" data-i18n="expiredH">' + S.expiredH + '</h3><p style="color:#555" data-i18n="expiredBody">' + S.expiredBody + '</p></div>';
+  } else if (r.status === 'Quoted') {
     actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px">'
-      + '<h3 style="margin-top:0">Approve this estimate?</h3>'
-      + '<p style="color:#666;font-size:13px">Approving creates your invoice right away — then you pay online with a card. No account needed.</p>'
-      + '<input id="decReason" placeholder="Optional: reason or change request…" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-bottom:10px;box-sizing:border-box">'
-      + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button id="apBtn" style="background:#1a7f37;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1">Approve estimate</button>'
-      + '<button id="decBtn" style="background:#fff;color:#333;border:1px solid #ccc;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1">Decline / request changes</button></div>'
+      + '<h3 style="margin-top:0" data-i18n="approveH">' + S.approveH + '</h3>'
+      + '<p style="color:#666;font-size:13px" data-i18n="approveBody">' + S.approveBody + '</p>'
+      + '<input id="decReason" data-i18n-ph="decReasonPh" placeholder="' + S.decReasonPh + '" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-bottom:10px;box-sizing:border-box">'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button id="apBtn" style="background:#1a7f37;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1" data-i18n="approveBtn">' + S.approveBtn + '</button>'
+      + '<button id="decBtn" style="background:#fff;color:#333;border:1px solid #ccc;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1" data-i18n="declineBtn">' + S.declineBtn + '</button></div>'
       + '<p id="decMsg" style="color:#666"></p></div>'
-      + '<script>function decide(action){var m=document.getElementById("decMsg");m.textContent="Sending…";var reason=document.getElementById("decReason").value;fetch("/estimate/' + r.id + '/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:reason})}).then(function(res){return res.json().then(function(d){return{ok:res.ok,d:d};});}).then(function(o){if(!o.ok)throw new Error(o.d.error||"failed");if(action==="approve"&&o.d.payUrl){m.innerHTML="Approved! Opening your secure payment page…";setTimeout(function(){location.href=o.d.payUrl;},1200);}else{location.reload();}}).catch(function(e){m.textContent=e.message;});}document.getElementById("apBtn").onclick=function(){decide("approve");};document.getElementById("decBtn").onclick=function(){if(confirm("Decline this estimate?"))decide("decline");};</scr' + 'ipt>';
+      + '<script>function decide(action){var m=document.getElementById("decMsg");m.textContent=T("sending");var reason=document.getElementById("decReason").value;fetch("/estimate/' + r.id + '/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:reason})}).then(function(res){return res.json().then(function(d){return{ok:res.ok,d:d};});}).then(function(o){if(!o.ok)throw new Error(o.d.error||"failed");if(action==="approve"&&o.d.payUrl){m.innerHTML=T("approvedOpening");setTimeout(function(){location.href=o.d.payUrl;},1200);}else{location.reload();}}).catch(function(e){m.textContent=e.message;});}document.getElementById("apBtn").onclick=function(){decide("approve");};document.getElementById("decBtn").onclick=function(){if(confirm(T("declineConfirm")))decide("decline");};</scr' + 'ipt>';
   } else if (r.status === 'Approved') {
-    actionBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#1a7f37">Estimate approved</h3>'
+    actionBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#1a7f37" data-i18n="approvedH">' + S.approvedH + '</h3>'
       + (inv
-        ? '<p>Your invoice <b>' + escMail(inv.id) + '</b> (' + usd(inv.total) + ') is ready.' + (inv.status === 'paid' ? ' It is paid in full — thank you!' : '') + '</p><p><a href="/invoice/' + escMail(inv.id) + '" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block">' + (inv.status === 'paid' ? 'View invoice' : 'Pay ' + usd(inv.total) + ' now') + '</a></p>'
-        : '<p>Your invoice is being prepared — the Team will send your payment link shortly.</p>')
+        ? '<p><span data-i18n="invoiceReadyA">' + S.invoiceReadyA + '</span> <b>' + escMail(inv.id) + '</b> (' + usd(inv.total) + ') <span data-i18n="invoiceReadyB">' + S.invoiceReadyB + '</span>' + (inv.status === 'paid' ? ' <span data-i18n="invoicePaid">' + S.invoicePaid + '</span>' : '') + '</p><p><a href="/invoice/' + escMail(inv.id) + '" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block">' + (inv.status === 'paid' ? S.viewInvoice : fillS(S.payNow, { amt: usd(inv.total) })) + '</a></p>'
+        : '<p data-i18n="invoicePrep">' + S.invoicePrep + '</p>')
       + '</div>';
   } else if (r.status === 'Declined') {
-    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">Estimate declined</h3><p style="color:#666">No problem — if anything changes, just text or call (707) 862-3773 and we will rework it.</p></div>';
+    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0" data-i18n="declinedH">' + S.declinedH + '</h3><p style="color:#666" data-i18n="declinedBody">' + S.declinedBody + '</p></div>';
   }
-  return '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Estimate ' + escMail(r.id) + ' — General Handyman Solutions</title>'
-    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
-    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Estimate ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
-    + '<p style="color:#666"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • for <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
+  return head
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0"><span data-i18n="titleEst">' + S.titleEst + '</span> ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
+    + '<p style="color:#666"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • <span data-i18n="forWord">' + S.forWord + '</span> <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
     + (r.description ? '<p style="color:#555">' + escMail(r.description) + '</p>' : '')
-    + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">Work</th><th style="padding:8px">Qty</th><th style="text-align:right;padding:8px">Each</th><th style="text-align:right;padding:8px">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(e.subtotal) + '</b></p>' + adj
-    + '<p style="font-size:22px">Total: <b>' + usd(e.total) + '</b></p>'
-    + '<p><b>Due to book:</b> ' + usd(e.bookingDue) + ' • <b>Balance at completion:</b> ' + usd(e.balanceDue) + '</p>'
-    + (r.quoteNote ? '<p style="color:#555"><b>Team note:</b> ' + escMail(r.quoteNote) + '</p>' : '')
-    + '<p style="color:#666;font-size:13px">Labor only — you buy materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</p>'
-    + estimatePayPanelHtml(r)
+    + optionsBlock
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:10px"><tr><th style="text-align:left;padding:8px" data-i18n="thWork">' + S.thWork + '</th><th style="padding:8px" data-i18n="thQty">' + S.thQty + '</th><th style="text-align:right;padding:8px" data-i18n="thEach">' + S.thEach + '</th><th style="text-align:right;padding:8px" data-i18n="thLine">' + S.thLine + '</th></tr>' + rows + '</table>'
+    + sums
+    + (disp.validUntil && !expired ? '<p style="color:#666;font-size:13px"><span data-i18n="validUntil">' + S.validUntil + '</span> <b>' + escMail(fmtDate(disp.validUntil)) + '</b></p>' : '')
+    + (r.quoteNote ? '<p style="color:#555"><b data-i18n="teamNote">' + S.teamNote + '</b> ' + escMail(r.quoteNote) + '</p>' : '')
+    + '<p style="color:#666;font-size:13px">' + (estimateHasMaterials(disp) ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
+    + photosBlock
+    + estimatePayPanelHtml(r, initLang)
+    + (r.status === 'Quoted' && !expired ? memberBlock : '')
     + actionBlock
-    + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
-    + '</div></body>';
+    + foot;
 }
+
 // ---------- Public cart page (v44) ----------
 // One link from Gabriel: the customer sees the itemized cart, fills THEIR
 // data + address + when, decides on HomeCare (join right there — the same
@@ -2806,6 +3123,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
+    if (user.role === 'admin') sweepEstimateReminders();
     let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
     if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); const ei = (db.invoices || []).find(x => x.requestId === r.id); return Object.assign({}, r, { customerPhone: r.customerPhone || (c ? (c.phone || '') : ''), customerEmail: r.customerEmail || (c ? c.email : ''), customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none', estimateInvoice: ei ? { id: ei.id, status: ei.status } : null }); });
     return send(res, 200, { requests: list });
@@ -2819,10 +3137,16 @@ const server = http.createServer(async (req, res) => {
     if (user && user.role === 'admin') {
       if (b.estimate || typeof b.quote === 'number') {
         const est = applyMemberDiscount(normalizeEstimate(b.estimate || { total: b.quote, credit: 0, bookingDue: null }, r), r, db.users.find(u => u.id === r.customerId));
+        // v45: saving/sending the estimate (re)arms its validity window and
+        // the 48-hour reminder clock — the default validity is 7 days from
+        // this send unless Gabriel picked a date in the builder.
+        est.sentAt = new Date().toISOString();
+        if (!est.validUntil) est.validUntil = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+        est.remindedAt = null;
         r.estimate = est; r.quote = est.total; r.status = 'Quoted'; r.quoteNote = b.note || '';
         r.messages = r.messages || [];
         const totalText = '$' + est.total.toFixed(2);
-        let quoteText = 'Professional estimate sent: ' + totalText + ' total after the adjustments shown in your estimate (labor only — you buy materials/parts).';
+        let quoteText = 'Professional estimate sent: ' + totalText + ' total after the adjustments shown in your estimate (' + (estimateHasMaterials(est) ? 'materials included in this estimate' : 'labor only — you buy materials/parts') + ').';
         if (est.credit > 0) quoteText += ' Appointment credit applied: -$' + est.credit.toFixed(2) + '.';
         if (est.bookingDue > 0) quoteText += ' Due to book: $' + est.bookingDue.toFixed(2) + '; balance at completion: $' + est.balanceDue.toFixed(2) + '.';
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: quoteText + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
@@ -2839,6 +3163,7 @@ const server = http.createServer(async (req, res) => {
       if (b.status) r.status = b.status;
     } else if (user && user.role === 'customer' && r.customerId === user.id) {
       r.messages = r.messages || [];
+      if (b.action === 'approve' && estimateIsExpired(r.estimate)) return send(res, 400, { error: 'this estimate has expired — ask the Team for a fresh one' });
       if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' })); }
       if (b.action === 'approve') await tryHoldIncrementAfterApproval(r); // increment only — never a capture; failures land on r.holdSync
       if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' })); }
@@ -3330,7 +3655,7 @@ const server = http.createServer(async (req, res) => {
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepCaptainOverrides();
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepCaptainOverrides(); sweepEstimateReminders();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
@@ -3975,6 +4300,41 @@ const server = http.createServer(async (req, res) => {
     save();
     return send(res, 200, { ok: true, refunded: refundedCents / 100, keptFee: keptCents / 100, dispatched });
   }
+  // ---------- v45: direct estimate entry, preview, duplicate (admin) ----------
+  if (p === '/api/admin/estimates/new' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const email = cleanText(b.customerEmail, 160).toLowerCase();
+    if (!cleanText(b.customerName, 80) && !email) return send(res, 400, { error: 'add at least the customer name or email so the estimate can be sent' });
+    const cust = email ? db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email) : null;
+    const r = { id: id('GHS'), customerId: cust ? cust.id : '', customerName: cleanText(b.customerName, 80) || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: cleanText(b.description, 1000) || 'Estimate prepared by the Team.', city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate started by the Team — add the lines (menu, labor, materials), preview it as the customer, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    db.requests.unshift(r);
+    audit(user, 'estimate.new', r.id, (r.customerName || r.customerEmail || '') + ' · ' + (r.service || ''));
+    save();
+    return send(res, 201, { request: r });
+  }
+  if (p === '/api/admin/estimates/preview' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const base = (b.requestId && db.requests.find(x => x.id === b.requestId)) || {};
+    const tmpR = Object.assign({}, base, { id: base.id || 'PREVIEW', customerName: cleanText(b.customerName, 80) || base.customerName || '', customerEmail: cleanText(b.customerEmail, 160) || base.customerEmail || '', service: cleanText(b.service, 120) || base.service || '', city: cleanText(b.city, 80) || base.city || '', description: cleanText(b.description, 1000) || base.description || '', quoteNote: cleanText(b.note, 1000) || '', status: 'Quoted', estimate: normalizeEstimate(b.estimate || {}, base.estimateType ? base : null) });
+    if (!tmpR.estimate.validUntil) tmpR.estimate.validUntil = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    return send(res, 200, { html: estimatePageHtml(tmpR, null, b.lang === 'es' ? 'es' : 'en') });
+  }
+  const dupEstMatch = p.match(/^\/api\/requests\/([\w-]+)\/duplicate-estimate$/);
+  if (dupEstMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const srcR = db.requests.find(x => x.id === dupEstMatch[1]);
+    if (!srcR) return send(res, 404, { error: 'request not found' });
+    if (!srcR.estimate) return send(res, 400, { error: 'this request has no estimate to duplicate' });
+    const estCopy = JSON.parse(JSON.stringify(srcR.estimate));
+    estCopy.sentAt = null; estCopy.remindedAt = null; estCopy.validUntil = '';
+    const r = { id: id('GHS'), customerId: srcR.customerId || '', customerName: srcR.customerName || '', customerEmail: srcR.customerEmail || '', customerPhone: srcR.customerPhone || '', service: srcR.service || '', description: srcR.description || '', city: srcR.city || '', address: srcR.address || '', when: srcR.when || '', estimateType: srcR.estimateType || 'inperson', membership: srcR.membership || 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: srcR.quoteNote || '', estimate: estCopy, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate duplicated from ' + srcR.id + ' — review the lines and the valid-until date, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    db.requests.unshift(r);
+    audit(user, 'estimate.duplicate', r.id, 'cloned from ' + srcR.id);
+    save();
+    return send(res, 201, { request: r });
+  }
   // ---------- Admin carts (v44) ----------
   if (p === '/api/admin/carts' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -4139,7 +4499,7 @@ const server = http.createServer(async (req, res) => {
   if (estPageMatch && req.method === 'GET') {
     const r = db.requests.find(x => x.id === estPageMatch[1]);
     if (!r || !r.estimate) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Estimate not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
-    return send(res, 200, estimatePageHtml(r));
+    return send(res, 200, estimatePageHtml(r, user, url.searchParams.get('lang')));
   }
   const estActMatch = p.match(/^\/estimate\/([\w-]+)\/(approve|decline)$/);
   if (estActMatch && req.method === 'POST') {
@@ -4149,6 +4509,7 @@ const server = http.createServer(async (req, res) => {
     const r = db.requests.find(x => x.id === estActMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
     if (r.status !== 'Quoted') return send(res, 400, { error: 'this estimate is no longer awaiting approval (status: ' + r.status + ')' });
+    if (estimateIsExpired(r.estimate)) return send(res, 400, { error: 'this estimate has expired — ask the Team for a fresh one' });
     const b = await readBody(req);
     const action = estActMatch[2];
     r.messages = r.messages || [];
@@ -4175,6 +4536,64 @@ const server = http.createServer(async (req, res) => {
     save();
     fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' }));
     return send(res, 200, { ok: true });
+  }
+  // ---------- v45: estimate page actions (member-check / member-apply / option pick) ----------
+  // Same trust model as the cart page: the estimate id in the link is
+  // the credential. Membership is only ever granted from Stripe truth —
+  // cartMemberUserFor() checks the session user or an account whose
+  // email matches and whose HomeCare/Plus plan is ACTIVE.
+  const estMemberCheckMatch = p.match(/^\/estimate\/([\w-]+)\/member-check$/);
+  if (estMemberCheckMatch && req.method === 'POST') {
+    const r = db.requests.find(x => x.id === estMemberCheckMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
+    const b = await readBody(req);
+    return send(res, 200, { member: !!cartMemberUserFor(user, cleanText(b.email, 160) || r.customerEmail || '') });
+  }
+  const estMemberApplyMatch = p.match(/^\/estimate\/([\w-]+)\/member-apply$/);
+  if (estMemberApplyMatch && req.method === 'POST') {
+    const r = db.requests.find(x => x.id === estMemberApplyMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
+    const b = await readBody(req);
+    const memberUser = cartMemberUserFor(user, cleanText(b.email, 160) || r.customerEmail || '');
+    if (!memberUser) return send(res, 200, { member: false, applied: false });
+    if (r.status !== 'Quoted') return send(res, 200, { member: true, applied: false });
+    const est = r.estimate;
+    const variant = memberVariantOfEstimate(est);
+    let applied = false;
+    if (variant !== est) {
+      // The joining customer is linked to the estimate when we know who
+      // they are — keeps the admin list + discount guards true.
+      if (!r.customerId) r.customerId = memberUser.id;
+      est.discountPct = variant.discountPct;
+      est.discountAmount = variant.discountAmount;
+      est.memberDiscount = true;
+      settleEstimateTotals(est);
+      r.quote = est.total;
+      applied = true;
+      audit(memberUser, 'estimate.member_applied', r.id, 'member total ' + usd(est.total));
+      r.messages = r.messages || [];
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'HomeCare member pricing applied to this estimate — you save 20% on the labor. New total: ' + usd(est.total) + '.', at: new Date().toISOString() });
+    }
+    save();
+    return send(res, 200, { member: true, applied, total: r.estimate.total, bookingDue: r.estimate.bookingDue });
+  }
+  const estOptionMatch = p.match(/^\/estimate\/([\w-]+)\/option$/);
+  if (estOptionMatch && req.method === 'POST') {
+    const r = db.requests.find(x => x.id === estOptionMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
+    if (r.status !== 'Quoted') return send(res, 400, { error: 'this estimate is no longer awaiting approval (status: ' + r.status + ')' });
+    if (estimateIsExpired(r.estimate)) return send(res, 400, { error: 'this estimate has expired — ask the Team for a fresh one' });
+    if (!Array.isArray(r.estimate.options) || r.estimate.options.length < 2) return send(res, 400, { error: 'this estimate has a single option' });
+    const b = await readBody(req);
+    const idx = Math.round(Number(b.index));
+    if (!(idx >= 0 && idx < r.estimate.options.length)) return send(res, 400, { error: 'unknown option' });
+    const est = r.estimate;
+    est.selectedOption = idx;
+    est.items = est.options[idx].items;
+    settleEstimateTotals(est);
+    r.quote = est.total;
+    save();
+    return send(res, 200, { ok: true, selectedOption: idx, total: est.total, bookingDue: est.bookingDue, balanceDue: est.balanceDue });
   }
   // ---------- public scheduling request (added 2026-10-12) ----------
   const schedMatch = p.match(/^\/api\/invoices\/([\w-]+)\/schedule$/);

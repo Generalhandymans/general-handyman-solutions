@@ -56,11 +56,12 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .estimate th{background:#111;color:#fff;text-align:left;padding:7px}.estimate td{padding:7px;border-bottom:1px solid var(--line)}
 .estimate .num{text-align:right}.estimate-total{background:#111!important;color:#fff;font-weight:900}.estimate-total td{border-bottom:0}
 .est-row{display:grid;grid-template-columns:minmax(150px,2fr) 72px 105px 38px;gap:6px;align-items:end;margin:6px 0}
+.est-row.trow{grid-template-columns:minmax(130px,2fr) 96px 64px 96px 34px}.est-row select{margin:0}
 .est-row input{margin:0}.est-row button{padding:9px 10px}.est-x{background:#fff;color:var(--ink);border:1px solid var(--line)}
 .est-grid{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px}.est-grid label{text-transform:none;letter-spacing:0;font-size:13px}.est-grid input{margin-top:3px}
 .est-summary{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;font-size:14px;line-height:1.5}
 .est-actions{display:flex;gap:8px;flex-wrap:wrap}.est-actions button{flex:1;min-width:190px}
-@media(max-width:620px){.est-row{grid-template-columns:minmax(120px,1fr) 58px 86px 34px}.est-grid{grid-template-columns:1fr}.estimate th,.estimate td{padding:6px 4px}}
+@media(max-width:620px){.est-row.trow{grid-template-columns:minmax(96px,1fr) 78px 50px 72px 30px}.est-row{grid-template-columns:minmax(120px,1fr) 58px 86px 34px}.est-grid{grid-template-columns:1fr}.estimate th,.estimate td{padding:6px 4px}}
 .cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.cal-head b{font-size:18px;text-transform:uppercase;flex:1}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;text-align:center;padding:4px 0}
@@ -812,6 +813,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div id="calDay"></div>
     </div>
     <h3>Customer requests (send quotes)</h3>
+    <div class="card" style="margin-bottom:10px"><b>+ Nuevo estimado</b> <span class="mut">— for a customer with no request yet: create it here, then add lines from the menu / materials in its builder, preview it as the customer, and send.</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input id="neName" placeholder="Customer name" style="flex:1;min-width:140px"><input id="neEmail" placeholder="Email" style="flex:1;min-width:170px"><input id="nePhone" placeholder="Phone" style="flex:1;min-width:120px"><input id="neService" placeholder="Service / job" style="flex:2;min-width:180px"><input id="neCity" placeholder="City" style="flex:1;min-width:110px"><button type="button" class="black" onclick="newEstimate()">Create &amp; open builder</button></div><p class="mut" id="neMsg"></p></div>
     <div id="adminRequests"></div>
     <h3>Cart — build it, send ONE link</h3>
     <div class="card">
@@ -2074,12 +2076,12 @@ function moneyFmt(v){ const n=Number(v)||0; return '$'+n.toFixed(2); }
 function estimateHtml(r, isCustomer){
   const e=r && r.estimate;
   if(!e || !Array.isArray(e.items) || !e.items.length) return '';
-  const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
+  const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+(it.type==='material'?' <span class="pill" style="background:#6b6762">material</span>':'')+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
   let adj='';
   if(e.asapAmount) adj+='<tr><td colspan="3">ASAP / Emergency (+25%)</td><td class="num">'+moneyFmt(e.asapAmount)+'</td></tr>';
   if(e.discountAmount) adj+='<tr><td colspan="3">Discount ('+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
   if(e.credit) adj+='<tr><td colspan="3">Appointment credit (approved same day)</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
-  return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • app.generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">Labor only — customer buys materials/parts unless the Team says otherwise in writing. Estimate valid for 7 days.</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
+  return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • app.generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">'+((e.materialSubtotal||0)>0?'Materials included in this estimate.':'Labor only — customer buys materials/parts unless the Team says otherwise in writing.')+(e.validUntil?' Valid until '+escHtml(e.validUntil)+'.':' Estimate valid for 7 days.')+'</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
 }
 function estimateStatusBadgeHtml(r){
   if(!r.estimate) return '';
@@ -2098,31 +2100,112 @@ function copyEstimateLink(idv){
 }
 function estimateBuilderHtml(r){
   const e=r.estimate || null;
-  const items=(e && e.items && e.items.length) ? e.items : [{description:(r.service||'Labor')+' — labor only', qty:1, unitPrice:''}];
+  const items=(e && e.items && e.items.length) ? e.items : [{description:(r.service||'Labor')+' — labor only', qty:1, unitPrice:'', type:'labor'}];
   const credit=e && e.credit!=null ? e.credit : (r.estimateType==='inperson' ? (r.estimateDue||0) : 0);
   const booking=e && e.bookingDue!=null ? e.bookingDue : '';
-  return '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px"><h3 style="margin-top:0">Professional estimate builder</h3><p class="mut" style="margin-top:0">Customer email: <b>'+escHtml(r.customerEmail||'not on file')+'</b> • Customer total never goes to workers.</p><div id="estRows-'+r.id+'">'+items.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\')">+ Add line</button><div class="est-grid" style="margin-top:10px"><label><input type="checkbox" id="estAsap-'+r.id+'" '+(e&&e.asap?'checked':'')+' onchange="updateEstimateSummary(\''+r.id+'\')"> ASAP / Emergency (+25%)</label><label>Discount %<input type="number" min="0" max="90" step="0.5" id="estDiscount-'+r.id+'" value="'+(e?e.discountPct||0:0)+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Appointment credit $<input type="number" min="0" step="0.01" id="estCredit-'+r.id+'" value="'+credit+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Due to book $ <span class="mut">(editable)</span><input type="number" min="0" step="0.01" id="estBooking-'+r.id+'" value="'+booking+'" placeholder="Auto" oninput="updateEstimateSummary(\''+r.id+'\')"></label></div><label style="margin-top:8px">Note on estimate</label><input id="qn-'+r.id+'" placeholder="Scheduling, deposit, scope notes..." value="'+escHtml(r.quoteNote||'')+'"><div class="est-summary" id="estSummary-'+r.id+'">Add the lines to see the total.</div><div class="est-actions"><button type="button" onclick="sendEstimate(\''+r.id+'\',false)">Save estimate in app</button><button type="button" class="black" onclick="sendEstimate(\''+r.id+'\',true)">Send estimate by email</button></div><p class="mut">“Send estimate by email” saves it in the app and emails it from estimates@generalhandymans.app, with a copy to your normal Gmail. You confirm the total before anything is sent.</p></div>';
+  const opts=(e && Array.isArray(e.options) && e.options.length>=2) ? e.options : null;
+  const itemsB=opts ? opts[1].items : [{description:'', qty:1, unitPrice:'', type:'labor'}];
+  const validDefault=new Date(Date.now()+7*24*3600*1000).toISOString().slice(0,10);
+  return '<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px"><h3 style="margin-top:0">Professional estimate builder</h3><p class="mut" style="margin-top:0">Customer email: <b>'+escHtml(r.customerEmail||'not on file')+'</b> • Customer total never goes to workers.</p>'
+  + '<div style="margin:8px 0"><input id="estMenuSearch-'+r.id+'" placeholder="🔎 Add from your menu — search a service (goes in as a labor line)…" oninput="renderEstMenuPicker(\''+r.id+'\')"><div id="estMenuPicker-'+r.id+'"></div></div>'
+  + '<label style="display:block;margin:6px 0"><input type="checkbox" id="estOpt2-'+r.id+'" '+(opts?'checked':'')+' onchange="estOpt2Toggle(\''+r.id+'\')"> <b>Two options</b> <span class="mut">(e.g. Básico = labor only / Completo = with materials — the customer picks on the estimate page)</span></label>'
+  + '<div class="est-opt2" id="estOptNames-'+r.id+'" style="display:'+(opts?'block':'none')+'"><label>Option 1 label<input id="estOptLabelA-'+r.id+'" value="'+escHtml(opts?opts[0].label:'Básico')+'" placeholder="Básico"></label><label>Option 2 label<input id="estOptLabelB-'+r.id+'" value="'+escHtml(opts?opts[1].label:'Completo')+'" placeholder="Completo"></label></div>'
+  + '<div id="estRows-'+r.id+'">'+items.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\')">+ Add line</button>'
+  + '<div class="est-opt2" id="estOpt2Box-'+r.id+'" style="display:'+(opts?'block':'none')+';margin-top:10px;border-top:1px dashed var(--line);padding-top:8px"><b>Option 2 lines</b> <button type="button" class="ghost" onclick="estCopyAtoB(\''+r.id+'\')">Copy option 1 lines here</button><div id="estRowsB-'+r.id+'">'+itemsB.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\',\'B\')">+ Add line to option 2</button></div>'
+  + '<div class="est-grid" style="margin-top:10px"><label><input type="checkbox" id="estAsap-'+r.id+'" '+(e&&e.asap?'checked':'')+' onchange="updateEstimateSummary(\''+r.id+'\')"> ASAP / Emergency (+25% on labor)</label><label>Discount % <span class="mut">(on labor)</span><input type="number" min="0" max="90" step="0.5" id="estDiscount-'+r.id+'" value="'+(e?e.discountPct||0:0)+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Appointment credit $<input type="number" min="0" step="0.01" id="estCredit-'+r.id+'" value="'+credit+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Due to book $ <span class="mut">(editable)</span><input type="number" min="0" step="0.01" id="estBooking-'+r.id+'" value="'+booking+'" placeholder="Auto" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Valid until<input type="date" id="estValid-'+r.id+'" value="'+escHtml((e&&e.validUntil)||validDefault)+'"></label></div>'
+  + '<label style="margin-top:8px">Photos on the estimate <span class="mut">(the problem, or a similar finished job — the customer sees them on the page)</span></label><input type="file" id="estPhotoInput-'+r.id+'" accept="image/*" multiple onchange="estPhotosAdd(\''+r.id+'\',this)"><div id="estPhotoThumbs-'+r.id+'" style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0"></div>'
+  + '<label style="margin-top:8px">Note on estimate</label><input id="qn-'+r.id+'" placeholder="Scheduling, deposit, scope notes..." value="'+escHtml(r.quoteNote||'')+'"><div class="est-summary" id="estSummary-'+r.id+'">Add the lines to see the total.</div><div class="est-actions"><button type="button" onclick="sendEstimate(\''+r.id+'\',false)">Save estimate in app</button><button type="button" class="black" onclick="sendEstimate(\''+r.id+'\',true)">Send estimate by email</button><button type="button" class="ghost" onclick="previewEstimate(\''+r.id+'\')">Preview — as the customer sees it</button>'+(e?'<button type="button" class="ghost" onclick="duplicateEstimate(\''+r.id+'\')">Duplicate estimate</button>':'')+'</div><p class="mut">“Send estimate by email” saves it in the app and emails it from generalhandymans@gmail.com, with a copy to your normal Gmail. You confirm the total before anything is sent.</p></div>';
 }
 function estimateItemRowHtml(reqId,it){
-  it=it||{description:'',qty:1,unitPrice:''};
-  return '<div class="est-row" data-est-row="'+reqId+'"><input data-est-desc placeholder="Labor / service line" value="'+escHtml(it.description||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><input data-est-qty type="number" min="0" step="0.25" value="'+escHtml(it.qty||1)+'" oninput="updateEstimateSummary(\''+reqId+'\')"><input data-est-price type="number" min="0" step="0.01" placeholder="$" value="'+escHtml(it.unitPrice||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><button type="button" class="est-x" onclick="removeEstimateItem(this,\''+reqId+'\')" title="Remove line">×</button></div>';
+  it=it||{description:'',qty:1,unitPrice:'',type:'labor'};
+  const mat=it.type==='material';
+  return '<div class="est-row trow" data-est-row="'+reqId+'"><input data-est-desc placeholder="Labor / service line" value="'+escHtml(it.description||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><select data-est-type onchange="updateEstimateSummary(\''+reqId+'\')" title="Line type — labor or material"><option value="labor"'+(mat?'':' selected')+'>Labor</option><option value="material"'+(mat?' selected':'')+'>Material</option></select><input data-est-qty type="number" min="0" step="0.25" value="'+escHtml(it.qty||1)+'" oninput="updateEstimateSummary(\''+reqId+'\')"><input data-est-price type="number" min="0" step="0.01" placeholder="$" value="'+escHtml(it.unitPrice||'')+'" oninput="updateEstimateSummary(\''+reqId+'\')"><button type="button" class="est-x" onclick="removeEstimateItem(this,\''+reqId+'\')" title="Remove line">×</button></div>';
 }
-function addEstimateItem(idv){ const box=document.getElementById('estRows-'+idv); if(box) box.insertAdjacentHTML('beforeend', estimateItemRowHtml(idv)); updateEstimateSummary(idv); }
-function removeEstimateItem(btn,idv){ const row=btn.closest('.est-row'); if(row) row.remove(); if(!document.querySelectorAll('#estRows-'+idv+' .est-row').length) addEstimateItem(idv); updateEstimateSummary(idv); }
+function addEstimateItem(idv, which){ const box=document.getElementById(which==='B' ? 'estRowsB-'+idv : 'estRows-'+idv); if(box) box.insertAdjacentHTML('beforeend', estimateItemRowHtml(idv)); updateEstimateSummary(idv); }
+function removeEstimateItem(btn,idv){ const row=btn.closest('.est-row'); const box=row?row.parentElement:null; if(row) row.remove(); if(box && !box.querySelectorAll('.est-row').length) box.insertAdjacentHTML('beforeend', estimateItemRowHtml(idv)); updateEstimateSummary(idv); }
+function estOpt2Toggle(idv){ const on=document.getElementById('estOpt2-'+idv).checked; document.getElementById('estOpt2Box-'+idv).style.display=on?'block':'none'; document.getElementById('estOptNames-'+idv).style.display=on?'block':'none'; updateEstimateSummary(idv); }
+function estCopyAtoB(idv){ const a=document.getElementById('estRows-'+idv), b=document.getElementById('estRowsB-'+idv); if(!a||!b) return; b.innerHTML=a.innerHTML; updateEstimateSummary(idv); }
+function renderEstMenuPicker(idv){
+  const box=document.getElementById('estMenuPicker-'+idv); if(!box || typeof MENU_CATALOG==='undefined') return;
+  const q=((document.getElementById('estMenuSearch-'+idv)||{}).value||'').toLowerCase();
+  if(!q){ box.innerHTML=''; return; }
+  const ids=Object.keys(MENU_CATALOG).filter(function(id){ return MENU_CATALOG[id].name.toLowerCase().indexOf(q)>=0; });
+  box.innerHTML=ids.slice(0,12).map(function(id){ const s=MENU_CATALOG[id]; return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed #eee"><span><b>'+escHtml(s.name)+'</b> <span class="mut">'+escHtml(s.meta||'')+'</span></span><span style="white-space:nowrap">$'+s.price+' <button type="button" class="ghost" onclick="estMenuAdd(\''+idv+'\',\''+id+'\')">+ Add</button></span></div>'; }).join('') || '<span class="mut">No services match.</span>';
+}
+function estMenuAdd(idv, svcId){
+  const s=MENU_CATALOG[svcId]; if(!s) return;
+  const box=document.getElementById('estRows-'+idv); if(!box) return;
+  box.insertAdjacentHTML('beforeend', estimateItemRowHtml(idv, { description:s.name, qty:1, unitPrice:s.price, type:'labor' }));
+  document.getElementById('estMenuSearch-'+idv).value=''; document.getElementById('estMenuPicker-'+idv).innerHTML='';
+  updateEstimateSummary(idv);
+}
+// Photos on the estimate: drafts live per request id; seeded once from the
+// saved estimate when the admin panel renders (seedEstimateBuilder).
+function estPhotosOf(idv){ if(!window._estPhotos) window._estPhotos={}; if(!window._estPhotos[idv]) window._estPhotos[idv]=[]; return window._estPhotos[idv]; }
+function estPhotosSeed(idv, photos){ if(window._estPhotos && window._estPhotos[idv]) return; estPhotosOf(idv).push.apply(estPhotosOf(idv), (photos||[]).slice(0,6)); renderEstPhotoThumbs(idv); }
+async function estPhotosAdd(idv, input){ const files=[...input.files].slice(0,6); for(const f of files){ if(estPhotosOf(idv).length>=6) break; estPhotosOf(idv).push(await fileToDataUrl(f)); } input.value=''; renderEstPhotoThumbs(idv); }
+function estPhotoRemove(idv, i){ estPhotosOf(idv).splice(i,1); renderEstPhotoThumbs(idv); }
+function renderEstPhotoThumbs(idv){ const box=document.getElementById('estPhotoThumbs-'+idv); if(!box) return; box.innerHTML=estPhotosOf(idv).map(function(p,i){ return '<span style="position:relative;display:inline-block"><img src="'+p+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="est-x" style="position:absolute;top:-6px;right:-6px;padding:2px 7px" onclick="estPhotoRemove(\''+idv+'\','+i+')" title="Remove photo">×</button></span>'; }).join(''); }
+function readEstRows(sel){
+  return [...document.querySelectorAll(sel)].map(function(row){ const ty=row.querySelector('[data-est-type]'); return { description:row.querySelector('[data-est-desc]').value.trim(), type:(ty && ty.value==='material')?'material':'labor', qty:Number(row.querySelector('[data-est-qty]').value)||0, unitPrice:Number(row.querySelector('[data-est-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
+}
+function estBundleMath(items, asap, discountPct, credit){
+  const labor=items.filter(function(it){ return it.type!=='material'; }).reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
+  const material=items.filter(function(it){ return it.type==='material'; }).reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
+  const subtotal=labor+material;
+  const asapAmount=asap?labor*0.25:0;
+  const discountAmount=labor*Math.max(0,Math.min(90,discountPct))/100;
+  const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
+  return { labor:Math.round(labor*100)/100, material:Math.round(material*100)/100, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total };
+}
 function readEstimate(idv){
-  const items=[...document.querySelectorAll('#estRows-'+idv+' .est-row')].map(function(row){ return { description:row.querySelector('[data-est-desc]').value.trim(), qty:Number(row.querySelector('[data-est-qty]').value)||0, unitPrice:Number(row.querySelector('[data-est-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
+  const items=readEstRows('#estRows-'+idv+' .est-row');
+  const twoEl=document.getElementById('estOpt2-'+idv);
+  const two=!!(twoEl && twoEl.checked);
   const asap=document.getElementById('estAsap-'+idv).checked;
   const discountPct=Number(document.getElementById('estDiscount-'+idv).value)||0;
   const credit=Number(document.getElementById('estCredit-'+idv).value)||0;
   const bookingRaw=document.getElementById('estBooking-'+idv).value;
-  const subtotal=items.reduce((s,it)=>s+it.qty*it.unitPrice,0);
-  const asapAmount=asap?subtotal*0.25:0;
-  const discountAmount=subtotal*Math.max(0,Math.min(90,discountPct))/100;
-  const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
-  const bookingDue=bookingRaw===''? total : Math.min(Number(bookingRaw)||0,total); // v44: default = pay in full
-  return { items, asap, discountPct, credit, bookingDue, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total, balanceDue:Math.round((total-bookingDue)*100)/100 };
+  const m=estBundleMath(items, asap, discountPct, credit);
+  const bookingDue=bookingRaw===''? m.total : Math.min(Number(bookingRaw)||0, m.total); // v44: default = pay in full
+  const out={ items, asap, discountPct, credit, bookingDue, validUntil:(document.getElementById('estValid-'+idv)||{}).value||'', photos:estPhotosOf(idv).slice(0,6), subtotal:m.subtotal, laborSubtotal:m.labor, materialSubtotal:m.material, asapAmount:m.asapAmount, discountAmount:m.discountAmount, total:m.total, balanceDue:Math.round((m.total-bookingDue)*100)/100 };
+  if(two){
+    const itemsB=readEstRows('#estRowsB-'+idv+' .est-row');
+    const labelA=(document.getElementById('estOptLabelA-'+idv).value||'Option 1').trim()||'Option 1';
+    const labelB=(document.getElementById('estOptLabelB-'+idv).value||'Option 2').trim()||'Option 2';
+    out.options=[{ label:labelA, items }, { label:labelB, items:itemsB }];
+    out.optionTotals=[estBundleMath(items, asap, discountPct, 0), estBundleMath(itemsB, asap, discountPct, 0)];
+  }
+  return out;
 }
-function updateEstimateSummary(idv){ const el=document.getElementById('estSummary-'+idv); if(!el) return; const e=readEstimate(idv); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(e.subtotal)+(e.asapAmount?' • <b>ASAP:</b> '+moneyFmt(e.asapAmount):'')+(e.discountAmount?' • <b>Discount:</b> −'+moneyFmt(e.discountAmount):'')+(e.credit?' • <b>Credit:</b> −'+moneyFmt(e.credit):'')+'<br><b>Total for customer:</b> <span class="st">'+moneyFmt(e.total)+'</span> • Due to book: '+moneyFmt(e.bookingDue)+' • Balance: '+moneyFmt(e.balanceDue); }
+function updateEstimateSummary(idv){ const el=document.getElementById('estSummary-'+idv); if(!el) return; const e=readEstimate(idv); let h='<b>Subtotal:</b> '+moneyFmt(e.subtotal)+(e.materialSubtotal?' <span class="mut">(labor '+moneyFmt(e.laborSubtotal)+' + materials '+moneyFmt(e.materialSubtotal)+')</span>':'')+(e.asapAmount?' • <b>ASAP:</b> '+moneyFmt(e.asapAmount):'')+(e.discountAmount?' • <b>Discount (labor):</b> −'+moneyFmt(e.discountAmount):'')+(e.credit?' • <b>Credit:</b> −'+moneyFmt(e.credit):'')+'<br><b>Total for customer:</b> <span class="st">'+moneyFmt(e.total)+'</span> • Due to book: '+moneyFmt(e.bookingDue)+' • Balance: '+moneyFmt(e.balanceDue); if(e.options && e.optionTotals) h+='<br><span class="mut">Option 1: '+moneyFmt(e.optionTotals[0].total)+' • Option 2: '+moneyFmt(e.optionTotals[1].total)+' — the customer picks one on the estimate page.</span>'; el.innerHTML=h; }
+async function previewEstimate(idv){
+  const est=readEstimate(idv); const note=(document.getElementById('qn-'+idv)||{}).value||'';
+  const rc=(window._adminReqCache||{})[idv]||{};
+  try{ const d=await api('/api/admin/estimates/preview',{method:'POST', body:JSON.stringify({ requestId:idv, customerName:rc.customerName||'', customerEmail:rc.customerEmail||'', service:rc.service||'', city:rc.city||'', description:rc.description||'', note, estimate:est })});
+    const w=window.open('','_blank'); if(!w){ alert('Allow pop-ups to preview the estimate.'); return; } w.document.write(d.html); w.document.close();
+  }catch(e){ alert(e.message); }
+}
+async function duplicateEstimate(idv){
+  if(!confirm('Duplicate this estimate? A fresh draft for the same customer is created at the top of the list — review it, set the valid-until date, and send.')) return;
+  try{ const d=await api('/api/requests/'+idv+'/duplicate-estimate',{method:'POST', body:JSON.stringify({})});
+    alert('Duplicated as '+d.request.id+'.'); loadAdmin();
+  }catch(e){ alert(e.message); }
+}
+async function newEstimate(){
+  const g=function(x){ return document.getElementById(x).value.trim(); };
+  const msg=document.getElementById('neMsg');
+  const body={ customerName:g('neName'), customerEmail:g('neEmail'), customerPhone:g('nePhone'), service:g('neService'), city:g('neCity') };
+  if(!body.customerName && !body.customerEmail){ msg.textContent='Add at least the customer name or email.'; return; }
+  try{ const d=await api('/api/admin/estimates/new',{method:'POST', body:JSON.stringify(body)});
+    ['neName','neEmail','nePhone','neService','neCity'].forEach(function(x){ document.getElementById(x).value=''; });
+    await loadAdmin();
+    msg.textContent='Created '+d.request.id+' — its estimate builder is at the top of Customer requests below.';
+    const card=document.getElementById('reqcard-'+d.request.id); if(card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){ msg.textContent=e.message; }
+}
+function seedEstimateBuilder(r){ updateEstimateSummary(r.id); if(r.estimate) estPhotosSeed(r.id, r.estimate.photos||[]); }
+
 async function sendEstimate(idv, sendEmail){
   const est=readEstimate(idv); const note=document.getElementById('qn-'+idv).value;
   if(!est.items.length || est.total<=0){ alert('Add at least one priced line first.'); return; }
@@ -3396,8 +3479,8 @@ async function yardPhotoChange(idv, key, input){
 async function loadAdmin(){
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminPaymentHtml(r)+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
-  rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminPaymentHtml(r)+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
+  window._adminReqCache={}; rq.requests.forEach(function(r){ window._adminReqCache[r.id]=r; seedEstimateBuilder(r); });
   sndAdminRequests(rq.requests);
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
