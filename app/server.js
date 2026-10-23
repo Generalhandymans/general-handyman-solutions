@@ -1901,8 +1901,8 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
-  // Membership plan card images (added 2026-10-21) — exact filenames only.
-  if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png'].includes(p)) {
+  // Membership plan card images (added 2026-10-21) + app logo banner (v40) — exact filenames only.
+  if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png', '/logo-header.png'].includes(p)) {
     const file = path.join(__dirname, 'public', path.basename(p));
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
