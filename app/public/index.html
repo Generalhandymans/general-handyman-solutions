@@ -4514,7 +4514,7 @@ function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (me
 // (or fails to load) the card falls back to the category photo, so the
 // menu never shows a broken image.
 function svcImgHtml(id, groupKey, cls) {
-  return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="/menu-img/' + id + '.jpg" alt="" loading="lazy" onerror="this.onerror=null;this.src=CAT_IMGS[\'' + groupKey + '\']">';
+  return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="/menu-img/' + id + '.jpg?v=3" alt="" loading="lazy" onerror="this.onerror=null;this.src=CAT_IMGS[\'' + groupKey + '\']">';
 }
 function menuPriceHtml(s) {
   let h = '<span class="menu-price">$' + s.price + (s.from ? '–$300' : '') + '</span>';
