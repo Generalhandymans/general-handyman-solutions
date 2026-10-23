@@ -2609,6 +2609,135 @@ function jobWorkerAutomationPayload(j) {
   };
 }
 
+
+// ---------- v46 charge audit: server-side menu catalog + totals ----------
+// SERVER_MENU mirrors MENU_CATALOG in app/public/index.html EXACTLY (the
+// suite parses both and fails on any drift). Prices/members/add-ons are
+// NEVER taken from the client: POST /api/requests recomputes a menu
+// order's totals here, so what the customer is charged always equals the
+// catalog — a tampered or stale client can neither raise nor lower it.
+// Add-on tuple: [price, nodisc(1|0), name].
+const SERVER_MENU = {
+  "closet-doors":{p:175,m:140},
+  "door-slab-swap":{p:125,m:100,a:{"knob":[75,0,"Install a knob/lever on the new slab"],"deadbolt":[75,0,"Install a deadbolt on the new slab"],"haul-door":[50,1,"Haul away the old door"]}},
+  "door-knob-install":{p:75,m:60},
+  "deadbolt-install":{p:75,m:60},
+  "deadbolt-knob-combo":{p:125,m:100},
+  "smart-lock-install":{p:125,m:100},
+  "door-adjustment":{p:75,m:60},
+  "weatherstripping":{p:75,m:60},
+  "screen-door-install":{p:125,m:100},
+  "sliding-door-service":{p:125,m:100},
+  "window-screen-repair":{p:75,m:60,a:{"extra-screen":[25,0,"Additional screen rescreen — same visit"]}},
+  "pet-door-install":{p:125,m:100},
+  "furniture-assembly":{p:125,m:100},
+  "furniture-assembly-large":{p:175,m:140},
+  "closet-organizer":{p:225,m:180},
+  "floating-shelves":{p:125,m:100},
+  "cabinet-hardware-install":{p:125,m:100},
+  "baby-gate-install":{p:125,m:100},
+  "picture-mirror-hanging":{p:125,m:100},
+  "mirror-cabinet-install":{p:125,m:100},
+  "curtain-rod-install":{p:75,m:60},
+  "blinds-install":{p:75,m:60},
+  "blinds-install-deal":{p:55,m:44},
+  "baseboard-install":{p:225,m:180},
+  "baseboard-repair":{p:125,m:100},
+  "laminate-floor-repair":{p:225,m:180},
+  "carpet-repair":{p:175,m:140},
+  "transition-strip-install":{p:125,m:100},
+  "drywall-patch-small":{p:150,m:120,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
+  "drywall-patch-medium":{p:250,m:200,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
+  "drywall-holes-set":{p:125,m:100,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
+  "paint-room":{p:325,m:260},
+  "paint-room-large":{p:450,m:360},
+  "paint-room-large-ceiling":{p:600,m:480},
+  "accent-wall-painting":{p:225,m:180},
+  "interior-door-painting":{p:75,m:60},
+  "fence-picket-repair":{p:125,m:100},
+  "fence-post-replacement":{p:125,m:100},
+  "deck-board-replacement":{p:185,m:148},
+  "gate-repair":{p:125,m:100},
+  "tv-mounting":{p:125,m:100,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
+  "tv-mounting-large":{p:185,m:148,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
+  "soundbar-mounting":{p:125,m:100},
+  "ceiling-fan":{p:125,m:100},
+  "chandelier-swap":{p:125,m:100},
+  "light-fixture-swap":{p:125,m:100},
+  "exhaust-fan-swap":{p:185,m:148},
+  "dimmer-switch-swap":{p:125,m:100,a:{"extra-dimmer":[75,0,"Additional dimmer / switch — same visit"]}},
+  "smoke-co-detector-install":{p:125,m:100},
+  "ring-doorbell":{p:125,m:100},
+  "smart-thermostat-install":{p:125,m:100},
+  "security-camera-install":{p:125,m:100,a:{"extra-camera":[75,0,"Additional wireless camera — same visit"]}},
+  "garage-opener":{p:375,m:300},
+  "holiday-lights":{p:175,m:140},
+  "holiday-lights-two-story":{p:250,m:200},
+  "holiday-lights-takedown":{p:75,m:60},
+  "holiday-lights-takedown-two-story":{p:150,m:120},
+  "window-ac-install":{p:250,m:200},
+  "faucet-replacement":{p:125,m:100},
+  "toilet-replacement":{p:175,m:140,a:{"haul-toilet":[50,1,"Remove & haul away the old toilet"]}},
+  "toilet-repair":{p:125,m:100},
+  "garbage-disposal-swap":{p:125,m:100,a:{"haul-disposal":[50,1,"Haul away the old disposal"]}},
+  "showerhead-swap":{p:75,m:60},
+  "tub-shower-recaulk":{p:125,m:100},
+  "grab-bar-install":{p:125,m:100,a:{"extra-grab-bar":[75,0,"Additional grab bar — same visit"]}},
+  "p-trap-swap":{p:125,m:100},
+  "bidet-seat-install":{p:125,m:100},
+  "dryer-vent-cleaning":{p:125,m:100},
+  "washer-dryer-hookup":{p:125,m:100},
+  "drain-unclog":{p:185,m:148,a:{"extra-drain":[75,0,"Additional drain unclog — same visit"]}},
+  "dishwasher-swap":{p:200,m:160},
+  "vanity-swap":{p:250,m:200,a:{"haul-vanity":[50,1,"Haul away the old vanity"]}},
+  "bathroom-accessories-install":{p:125,m:100},
+  "hose-bibb-swap":{p:125,m:100},
+  "water-heater":{p:700,m:560},
+  "gutter-cleaning":{p:150,m:120},
+  "gutter-cleaning-two-story":{p:250,m:200},
+  "pressure-washing":{p:150,m:120,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
+  "pressure-washing-large":{p:225,m:180,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
+  "yard-cleanup":{p:150,m:120},
+  "sprinkler-irrigation":{p:125,m:100},
+  "green-waste":{p:225,m:180},
+  "junk-minimum":{p:225,m:180},
+  "junk-medium":{p:325,m:260},
+  "junk-large":{p:425,m:340},
+  "junk-full":{p:650,m:520},
+  "mailbox-install":{p:185,m:148},
+  "fuel-pump-replacement":{p:300,m:240},
+  "battery-replacement":{p:125,m:100},
+  "check-engine-diagnostics":{p:75,m:60},
+  "oil-change":{p:75,m:60,a:{"filter-swap":[50,0,"Air / cabin filter swap"]}},
+  "brake-pads":{p:100,m:80,a:{"rotors":[85,0,"Add rotors (per pair)"]}},
+  "alternator-replacement":{p:185,m:148},
+  "starter-replacement":{p:225,m:180},
+  "belt-hose-replacement":{p:125,m:100},
+  "spark-plug-replacement":{p:125,m:100},
+  "headlight-replacement":{p:75,m:60},
+  "heavy-furniture-move":{p:200,m:160}
+};
+function serverMenuTotals(serviceId, addonIds, isMember, asap) {
+  const svc = SERVER_MENU[serviceId];
+  if (!svc) return null;
+  const addons = svc.a || {};
+  let extrasSum = 0, discSum = 0, nodiscSum = 0;
+  const extras = [];
+  for (const aid of (addonIds || [])) {
+    const a = addons[aid];
+    if (!a) return null;
+    extrasSum += a[0];
+    if (a[1]) nodiscSum += a[0]; else discSum += a[0];
+    extras.push({ id: aid, name: a[2], price: a[0], nodisc: !!a[1] });
+  }
+  const list = svc.p + extrasSum;
+  const member = svc.m + Math.round(discSum * 0.8) + nodiscSum;
+  let due = isMember ? member : list;
+  let asapFee = 0;
+  if (asap) { asapFee = Math.round(due * 0.25); due += asapFee; }
+  return { list, member, due, asapFee, extras };
+}
+
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -2650,6 +2779,16 @@ const server = http.createServer(async (req, res) => {
     const file = path.join(__dirname, 'public', 'icons', path.basename(p));
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // Per-service menu photos (v46): /menu-img/<serviceId>.jpg — basename
+  // only (no traversal), 404 when a service has no photo yet; the client
+  // falls back to the category image on error, so a missing file never
+  // breaks the menu.
+  if (req.method === 'GET' && p.startsWith('/menu-img/') && p.endsWith('.jpg')) {
+    const file = path.join(__dirname, 'public', 'menu-img', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
   // Membership plan card images (added 2026-10-21) + app logo banner (v40) — exact filenames only.
@@ -3090,13 +3229,42 @@ const server = http.createServer(async (req, res) => {
     let menuOrder = null;
     if (b.estimateType === 'menu' && b.menuOrder && typeof b.menuOrder === 'object') {
       const mo = b.menuOrder;
-      const num = (v, max) => { const n = Number(v); return isFinite(n) && n >= 0 && n <= max ? Math.round(n * 100) / 100 : 0; };
+      // v46 CHARGE AUDIT FIX: the totals a menu order is charged on are
+      // RECOMPUTED from SERVER_MENU — the client-sent totals/extras prices
+      // are never trusted (before this fix, a tampered client could name
+      // its own "due" and /api/orders/pay would charge exactly that).
+      // Add-ons resolve by id; an older cached client that sends only
+      // {name, price} resolves by exact add-on name for that service.
+      // Unknown service or add-on -> 400, never a guessed price.
+      const serviceId = cleanText(mo.serviceId, 60);
+      const svcDef = SERVER_MENU[serviceId];
+      if (!svcDef) return send(res, 400, { error: 'unknown menu service' });
+      const addonIds = [];
+      for (const x of (Array.isArray(mo.extras) ? mo.extras.slice(0, 8) : [])) {
+        const wantId = cleanText(x && x.id, 40);
+        const wantName = cleanText(x && x.name, 80);
+        let aid = (wantId && svcDef.a && svcDef.a[wantId]) ? wantId : '';
+        if (!aid && wantName && svcDef.a) { for (const k of Object.keys(svcDef.a)) { if (svcDef.a[k][2] === wantName) { aid = k; break; } } }
+        if (!aid) return send(res, 400, { error: 'unknown add-on for this service' });
+        if (!addonIds.includes(aid)) addonIds.push(aid);
+      }
+      // Member pricing = HomeCare/Plus active on the server record (the
+      // client order page uses the same homeCareStatus flag). A join
+      // completed in this same checkout counts when Stripe actually
+      // created the subscription on the account (stripeSubscriptionId) —
+      // the bare client flag alone never grants the discount.
+      const isMem = hcActive || (!!mo.joinedMembership && !!user && !!user.stripeSubscriptionId);
+      const t = serverMenuTotals(serviceId, addonIds, isMem, !!mo.asap);
+      if (!t) return send(res, 400, { error: 'could not price this order' });
+      const clientDue = mo.totals && Number(mo.totals.due);
       menuOrder = {
-        serviceId: cleanText(mo.serviceId, 60),
-        extras: Array.isArray(mo.extras) ? mo.extras.slice(0, 8).map(x => ({ name: cleanText(x && x.name, 80), price: num(x && x.price, 10000) })).filter(x => x.name) : [],
+        serviceId,
+        extras: t.extras.map(a => ({ id: a.id, name: a.name, price: a.price })),
         asap: !!mo.asap,
         joinedMembership: !!mo.joinedMembership,
-        totals: { list: num(mo.totals && mo.totals.list, 100000), member: num(mo.totals && mo.totals.member, 100000), due: num(mo.totals && mo.totals.due, 100000) }
+        totals: { list: t.list, member: t.member, due: t.due, asapFee: t.asapFee },
+        totalsCorrected: (clientDue != null && isFinite(clientDue) && Math.round(clientDue * 100) !== Math.round(t.due * 100)) ? true : undefined,
+        clientDue: (clientDue != null && isFinite(clientDue)) ? Math.round(clientDue * 100) / 100 : undefined
       };
     }
     const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
@@ -3119,6 +3287,7 @@ const server = http.createServer(async (req, res) => {
         ? 'Your free Yard Care estimate was applied to request ' + r.id + '.'
         : 'Your free HomeCare estimate was applied to request ' + r.id + '.');
     }
+    if (menuOrder && menuOrder.totalsCorrected) audit(user, 'order.totals_corrected', r.id, 'client due ' + usd(menuOrder.clientDue || 0) + ' -> catalog due ' + usd(menuOrder.totals.due));
     db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); emitRequestNew(r); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
   }
   if (p === '/api/requests' && req.method === 'GET') {

@@ -224,6 +224,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .wz-cats button img{width:100%;height:92px;object-fit:cover;display:block;margin-bottom:8px}
 .wz-cats button.sel{border-color:var(--red)!important;box-shadow:0 0 0 2px var(--red)}
 .wz-mi{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--field-line);border-radius:12px;padding:9px 12px;margin:6px 0;background:#101010}
+.wz-mi-img{width:46px;height:46px;object-fit:cover;border-radius:9px;flex:none}
+.wz-mi-main{flex:1;min-width:0}
+.menu-lang{display:inline-flex;border:1px solid #3a3a3a;border-radius:999px;overflow:hidden}
+.menu-lang button{background:#161616;color:#cfc9c2;border:0;padding:6px 14px;font-weight:700;cursor:pointer;font-size:13px}
+.menu-lang button.on{background:#e42535;color:#fff}
 .wz-mi-price{white-space:nowrap;font-weight:700}
 .wz-mem{color:#2fbf71}
 .wz-guide{display:flex;gap:10px;align-items:center;border:1px dashed var(--field-line);border-radius:12px;padding:8px;margin:4px 0 8px}
@@ -754,8 +759,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       </div>
     </div>
     <div id="menuBox">
-      <h2>Menu — order &amp; pay right here · Menú</h2>
-      <p class="mut">Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 id="menuTitle" style="margin:0">Menu — order &amp; pay right here</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="menuLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="menuLangEs" onclick="setMenuLang('es')">ES</button></span></div>
+      <p class="mut" id="menuIntro">Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
       <div id="menuGroups"></div>
     </div>
     <div id="membershipSummary" class="custAccountOnly"></div>
@@ -2997,13 +3002,21 @@ function buildTrackMap(j, box){
 }
 function initTrackMaps(jobs){
   trackJobsCache = jobs || [];
-  for (const k in trackMaps) { try { trackMaps[k].map.remove(); } catch(e) {} delete trackMaps[k]; }
-  (jobs || []).forEach(function(j){
-    if (!j.liveLoc) return;
-    const box = document.getElementById('trkmap-' + j.id);
-    if (box) buildTrackMap(j, box);
-  });
-  liveSig = (jobs || []).filter(function(j){ return j.liveLoc; }).map(function(j){ return j.id; }).sort().join(',');
+  // v46 ADMIN PERF: rebuilding every Leaflet tracking map on each reload
+  // flickered the panel and burned phone CPU even when nothing moved.
+  // When the set of live-tracked jobs is unchanged and their maps are
+  // still in the DOM, keep them — refreshLiveTracking moves the markers.
+  const newSig = (jobs || []).filter(function(j){ return j.liveLoc; }).map(function(j){ return j.id; }).sort().join(',');
+  const keep = newSig && newSig === liveSig && newSig.split(',').every(function(jid){ return trackMaps[jid] && document.contains(trackMaps[jid].map.getContainer()); });
+  if (!keep) {
+    for (const k in trackMaps) { try { trackMaps[k].map.remove(); } catch(e) {} delete trackMaps[k]; }
+    (jobs || []).forEach(function(j){
+      if (!j.liveLoc) return;
+      const box = document.getElementById('trkmap-' + j.id);
+      if (box) buildTrackMap(j, box);
+    });
+  }
+  liveSig = newSig;
   updateLivePoll(jobs);
 }
 function updateLivePoll(jobs){
@@ -3476,7 +3489,15 @@ async function yardPhotoChange(idv, key, input){
     loadWorkerYardVisits();
   }catch(e){ alert(e.message||'Photo failed'); }
 }
+let _adminLoading = false, _adminReloadQueued = false;
 async function loadAdmin(){
+  // v46 ADMIN PERF: loadAdmin used to stack — every render()/action fired
+  // a full reload (3 API fetches + full re-render + every Leaflet map torn
+  // down and rebuilt), and overlapping runs interleaved. Now a run in
+  // flight coalesces further calls into ONE trailing re-run.
+  if (_adminLoading) { _adminReloadQueued = true; return; }
+  _adminLoading = true;
+  try {
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminPaymentHtml(r)+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
@@ -3499,10 +3520,11 @@ async function loadAdmin(){
   loadInvoices();
   loadAdminRatings();
   loadAdminCaptains();
-  loadAdminMap();
+  loadAdminMap(jb.jobs);
   loadAdminAudit();
   renderCartPicker();
   loadAdminCarts();
+  } finally { _adminLoading = false; if (_adminReloadQueued) { _adminReloadQueued = false; loadAdmin(); } }
 }
 // ---------- Admin cart builder (v44) ----------
 let cartDraft = [];
@@ -3576,36 +3598,77 @@ async function cancelCart(idv){
 // the hammer badge, or the hammer pin when he has no photo. This feed
 // is ADMIN-ONLY — customers never see it.
 let adminMasterMap = null;
-async function loadAdminMap(){
+let adminMapLoading = false;
+// v46 MAP FIX (Gabriel: "el mapa no me funciona en admin"): the old code
+// created the Leaflet map inline during loadAdmin's async chain with no
+// size correction and set the view only AFTER adding markers. If the
+// container had zero size at init (route transition / panel not yet laid
+// out on the phone) Leaflet locked onto a 0x0 viewport and painted a
+// silent grey box; and any throw while adding a marker (bad coords)
+// skipped setView entirely, which also renders as an empty grey map.
+// The fix: build the list FIRST (it is the primary content), create the
+// map only once the box is actually laid out, set the Solano County
+// default view BEFORE any marker, add markers one-by-one with numeric
+// validation, and always invalidateSize() once visible.
+function adminMapWhenVisible(el, cb) {
+  let tries = 0;
+  const tick = function () {
+    if (!document.contains(el)) return; // a reload replaced the box — the new load wins
+    if ((el.clientWidth > 0 && el.clientHeight > 0) || tries >= 50) { cb(); return; }
+    tries++; requestAnimationFrame(tick);
+  };
+  tick();
+}
+async function loadAdminMap(preloadedJobs){
   const box = document.getElementById('adminMapBox'); if (!box || !me || me.role !== 'admin') return;
-  let wk = [];
-  try { const d = await api('/api/admin/worker-locations'); wk = (d && d.workers) || []; } catch(e) {}
-  let jobs = [];
-  try { const jd = await api('/api/jobs'); jobs = (jd && jd.jobs) || []; } catch(e) {}
-  const today = new Date().toISOString().slice(0, 10);
-  const jobPins = jobs.filter(function(j){ return j.destLat != null && j.destLng != null && ['Done — photos sent', 'Cancelled', 'Canceled'].indexOf(j.status) === -1 && (!j.schedDate || j.schedDate === today); });
-  const listHtml = wk.length
-    ? wk.map(function(w){ return '<div style="padding:4px 0">' + avatarHtml(w.photo, w.name, 28) + ' <b>' + escHtml(w.name) + '</b> <span class="mut">📍 ' + escHtml(agoText(w.updatedAt)) + '</span></div>'; }).join('')
-    : '<p class="mut">Ningún técnico está compartiendo ubicación ahora / No technician is sharing location right now.</p>';
-  box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card">'
-    + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
-    + '<div style="margin-top:8px">' + listHtml + '</div>'
-    + (jobPins.length ? '<p class="mut">🏠 = destino de un trabajo activo de hoy / an active job destination today (' + jobPins.length + ')</p>' : '')
-    + '</div>';
-  if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
-  const mapEl = document.getElementById('adminMap');
-  if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>'; return; }
+  if (adminMapLoading) return;
+  adminMapLoading = true;
   try {
-    const map = L.map(mapEl);
-    adminMasterMap = map;
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
-    const pts = [];
-    wk.forEach(function(w){ const m = L.marker([w.lat, w.lng], { icon: w.photo ? photoIcon(w.photo) : hammerPinIcon() }).addTo(map); m.bindPopup('<b>' + escHtml(w.name) + '</b><br>📍 ' + escHtml(agoText(w.updatedAt))); pts.push([w.lat, w.lng]); });
-    jobPins.forEach(function(j){ const m = L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); m.bindPopup('<b>' + escHtml(j.service || 'Job') + '</b><br>' + escHtml(j.city || '') + ' · ' + escHtml(j.status || '')); pts.push([j.destLat, j.destLng]); });
-    if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30] });
-    else if (pts.length === 1) map.setView(pts[0], 12);
-    else map.setView([38.2499, -122.0369], 10);
-  } catch(e) {}
+    let wk = [];
+    try { const d = await api('/api/admin/worker-locations'); wk = (d && d.workers) || []; } catch(e) {}
+    let jobs = Array.isArray(preloadedJobs) ? preloadedJobs : null;
+    if (!jobs) { try { const jd = await api('/api/jobs'); jobs = (jd && jd.jobs) || []; } catch(e) { jobs = []; } }
+    const today = new Date().toISOString().slice(0, 10);
+    const jobPins = jobs.filter(function(j){ return j.destLat != null && j.destLng != null && isFinite(Number(j.destLat)) && isFinite(Number(j.destLng)) && ['Done — photos sent', 'Cancelled', 'Canceled'].indexOf(j.status) === -1 && (!j.schedDate || j.schedDate === today); });
+    const liveWorkers = wk.filter(function(w){ return isFinite(Number(w.lat)) && isFinite(Number(w.lng)); });
+    const listHtml = liveWorkers.length
+      ? liveWorkers.map(function(w){ return '<div style="padding:4px 0">' + avatarHtml(w.photo, w.name, 28) + ' <b>' + escHtml(w.name) + '</b> <span class="mut">📍 ' + escHtml(agoText(w.updatedAt)) + '</span></div>'; }).join('')
+      : '<p class="mut">Ningún técnico está compartiendo ubicación ahora / No technician is sharing location right now.</p>';
+    const emptyNote = (!liveWorkers.length && !jobPins.length)
+      ? '<p class="mut" style="margin:0 0 8px">El mapa muestra Solano County — en cuanto un técnico activo comparta su ubicación, su pin aparece aquí. / Showing Solano County — as soon as an active technician shares his location, his pin appears here.</p>' : '';
+    box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card">'
+      + '<div>' + listHtml + '</div>'
+      + (jobPins.length ? '<p class="mut">🏠 = destino de un trabajo activo de hoy / an active job destination today (' + jobPins.length + ')</p>' : '')
+      + emptyNote
+      + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df;margin-top:8px"></div>'
+      + '</div>';
+    if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
+    const mapEl = document.getElementById('adminMap');
+    if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>'; return; }
+    adminMapWhenVisible(mapEl, function () {
+      try {
+        const map = L.map(mapEl);
+        adminMasterMap = map;
+        // Default view FIRST — Solano County (Fairfield) — before any
+        // marker can throw or the bounds logic runs.
+        map.setView([38.25, -122.04], 10);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+        const pts = [];
+        liveWorkers.forEach(function(w){ try { const m = L.marker([Number(w.lat), Number(w.lng)], { icon: w.photo ? photoIcon(w.photo) : hammerPinIcon() }).addTo(map); m.bindPopup('<b>' + escHtml(w.name) + '</b><br>📍 ' + escHtml(agoText(w.updatedAt))); pts.push([Number(w.lat), Number(w.lng)]); } catch(e) {} });
+        jobPins.forEach(function(j){ try { const m = L.marker([Number(j.destLat), Number(j.destLng)], { icon: pinIcon('🏠') }).addTo(map); m.bindPopup('<b>' + escHtml(j.service || 'Job') + '</b><br>' + escHtml(j.city || '') + ' · ' + escHtml(j.status || '')); pts.push([Number(j.destLat), Number(j.destLng)]); } catch(e) {} });
+        if (pts.length > 1) map.fitBounds(pts, { padding: [30, 30] });
+        else if (pts.length === 1) map.setView(pts[0], 12);
+        // The permanent cure for the zero-size init: re-measure now that
+        // the panel is laid out, and once more after late layout shifts.
+        try { map.invalidateSize(); } catch(e) {}
+        setTimeout(function () { try { if (adminMasterMap === map) map.invalidateSize(); } catch(e) {} }, 400);
+      } catch(e) {
+        if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>';
+      }
+    });
+  } catch(e) {
+    box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card"><p class="mut">El mapa no cargó. / The map could not load.</p></div>';
+  } finally { adminMapLoading = false; }
 }
 // ---------- Admin captains (v40) ----------
 function capUsd(n){ return '$' + Number(n || 0).toFixed(2); }
@@ -4102,7 +4165,7 @@ async function submitOrder(){
       service: svc.name, description: desc, address: address, city: city,
       when: orderWhenSel() + (whenText ? ' · ' + whenText : ''),
       estimateType: 'menu', customerName: me.name, customerEmail: me.email, customerPhone: me.phone || '',
-      menuOrder: { serviceId: orderState.svcId, extras: t.extrasList.map(function(a){ return { name: a.name, price: a.price }; }), asap: t.asap, joinedMembership: joinedNow, totals: { list: t.list, member: t.member, due: t.due } }
+      menuOrder: { serviceId: orderState.svcId, extras: t.extrasList.map(function(a){ return { id: a.id, name: a.name, price: a.price }; }), asap: t.asap, joinedMembership: joinedNow, totals: { list: t.list, member: t.member, due: t.due } }
     }) });
     const req = rd.request;
     let payOk = false, payNote = '';
@@ -4203,13 +4266,14 @@ function wzPickCat(key) {
 function wzRenderMenuPanel() {
   const p = document.getElementById('wzMenuPanel'); if (!p) return;
   const grp = wzGroupOf(wzState.cat);
+  const L = menuLang(), ui = MENU_UI[L];
   if (!grp) {
-    p.innerHTML = wzState.cat === 'otro' ? '<p class="mut" style="margin-top:10px">No problem — describe it in the next step and the Team will price it. · Sin problema: descríbelo en el siguiente paso y el Team te da precio.</p>' : '';
+    p.innerHTML = wzState.cat === 'otro' ? '<p class="mut" style="margin-top:10px">' + ui.wzOther + '</p>' : '';
     return;
   }
-  let h = '<p class="mut" style="margin:12px 0 6px"><b>Fixed prices — ' + escHtml(grp.es) + ' · ' + escHtml(grp.en) + '</b> — order in one tap, or keep going for a custom estimate:</p>';
-  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="wz-mi"><span><b>' + escHtml(s.name) + '</b> <span class="mut">' + escHtml(s.meta) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">Members $' + s.member + '</span>' : '') + '</span><button type="button" onclick="location.hash=\'#order/' + id + '\'">Order</button></div>'; }).join('');
-  h += '<p class="mut" style="margin:8px 0 0">Not your job? Tap <b>Continuar · Continue</b> below for a custom estimate. · ¿No es tu trabajo? Sigue para un estimado personalizado.</p>';
+  let h = '<p class="mut" style="margin:12px 0 6px"><b>' + ui.wzHead + '</b></p>';
+  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button></div>'; }).join('');
+  h += '<p class="mut" style="margin:8px 0 0">' + ui.wzFoot + '</p>';
   p.innerHTML = h;
 }
 function wzApplyCatHints() {
@@ -4312,17 +4376,156 @@ function wzAddrPick(btn) {
   const inp = document.getElementById('rAddr'); if (inp) inp.value = btn.getAttribute('data-addr') || '';
   const box = document.getElementById('wzAddrSugg'); if (box) box.innerHTML = '';
 }
+// ---------- Menu EN|ES (v46) ----------
+// Gabriel's rule: ONE language at a time in the menu — never mixed. The
+// toggle lives in the menu header, persists in localStorage
+// ('ghsMenuLang', default 'en') and governs the in-app Menu and the
+// wizard's fixed-price service lists. MENU_ES carries a faithful
+// Spanish name + meta for every catalog service; prices never translate.
+const MENU_ES = {
+  'closet-doors': ['Puertas de clóset (par)', '~2.5 h · Por par'],
+  'door-slab-swap': ['Cambio de puerta (solo la hoja)', '~2 h · Instalación de chapa disponible'],
+  'door-knob-install': ['Instalación de chapa / manija', '~1 h · Por puerta'],
+  'deadbolt-install': ['Instalación de cerrojo — sencillo', '~45 min · Precio fijo'],
+  'deadbolt-knob-combo': ['Instalación de cerrojo + chapa', '~1 h · Precio fijo'],
+  'smart-lock-install': ['Instalación de cerradura inteligente', '~1.5 h · Precio fijo'],
+  'door-adjustment': ['Ajuste de puerta', '~1 h · Se atora / no cierra bien'],
+  'weatherstripping': ['Burletes para puerta', '~1 h · Por puerta'],
+  'screen-door-install': ['Instalación de puerta mosquitera', '~2 h · Precio fijo'],
+  'sliding-door-service': ['Servicio de puerta corrediza (ruedas / riel)', '~1.5 h · Precio fijo'],
+  'window-screen-repair': ['Reparación de mosquiteros de ventana', '~1 h · Hasta 2 mosquiteros'],
+  'pet-door-install': ['Instalación de puerta para mascota (en puerta)', '~2 h · Precio fijo'],
+  'furniture-assembly': ['Armado de muebles', '~1.5 h · Pieza estándar'],
+  'furniture-assembly-large': ['Armado de muebles — grande / complejo', '~2.5 h · Ropero, litera, piezas grandes'],
+  'closet-organizer': ['Instalación de organizador de clóset', '~3 h · Sistemas en kit'],
+  'floating-shelves': ['Repisas flotantes (juego de 2)', '~1 h · Por juego'],
+  'cabinet-hardware-install': ['Instalación de jaladeras de gabinete', '~1 h · Hasta 10 jaladeras'],
+  'baby-gate-install': ['Instalación de puerta de seguridad para bebé', '~1 h · Precio fijo'],
+  'picture-mirror-hanging': ['Colgar cuadros y espejos', '~1 h · Hasta 3 piezas'],
+  'mirror-cabinet-install': ['Instalación de espejo / botiquín', '~1 h · Precio fijo'],
+  'curtain-rod-install': ['Instalación de cortinero', '~45 min · Por ventana'],
+  'blinds-install': ['Instalación de persianas (1–3 ventanas)', '~30 min · Por ventana'],
+  'blinds-install-deal': ['Instalación de persianas — 4+ ventanas', '~30 min · Por ventana'],
+  'baseboard-install': ['Instalación de zoclo (1 cuarto)', '~3 h · Hasta ~40 pies lineales'],
+  'baseboard-repair': ['Reparación / cambio de sección de zoclo', '~1.5 h · Precio fijo'],
+  'laminate-floor-repair': ['Reparación de piso laminado / LVP', '~3 h · Algunas piezas'],
+  'carpet-repair': ['Reparación de alfombra', '~2.5 h · Precio fijo'],
+  'transition-strip-install': ['Instalación de perfil de transición / umbral', '~1 h · Precio fijo'],
+  'drywall-patch-small': ['Parche de tablaroca — chico', '~1.5 h · Hasta ~1 pie'],
+  'drywall-patch-medium': ['Parche de tablaroca — mediano', 'Con textura, listo para pintar'],
+  'drywall-holes-set': ['Juego de parches chicos (hasta 3 hoyos)', '~1 h · Hoyos de chapa / taquetes'],
+  'paint-room': ['Pintar un cuarto — estándar', '~4 h · Solo paredes, mano de obra'],
+  'paint-room-large': ['Pintar cuarto grande', '~6 h · Solo paredes, mano de obra'],
+  'paint-room-large-ceiling': ['Pintar cuarto grande + techo', '~8 h · Mano de obra'],
+  'accent-wall-painting': ['Pintura de pared de acento', '~2.5 h · Por pared'],
+  'interior-door-painting': ['Pintura de puerta interior', '~1 h · Por puerta'],
+  'fence-picket-repair': ['Reparación de tablas de cerca (hasta 5)', '~2 h · Precio fijo'],
+  'fence-post-replacement': ['Cambio de poste de cerca', '~1–1.5 h · Por poste — extra en una visita de reparación de cerca'],
+  'deck-board-replacement': ['Cambio de tablas de deck (hasta 5)', '~2 h · Precio fijo'],
+  'gate-repair': ['Reparación / ajuste de puerta de cerca', '~1.5 h · Precio fijo'],
+  'tv-mounting': ['Montaje de TV (hasta 65")', '~2 h · Montaje y nivelación'],
+  'tv-mounting-large': ['Montaje de TV (más de 65")', '~2.5 h · Montaje y nivelación'],
+  'soundbar-mounting': ['Montaje de barra de sonido', '~1 h · Precio fijo'],
+  'ceiling-fan': ['Instalación de ventilador de techo', '~1.5 h · Caja existente'],
+  'chandelier-swap': ['Cambio de candil / lámpara', '~1.5 h · Precio fijo'],
+  'light-fixture-swap': ['Cambio de lámpara — sencillo', '~1 h · De techo, porche, tocador'],
+  'exhaust-fan-swap': ['Cambio de extractor de baño', '~2 h · Precio fijo'],
+  'dimmer-switch-swap': ['Cambio de dimmer / apagador', '~45 min · Precio fijo'],
+  'smoke-co-detector-install': ['Instalación de detector de humo / CO', '~1 h · Hasta 3, de batería'],
+  'ring-doorbell': ['Instalación de timbre con cámara', '~1 h · Configuración incluida'],
+  'smart-thermostat-install': ['Instalación de termostato inteligente', '~1.5 h · Precio fijo'],
+  'security-camera-install': ['Instalación de cámara de seguridad (inalámbrica)', '~1 h · Por cámara'],
+  'garage-opener': ['Cambio de motor de puerta de garaje', '~3 h · Acceso estándar'],
+  'holiday-lights': ['Instalación de luces navideñas', 'Una planta · Reserva temprano'],
+  'holiday-lights-two-story': ['Instalación de luces navideñas — dos pisos', '~3.5 h · Reserva temprano'],
+  'holiday-lights-takedown': ['Retiro y guardado de luces navideñas', '~1 h · Una planta'],
+  'holiday-lights-takedown-two-story': ['Retiro de luces navideñas — dos pisos', '~3 h · Casas de dos pisos'],
+  'window-ac-install': ['Instalación de aire acondicionado de ventana', '~1.5 h · Precio fijo'],
+  'faucet-replacement': ['Cambio de mezcladora / llave', '~1.5 h · Cocina o baño'],
+  'toilet-replacement': ['Cambio de inodoro (WC)', '~2.5 h · Cambio completo'],
+  'toilet-repair': ['Reparación de inodoro (válvula / sapo)', '~1 h · Precio fijo'],
+  'garbage-disposal-swap': ['Cambio de triturador de alimentos', '~2 h · Precio fijo'],
+  'showerhead-swap': ['Cambio de regadera', '~45 min · Precio fijo'],
+  'tub-shower-recaulk': ['Resellado de tina / regadera', '~1.5 h · Precio fijo'],
+  'grab-bar-install': ['Instalación de barra de apoyo', '~1 h · Cada una'],
+  'p-trap-swap': ['Cambio de céspol / sifón', '~1.5 h · Precio fijo'],
+  'bidet-seat-install': ['Instalación de asiento bidé', '~1.5 h · Precio fijo'],
+  'dryer-vent-cleaning': ['Limpieza de ducto de secadora', '~1.5 h · Precio fijo'],
+  'washer-dryer-hookup': ['Conexión / instalación de lavadora y secadora', '~1.5 h · Conexiones existentes'],
+  'drain-unclog': ['Destape de drenaje — básico', 'Un drenaje · Limpieza con máquina'],
+  'dishwasher-swap': ['Cambio de lavavajillas', '~2 h · Mismas conexiones'],
+  'vanity-swap': ['Cambio de mueble de baño (vanity)', '~3 h · Mueble estándar'],
+  'bathroom-accessories-install': ['Instalación de accesorios de baño (juego)', '~1 h · Toalleros, portarrollos, ganchos — hasta 4 piezas'],
+  'hose-bibb-swap': ['Cambio de llave de manguera / exterior', '~1.5 h · Precio fijo'],
+  'water-heater': ['Instalación de calentador de agua', 'Retiro del viejo incluido'],
+  'gutter-cleaning': ['Limpieza de canales', '~2 h · Una planta'],
+  'gutter-cleaning-two-story': ['Limpieza de canales — dos pisos', 'Casa de dos pisos'],
+  'pressure-washing': ['Lavado a presión — área estándar', '~2 h · Cochera para 2 carros o patio'],
+  'pressure-washing-large': ['Lavado a presión — área grande', '~3 h · Cochera larga, patio o deck grande'],
+  'yard-cleanup': ['Limpieza de yarda', '~2 h · Rescate de una vez'],
+  'sprinkler-irrigation': ['Aspersores y riego por goteo — básico', '~1.5 h · Aspersores, temporizadores, fugas chicas'],
+  'green-waste': ['Recolección de desecho verde', 'Ramas, maleza y desecho de yarda — por carga'],
+  'junk-minimum': ['Retiro de basura — carga mínima', 'Una pieza grande o hasta ~5 piezas medianas'],
+  'junk-medium': ['Retiro de basura — carga mediana', 'Un cuarto de muebles o una esquina del garaje'],
+  'junk-large': ['Retiro de basura — carga grande', 'Unos 2 cuartos o medio garaje de un carro'],
+  'junk-full': ['Retiro de basura — carga completa (camión y remolque)', 'Garaje completo o limpieza de casa'],
+  'mailbox-install': ['Instalación de buzón', '~1.5 h · Precio fijo'],
+  'fuel-pump-replacement': ['Cambio de bomba de gasolina', '~4 h · Precio fijo'],
+  'battery-replacement': ['Cambio de batería de auto', '~1 h · Probada en el lugar'],
+  'check-engine-diagnostics': ['Diagnóstico de check-engine / escaneo', '~1 h · Precio fijo'],
+  'oil-change': ['Cambio de aceite y fluidos', '~1 h · En tu casa'],
+  'brake-pads': ['Balatas (frenos) — por par', '~1 h · Delanteras o traseras'],
+  'alternator-replacement': ['Cambio de alternador', '~2 h · Acceso estándar'],
+  'starter-replacement': ['Cambio de marcha (arranque)', 'Por marca y dificultad — precio final $225–$300'],
+  'belt-hose-replacement': ['Cambio de banda / manguera (básico)', '~1.5 h · Precio fijo'],
+  'spark-plug-replacement': ['Cambio de bujías (4 cilindros)', '~1.5 h · Precio fijo'],
+  'headlight-replacement': ['Cambio de foco / faro', '~45 min · Precio fijo'],
+  'heavy-furniture-move': ['Mover mueble pesado (2 técnicos)', '~1 h · Por trabajo']
+};
+const MENU_UI = {
+  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.' },
+  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados y pagados en la app — pagas completo al ordenar (si cancelas antes de que salga el técnico: reembolso completo). Miembros HomeCare / HomeCare Plus: tu precio de miembro está en cada tarjeta.', order: 'Ordenar', members: 'Miembros', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.' }
+};
+let _menuLang = null;
+function menuLang() {
+  if (_menuLang) return _menuLang;
+  try { _menuLang = localStorage.getItem('ghsMenuLang') === 'es' ? 'es' : 'en'; } catch (e) { _menuLang = 'en'; }
+  return _menuLang;
+}
+function setMenuLang(l) {
+  _menuLang = (l === 'es') ? 'es' : 'en';
+  try { localStorage.setItem('ghsMenuLang', _menuLang); } catch (e) {}
+  applyMenuLang();
+  renderMenu();
+  if (typeof wzRenderMenuPanel === 'function' && wzState && wzState.cat) wzRenderMenuPanel();
+}
+function applyMenuLang() {
+  const L = menuLang(), ui = MENU_UI[L];
+  const t = document.getElementById('menuTitle'); if (t) t.textContent = ui.title;
+  const intro = document.getElementById('menuIntro'); if (intro) intro.textContent = ui.intro;
+  const bE = document.getElementById('menuLangEn'); if (bE) bE.classList.toggle('on', L === 'en');
+  const bS = document.getElementById('menuLangEs'); if (bS) bS.classList.toggle('on', L === 'es');
+}
+function svcName(id) { const s = MENU_CATALOG[id]; if (!s) return id; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][0] : s.name; }
+function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][1] : s.meta; }
+// Per-service photo (v46): /menu-img/<id>.jpg — if the file is missing
+// (or fails to load) the card falls back to the category photo, so the
+// menu never shows a broken image.
+function svcImgHtml(id, groupKey, cls) {
+  return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="/menu-img/' + id + '.jpg" alt="" loading="lazy" onerror="this.onerror=null;this.src=CAT_IMGS[\'' + groupKey + '\']">';
+}
 function menuPriceHtml(s) {
   let h = '<span class="menu-price">$' + s.price + (s.from ? '–$300' : '') + '</span>';
-  if (s.member) h += '<span class="menu-member">Members $' + s.member + '</span>';
+  if (s.member) h += '<span class="menu-member">' + MENU_UI[menuLang()].members + ' $' + s.member + '</span>';
   return h;
 }
 function renderMenu() {
   const box = document.getElementById('menuGroups');
   if (!box || typeof MENU_CATALOG === 'undefined') return;
+  const L = menuLang(), ui = MENU_UI[L];
   box.innerHTML = MENU_GROUPS.map(function (g) {
-    const cards = g.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="menu-card"><img src="' + CAT_IMGS[g.key] + '" alt=""><div class="menu-card-body"><b>' + escHtml(s.name) + '</b><span class="mut">' + escHtml(s.meta) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="location.hash=\'#order/' + id + '\'">Order · Ordenar</button></div></div>'; }).join('');
-    return '<h3 class="menu-group-title">' + escHtml(g.es) + ' · ' + escHtml(g.en) + '</h3><div class="menu-grid">' + cards + '</div>';
+    const cards = g.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="menu-card">' + svcImgHtml(id, g.key, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button></div></div>'; }).join('');
+    return '<h3 class="menu-group-title">' + escHtml(L === 'es' ? g.es : g.en) + '</h3><div class="menu-grid">' + cards + '</div>';
   }).join('');
 }
 function goMenu() {
@@ -4344,6 +4547,7 @@ WZ_CATS.forEach(function (c) { const img = document.getElementById('wzImg-' + c.
   const rp = document.getElementById('rPhotos');
   if (rp) rp.addEventListener('change', function () { const n = document.getElementById('rPhotoNames'); if (n) n.textContent = rp.files && rp.files.length ? rp.files.length + ' photo(s) selected' : ''; });
   wzShow(1);
+  applyMenuLang();
   renderMenu();
 })();
 
@@ -4380,7 +4584,6 @@ try {
 } catch (e) {}
 if (window.Notification && Notification.permission === 'default') { Notification.requestPermission().catch(() => {}); }
 </script>
-
 <!-- GHS-INSTALL-V47 -->
 <button id="ghsInstallBtn" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:88px;z-index:9999;background:#e42535;color:#fff;border:none;border-radius:999px;padding:13px 22px;font-size:16px;font-weight:700;box-shadow:0 6px 22px rgba(0,0,0,.45);cursor:pointer">&#128242; Install app</button>
 <div id="ghsInstallHelp" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:10000;align-items:center;justify-content:center">
@@ -4414,5 +4617,6 @@ if (window.Notification && Notification.permission === 'default') { Notification
 }catch(e){}})();
 </script>
 <!-- /GHS-INSTALL-V47 -->
+</body>
 </body>
 </html>
