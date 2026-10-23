@@ -609,7 +609,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="clause"><h4>2. Labor only — you buy materials.</h4><p>Unless we agree otherwise in writing, every price is <b>labor only</b>. You buy all materials and parts for your job. If a technician picks up materials on your behalf, that is arranged and priced separately before purchase.</p></div>
       <div class="clause"><h4>3. Estimates.</h4><p>Photo estimates are free. An in-person estimate costs <b>$75 for non-members</b>: when you book the visit, we place an <b>authorization hold</b> (not a charge) for that amount, and the fee is <b>credited toward your repair</b> when you approve the work the same day. <b>Members:</b> your first in-person estimate is <b>FREE</b>; after that, member estimates are <b>$50</b>.</p></div>
       <div class="clause"><h4>4. How payment works.</h4><p>Your card is authorized first and <b>charged when the job is completed</b>, for the exact approved amount. If your approved quote is higher than the initial hold, we may request an additional authorization for the difference before work begins. You can follow your payment status live in the app at all times (hold → authorized → charged/released).</p></div>
-      <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$29/mo</b>, Yard Care <b>$75/mo</b> (1 visit) or <b>$150/mo</b> (2 visits), HomeCare Plus <b>$100/mo</b> (1 yard visit) or <b>$175/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b> (the discount does not apply to junk removal, hauling or green-waste loads, or flat $75 services) and priority scheduling. Members of <b>every</b> plan get one free first in-person estimate (then $50).</p></div>
+      <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$29/mo</b>, Yard Care <b>$75/mo</b> (1 visit) or <b>$150/mo</b> (2 visits), HomeCare Plus <b>$100/mo</b> (1 yard visit) or <b>$175/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b> — on every menu service, including junk removal, hauling / green-waste loads and flat $75 services — and priority scheduling. Members of <b>every</b> plan get one free first in-person estimate (then $50).</p></div>
       <div class="clause"><h4>6. Changing or cancelling a membership.</h4><p>You can change plans anytime from your account; Stripe prorates the difference (you may see a prorated charge or credit). You can cancel anytime from your account or by contacting the Team; <b>cancellation takes effect at the end of the current paid month</b> — your plan stays active until then and you will not be charged again. Membership payments are charged in advance and are not refunded.</p></div>
       <div class="clause"><h4>7. Yard visits.</h4><p>A standard visit includes mowing, edging, blowing, and light weeding of a standard residential yard. Your first scheduled visit includes the normal yard cut. Work beyond normal maintenance — extreme overgrowth, accumulated debris or junk, hauling — is quoted separately before we do it. <b>Unused visits do not roll over to the next month and are not refunded.</b></p></div>
       <div class="clause"><h4>8. Scheduling.</h4><p>You propose dates and times; <b>the Team confirms</b> every appointment — nothing is final until we confirm it. Please provide safe access to the work area (gates, pets, parking) in your home notes. If you need to move a visit, message the Team and we will confirm a new time — visits are prepaid with your membership and are not refunded.</p></div>
@@ -3652,34 +3652,110 @@ window.addEventListener('hashchange', function(){ render(); });
 // authorization hold are both confirmed with the same card. Gabriel
 // captures the final amount by hand when the job is done.
 const MENU_CATALOG = {
-  'tv-mounting': { name: 'TV Mounting (up to 65")', meta: '~2 h · Mount & level', price: 135, member: 108, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
-  'tv-mounting-large': { name: 'TV Mounting (over 65")', meta: '~2.5 h · Mount & level', price: 185, member: 148, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
-  'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 },
-  'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50, nodisc: true }] },
-  'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: null },
-  'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 },
-  'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 },
-  'furniture-assembly': { name: 'Furniture Assembly', meta: '~1.5 h · Standard piece', price: 135, member: 108 },
-  'door-slab-swap': { name: 'Door Slab Swap', meta: '~2 h · + lock install available', price: 135, member: 108, addons: [{ id: 'knob', name: 'Install a knob/lever on the new slab', price: 75 }, { id: 'deadbolt', name: 'Install a deadbolt on the new slab', price: 75 }] },
+  // ---------- Carpintería (master list section 1) ----------
+  'closet-doors': { name: 'Closet Doors (Pair)', meta: '~2.5 h · Per pair', price: 175, member: 140 },
+  'door-slab-swap': { name: 'Door Slab Swap', meta: '~2 h · + lock install available', price: 125, member: 100, addons: [{ id: 'knob', name: 'Install a knob/lever on the new slab', price: 75 }, { id: 'deadbolt', name: 'Install a deadbolt on the new slab', price: 75 }, { id: 'haul-door', name: 'Haul away the old door', price: 50, nodisc: true }] },
+  'door-knob-install': { name: 'Door Knob / Lever Install', meta: '~1 h · Per door', price: 75, member: 60 },
+  'deadbolt-install': { name: 'Deadbolt Install — Single', meta: '~45 min · Flat', price: 75, member: 60 },
+  'deadbolt-knob-combo': { name: 'Deadbolt + Knob Combo Install', meta: '~1 h · Flat', price: 125, member: 100 },
+  'smart-lock-install': { name: 'Smart Lock Install & Setup', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'door-adjustment': { name: 'Door Adjustment', meta: '~1 h · Sticks / hard to latch', price: 75, member: 60 },
+  'weatherstripping': { name: 'Weatherstripping', meta: '~1 h · Per door', price: 75, member: 60 },
+  'screen-door-install': { name: 'Screen Door Install', meta: '~2 h · Flat', price: 125, member: 100 },
+  'sliding-door-service': { name: 'Sliding Door Roller / Track Service', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'window-screen-repair': { name: 'Window Screen Rescreen / Repair', meta: '~1 h · Up to 2 screens', price: 75, member: 60, addons: [{ id: 'extra-screen', name: 'Additional screen rescreen — same visit', price: 25 }] },
+  'pet-door-install': { name: 'Pet Door Install (In Door)', meta: '~2 h · Flat', price: 125, member: 100 },
+  'furniture-assembly': { name: 'Furniture Assembly', meta: '~1.5 h · Standard piece', price: 125, member: 100 },
+  'furniture-assembly-large': { name: 'Furniture Assembly — Large / Complex', meta: '~2.5 h · Wardrobe, bunk bed, big pieces', price: 175, member: 140 },
   'closet-organizer': { name: 'Closet Organizer Install', meta: '~3 h · Kit systems', price: 225, member: 180 },
-  'drywall-patch-medium': { name: 'Drywall Patch — Medium', meta: 'Textured, ready to paint', price: 250, member: 200 },
-  'ceiling-fan': { name: 'Ceiling Fan Install', meta: '~1.5 h · Existing box', price: 135, member: 108 },
-  'ring-doorbell': { name: 'Ring Doorbell Install', meta: '~1 h · Setup included', price: 135, member: 108 },
-  'holiday-lights': { name: 'Holiday Lights Install', meta: 'Single story · Book early', price: 175, member: 140 },
+  'floating-shelves': { name: 'Floating Shelves (Set of 2)', meta: '~1 h · Per set', price: 125, member: 100 },
+  'cabinet-hardware-install': { name: 'Cabinet Hardware Install', meta: '~1 h · Up to 10 pulls', price: 125, member: 100 },
+  'baby-gate-install': { name: 'Baby Gate Install', meta: '~1 h · Flat', price: 125, member: 100 },
+  'picture-mirror-hanging': { name: 'Picture & Mirror Hanging', meta: '~1 h · Up to 3 pieces', price: 125, member: 100 },
+  'mirror-cabinet-install': { name: 'Mirror / Medicine Cabinet Install', meta: '~1 h · Flat', price: 125, member: 100 },
+  'curtain-rod-install': { name: 'Curtain Rod Install', meta: '~45 min · Per window', price: 75, member: 60 },
+  'blinds-install': { name: 'Blinds Install (1-3 Windows)', meta: '~30 min · Per window', price: 75, member: 60 },
+  'blinds-install-deal': { name: 'Blinds Install — 4+ Windows', meta: '~30 min · Per window', price: 55, member: 44 },
+  'baseboard-install': { name: 'Baseboard Install (1 Room)', meta: '~3 h · Up to ~40 linear ft', price: 225, member: 180 },
+  'baseboard-repair': { name: 'Baseboard Repair / Section Replace', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'laminate-floor-repair': { name: 'Laminate / LVP Plank Repair', meta: '~3 h · A few planks', price: 225, member: 180 },
+  'carpet-repair': { name: 'Carpet Repair', meta: '~2.5 h · Flat', price: 175, member: 140 },
+  'transition-strip-install': { name: 'Transition Strip / Threshold Install', meta: '~1 h · Flat', price: 125, member: 100 },
+  'drywall-patch-small': { name: 'Drywall Patch — Small', meta: '~1.5 h · Up to ~1 ft', price: 150, member: 120, addons: [{ id: 'paint-touchup', name: 'Primer / paint touch-up return visit', price: 75 }] },
+  'drywall-patch-medium': { name: 'Drywall Patch — Medium', meta: 'Textured, ready to paint', price: 250, member: 200, addons: [{ id: 'paint-touchup', name: 'Primer / paint touch-up return visit', price: 75 }] },
+  'drywall-holes-set': { name: 'Small-Holes Patch Set (Up to 3)', meta: '~1 h · Doorknob / anchor holes', price: 125, member: 100, addons: [{ id: 'paint-touchup', name: 'Primer / paint touch-up return visit', price: 75 }] },
+  'paint-room': { name: 'Paint One Room — Standard', meta: '~4 h · Walls only, labor', price: 325, member: 260 },
+  'paint-room-large': { name: 'Paint Large Room', meta: '~6 h · Walls only, labor', price: 450, member: 360 },
+  'paint-room-large-ceiling': { name: 'Paint Large Room + Ceiling', meta: '~8 h · Labor', price: 600, member: 480 },
+  'accent-wall-painting': { name: 'Accent Wall Painting', meta: '~2.5 h · Per wall', price: 225, member: 180 },
+  'interior-door-painting': { name: 'Interior Door Painting', meta: '~1 h · Per door', price: 75, member: 60 },
+  'fence-picket-repair': { name: 'Fence Picket Repair (Up to 5)', meta: '~2 h · Flat', price: 125, member: 100 },
+  'fence-post-replacement': { name: 'Fence Post Replacement', meta: '~1-1.5 h · Per post — add-on to a fence repair visit', price: 125, member: 100 },
+  'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 185, member: 148 },
+  'gate-repair': { name: 'Gate Repair / Adjustment', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  // ---------- Electricidad (master list section 2) ----------
+  'tv-mounting': { name: 'TV Mounting (up to 65")', meta: '~2 h · Mount & level', price: 125, member: 100, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
+  'tv-mounting-large': { name: 'TV Mounting (over 65")', meta: '~2.5 h · Mount & level', price: 185, member: 148, addons: [{ id: 'raceway', name: 'Hide the cables (surface raceway)', price: 50 }, { id: 'soundbar', name: 'Mount my soundbar too', price: 75 }] },
+  'soundbar-mounting': { name: 'Soundbar Mounting', meta: '~1 h · Flat', price: 125, member: 100 },
+  'ceiling-fan': { name: 'Ceiling Fan Install', meta: '~1.5 h · Existing box', price: 125, member: 100 },
+  'chandelier-swap': { name: 'Chandelier / Light Fixture Swap', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'light-fixture-swap': { name: 'Light Fixture Swap — Simple', meta: '~1 h · Flush-mount, porch, vanity', price: 125, member: 100 },
+  'exhaust-fan-swap': { name: 'Bathroom Exhaust Fan Swap', meta: '~2 h · Flat', price: 185, member: 148 },
+  'dimmer-switch-swap': { name: 'Dimmer / Switch Swap', meta: '~45 min · Flat', price: 125, member: 100, addons: [{ id: 'extra-dimmer', name: 'Additional dimmer / switch — same visit', price: 75 }] },
+  'smoke-co-detector-install': { name: 'Smoke / CO Detector Install', meta: '~1 h · Up to 3, battery', price: 125, member: 100 },
+  'ring-doorbell': { name: 'Ring Doorbell Install', meta: '~1 h · Setup included', price: 125, member: 100 },
+  'smart-thermostat-install': { name: 'Smart Thermostat Install', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'security-camera-install': { name: 'Security Camera Install (Wireless)', meta: '~1 h · Per camera', price: 125, member: 100, addons: [{ id: 'extra-camera', name: 'Additional wireless camera — same visit', price: 75 }] },
   'garage-opener': { name: 'Garage Door Opener Swap', meta: '~3 h · Standard access', price: 375, member: 300 },
-  'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 185, member: 148 },
-  'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
+  'holiday-lights': { name: 'Holiday Lights Install', meta: 'Single story · Book early', price: 175, member: 140 },
+  'holiday-lights-two-story': { name: 'Holiday Lights Install — Two-Story', meta: '~3.5 h · Book early', price: 250, member: 200 },
+  'holiday-lights-takedown': { name: 'Holiday Light Take-Down & Storage', meta: '~1 h · Single story', price: 75, member: 60 },
+  'holiday-lights-takedown-two-story': { name: 'Holiday Light Take-Down — Two-Story', meta: '~3 h · Two-story homes', price: 150, member: 120 },
+  'window-ac-install': { name: 'Window AC Unit Install', meta: '~1.5 h · Flat', price: 250, member: 200 },
+  // ---------- Plomería (master list section 3) ----------
+  'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 125, member: 100 },
+  'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50, nodisc: true }] },
+  'toilet-repair': { name: 'Toilet Repair (Fill Valve / Flapper)', meta: '~1 h · Flat', price: 125, member: 100 },
+  'garbage-disposal-swap': { name: 'Garbage Disposal Swap', meta: '~2 h · Flat', price: 125, member: 100, addons: [{ id: 'haul-disposal', name: 'Haul away the old disposal', price: 50, nodisc: true }] },
+  'showerhead-swap': { name: 'Showerhead Swap', meta: '~45 min · Flat', price: 75, member: 60 },
+  'tub-shower-recaulk': { name: 'Tub / Shower Re-Caulk', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'grab-bar-install': { name: 'Grab Bar Install', meta: '~1 h · Each', price: 125, member: 100, addons: [{ id: 'extra-grab-bar', name: 'Additional grab bar — same visit', price: 75 }] },
+  'p-trap-swap': { name: 'P-Trap / Drain Assembly Swap', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'bidet-seat-install': { name: 'Bidet Seat Install', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'dryer-vent-cleaning': { name: 'Dryer Vent Cleaning', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'washer-dryer-hookup': { name: 'Washer & Dryer Hookup / Install', meta: '~1.5 h · Existing connections', price: 125, member: 100 },
+  'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 185, member: 148, addons: [{ id: 'extra-drain', name: 'Additional drain unclog — same visit', price: 75 }] },
   'dishwasher-swap': { name: 'Dishwasher Swap', meta: '~2 h · Same hookups', price: 200, member: 160 },
   'vanity-swap': { name: 'Vanity Swap', meta: '~3 h · Standard vanity', price: 250, member: 200, addons: [{ id: 'haul-vanity', name: 'Haul away the old vanity', price: 50, nodisc: true }] },
+  'bathroom-accessories-install': { name: 'Bathroom Accessories Set Install', meta: '~1 h · Towel bars, paper holder, hooks — up to 4 pieces', price: 125, member: 100 },
+  'hose-bibb-swap': { name: 'Hose Bibb / Outdoor Faucet Swap', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 },
+  // ---------- Jardinería (master list section 4) ----------
+  'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 },
+  'gutter-cleaning-two-story': { name: 'Gutter Cleaning — Two-Story', meta: 'Two-story house', price: 250, member: 200 },
+  'pressure-washing': { name: 'Pressure Washing — Standard Area', meta: '~2 h · 2-car driveway or patio', price: 150, member: 120, addons: [{ id: 'trash-bin-cleaning', name: 'Trash bin cleaning (2 bins)', price: 50 }] },
+  'pressure-washing-large': { name: 'Pressure Washing — Large Area', meta: '~3 h · Long driveway, large patio or deck', price: 225, member: 180, addons: [{ id: 'trash-bin-cleaning', name: 'Trash bin cleaning (2 bins)', price: 50 }] },
+  'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 },
+  'sprinkler-irrigation': { name: 'Sprinkler & Drip Irrigation Basics', meta: '~1.5 h · Heads, timers, small leaks', price: 125, member: 100 },
+  'green-waste': { name: 'Green Waste Hauling', meta: 'Branches, brush & yard debris — per load', price: 225, member: 180 },
+  'junk-minimum': { name: 'Junk Removal — Minimum load', meta: 'One big piece or up to ~5 medium items', price: 225, member: 180 },
+  'junk-medium': { name: 'Junk Removal — Medium load', meta: 'One room of furniture or a garage corner', price: 325, member: 260 },
+  'junk-large': { name: 'Junk Removal — Large load', meta: 'About 2 rooms or half a one-car garage', price: 425, member: 340 },
+  'junk-full': { name: 'Junk Removal — Full load (truck & trailer)', meta: 'Full garage or house cleanout', price: 650, member: 520 },
+  'mailbox-install': { name: 'Mailbox Install', meta: '~1.5 h · Flat', price: 185, member: 148 },
+  // ---------- Mecánica (master list section 5) ----------
+  'fuel-pump-replacement': { name: 'Fuel Pump Replacement', meta: '~4 h · Flat', price: 300, member: 240 },
+  'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 125, member: 100 },
+  'check-engine-diagnostics': { name: 'Check-Engine Diagnostics / Scan', meta: '~1 h · Flat', price: 75, member: 60 },
+  'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: 60, addons: [{ id: 'filter-swap', name: 'Air / cabin filter swap', price: 50 }] },
   'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 100, member: 80, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
-  'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 135, member: 108 },
   'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 185, member: 148 },
   'starter-replacement': { name: 'Starter Replacement', meta: 'By make & difficulty — final price $225–$300', price: 225, member: 180, from: true },
-  'junk-minimum': { name: 'Junk Removal — Minimum load', meta: 'One big piece or up to ~5 medium items', price: 225, member: null },
-  'junk-medium': { name: 'Junk Removal — Medium load', meta: 'One room of furniture or a garage corner', price: 325, member: null },
-  'junk-large': { name: 'Junk Removal — Large load', meta: 'About 2 rooms or half a one-car garage', price: 425, member: null },
-  'junk-full': { name: 'Junk Removal — Full load (truck & trailer)', meta: 'Full garage or house cleanout', price: 650, member: null },
-  'green-waste': { name: 'Green Waste Hauling', meta: 'Branches, brush & yard debris — per load', price: 225, member: null }
+  'belt-hose-replacement': { name: 'Belt / Hose Replacement (Basics)', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'spark-plug-replacement': { name: 'Spark Plug Replacement (4-Cylinder)', meta: '~1.5 h · Flat', price: 125, member: 100 },
+  'headlight-replacement': { name: 'Headlight / Bulb Replacement', meta: '~45 min · Flat', price: 75, member: 60 },
+  // ---------- Ayuda general (master list, secondary section) ----------
+  'heavy-furniture-move': { name: 'Heavy Furniture Move (2 Technicians)', meta: '~1 h · Per job', price: 200, member: 160 }
 };
 let orderState = null, orderCardEl = null, orderStripeTried = false;
 function isOrderRoute(){ return (location.hash || '').indexOf('#order') === 0; }
@@ -3749,15 +3825,14 @@ function orderTotalsCalc(){
   const extrasList = (svc.addons || []).filter(function(a){ return orderState.extras.has(a.id); });
   const extrasSum = extrasList.reduce(function(s, a){ return s + a.price; }, 0);
   const list = svc.price + extrasSum;
-  let member = list;
-  if (svc.member != null) {
-    // Member price: base at the member price + extras at 20% off — EXCEPT
-    // hauling add-ons (nodisc), which are never discounted (Gabriel's rule:
-    // no member discount on junk / hauling / $75 services).
-    const discSum = extrasList.filter(function(a){ return !a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
-    const nodiscSum = extrasList.filter(function(a){ return a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
-    member = svc.member + Math.round(discSum * 0.8) + nodiscSum;
-  }
+  // Member price: EVERY menu service carries the 20% member price
+  // (Gabriel, 2026-10-23 — universal: $75 flats, junk and green waste
+  // included). Extras get 20% off too — EXCEPT the hauling add-ons
+  // (nodisc: haul-toilet / haul-vanity / haul-door / haul-disposal),
+  // which are extras, not services, and stay full price.
+  const discSum = extrasList.filter(function(a){ return !a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
+  const nodiscSum = extrasList.filter(function(a){ return a.nodisc; }).reduce(function(s, a){ return s + a.price; }, 0);
+  const member = svc.member + Math.round(discSum * 0.8) + nodiscSum;
   const isMember = orderState.memberActive || orderState.join;
   let due = isMember ? member : list;
   const asap = orderWhenSel() === 'ASAP';
@@ -3888,11 +3963,11 @@ const WZ_CATS = [
   { key: 'otro', service: 'Other / Not sure', hint: 'Describe it in your own words — what it is, where it is, and what you want done. The Team figures out the rest.', ph: 'Example: I need help with…', photo: 'one wide shot of the area and a close-up of the problem spot.' }
 ];
 const MENU_GROUPS = [
-  { key: 'carpentry', es: 'Carpintería', en: 'Carpentry & installs', services: ['tv-mounting', 'tv-mounting-large', 'furniture-assembly', 'door-slab-swap', 'closet-organizer', 'drywall-patch-medium'] },
-  { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener'] },
-  { key: 'plumbing', es: 'Plomería', en: 'Plumbing', services: ['toilet-replacement', 'water-heater', 'drain-unclog', 'faucet-replacement', 'dishwasher-swap', 'vanity-swap'] },
-  { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste'] },
-  { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'starter-replacement'] }
+  { key: 'carpentry', es: 'Carpintería', en: 'Carpentry & installs', services: ['tv-mounting', 'tv-mounting-large', 'furniture-assembly', 'door-slab-swap', 'closet-organizer', 'drywall-patch-medium', 'closet-doors', 'door-knob-install', 'deadbolt-install', 'deadbolt-knob-combo', 'smart-lock-install', 'door-adjustment', 'weatherstripping', 'screen-door-install', 'sliding-door-service', 'window-screen-repair', 'pet-door-install', 'furniture-assembly-large', 'floating-shelves', 'cabinet-hardware-install', 'baby-gate-install', 'picture-mirror-hanging', 'mirror-cabinet-install', 'curtain-rod-install', 'blinds-install', 'blinds-install-deal', 'baseboard-install', 'baseboard-repair', 'laminate-floor-repair', 'carpet-repair', 'transition-strip-install', 'drywall-patch-small', 'drywall-holes-set', 'paint-room', 'paint-room-large', 'paint-room-large-ceiling', 'accent-wall-painting', 'interior-door-painting', 'fence-picket-repair', 'fence-post-replacement', 'deck-board-replacement', 'gate-repair', 'heavy-furniture-move'] },
+  { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener', 'soundbar-mounting', 'chandelier-swap', 'light-fixture-swap', 'exhaust-fan-swap', 'dimmer-switch-swap', 'smoke-co-detector-install', 'smart-thermostat-install', 'security-camera-install', 'holiday-lights-two-story', 'holiday-lights-takedown', 'holiday-lights-takedown-two-story', 'window-ac-install'] },
+  { key: 'plumbing', es: 'Plomería', en: 'Plumbing', services: ['toilet-replacement', 'water-heater', 'drain-unclog', 'faucet-replacement', 'dishwasher-swap', 'vanity-swap', 'toilet-repair', 'garbage-disposal-swap', 'showerhead-swap', 'tub-shower-recaulk', 'grab-bar-install', 'p-trap-swap', 'bidet-seat-install', 'dryer-vent-cleaning', 'washer-dryer-hookup', 'bathroom-accessories-install', 'hose-bibb-swap'] },
+  { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste', 'gutter-cleaning-two-story', 'pressure-washing', 'pressure-washing-large', 'sprinkler-irrigation', 'mailbox-install'] },
+  { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'starter-replacement', 'fuel-pump-replacement', 'check-engine-diagnostics', 'belt-hose-replacement', 'spark-plug-replacement', 'headlight-replacement'] }
 ];
 const wzState = { step: 1, cat: '', est: 'inperson', city: '', when: '' };
 function wzCatOf(key) { return WZ_CATS.find(function (c) { return c.key === key; }) || null; }
