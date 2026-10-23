@@ -12,9 +12,9 @@ _Last updated: [fecha de publicación]_
 
 3. **Estimates.** Photo estimates are free. An in-person estimate costs **$75 for non-members**: when you book the visit, we place an **authorization hold** (not a charge) for that amount, and the fee is **credited toward your repair** when you approve the work the same day. **Members:** your first in-person estimate is **FREE**; after that, member estimates are **$50**.
 
-4. **How payment works.** Your card is authorized first and **charged when the job is completed**, for the exact approved amount. If your approved quote is higher than the initial hold, we may request an additional authorization for the difference before work begins. You can follow your payment status live in the app at all times (hold → authorized → charged/released).
+4. **How payment works.** Menu services are **paid in full when you order**, and an approved estimate is **paid in full to book** — one charge for the whole amount, no balance later. **Cancelling:** if you cancel before a technician is dispatched, we refund you in full; once a technician has been dispatched, **$75 is non-refundable** and the rest is refunded to your card. You can follow your payment status live in the app at all times. *(Actualizado 2026-10-23, v44: muere el hold de $75 de las órdenes del menú — ver DISENO-PAGO-COMPLETO.md. El hold de la cláusula 3 es SOLO el fee del estimado en persona y se queda.)*
 
-5. **Memberships.** HomeCare **$29/mo**, Yard Care **$75/mo** (1 visit) or **$150/mo** (2 visits), HomeCare Plus **$100/mo** (1 yard visit) or **$175/mo** (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive **20% off labor on jobs under $1,000** (the discount does not apply to junk removal, hauling or green-waste loads, or flat $75 services) and priority scheduling. Members of **every** plan get one free first in-person estimate (then $50).
+5. **Memberships.** HomeCare **$29/mo**, Yard Care **$75/mo** (1 visit) or **$150/mo** (2 visits), HomeCare Plus **$100/mo** (1 yard visit) or **$175/mo** (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive **20% off labor on jobs under $1,000** (the 20% applies to every menu service — including junk removal, hauling / green-waste loads and flat $75 services) and priority scheduling. Members of **every** plan get one free first in-person estimate (then $50).
 
 6. **Changing or cancelling a membership.** You can change plans anytime from your account; Stripe prorates the difference (you may see a prorated charge or credit). You can cancel anytime from your account or by contacting the Team; **cancellation takes effect at the end of the current paid month** — your plan stays active until then and you will not be charged again. Membership payments are charged in advance and are not refunded. *(Decisión de Gabriel 2026-10-21: "se cobra adelantado y no se devuelve nada".)*
 
@@ -39,10 +39,10 @@ _Last updated: [fecha de publicación]_
 1. **Create your account** (or start with a free photo estimate — no account needed).
 2. **Request your estimate** — free with photos, or in person ($75 hold for non-members; members: first one FREE, then $50).
 3. **Approve your price** — you see the exact total before anything happens.
-4. **Authorize, don't pay** — your card hold is only captured when the job is done.
+4. **Pay in full when you book** — one charge for the whole amount; cancel before dispatch for a full refund.
 5. **The Team confirms** your day and time (you propose, we confirm).
 6. **Watch your technician on the map** — live, while he's on the way to your home.
-7. **Job done** — the exact amount is charged, and you can rate the work.
+7. **Job done** — already paid in full, and you can rate the work.
 Questions at any step? **Message the Team** right in the app — we coordinate everything with your technician for you.
 
 ## C. HOW IT WORKS — TECHNICIANS (área "Procesos — Técnico")

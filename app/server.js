@@ -341,6 +341,11 @@ function captainChargedAmount(j) {
     const capCents = r.holds.filter(h => h && h.status === 'captured').reduce((s, h) => s + (Number(h.capturedCents) || 0), 0);
     if (capCents > 0) return money(capCents / 100);
   }
+  // v44: pay-in-full order payments land on r.payment (no holds anymore) —
+  // that money ACTUALLY landed too, so it counts for the override exactly
+  // like a captured hold did.
+  if (r && r.payment && r.payment.status === 'paid') return money((Number(r.payment.amountCents) || 0) / 100);
+  if (r && r.payment && r.payment.status === 'partially_refunded') return money(((Number(r.payment.amountCents) || 0) - (Number(r.payment.refundedCents) || 0)) / 100);
   const inv = (db.invoices || []).find(x => x.status === 'paid' && ((x.jobId && x.jobId === j.id) || (j.requestId && x.requestId && x.requestId === j.requestId)));
   if (inv) return money(inv.paidAmount || inv.total || 0);
   return 0;
@@ -986,7 +991,11 @@ async function maybePayWorkerForJob(j, opts) {
       return;
     }
     const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
-    if (r && !(r.holds || []).some(h => h.status === 'captured')) { j.payoutStatus = 'awaiting_capture'; save(); return; }
+    // v44: the gate is PAID — a pay-in-full order payment (r.payment) counts
+    // exactly like a legacy captured hold (old jobs keep resolving on the
+    // hold trail). New stamps say 'awaiting_payment'; the legacy
+    // 'awaiting_capture' stamp still renders and sweeps for old jobs.
+    if (r && !requestIsPaid(r)) { j.payoutStatus = 'awaiting_payment'; save(); return; }
     const amount = Math.round(Number(j.payOffer) * 100);
     j.payoutInFlight = Date.now(); save();
     let tr;
@@ -1013,7 +1022,7 @@ function sweepPendingPayouts() {
   if (now - lastPayoutSweep < 60 * 1000) return;
   lastPayoutSweep = now;
   db.jobs.filter(j => !j.payoutTransferId
-    && ['pending_funds', 'awaiting_capture', 'awaiting_worker_setup'].includes(j.payoutStatus)
+    && ['pending_funds', 'awaiting_capture', 'awaiting_payment', 'awaiting_worker_setup'].includes(j.payoutStatus)
     && j.status === 'Done — photos sent'
     && !(j.payoutTriedAt && (now - new Date(j.payoutTriedAt).getTime() < 2 * 60 * 1000)))
     .slice(0, 10)
@@ -1300,6 +1309,93 @@ function activateHomeCare(u, isFirst) {
   }
   save();
 }
+// ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
+// Gabriel's call (2026-10-23): the $75 menu-order authorization hold is
+// GONE. Menu orders (and admin carts) are charged the FULL total at order
+// time — a normal captured card charge, recorded on r.payment. "Paid"
+// (r.payment.status === 'paid') is the money gate everywhere the old
+// captured-hold check used to be; legacy captured holds keep counting so
+// old jobs still resolve. The estimate-visit authorization flow below is
+// a different thing (the $75/$50 in-person estimate fee) and is untouched.
+function requestIsPaid(r) {
+  if (!r) return false;
+  if (r.payment && r.payment.status === 'paid') return true;
+  return (r.holds || []).some(h => h && h.status === 'captured');
+}
+// Single recorder for a landed full payment on a request. Idempotent — a
+// payment already recorded (confirm endpoint + webhook can both fire) is
+// never double-counted. Notifies the customer + the Team and fires the
+// same payment_received automation the estimate payments use, then gives
+// any already-finished job on this request its payout chance.
+function recordRequestPayment(r, info) {
+  info = info || {};
+  if (r.payment && r.payment.status === 'paid') return false;
+  r.payment = { status: 'paid', kind: info.kind || 'menu-order', pi: info.pi || '', amountCents: Math.round(Number(info.amountCents) || 0), at: new Date().toISOString() };
+  r.messages = r.messages || [];
+  r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: ' + usd(r.payment.amountCents / 100) + ' — your order ' + r.id + ' is paid in full. Thank you! The Team confirms your time right here.', at: new Date().toISOString() });
+  if (r.customerId) notify(r.customerId, 'payment', 'Payment received (' + usd(r.payment.amountCents / 100) + ') on order ' + r.id + ' — paid in full.');
+  notifyAdmins('payment', 'PAID IN FULL: ' + usd(r.payment.amountCents / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
+  fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: r.payment.amountCents / 100 }));
+  db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
+  return true;
+}
+// ---------- Admin carts (v44, DISENO-PAGO-COMPLETO) ----------
+// Gabriel builds a cart from the menu in the admin ("meter las 2 cosas al
+// carrito y mandárselo a mi cliente") and sends ONE public link. The
+// customer fills their own data/address/when on the page, decides on
+// HomeCare there, and pays in full; the paid cart converts into a normal
+// menu request in the pipeline. Cart shape:
+// { id:'CRT-XXXXXX', items:[{serviceId,name,qty,unitPrice,lineTotal,
+// memberUnit}], listTotal, memberTotal, note, customerName, customerPhone
+// (Gabriel's optional prefill), status:'open'|'paid'|'cancelled',
+// customer:{name,phone,email,address,city,when} (filled at pay time),
+// memberApplied, payPi, payment:{pi,amountCents}, requestId, paidAt,
+// createdBy, createdAt }
+function cartsOf() { if (!Array.isArray(db.carts)) db.carts = []; return db.carts; }
+function cartLink(c) { return appBase() + '/cart/' + c.id; }
+function publicCart(c) {
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null };
+}
+function normalizeCartItems(rawItems) {
+  return (Array.isArray(rawItems) ? rawItems : []).slice(0, 20).map(it => {
+    const qty = Math.max(1, Math.min(99, Math.round(Number(it && it.qty) || 1)));
+    const unitPrice = clampMoney(it && it.unitPrice);
+    return { serviceId: cleanText(it && it.serviceId, 60), name: cleanText(it && (it.name || it.description), 120), qty, unitPrice, lineTotal: money(qty * unitPrice), memberUnit: money(unitPrice * 0.8) };
+  }).filter(it => it.name && it.qty > 0);
+}
+function cartTotals(items) {
+  return { listTotal: money(items.reduce((s, it) => s + it.lineTotal, 0)), memberTotal: money(items.reduce((s, it) => s + money(it.qty * it.memberUnit), 0)) };
+}
+// The 20% menu discount belongs to HomeCare / HomeCare Plus ONLY — the
+// same homeCareStatus flag the checkout uses. A Yard-only member does NOT
+// get cart member prices.
+function cartMemberUserFor(user, email) {
+  if (user && user.role === 'customer' && user.homeCareStatus === 'active') return user;
+  const e = (email || '').toLowerCase();
+  if (e) { const u = db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === e); if (u && u.homeCareStatus === 'active') return u; }
+  return null;
+}
+// A paid cart becomes a normal menu request with every customer field the
+// customer typed on the cart page. Idempotent: converting twice returns
+// the same request and never duplicates the order.
+function convertCartToRequest(c, payInfo) {
+  payInfo = payInfo || {};
+  if (c.requestId) { const ex = db.requests.find(x => x.id === c.requestId); if (ex) return ex; }
+  if (c.status !== 'open') return null;
+  const cust = c.customer || {};
+  const email = (cust.email || '').toLowerCase();
+  let customerId = null;
+  if (email) { const u = db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === email); if (u) customerId = u.id; }
+  const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
+  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => ({ serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice })), totals: { list: c.listTotal, member: c.memberTotal, due: (Number(payInfo.amountCents) || 0) / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: 'Ordered from cart ' + c.id + ' and paid in full: ' + usd((Number(payInfo.amountCents) || 0) / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  db.requests.push(r);
+  c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString(); c.payment = { pi: payInfo.pi || '', amountCents: Math.round(Number(payInfo.amountCents) || 0) };
+  recordRequestPayment(r, { pi: payInfo.pi, amountCents: payInfo.amountCents, kind: 'cart-order' });
+  notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — paid in full ' + usd((Number(payInfo.amountCents) || 0) / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + '.');
+  emitRequestNew(r);
+  fireAutomation('new_request', requestAutomationPayload(r));
+  return r;
+}
 // ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
 // Gabriel's payment model: the in-person estimate fee ($75 regular / $50
 // member) is AUTHORIZED (a hold) when the customer books — never charged up
@@ -1552,6 +1648,19 @@ async function handleStripeEvent(event) {
       }
     }
   } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
+    // v44 pay-in-full PIs (menu orders + admin carts): the confirm
+    // endpoints record these synchronously; this webhook is the backup
+    // and reconciles idempotently if a confirm call never landed.
+    if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order')) {
+      if (obj.metadata.kind === 'menu-order' && obj.metadata.requestId) {
+        const r = db.requests.find(x => x.id === obj.metadata.requestId);
+        if (r) recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' });
+      } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
+        const c = cartsOf().find(x => x.id === obj.metadata.cartId);
+        if (c) convertCartToRequest(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 });
+      }
+      return;
+    }
     // Estimate-hold lifecycle. PIs we do not track (inline HomeCare card
     // flow, older charges) are ignored silently. Idempotent: Stripe may
     // deliver any of these more than once.
@@ -1648,7 +1757,9 @@ function normalizeEstimate(input, request) {
   const defaultCredit = request && request.estimateType === 'inperson' ? (Number(request.estimateDue) || 0) : 0;
   const credit = Math.min(clampMoney(raw.credit == null ? defaultCredit : raw.credit), money(subtotal + asapAmount - discountAmount));
   const total = Math.max(0, money(subtotal + asapAmount - discountAmount - credit));
-  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? (credit > 0 ? Math.min(credit || 75, total) : money(total / 2)) : clampMoney(raw.bookingDue);
+  // v44 (pay in full): the amount due to book defaults to the FULL total —
+  // Gabriel still overrides it by hand in the builder whenever he wants.
+  let bookingDue = raw.bookingDue == null || raw.bookingDue === '' ? total : clampMoney(raw.bookingDue);
   bookingDue = Math.min(bookingDue, total);
   return { items, subtotal, asap, asapRate, asapAmount, discountPct, discountAmount, credit, total, bookingDue, balanceDue: money(total - bookingDue), bookingAuto: raw.bookingDue == null || raw.bookingDue === '', currency: 'USD', updatedAt: new Date().toISOString() };
 }
@@ -1667,7 +1778,7 @@ function applyMemberDiscount(est, request, customer) {
   est.memberDiscount = true;
   const credit = est.credit || 0;
   est.total = Math.max(0, Math.round((subtotal + (est.asapAmount || 0) - d - credit) * 100) / 100);
-  if (est.bookingAuto) est.bookingDue = est.credit > 0 ? Math.min(est.credit, est.total) : money(est.total / 2);
+  if (est.bookingAuto) est.bookingDue = est.total; // v44: pay in full to book
   else est.bookingDue = Math.min(est.bookingDue, est.total);
   est.balanceDue = Math.round((est.total - est.bookingDue) * 100) / 100;
   return est;
@@ -1912,6 +2023,191 @@ function estimatePageHtml(r) {
     + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
     + '</div></body>';
 }
+// ---------- Public cart page (v44) ----------
+// One link from Gabriel: the customer sees the itemized cart, fills THEIR
+// data + address + when, decides on HomeCare (join right there — the same
+// inline subscription machinery as the app checkout — and the total
+// reprices to member prices), and pays in full. Order of the page is
+// Gabriel's: cart → your info → membership yes/no → pay.
+// v44 + language rule (Gabriel, 2026-10-23): the cart page speaks ONE
+// language at a time — EN | ES toggle at the top, like the website, never
+// mixed. Server renders in the cart language (admin picks it at creation;
+// ?lang= overrides; stored choice wins on the client via localStorage).
+// Item names are Gabriel's quote data, not UI chrome — the per-service
+// EN/ES name dictionary is the v45 menu build, not this page.
+function cartPageHtml(c, user, langOverride) {
+  const sessionMember = !!(user && user.role === 'customer' && user.homeCareStatus === 'active');
+  const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : (c.lang === 'es' ? 'es' : 'en');
+  const CI = {
+    en: {
+      titleCart: 'Your cart', cancelledH: 'This cart was cancelled', cancelledBody: 'The Team cancelled this cart. If that is a mistake, text or call (707) 862-3773 and we will send you a fresh link.',
+      paidH: '✅ Paid in full — thank you!', paidBodyA: 'is paid', paidOrder: '— your order number is', paidBodyB: 'The Team confirms your day and time shortly; you can also follow your order in the app.',
+      totalPaid: 'Total paid:', thService: 'Service', thQty: 'Qty', thEach: 'Each', thLine: 'Line', questions: 'Questions? Text or call (707) 862-3773.',
+      intro: 'The Team put this together for you. Review it, add your info, and pay — all on this one page.', totalLabel: 'Total:',
+      savings: 'Regular total {list} • HomeCare member total {member} (save {save})',
+      laborNote: 'Labor only — you buy materials/parts unless the Team says otherwise in writing.',
+      yourInfo: 'Your info', fullName: 'Full name', phone: 'Phone', email: 'Email', address: 'Service address', city: 'City',
+      whenH: 'When', whenNote: 'You propose the day and time — <b>the Team confirms</b> every appointment.', prefDate: 'Preferred date', timeWindow: 'Time window',
+      optAsap: 'ASAP — first available', optMorning: 'Morning (8am–12pm)', optAfternoon: 'Afternoon (12pm–5pm)', optEvening: 'Evening (5pm–8pm)',
+      whenExtra: 'Anything else about timing? (optional)', whenPh: 'Gate code, after 3 PM, talk to Maria…',
+      memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings are already in this cart.',
+      memberFoundBody: 'We found your active membership — your 20% savings are in this cart.',
+      joinLabel: 'Become a HomeCare member — $29/mo — and save 20% on this order',
+      joinBody: 'Join right here and this cart drops from {list} to {member} (you save {save}). First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
+      passLabel: 'Create your account password (8+ characters) — or your existing account password',
+      paymentH: 'Payment', payBtn: 'Pay {amt} in full',
+      refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
+      working: 'Working…', joining: 'Joining HomeCare…', processing: 'Processing payment…',
+      errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.', errLoading: 'Online payment is still loading — give it a second and try again.',
+      errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
+      errLogin: 'That email already has an account — type its password above to log in and join.', errMemberFail: 'membership signup failed',
+      errMemberPay: 'Your membership payment did not complete — check the card and try again.', errPay: 'payment failed', errConfirm: 'could not confirm the payment',
+      doneH: '✅ Order placed — ', donePaid: 'Paid in full:', doneMember: ' with your HomeCare member price.',
+      doneBody: 'The Team confirms your day and time shortly. Questions? Text or call (707) 862-3773.'
+    },
+    es: {
+      titleCart: 'Tu carrito', cancelledH: 'Este carrito fue cancelado', cancelledBody: 'El Equipo canceló este carrito. Si es un error, manda un texto o llama al (707) 862-3773 y te enviamos un enlace nuevo.',
+      paidH: '✅ Pagado completo — ¡gracias!', paidBodyA: 'está pagado', paidOrder: '— tu número de orden es', paidBodyB: 'El Equipo confirma tu día y hora muy pronto; también puedes seguir tu orden en la app.',
+      totalPaid: 'Total pagado:', thService: 'Servicio', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe', questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.',
+      intro: 'El Equipo preparó esto para ti. Revísalo, agrega tus datos y paga — todo en esta página.', totalLabel: 'Total:',
+      savings: 'Total normal {list} • Total de miembro HomeCare {member} (ahorras {save})',
+      laborNote: 'Solo mano de obra — tú compras los materiales y piezas, a menos que el Equipo diga lo contrario por escrito.',
+      yourInfo: 'Tus datos', fullName: 'Nombre completo', phone: 'Teléfono', email: 'Correo electrónico', address: 'Dirección del servicio', city: 'Ciudad',
+      whenH: 'Cuándo', whenNote: 'Tú propones el día y la hora — <b>el Equipo confirma</b> cada cita.', prefDate: 'Fecha preferida', timeWindow: 'Horario',
+      optAsap: 'Lo antes posible — primera disponibilidad', optMorning: 'Mañana (8am–12pm)', optAfternoon: 'Tarde (12pm–5pm)', optEvening: 'Noche (5pm–8pm)',
+      whenExtra: '¿Algo más sobre el horario? (opcional)', whenPh: 'Código de la puerta, después de las 3 PM, hablar con María…',
+      memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% ya está aplicado en este carrito.',
+      memberFoundBody: 'Encontramos tu membresía activa — tu ahorro del 20% está en este carrito.',
+      joinLabel: 'Hazte miembro de HomeCare — $29/mes — y ahorra 20% en esta orden',
+      joinBody: 'Únete aquí mismo y este carrito baja de {list} a {member} (ahorras {save}). Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
+      passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
+      paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
+      refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
+      working: 'Procesando…', joining: 'Uniéndote a HomeCare…', processing: 'Procesando el pago…',
+      errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.', errLoading: 'El pago en línea todavía está cargando — espera un segundo e inténtalo de nuevo.',
+      errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
+      errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y unirte.', errMemberFail: 'la membresía no se pudo activar',
+      errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.', errPay: 'el pago falló', errConfirm: 'no se pudo confirmar el pago',
+      doneH: '✅ Orden recibida — ', donePaid: 'Pagado completo:', doneMember: ' con tu precio de miembro HomeCare.',
+      doneBody: 'El Equipo confirma tu día y hora muy pronto. ¿Preguntas? Manda un texto o llama al (707) 862-3773.'
+    }
+  };
+  const S = CI[initLang];
+  const fillS = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
+  const amounts = { list: usd(c.listTotal), member: usd(c.memberTotal), save: usd(money(c.listTotal - c.memberTotal)) };
+  const rows = (c.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  const tblHead = '<tr><th style="text-align:left;padding:8px" data-i18n="thService">' + S.thService + '</th><th style="padding:8px" data-i18n="thQty">' + S.thQty + '</th><th style="text-align:right;padding:8px" data-i18n="thEach">' + S.thEach + '</th><th style="text-align:right;padding:8px" data-i18n="thLine">' + S.thLine + '</th></tr>';
+  const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleCart + ' ' + escMail(c.id) + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+    + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
+    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
+  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<script>var I18N=' + JSON.stringify(CI) + ';var LANG=' + JSON.stringify(initLang) + ';'
+    + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
+    + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsCartLang", l); }catch(e){}'
+    + ' document.documentElement.lang=l;'
+    + ' document.querySelectorAll("[data-i18n]").forEach(function(n){ var v=T(n.getAttribute("data-i18n")); if(v) n.innerHTML=v; });'
+    + ' document.querySelectorAll("[data-i18n-ph]").forEach(function(n){ var v=T(n.getAttribute("data-i18n-ph")); if(v) n.setAttribute("placeholder", v); });'
+    + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; });'
+    + ' if(typeof renderAmounts==="function") renderAmounts();'
+    + ' if(typeof mountCard==="function") mountCard(); }'
+    + 'document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang-btn")); }); });'
+    + 'try{ var sv=localStorage.getItem("ghsCartLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
+    + '</scr' + 'ipt></body>';
+  if (c.status === 'cancelled') {
+    return head + '<h2 style="margin-top:0" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#666" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
+  }
+  if (c.status === 'paid') {
+    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="paidH">' + S.paidH + '</h2>'
+      + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b> <span data-i18n="paidBodyA">' + S.paidBodyA + '</span>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '. <span data-i18n="paidBodyB">' + S.paidBodyB + '</span></p>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+      + '<p style="font-size:20px"><span data-i18n="totalPaid">' + S.totalPaid + '</span> <b>' + usd((c.payment && c.payment.amountCents ? c.payment.amountCents : 0) / 100) + '</b></p>' + foot;
+  }
+  const savings = money(c.listTotal - c.memberTotal);
+  const memberBox = '<b data-i18n="memberAppliedH">' + S.memberAppliedH + '</b>';
+  const joinBlock = sessionMember
+    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>'
+    : '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
+      + '<label style="display:block;font-size:16px"><input type="checkbox" id="cJoin" style="transform:scale(1.3);margin-right:8px"> <b data-i18n="joinLabel">' + S.joinLabel + '</b></label>'
+      + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
+      + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#555"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
+      + '</div>'
+      + '<div id="memberFound" style="display:none;background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberFoundBody">' + S.memberFoundBody + '</p></div>';
+  const inp = 'padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px';
+  const lbl = 'display:block;margin:10px 0;font-size:14px;color:#555';
+  const startCents = Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100);
+  return head
+    + '<h2 style="margin-top:0" data-i18n="titleCart">' + S.titleCart + '</h2>'
+    + '<p style="color:#666" data-i18n="intro">' + S.intro + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+    + '<p style="font-size:20px;margin-bottom:4px"><span data-i18n="totalLabel">' + S.totalLabel + '</span> <b id="cartBigTotal">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></p>'
+    + (savings > 0 ? '<p id="savingsLine" style="color:#666;font-size:13px;margin-top:0">' + fillS(S.savings, amounts) + '</p>' : '')
+    + '<p style="color:#666;font-size:13px" data-i18n="laborNote">' + S.laborNote + '</p>'
+    + '<div id="cartForm">'
+    + '<h3 style="margin-bottom:2px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
+    + '<label style="' + lbl + '"><span data-i18n="fullName">' + S.fullName + '</span><input id="cName" autocomplete="name" value="' + escMail(user ? user.name : (c.customerName || '')) + '" style="' + inp + '"></label>'
+    + '<label style="' + lbl + '"><span data-i18n="phone">' + S.phone + '</span><input id="cPhone" type="tel" autocomplete="tel" value="' + escMail(user ? (user.phone || '') : (c.customerPhone || '')) + '" style="' + inp + '"></label>'
+    + '<label style="' + lbl + '"><span data-i18n="email">' + S.email + '</span><input id="cEmail" type="email" autocomplete="email" value="' + escMail(user ? user.email : '') + '" style="' + inp + '"></label>'
+    + '<label style="' + lbl + '"><span data-i18n="address">' + S.address + '</span><input id="cAddr" autocomplete="street-address" value="' + escMail(user ? (user.serviceAddress || '') : '') + '" style="' + inp + '"></label>'
+    + '<label style="' + lbl + '"><span data-i18n="city">' + S.city + '</span><input id="cCity" autocomplete="address-level2" style="' + inp + '"></label>'
+    + '<h3 style="margin-bottom:2px" data-i18n="whenH">' + S.whenH + '</h3>'
+    + '<p style="color:#666;font-size:13px;margin-top:0" data-i18n="whenNote">' + S.whenNote + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:150px;font-size:14px;color:#555"><span data-i18n="prefDate">' + S.prefDate + '</span><input id="cDate" type="date" style="' + inp + '"></label>'
+    + '<label style="flex:1;min-width:150px;font-size:14px;color:#555"><span data-i18n="timeWindow">' + S.timeWindow + '</span><select id="cWin" style="' + inp + '"><option value="ASAP — first available" data-i18n="optAsap">' + S.optAsap + '</option><option value="Morning (8am–12pm)" data-i18n="optMorning">' + S.optMorning + '</option><option value="Afternoon (12pm–5pm)" data-i18n="optAfternoon">' + S.optAfternoon + '</option><option value="Evening (5pm–8pm)" data-i18n="optEvening">' + S.optEvening + '</option></select></label></div>'
+    + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
+    + joinBlock
+    + '<h3 style="margin-bottom:2px" data-i18n="paymentH">' + S.paymentH + '</h3>'
+    + '<div id="cardEl" style="border:1px solid #ccc;border-radius:10px;padding:12px;background:#fff"></div>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(startCents / 100) }) + '</button>'
+    + '<p id="payMsg" style="color:#666"></p>'
+    + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
+    + '</div>'
+    + '<div id="cartDone" style="display:none"></div>'
+    + '<script src="https://js.stripe.com/v3/"></scr' + 'ipt>'
+    + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
+    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', loggedIn=' + (user ? 'true' : 'false') + ', stripeObj=null, cardEl=null, pmId="";'
+    + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
+    + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
+    + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
+    + 'function renderAmounts(){ var cur=memberApplied?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); }'
+    + 'function applyMemberUi(){ memberApplied=true; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
+    + 'function mountCard(){ if(!stripeObj) return; try{ if(cardEl) cardEl.destroy(); }catch(e){} cardEl=stripeObj.elements({locale: LANG==="es"?"es":"en"}).create("card",{style:{base:{fontSize:"16px"}}}); cardEl.mount("#cardEl"); }'
+    + 'fetch("/api/stripe/config").then(function(r){return r.json();}).then(function(cfg){ if(cfg.publishableKey && typeof Stripe!=="undefined"){ stripeObj=Stripe(cfg.publishableKey); mountCard(); } }).catch(function(){});'
+    + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; }); }'
+    + 'if($("cEmail")){ $("cEmail").addEventListener("blur",function(){ if(memberApplied) return; var em=val("cEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/api/carts/"+CART_ID+"/member-check",{email:em}).then(function(o){ if(o.ok && o.d.member) applyMemberUi(); }).catch(function(){}); }); }'
+    + 'function buildWhen(){ var parts=[]; var d=$("cDate").value; var w=$("cWin").value; var t=val("cWhenText"); if(d) parts.push(d); if(w) parts.push(w); if(t) parts.push(t); return parts.join(" · ")||"ASAP — first available"; }'
+    + 'async function joinNow(){'
+    + ' if(!loggedIn){ var pw=$("cPass").value; if(pw.length<8) throw new Error(T("errPass"));'
+    + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:val("cName"),email:val("cEmail"),password:pw,phone:val("cPhone"),serviceAddress:val("cAddr"),role:"customer"})});'
+    + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
+    + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:val("cEmail"),password:pw})});'
+    + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
+    + ' var o=await jpost("/api/stripe/homecare-subscribe",{}); if(!o.ok) throw new Error(o.d.error||T("errMemberFail"));'
+    + ' var conf=await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:val("cName"),email:val("cEmail"),phone:val("cPhone")}}});'
+    + ' if(conf.error) throw new Error(conf.error.message); pmId=(conf.paymentIntent&&conf.paymentIntent.payment_method)||"";'
+    + ' var c2=await jpost("/api/stripe/homecare-confirm",{}); if(!c2.ok || !c2.d.active) throw new Error(T("errMemberPay"));'
+    + ' applyMemberUi(); }'
+    + '$("payBtn").onclick=async function(){ var m=$("payMsg"); var btn=$("payBtn"); function fail(t){ m.textContent=t; btn.disabled=false; renderAmounts(); }'
+    + ' if(!val("cName")) return fail(T("errName")); if(!/.+@.+\\..+/.test(val("cEmail"))) return fail(T("errEmail")); if(!val("cAddr")) return fail(T("errAddr"));'
+    + ' if(!stripeObj || !cardEl) return fail(T("errLoading"));'
+    + ' btn.disabled=true; btn.textContent=T("working"); m.textContent="";'
+    + ' try{'
+    + ' if($("cJoin") && $("cJoin").checked && !memberApplied){ btn.textContent=T("joining"); await joinNow(); }'
+    + ' btn.textContent=T("processing");'
+    + ' var o=await jpost("/api/carts/"+CART_ID+"/pay",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen()}); if(!o.ok) throw new Error(o.d.error||T("errPay"));'
+    + ' var conf2=pmId? await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:pmId}) : await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:val("cName"),email:val("cEmail"),phone:val("cPhone")}}});'
+    + ' if(conf2.error) throw new Error(conf2.error.message);'
+    + ' var f=await jpost("/api/carts/"+CART_ID+"/pay-confirm",{paymentIntentId:o.d.paymentIntentId}); if(!f.ok) throw new Error(f.d.error||T("errConfirm"));'
+    + ' $("cartForm").style.display="none"; var dn=$("cartDone"); dn.style.display="block";'
+    + ' dn.innerHTML="<h2 style=\\"color:#1a7f37\\">"+T("doneH")+(f.d.requestId||"")+"</h2><p>"+T("donePaid")+" <b>"+fmt(Math.round((o.d.amount||0)*100))+"</b>"+(memberApplied?T("doneMember"):"")+"</p><p style=\\"color:#666\\">"+T("doneBody")+"</p>";'
+    + ' dn.scrollIntoView({behavior:"smooth"});'
+    + ' }catch(e){ fail(e.message); } };'
+    + '</scr' + 'ipt>'
+    + foot;
+}
+
 // Build a matching invoice from an approved estimate (public approval flow).
 // Estimate line items carry over; the ASAP surcharge becomes its own line and
 // the discount + appointment credit fold into the invoice discount, so the
@@ -3573,38 +3869,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
-  // ---------- Menu-order authorization hold (inline, 2026-10-22) ----------
-  // The real checkout's payment step: the customer enters their card ONCE
-  // in the app (Stripe Elements). If they added HomeCare, the membership is
+  // ---------- Menu-order payment (inline, v44 — pay in full) ----------
+  // The checkout's payment step: the customer enters their card ONCE in
+  // the app (Stripe Elements). If they added HomeCare, the membership is
   // its own Stripe subscription, created and confirmed first through the
   // existing inline membership endpoints (a separate Stripe process, as
-  // Gabriel requires) — then this hold is confirmed with the same card.
-  // The hold is the $75 visit authorization (manual capture, Gabriel
-  // captures the final menu total by hand when the job is done).
-  if (p === '/api/orders/hold' && req.method === 'POST') {
+  // Gabriel requires) — then this payment is confirmed with the same card.
+  // v44: the FULL order total is charged right here (automatic capture) —
+  // the old $75 manual-capture authorization hold is gone.
+  if (p === '/api/orders/pay' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
     const b = await readBody(req);
     const r = db.requests.find(x => x.id === b.requestId);
     if (!r) return send(res, 404, { error: 'request not found' });
     if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
     if (r.estimateType !== 'menu') return send(res, 400, { error: 'not a menu order' });
-    if (requestHolds(r).some(x => x.key === 'visit' && x.status === 'authorized')) return send(res, 400, { error: 'hold already placed on this order' });
+    if (r.payment && r.payment.status === 'paid') return send(res, 400, { error: 'this order is already paid in full' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    const dueTotal = r.menuOrder && r.menuOrder.totals ? Number(r.menuOrder.totals.due) : 0;
+    const amount = Math.round((dueTotal > 0 ? dueTotal : (Number(r.estimateDue) || 0)) * 100);
+    if (!(amount > 0)) return send(res, 400, { error: 'nothing to pay on this order' });
     try {
       const params = {
-        amount: String(Math.round((Number(r.estimateDue) || 75) * 100)),
+        amount: String(amount),
         currency: 'usd',
-        capture_method: 'manual',
-        'payment_method_options[card][request_incremental_authorization]': 'if_available',
-        description: 'Visit authorization hold — menu order ' + r.id + ' — General Handyman Solutions',
-        'metadata[requestId]': r.id, 'metadata[holdKey]': 'visit', 'metadata[kind]': 'menu-hold'
+        description: 'Menu order ' + r.id + ' — paid in full — General Handyman Solutions',
+        'metadata[requestId]': r.id, 'metadata[kind]': 'menu-order'
       };
       if (user.stripeCustomerId) params.customer = user.stripeCustomerId;
       const pi = await stripeApi('/payment_intents', params);
-      return send(res, 200, { clientSecret: pi.client_secret, paymentIntentId: pi.id });
-    } catch (e) { console.error('menu hold failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+      return send(res, 200, { clientSecret: pi.client_secret, paymentIntentId: pi.id, amount: amount / 100 });
+    } catch (e) { console.error('menu order payment failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
-  if (p === '/api/orders/hold-confirm' && req.method === 'POST') {
+  if (p === '/api/orders/pay-confirm' && req.method === 'POST') {
     if (!user) return send(res, 401, { error: 'login required' });
     const b = await readBody(req);
     const r = db.requests.find(x => x.id === b.requestId);
@@ -3612,27 +3909,161 @@ const server = http.createServer(async (req, res) => {
     if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
     const piId = cleanText(b.paymentIntentId, 160);
     if (!piId) return send(res, 400, { error: 'paymentIntentId required' });
-    if (findHold(r, piId)) return send(res, 200, { ok: true, already: true });
+    if (r.payment && r.payment.status === 'paid') return send(res, 200, { ok: true, already: r.payment.pi === piId });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
     try {
-      const pi = await stripeGet('/payment_intents/' + piId + '?expand[]=latest_charge');
-      if (!pi || pi.status !== 'requires_capture') return send(res, 400, { error: 'the authorization is not in place yet' });
-      if (!pi.metadata || pi.metadata.requestId !== r.id) return send(res, 400, { error: 'payment does not match this order' });
-      const cents = Number(pi.amount) || 0;
-      const h = upsertHold(r, 'visit', piId, { status: 'authorized', authorizedCents: cents });
-      const card = pi.latest_charge && pi.latest_charge.payment_method_details && pi.latest_charge.payment_method_details.card;
-      if (card) {
-        if (card.capture_before) h.captureBefore = new Date(Number(card.capture_before) * 1000).toISOString();
-        if (card.incremental_authorization && card.incremental_authorization.status) h.incremental = card.incremental_authorization.status;
-        h.updatedAt = new Date().toISOString();
-      }
-      r.messages = r.messages || [];
-      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Order secured: we placed a ' + usd(cents / 100) + ' authorization HOLD on your card (authorized only — NOT charged yet). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
-      if (r.customerId) notify(r.customerId, 'payment', 'Authorization hold placed (' + usd(cents / 100) + ') on order ' + r.id + ' — not charged yet. Your order is secured.');
-      notifyAdmins('payment', 'Authorization HOLD ' + usd(cents / 100) + ' placed on menu order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — PI ' + piId + '.');
+      const pi = await stripeGet('/payment_intents/' + piId);
+      if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
+      if (!pi.metadata || pi.metadata.requestId !== r.id || pi.metadata.kind !== 'menu-order') return send(res, 400, { error: 'payment does not match this order' });
+      const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
+      const dueTotal = r.menuOrder && r.menuOrder.totals ? Math.round(Number(r.menuOrder.totals.due) * 100) : 0;
+      if (dueTotal > 0 && cents !== dueTotal) return send(res, 400, { error: 'payment amount does not match the order total' });
+      recordRequestPayment(r, { pi: piId, amountCents: cents, kind: 'menu-order' });
       save();
       return send(res, 200, { ok: true });
-    } catch (e) { console.error('menu hold confirm failed', e.message); return send(res, 502, { error: 'could not verify the authorization — if your card shows a hold, the Team will link it to your order shortly' }); }
+    } catch (e) { console.error('menu order pay-confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
+  }
+  // ---------- Order cancellation + refund (admin, v44) ----------
+  // Gabriel's rule (2026-10-23): cancel BEFORE a technician is dispatched
+  // → full refund. Cancel AFTER dispatch → the customer gets everything
+  // back EXCEPT $75, which stays as a non-refundable booking fee. The
+  // refund runs over the money that actually landed on this request: the
+  // pay-in-full payment (v44) and/or any legacy captured hold. The refund
+  // and the kept fee are recorded on the request (r.refund), the request
+  // is closed as Cancelled, and unfinished linked jobs are cancelled too.
+  const refundMatch = p.match(/^\/api\/requests\/([\w-]+)\/refund$/);
+  if (refundMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const r = db.requests.find(x => x.id === refundMatch[1]);
+    if (!r) return send(res, 404, { error: 'request not found' });
+    if (r.refund && Number(r.refund.refundedCents) > 0) return send(res, 400, { error: 'this order was already refunded' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    const sources = [];
+    if (r.payment && r.payment.status === 'paid' && r.payment.pi) sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.amountCents) || 0), type: 'payment', refundedCents: 0 });
+    for (const h of requestHolds(r)) if (h.status === 'captured' && h.pi) sources.push({ pi: h.pi, cents: Math.round(Number(h.capturedCents) || 0), type: 'hold', hold: h, refundedCents: 0 });
+    const paidCents = sources.reduce((s, x) => s + x.cents, 0);
+    if (!(paidCents > 0)) return send(res, 400, { error: 'no captured payment to refund on this request' });
+    const jobs = db.jobs.filter(j => j.requestId === r.id);
+    const dispatched = jobs.some(j => j.assignedWorkerId || j.infoReleased || ['Claimed', 'On my way', 'Arrived', 'Done — photos sent'].includes(j.status));
+    const keptCents = dispatched ? Math.min(7500, paidCents) : 0;
+    let toRefund = paidCents - keptCents;
+    const refundIds = [];
+    try {
+      for (const s of sources) {
+        if (toRefund <= 0) break;
+        const amt = Math.min(toRefund, s.cents);
+        if (amt <= 0) continue;
+        const rf = await stripeApi('/refunds', { payment_intent: s.pi, amount: String(amt) });
+        refundIds.push(rf.id);
+        s.refundedCents = amt;
+        toRefund -= amt;
+      }
+    } catch (e) { console.error('refund failed', e.message); return send(res, 502, { error: 'Stripe refund failed: ' + e.message, refundedSoFar: refundIds }); }
+    const refundedCents = paidCents - keptCents - toRefund;
+    for (const s of sources) {
+      if (s.type === 'payment' && s.refundedCents > 0) { r.payment.refundedCents = (Number(r.payment.refundedCents) || 0) + s.refundedCents; r.payment.status = r.payment.refundedCents >= (Number(r.payment.amountCents) || 0) ? 'refunded' : 'partially_refunded'; }
+      if (s.type === 'hold' && s.refundedCents > 0) { s.hold.status = 'refunded'; s.hold.refundedCents = s.refundedCents; s.hold.updatedAt = new Date().toISOString(); }
+    }
+    r.refund = { refundIds, refundedCents, keptFeeCents: keptCents, dispatched, at: new Date().toISOString(), by: user.id };
+    r.status = 'Cancelled';
+    jobs.forEach(j => { if (j.status !== 'Done — photos sent' && j.status !== 'Cancelled') { j.status = 'Cancelled'; delete j.liveLoc; } });
+    r.messages = r.messages || [];
+    r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'This order was cancelled by the Team. Refund: ' + usd(refundedCents / 100) + ' back to your card.' + (keptCents > 0 ? ' A ' + usd(keptCents / 100) + ' booking fee was kept because a technician had already been dispatched.' : ''), at: new Date().toISOString() });
+    if (r.customerId) notify(r.customerId, 'payment', 'Order ' + r.id + ' cancelled — refund of ' + usd(refundedCents / 100) + ' issued' + (keptCents > 0 ? ' (' + usd(keptCents / 100) + ' booking fee kept — already dispatched)' : '') + '.');
+    notifyAdmins('payment', 'Order ' + r.id + ' CANCELLED + refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' (kept ' + usd(keptCents / 100) + ' booking fee — was dispatched)' : ' (full refund — not dispatched)') + '.');
+    audit(user, 'request.refund', r.id, 'refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' · kept ' + usd(keptCents / 100) : '') + (dispatched ? ' · dispatched' : ' · not dispatched'));
+    save();
+    return send(res, 200, { ok: true, refunded: refundedCents / 100, keptFee: keptCents / 100, dispatched });
+  }
+  // ---------- Admin carts (v44) ----------
+  if (p === '/api/admin/carts' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const items = normalizeCartItems(b.items);
+    if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
+    const totals = cartTotals(items);
+    if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
+    const c = { id: id('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
+    cartsOf().push(c);
+    audit(user, 'cart.create', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
+    save();
+    return send(res, 201, { cart: publicCart(c) });
+  }
+  if (p === '/api/admin/carts' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, { carts: cartsOf().slice().reverse().map(publicCart) });
+  }
+  const cartAdminMatch = p.match(/^\/api\/admin\/carts\/([\w-]+)\/cancel$/);
+  if (cartAdminMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = cartsOf().find(x => x.id === cartAdminMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid — cancel/refund its order ' + (c.requestId || '') + ' instead' });
+    c.status = 'cancelled';
+    audit(user, 'cart.cancel', c.id, '');
+    save();
+    return send(res, 200, { cart: publicCart(c) });
+  }
+  // ---------- Public cart page actions (v44) ----------
+  // The cart id in the link is the credential — same trust model as the
+  // public estimate / invoice links. No login needed to view or pay.
+  const cartCheckMatch = p.match(/^\/api\/carts\/([\w-]+)\/member-check$/);
+  if (cartCheckMatch && req.method === 'POST') {
+    const c = cartsOf().find(x => x.id === cartCheckMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    const b = await readBody(req);
+    return send(res, 200, { member: !!cartMemberUserFor(user, cleanText(b.email, 160)) });
+  }
+  const cartPayMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay$/);
+  if (cartPayMatch && req.method === 'POST') {
+    const c = cartsOf().find(x => x.id === cartPayMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid' });
+    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
+    const b = await readBody(req);
+    const cust = { name: cleanText(b.name, 80), phone: cleanText(b.phone, 40), email: cleanText(b.email, 160).toLowerCase(), address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200) };
+    if (!cust.name) return send(res, 400, { error: 'your name is required' });
+    if (!/.+@.+\..+/.test(cust.email)) return send(res, 400, { error: 'a valid email is required' });
+    if (!cust.address) return send(res, 400, { error: 'the service address is required' });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to book' });
+    const memberUser = cartMemberUserFor(user, cust.email);
+    c.customer = cust;
+    c.memberApplied = !!memberUser;
+    const amount = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
+    if (!(amount > 0)) return send(res, 400, { error: 'nothing to pay on this cart' });
+    try {
+      const params = { amount: String(amount), currency: 'usd', description: 'Cart ' + c.id + ' — paid in full — General Handyman Solutions', 'metadata[cartId]': c.id, 'metadata[kind]': 'cart-order' };
+      if (user && user.stripeCustomerId) params.customer = user.stripeCustomerId;
+      const pi = await stripeApi('/payment_intents', params);
+      c.payPi = pi.id;
+      save();
+      return send(res, 200, { clientSecret: pi.client_secret, paymentIntentId: pi.id, amount: amount / 100, memberApplied: c.memberApplied });
+    } catch (e) { console.error('cart payment failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  const cartConfirmMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay-confirm$/);
+  if (cartConfirmMatch && req.method === 'POST') {
+    const c = cartsOf().find(x => x.id === cartConfirmMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status === 'paid') return send(res, 200, { ok: true, already: true, requestId: c.requestId });
+    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
+    const b = await readBody(req);
+    const piId = cleanText(b.paymentIntentId, 160);
+    if (!piId) return send(res, 400, { error: 'paymentIntentId required' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    try {
+      const pi = await stripeGet('/payment_intents/' + piId);
+      if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
+      if (!pi.metadata || pi.metadata.cartId !== c.id || pi.metadata.kind !== 'cart-order') return send(res, 400, { error: 'payment does not match this cart' });
+      const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
+      const listCents = Math.round(c.listTotal * 100), memberCents = Math.round(c.memberTotal * 100);
+      if (cents === memberCents && cents !== listCents) c.memberApplied = true;
+      else if (cents === listCents && cents !== memberCents) c.memberApplied = false;
+      else if (cents !== listCents && cents !== memberCents) return send(res, 400, { error: 'payment amount does not match the cart total' });
+      const r = convertCartToRequest(c, { pi: piId, amountCents: cents });
+      if (!r) return send(res, 400, { error: 'this cart can no longer be paid' });
+      save();
+      return send(res, 200, { ok: true, requestId: r.id });
+    } catch (e) { console.error('cart pay-confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
   }
   // ---------- invoices (customer payment) ----------
   if (p === '/api/invoices/mine' && req.method === 'GET') {
@@ -3693,6 +4124,14 @@ const server = http.createServer(async (req, res) => {
     const inv = (db.invoices || []).find(x => x.id === invPageMatch[1]);
     if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invoice not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
     return send(res, 200, invoicePageHtml(inv));
+  }
+
+  // ---------- public cart page (v44) ----------
+  const cartPageMatch = p.match(/^\/cart\/([\w-]+)$/);
+  if (cartPageMatch && req.method === 'GET') {
+    const c = cartsOf().find(x => x.id === cartPageMatch[1]);
+    if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
+    return send(res, 200, cartPageHtml(c, user, url.searchParams.get('lang')));
   }
 
   // ---------- public estimate approval (added 2026-10-12) ----------

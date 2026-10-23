@@ -590,11 +590,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div id="orderUpsell"></div>
       <div id="orderTotals"></div>
       <h4>Payment</h4>
-      <p class="mut">$75 authorization hold today — NOT a charge. It comes off your total, and you are only charged the final amount when the job is done.</p>
+      <p class="mut">You pay the full total today — one charge, no balance later. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="orderCardElement" style="border:1px solid #d4d4d8;border-radius:10px;padding:12px;background:#fff"></div>
       <p id="orderErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
       <button id="orderBtn" onclick="submitOrder()" style="margin-top:10px;width:100%">Place order</button>
-      <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · You pay when the job is done</p>
+      <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · Paid in full today</p>
     </div>
     <div class="card" id="orderDone" style="display:none"></div>
   </div>
@@ -608,7 +608,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="clause"><h4>1. Our services.</h4><p>General Handyman Solutions ("GHS", "we", "the Team") provides handyman, home-care membership, and yard-care services booked through generalhandymans.app and our app. Services are performed by GHS technicians — independent contractors coordinated by the Team.</p></div>
       <div class="clause"><h4>2. Labor only — you buy materials.</h4><p>Unless we agree otherwise in writing, every price is <b>labor only</b>. You buy all materials and parts for your job. If a technician picks up materials on your behalf, that is arranged and priced separately before purchase.</p></div>
       <div class="clause"><h4>3. Estimates.</h4><p>Photo estimates are free. An in-person estimate costs <b>$75 for non-members</b>: when you book the visit, we place an <b>authorization hold</b> (not a charge) for that amount, and the fee is <b>credited toward your repair</b> when you approve the work the same day. <b>Members:</b> your first in-person estimate is <b>FREE</b>; after that, member estimates are <b>$50</b>.</p></div>
-      <div class="clause"><h4>4. How payment works.</h4><p>Your card is authorized first and <b>charged when the job is completed</b>, for the exact approved amount. If your approved quote is higher than the initial hold, we may request an additional authorization for the difference before work begins. You can follow your payment status live in the app at all times (hold → authorized → charged/released).</p></div>
+      <div class="clause"><h4>4. How payment works.</h4><p>Menu services are <b>paid in full when you order</b>, and an approved estimate is <b>paid in full to book</b> — one charge for the whole amount, no balance later. <b>Cancelling:</b> if you cancel before a technician is dispatched, we refund you in full; once a technician has been dispatched, <b>$75 is non-refundable</b> and the rest is refunded to your card. You can follow your payment status live in the app at all times.</p></div>
       <div class="clause"><h4>5. Memberships.</h4><p>HomeCare <b>$29/mo</b>, Yard Care <b>$75/mo</b> (1 visit) or <b>$150/mo</b> (2 visits), HomeCare Plus <b>$100/mo</b> (1 yard visit) or <b>$175/mo</b> (2 yard visits) — one total monthly charge per plan, renewing monthly until cancelled. HomeCare and Plus members receive <b>20% off labor on jobs under $1,000</b> — on every menu service, including junk removal, hauling / green-waste loads and flat $75 services — and priority scheduling. Members of <b>every</b> plan get one free first in-person estimate (then $50).</p></div>
       <div class="clause"><h4>6. Changing or cancelling a membership.</h4><p>You can change plans anytime from your account; Stripe prorates the difference (you may see a prorated charge or credit). You can cancel anytime from your account or by contacting the Team; <b>cancellation takes effect at the end of the current paid month</b> — your plan stays active until then and you will not be charged again. Membership payments are charged in advance and are not refunded.</p></div>
       <div class="clause"><h4>7. Yard visits.</h4><p>A standard visit includes mowing, edging, blowing, and light weeding of a standard residential yard. Your first scheduled visit includes the normal yard cut. Work beyond normal maintenance — extreme overgrowth, accumulated debris or junk, hauling — is quoted separately before we do it. <b>Unused visits do not roll over to the next month and are not refunded.</b></p></div>
@@ -637,10 +637,10 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
         <div class="step-card"><div class="step-badge green">1</div><div class="step-body"><b>Create your account</b><span>(or start with a free photo estimate — no account needed).</span></div></div>
         <div class="step-card"><div class="step-badge green">2</div><div class="step-body"><b>Request your estimate</b><span>— free with photos, or in person ($75 hold for non-members; members: first one FREE, then $50).</span></div></div>
         <div class="step-card"><div class="step-badge green">3</div><div class="step-body"><b>Approve your price</b><span>— you see the exact total before anything happens.</span></div></div>
-        <div class="step-card"><div class="step-badge green">4</div><div class="step-body"><b>Authorize, don't pay</b><span>— your card hold is only captured when the job is done.</span></div></div>
+        <div class="step-card"><div class="step-badge green">4</div><div class="step-body"><b>Pay in full when you book</b><span>— one charge for the whole amount; cancel before dispatch for a full refund.</span></div></div>
         <div class="step-card"><div class="step-badge green">5</div><div class="step-body"><b>The Team confirms</b><span>your day and time (you propose, we confirm).</span></div></div>
         <div class="step-card"><div class="step-badge green">6</div><div class="step-body"><b>Watch your technician on the map</b><span>— live, while he's on the way to your home.</span></div></div>
-        <div class="step-card"><div class="step-badge green">7</div><div class="step-body"><b>Job done</b><span>— the exact amount is charged, and you can rate the work.</span></div></div>
+        <div class="step-card"><div class="step-badge green">7</div><div class="step-body"><b>Job done</b><span>— already paid in full, and you can rate the work.</span></div></div>
       </div>
       <p class="mut">Questions at any step? <b>Message the Team</b> right in the app — we coordinate everything with your technician for you.</p>
     </div>
@@ -754,7 +754,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     </div>
     <div id="menuBox">
       <h2>Menu — order &amp; pay right here · Menú</h2>
-      <p class="mut">Fixed prices, ordered and paid in the app — today your card only gets a $75 authorization hold (not a charge); you pay the rest when the job is done. HomeCare / HomeCare Plus members: your member price is on every card.</p>
+      <p class="mut">Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
       <div id="menuGroups"></div>
     </div>
     <div id="membershipSummary" class="custAccountOnly"></div>
@@ -813,6 +813,20 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     </div>
     <h3>Customer requests (send quotes)</h3>
     <div id="adminRequests"></div>
+    <h3>Cart — build it, send ONE link</h3>
+    <div class="card">
+      <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays in full.</p>
+      <label>Search the menu<input id="cartSearch" placeholder="Type to search services…" oninput="renderCartPicker()"></label>
+      <div id="cartPicker" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:6px"></div>
+      <div id="cartLines" style="margin-top:10px"></div>
+      <div class="est-summary" id="cartSummary">Cart is empty — add services above.</div>
+      <div class="row"><div><label>Customer name (optional)</label><input id="cartCustName" placeholder="Prefill for the customer"></div><div><label>Customer phone (optional)</label><input id="cartCustPhone" placeholder="(707) 555-0123"></div></div>
+      <label>Team note (optional)<input id="cartNote" placeholder="Anything about this quote — the customer sees it in the order"></label>
+      <label>Cart page language<select id="cartLang"><option value="en">English</option><option value="es">Español</option></select></label>
+      <button class="black" onclick="createCartLink()">Generate cart link</button>
+      <div id="cartLinkOut" style="margin-top:8px"></div>
+    </div>
+    <div id="adminCarts"></div>
     <h3>Workers (activate after review)</h3>
     <div id="adminWorkers"></div>
     <h3>Capitanes — Area Captains</h3>
@@ -2105,7 +2119,7 @@ function readEstimate(idv){
   const asapAmount=asap?subtotal*0.25:0;
   const discountAmount=subtotal*Math.max(0,Math.min(90,discountPct))/100;
   const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
-  const bookingDue=bookingRaw===''? (credit>0?Math.min(75,total):Math.round(total/2*100)/100) : Math.min(Number(bookingRaw)||0,total);
+  const bookingDue=bookingRaw===''? total : Math.min(Number(bookingRaw)||0,total); // v44: default = pay in full
   return { items, asap, discountPct, credit, bookingDue, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total, balanceDue:Math.round((total-bookingDue)*100)/100 };
 }
 function updateEstimateSummary(idv){ const el=document.getElementById('estSummary-'+idv); if(!el) return; const e=readEstimate(idv); el.innerHTML='<b>Subtotal:</b> '+moneyFmt(e.subtotal)+(e.asapAmount?' • <b>ASAP:</b> '+moneyFmt(e.asapAmount):'')+(e.discountAmount?' • <b>Discount:</b> −'+moneyFmt(e.discountAmount):'')+(e.credit?' • <b>Credit:</b> −'+moneyFmt(e.credit):'')+'<br><b>Total for customer:</b> <span class="st">'+moneyFmt(e.total)+'</span> • Due to book: '+moneyFmt(e.bookingDue)+' • Balance: '+moneyFmt(e.balanceDue); }
@@ -2276,7 +2290,8 @@ async function loadRequests(){
     const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
     const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
     const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">Secure my appointment — authorize '+moneyFmt(r.estimateDue)+' hold (not a charge yet)</button></div>':'');
-    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+holdBlock+threadHtml(r)+'</div>';
+    const payBlock=r.payment?'<div class="pay-panel"><b>💳 '+(r.payment.status==='paid'?'Paid in full: '+moneyFmt((r.payment.amountCents||0)/100):(r.payment.status==='partially_refunded'?'Paid '+moneyFmt((r.payment.amountCents||0)/100)+' — partially refunded':'Payment refunded'))+'</b>'+(r.refund?'<br><span class="mut">Refund issued: '+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+' booking fee kept (already dispatched)':'')+'</span>':'')+'</div>':'';
+    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+payBlock+holdBlock+threadHtml(r)+'</div>';
   }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
@@ -2344,7 +2359,7 @@ async function loadPayouts(){ const box=document.getElementById('workerPayouts')
     ? '<div class="card" style="border:1.5px solid #1d5c38;background:#0b2013"><b>\u{1F4B3} Payouts are ON</b><p class="mut">When you finish a job, your pay is sent automatically to your bank via Stripe. Nothing else to do.</p></div>'
     : '<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>\u{1F4B3} '+(conn.connected?'Finish your payout setup':'Set up your payouts')+'</b><p class="mut">Get paid automatically the moment you finish a job — Stripe sends your pay straight to your bank. One-time setup, about 2 minutes: your ID and your bank.</p><button onclick="startConnect()">'+(conn.connected?'Continue setup with Stripe':'Set up payouts with Stripe')+'</button></div>';
   const tot=d.totals||{paidOut:0,pending:0};
-  const stLabel=function(s){ return ({paid:'Pagado / Paid', awaiting_capture:'Esperando el pago del cliente / Awaiting capture', awaiting_worker_setup:'Falta tu setup de Stripe / Awaiting your setup', pending_funds:'Fondos en camino / Pending funds', pending:'Pendiente / Pending', error:'Error — habla con el Team', stripe_off:'Stripe no conectado / Stripe off'})[s] || String(s||'').replace(/_/g,' '); };
+  const stLabel=function(s){ return ({paid:'Pagado / Paid', awaiting_payment:'Esperando el pago del cliente / Awaiting payment', awaiting_capture:'Esperando el pago del cliente / Awaiting payment', awaiting_worker_setup:'Falta tu setup de Stripe / Awaiting your setup', pending_funds:'Fondos en camino / Pending funds', pending:'Pendiente / Pending', error:'Error — habla con el Team', stripe_off:'Stripe no conectado / Stripe off'})[s] || String(s||'').replace(/_/g,' '); };
   const rows=(d.entries||[]).map(function(e){ return '<div style="padding:6px 0;border-bottom:1px dashed #333"><b>'+escHtml(e.jobId)+'</b> — '+escHtml(e.service||'Job')+(e.city?' <span class="mut">'+escHtml(e.city)+'</span>':'')+'<br><span class="st">$'+Number(e.amount||0).toFixed(2)+'</span> <span class="pill">'+escHtml(stLabel(e.status))+'</span>'+(e.date?' <span class="mut">'+escHtml(String(e.date).slice(0,10))+'</span>':'')+'</div>'; }).join('');
   box.innerHTML='<h2>Mi dinero / My money</h2>'+setupCard
     + '<div class="card"><b>Pagado a tu banco / Paid out to you: <span class="st">$'+Number(tot.paidOut||0).toFixed(2)+'</span></b><br><b>Pendiente / Pending: $'+Number(tot.pending||0).toFixed(2)+'</b>'
@@ -2501,7 +2516,7 @@ async function saveWorkerTrades(){
     loadMe();
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
-function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_capture:'Payout waiting — customer payment not captured yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
+function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
 async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdmin(); }catch(e){ alert(e.message); } }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
@@ -2955,6 +2970,30 @@ async function secureHold(idv){
     if(d.url) location.href=d.url; else alert('Could not start the authorization.');
   }catch(e){ alert(e.message); }
 }
+// ---------- Pay-in-full payments + refunds (v44) ----------
+function adminPaymentHtml(r){
+  const captured=holdsOf(r).some(function(h){ return h.status==='captured'; });
+  let h='';
+  if(r.payment){
+    h+='<div class="pay-panel"><b>💳 Paid in full:</b> '+moneyFmt((r.payment.amountCents||0)/100)+' <span class="mut">('+(r.payment.kind||'card')+' • '+escHtml(String(r.payment.at||'').slice(0,10))+' • status: '+escHtml(r.payment.status)+')</span></div>';
+  }
+  if(r.refund){
+    h+='<div style="margin-top:6px"><b>Refund:</b> '+moneyFmt((r.refund.refundedCents||0)/100)+' refunded'+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+' booking fee kept (was dispatched)':' • full refund (not dispatched)')+' <span class="mut">'+escHtml(String(r.refund.at||'').slice(0,10))+'</span></div>';
+  }
+  const refundable=!r.refund && ((r.payment&&r.payment.status==='paid')||captured);
+  if(refundable){
+    h+='<div style="margin-top:8px"><button class="ghost" onclick="refundRequest(\''+r.id+'\')">Cancel order &amp; refund</button> <span class="mut">full refund before dispatch — after dispatch, $75 stays as the booking fee</span></div>';
+  }
+  return h;
+}
+async function refundRequest(idv){
+  if(!confirm('Cancel this order and refund the customer?\n\nRule: FULL refund if no technician has been dispatched yet. If a technician was already dispatched, $75 stays as a non-refundable booking fee and the rest is refunded.')) return;
+  try{
+    const d=await api('/api/requests/'+idv+'/refund',{method:'POST', body:JSON.stringify({})});
+    alert('Refunded '+moneyFmt(d.refunded)+(d.keptFee?' • kept '+moneyFmt(d.keptFee)+' booking fee (was dispatched)':' • full refund'));
+    loadAdmin();
+  }catch(e){ alert(e.message); }
+}
 function adminHoldPanelHtml(r){
   const holds=holdsOf(r);
   const pool=holdsPoolCents(r);
@@ -3357,7 +3396,7 @@ async function yardPhotoChange(idv, key, input){
 async function loadAdmin(){
   loadCalendar();
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
+  document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminPaymentHtml(r)+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
   rq.requests.forEach(function(r){ updateEstimateSummary(r.id); });
   sndAdminRequests(rq.requests);
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
@@ -3379,6 +3418,71 @@ async function loadAdmin(){
   loadAdminCaptains();
   loadAdminMap();
   loadAdminAudit();
+  renderCartPicker();
+  loadAdminCarts();
+}
+// ---------- Admin cart builder (v44) ----------
+let cartDraft = [];
+function renderCartPicker(){
+  const box=document.getElementById('cartPicker'); if(!box || typeof MENU_CATALOG==='undefined') return;
+  const q=((document.getElementById('cartSearch')||{}).value||'').toLowerCase();
+  const ids=Object.keys(MENU_CATALOG).filter(function(id){ return !q || MENU_CATALOG[id].name.toLowerCase().indexOf(q)>=0; });
+  box.innerHTML=ids.slice(0,60).map(function(id){ const s=MENU_CATALOG[id]; return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed #eee"><span><b>'+escHtml(s.name)+'</b> <span class="mut">'+escHtml(s.meta||'')+'</span></span><span style="white-space:nowrap">$'+s.price+' <button type="button" class="ghost" onclick="cartAdd(\''+id+'\')">+ Add</button></span></div>'; }).join('') || '<span class="mut">No services match.</span>';
+}
+function cartAdd(idv){
+  const s=MENU_CATALOG[idv]; if(!s) return;
+  const ex=cartDraft.find(function(x){ return x.serviceId===idv; });
+  if(ex) ex.qty=Math.min(99, ex.qty+1); else cartDraft.push({ serviceId:idv, name:s.name, qty:1, unitPrice:s.price });
+  renderCartLines();
+}
+function cartSetQty(i,v){ cartDraft[i].qty=Math.max(1,Math.min(99,Math.round(Number(v)||1))); renderCartLines(); }
+function cartSetPrice(i,v){ cartDraft[i].unitPrice=Math.max(0,Math.round((Number(v)||0)*100)/100); renderCartSummary(); }
+function cartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
+function renderCartLines(){
+  const box=document.getElementById('cartLines'); if(!box) return;
+  box.innerHTML=cartDraft.map(function(it,i){ return '<div class="est-row"><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name"><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="cartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
+  renderCartSummary();
+}
+function renderCartSummary(){
+  const el=document.getElementById('cartSummary'); if(!el) return;
+  if(!cartDraft.length){ el.textContent='Cart is empty — add services above.'; return; }
+  const list=cartDraft.reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
+  const member=cartDraft.reduce(function(s,it){ return s+it.qty*Math.round(it.unitPrice*0.8*100)/100; },0);
+  el.innerHTML='<b>Total:</b> <span class="st">'+moneyFmt(list)+'</span> • HomeCare member pays: <b>'+moneyFmt(member)+'</b> (member price applies only if the customer is — or becomes — a HomeCare / Plus member on the cart page)';
+}
+async function createCartLink(){
+  if(!cartDraft.length){ alert('Add at least one service first.'); return; }
+  const out=document.getElementById('cartLinkOut');
+  try{
+    const d=await api('/api/admin/carts',{method:'POST', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
+    const url=d.cart.link;
+    out.innerHTML='<b>Cart link ready:</b> <a href="'+url+'" target="_blank" rel="noopener">'+url+'</a> <button type="button" class="ghost" onclick="copyCartLink(\''+d.cart.id+'\')">Copy link</button><br><span class="mut">Send it to the customer — they fill their info, decide on HomeCare, and pay in full. The paid order lands in Customer requests.</span>';
+    cartDraft=[]; renderCartLines();
+    loadAdminCarts();
+  }catch(e){ alert(e.message); }
+}
+function copyCartLink(idv){
+  var url=location.origin+'/cart/'+idv;
+  function done(){ alert('Cart link copied:\n'+url); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('Copy the cart link:',url); }); }
+  else prompt('Copy the cart link:',url);
+}
+async function loadAdminCarts(){
+  const box=document.getElementById('adminCarts'); if(!box || !me || me.role!=='admin') return;
+  try{
+    const d=await api('/api/admin/carts');
+    if(!(d.carts||[]).length){ box.innerHTML=''; return; }
+    box.innerHTML=d.carts.map(function(c){
+      const items=(c.items||[]).map(function(it){ return escHtml(it.name)+' ×'+it.qty; }).join(' + ');
+      const badge=c.status==='paid'?'<span class="pill" style="background:#1a7f37">paid → '+(c.requestId||'')+'</span>':(c.status==='cancelled'?'<span class="pill" style="background:#6b6762">cancelled</span>':'<span class="pill" style="background:#b26a00">open</span>');
+      return '<div class="card"><b>'+c.id+'</b> '+badge+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+(c.customerName?' • for '+escHtml(c.customerName):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button> <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
+    }).join('');
+  }catch(e){ box.innerHTML=''; }
+}
+async function cancelCart(idv){
+  if(!confirm('Cancel this cart link? The customer will no longer be able to pay it.')) return;
+  try{ await api('/api/admin/carts/'+idv+'/cancel',{method:'POST', body:JSON.stringify({})}); loadAdminCarts(); }
+  catch(e){ alert(e.message); }
 }
 // ---------- Admin master map (v41) ----------
 // Gabriel's master map: ONE Leaflet map with every ACTIVE worker who is
@@ -3648,9 +3752,9 @@ window.addEventListener('hashchange', function(){ render(); });
 // their data right here, can add HomeCare (its own Stripe monthly
 // subscription, created + confirmed first through the existing inline
 // membership endpoints) and the 20% member price applies to THIS order at
-// once. One card entry, one tap: subscription (if added) + the $75
-// authorization hold are both confirmed with the same card. Gabriel
-// captures the final amount by hand when the job is done.
+// once. One card entry, one tap: subscription (if added) + the order
+// total are both confirmed with the same card. v44: the order is PAID IN
+// FULL right here — the old menu-order hold is gone.
 const MENU_CATALOG = {
   // ---------- Carpintería (master list section 1) ----------
   'closet-doors': { name: 'Closet Doors (Pair)', meta: '~2.5 h · Per pair', price: 175, member: 140 },
@@ -3859,10 +3963,10 @@ function orderTotals(){
   if (isMember && t.savings > 0) s += '<div style="display:flex;justify-content:space-between;color:#16a34a"><span>HomeCare member price (−20%)</span><span>−$' + t.savings + '</span></div>';
   if (orderState.join && !orderState.memberActive) s += '<div style="display:flex;justify-content:space-between"><span>HomeCare membership — first month</span><span>$29</span></div>';
   if (t.asap) s += '<div style="display:flex;justify-content:space-between"><span>ASAP rush (+25%)</span><span>$' + t.asapFee + '</span></div>';
-  s += '<div style="display:flex;justify-content:space-between;border-top:1px solid #d4d4d8;padding-top:6px;margin-top:6px"><b>Total — pay when the job is done</b><b>$' + t.due + '</b></div>';
-  s += '<p class="mut">Due today: ' + (orderState.join && !orderState.memberActive ? '<b>$29</b> (first HomeCare month, charged) + ' : '') + '<b>$75 authorization hold</b> — not a charge; it comes off your total.</p>';
+  s += '<div style="display:flex;justify-content:space-between;border-top:1px solid #d4d4d8;padding-top:6px;margin-top:6px"><b>Total — pay in full today</b><b>$' + t.due + '</b></div>';
+  s += '<p class="mut">Due today: ' + (orderState.join && !orderState.memberActive ? '<b>$29</b> (first HomeCare month) + ' : '') + '<b>$' + t.due + '</b> — the full order total, charged today. Cancel before a technician is dispatched: full refund.</p>';
   document.getElementById('orderTotals').innerHTML = s;
-  document.getElementById('orderBtn').textContent = (orderState.join && !orderState.memberActive ? 'Join HomeCare & place order' : 'Place order') + ' — $' + t.due + ' when done';
+  document.getElementById('orderBtn').textContent = (orderState.join && !orderState.memberActive ? 'Join HomeCare & pay' : 'Pay') + ' $' + t.due + ' & place order';
 }
 function orderAddon(cb){
   const idAttr = cb.getAttribute('data-addon');
@@ -3918,24 +4022,24 @@ async function submitOrder(){
       menuOrder: { serviceId: orderState.svcId, extras: t.extrasList.map(function(a){ return { name: a.name, price: a.price }; }), asap: t.asap, joinedMembership: joinedNow, totals: { list: t.list, member: t.member, due: t.due } }
     }) });
     const req = rd.request;
-    let holdOk = false, holdNote = '';
+    let payOk = false, payNote = '';
     if (orderState.noStripe) {
-      holdNote = ' The Team will call you to secure the visit with the $75 authorization hold.';
+      payNote = ' The Team will call you to complete the payment.';
     } else {
       try {
-        btn.textContent = 'Securing your visit (authorization hold)…';
-        const hd = await api('/api/orders/hold', { method: 'POST', body: JSON.stringify({ requestId: req.id }) });
+        btn.textContent = 'Charging your card…';
+        const pd = await api('/api/orders/pay', { method: 'POST', body: JSON.stringify({ requestId: req.id }) });
         let conf2;
-        if (orderState.pmId) conf2 = await stripeObj.confirmCardPayment(hd.clientSecret, { payment_method: orderState.pmId });
-        else conf2 = await stripeObj.confirmCardPayment(hd.clientSecret, { payment_method: { card: orderCardEl, billing_details: { name: me.name, email: me.email } } });
+        if (orderState.pmId) conf2 = await stripeObj.confirmCardPayment(pd.clientSecret, { payment_method: orderState.pmId });
+        else conf2 = await stripeObj.confirmCardPayment(pd.clientSecret, { payment_method: { card: orderCardEl, billing_details: { name: me.name, email: me.email } } });
         if (conf2.error) throw new Error(conf2.error.message);
-        await api('/api/orders/hold-confirm', { method: 'POST', body: JSON.stringify({ requestId: req.id, paymentIntentId: hd.paymentIntentId }) });
-        holdOk = true;
-      } catch (e) { holdNote = ' The authorization hold could not be placed (' + e.message + ') — your order is in, and the Team will call you to secure the visit.'; }
+        await api('/api/orders/pay-confirm', { method: 'POST', body: JSON.stringify({ requestId: req.id, paymentIntentId: pd.paymentIntentId }) });
+        payOk = true;
+      } catch (e) { payNote = ' Your payment could not be completed (' + e.message + ') — your order is in, and the Team will call you to finish the payment.'; }
     }
     const done = document.getElementById('orderDone');
     done.style.display = 'block';
-    done.innerHTML = '<h3>✅ Order placed — ' + req.id + '</h3><p><b>' + svc.name + '</b> · Total when the job is done: <b>$' + t.due + '</b>' + (joinedNow ? '<br>🎉 Welcome to HomeCare! Your membership is active and its 20% price is applied to this order.' : '') + (holdOk ? '<br>💳 A $75 authorization hold is on your card — not a charge.' : '') + holdNote + '</p><p class="mut">The Team confirms your time within minutes. Follow your order live — and message the Team — right here in the app.</p><button onclick="exitOrder()">Go to my orders</button>';
+    done.innerHTML = '<h3>✅ Order placed — ' + req.id + '</h3><p><b>' + svc.name + '</b> · Order total: <b>$' + t.due + '</b>' + (joinedNow ? '<br>🎉 Welcome to HomeCare! Your membership is active and its 20% price is applied to this order.' : '') + (payOk ? '<br>💳 Paid in full — $' + t.due + ' charged to your card. Thank you!' : '') + payNote + '</p><p class="mut">The Team confirms your time within minutes. Follow your order live — and message the Team — right here in the app.</p><button onclick="exitOrder()">Go to my orders</button>';
     done.scrollIntoView({ behavior: 'smooth' });
     btn.style.display = 'none';
   } catch (e) {
