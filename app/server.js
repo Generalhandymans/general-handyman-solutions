@@ -1434,6 +1434,25 @@ function publicCart(c) {
 }
 function normalizeCartItems(rawItems) {
   return (Array.isArray(rawItems) ? rawItems : []).slice(0, 20).map(it => {
+    // v52: free-form custom lines (Gabriel: the builder could not add a
+    // service that is not in the catalog, nor hourly labor at $75/hr).
+    // Custom lines are validated STRICTLY — a bad one rejects the whole
+    // cart with a 400 instead of being silently dropped or clamped.
+    // kind 'labor' earns the HomeCare/Plus member −20% exactly like
+    // catalog labor (memberUnit = round(price×0.8)); kind 'other'
+    // (materials/fees) NEVER discounts — its memberUnit is the full price.
+    if (it && it.custom === true) {
+      const name = cleanText(it.name || it.description, 120);
+      if (!name) throw new Error('a custom line needs a name');
+      const rawPrice = it.price != null ? it.price : it.unitPrice;
+      const price = Number(rawPrice);
+      if (!Number.isFinite(price) || price < 0 || price > 100000) throw new Error('a custom line price must be a number between $0 and $100,000');
+      const qty = Number(it.qty);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw new Error('a custom line quantity must be a whole number from 1 to 99');
+      const unitPrice = money(price);
+      const kind = it.kind === 'labor' ? 'labor' : 'other';
+      return { serviceId: '', custom: true, kind, name, qty, unitPrice, lineTotal: money(qty * unitPrice), memberUnit: kind === 'labor' ? money(unitPrice * 0.8) : unitPrice };
+    }
     const qty = Math.max(1, Math.min(99, Math.round(Number(it && it.qty) || 1)));
     const unitPrice = clampMoney(it && it.unitPrice);
     return { serviceId: cleanText(it && it.serviceId, 60), name: cleanText(it && (it.name || it.description), 120), qty, unitPrice, lineTotal: money(qty * unitPrice), memberUnit: money(unitPrice * 0.8) };
@@ -1463,7 +1482,7 @@ function convertCartToRequest(c, payInfo) {
   let customerId = null;
   if (email) { const u = db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === email); if (u) customerId = u.id; }
   const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
-  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => ({ serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice })), totals: { list: c.listTotal, member: c.memberTotal, due: (Number(payInfo.amountCents) || 0) / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: 'Ordered from cart ' + c.id + ' and paid in full: ' + usd((Number(payInfo.amountCents) || 0) / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: (Number(payInfo.amountCents) || 0) / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: 'Ordered from cart ' + c.id + ' and paid in full: ' + usd((Number(payInfo.amountCents) || 0) / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString(); c.payment = { pi: payInfo.pi || '', amountCents: Math.round(Number(payInfo.amountCents) || 0) };
   recordRequestPayment(r, { pi: payInfo.pi, amountCents: payInfo.amountCents, kind: 'cart-order' });
@@ -2429,6 +2448,7 @@ function cartPageHtml(c, user, langOverride) {
       totalPaid: 'Total paid:', thService: 'Service', thQty: 'Qty', thEach: 'Each', thLine: 'Line', questions: 'Questions? Text or call (707) 862-3773.',
       intro: 'The Team put this together for you. Review it, add your info, and pay — all on this one page.', totalLabel: 'Total:',
       savings: 'Regular total {list} • HomeCare member total {member} (save {save})',
+      subtotalLabel: 'Subtotal', memberSavingsLabel: 'Member savings', tagLabor: 'Labor', tagMaterial: 'Materials',
       laborNote: 'Labor only — you buy materials/parts unless the Team says otherwise in writing.',
       yourInfo: 'Your info', fullName: 'Full name', phone: 'Phone', email: 'Email', address: 'Service address', city: 'City',
       whenH: 'When', whenNote: 'You propose the day and time — <b>the Team confirms</b> every appointment.', prefDate: 'Preferred date', timeWindow: 'Time window',
@@ -2437,7 +2457,7 @@ function cartPageHtml(c, user, langOverride) {
       memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings are already in this cart.',
       memberFoundBody: 'We found your active membership — your 20% savings are in this cart.',
       joinLabel: 'Become a HomeCare member — $29/mo — and save 20% on this order',
-      joinBody: 'Join right here and this cart drops from {list} to {member} (you save {save}). First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
+      joinBody: 'Join right here and this proposal drops from {list} to {member} — you save {save} on this job. First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay {amt} in full',
       refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
@@ -2455,6 +2475,7 @@ function cartPageHtml(c, user, langOverride) {
       totalPaid: 'Total pagado:', thService: 'Servicio', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe', questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.',
       intro: 'El Equipo preparó esto para ti. Revísalo, agrega tus datos y paga — todo en esta página.', totalLabel: 'Total:',
       savings: 'Total normal {list} • Total de miembro HomeCare {member} (ahorras {save})',
+      subtotalLabel: 'Subtotal', memberSavingsLabel: 'Ahorro de miembro', tagLabor: 'Labor', tagMaterial: 'Materiales',
       laborNote: 'Solo mano de obra — tú compras los materiales y piezas, a menos que el Equipo diga lo contrario por escrito.',
       yourInfo: 'Tus datos', fullName: 'Nombre completo', phone: 'Teléfono', email: 'Correo electrónico', address: 'Dirección del servicio', city: 'Ciudad',
       whenH: 'Cuándo', whenNote: 'Tú propones el día y la hora — <b>el Equipo confirma</b> cada cita.', prefDate: 'Fecha preferida', timeWindow: 'Horario',
@@ -2463,7 +2484,7 @@ function cartPageHtml(c, user, langOverride) {
       memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% ya está aplicado en este carrito.',
       memberFoundBody: 'Encontramos tu membresía activa — tu ahorro del 20% está en este carrito.',
       joinLabel: 'Hazte miembro de HomeCare — $29/mes — y ahorra 20% en esta orden',
-      joinBody: 'Únete aquí mismo y este carrito baja de {list} a {member} (ahorras {save}). Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
+      joinBody: 'Únete aquí mismo y esta propuesta baja de {list} a {member} — ahorras {save} en este trabajo. Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
       refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
@@ -2479,7 +2500,31 @@ function cartPageHtml(c, user, langOverride) {
   const S = CI[initLang];
   const fillS = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
   const amounts = { list: usd(c.listTotal), member: usd(c.memberTotal), save: usd(money(c.listTotal - c.memberTotal)) };
-  const rows = (c.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  const startMember = c.status === 'paid' ? !!c.memberApplied : sessionMember;
+  // v52 layout (Gabriel): the proposal reads services first, then labor,
+  // then materials — stable within each group — and every line that earns
+  // the member −20% (catalog services + custom LABOR) shows a guest BOTH
+  // prices: the regular one and the green member one. Materials lines
+  // never show a member price. Once member pricing applies (by session,
+  // by the email check, or by joining on this page) renderAmounts swaps
+  // every row to its member figure and hides the hints.
+  const rankOf = it => it.custom ? (it.kind === 'labor' ? 1 : 2) : 0;
+  const orderedItems = (c.items || []).map((it, i) => ({ it, i })).sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i)).map(x => x.it);
+  const rows = orderedItems.map(it => {
+    const mu = it.memberUnit != null ? it.memberUnit : it.unitPrice;
+    const memLine = money(it.qty * mu);
+    const eu = startMember ? mu : it.unitPrice;
+    const el = money(it.qty * eu);
+    const tag = !it.custom ? '' : (it.kind === 'labor'
+      ? ' <span data-i18n="tagLabor" style="display:inline-block;background:#eef7ee;border:1px solid #bfe3bf;color:#1a7f37;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagLabor + '</span>'
+      : ' <span data-i18n="tagMaterial" style="display:inline-block;background:#f1f1f1;border:1px solid #ddd;color:#555;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagMaterial + '</span>');
+    const hint = (mu < it.unitPrice)
+      ? '<div class="memHint" style="color:#1a9e4b;font-size:12.5px;font-weight:700' + (startMember ? ';display:none' : '') + '">Members ' + usd(memLine) + '</div>' : '';
+    return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.name) + tag + hint + '</td>'
+      + '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td>'
+      + '<td class="cEach" data-l="' + usd(it.unitPrice) + '" data-m="' + usd(mu) + '" style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(eu) + '</td>'
+      + '<td class="cLine" data-l="' + usd(it.lineTotal) + '" data-m="' + usd(memLine) + '" style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(el) + '</td></tr>';
+  }).join('');
   const tblHead = '<tr><th style="text-align:left;padding:8px" data-i18n="thService">' + S.thService + '</th><th style="padding:8px" data-i18n="thQty">' + S.thQty + '</th><th style="text-align:right;padding:8px" data-i18n="thEach">' + S.thEach + '</th><th style="text-align:right;padding:8px" data-i18n="thLine">' + S.thLine + '</th></tr>';
   const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
   const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleCart + ' ' + escMail(c.id) + ' — General Handyman Solutions</title>'
@@ -2526,8 +2571,11 @@ function cartPageHtml(c, user, langOverride) {
     + '<h2 style="margin-top:0" data-i18n="titleCart">' + S.titleCart + '</h2>'
     + '<p style="color:#666" data-i18n="intro">' + S.intro + '</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
-    + '<p style="font-size:20px;margin-bottom:4px"><span data-i18n="totalLabel">' + S.totalLabel + '</span> <b id="cartBigTotal">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></p>'
-    + (savings > 0 ? '<p id="savingsLine" style="color:#666;font-size:13px;margin-top:0">' + fillS(S.savings, amounts) + '</p>' : '')
+    + '<div style="margin-top:12px;border-top:2px solid #111;padding-top:10px">'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span>' + usd(c.listTotal) + '</span></div>'
+    + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#1a9e4b;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
+    + '</div>'
     + '<p style="color:#666;font-size:13px" data-i18n="laborNote">' + S.laborNote + '</p>'
     + '<div id="cartForm">'
     + '<h3 style="margin-bottom:2px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
@@ -2555,7 +2603,7 @@ function cartPageHtml(c, user, langOverride) {
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var cur=memberApplied?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); }'
+    + 'function renderAmounts(){ var cur=memberApplied?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=memberApplied?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=memberApplied?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=memberApplied?"flex":"none"; }'
     + 'function applyMemberUi(){ memberApplied=true; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
     + 'function mountCard(){ if(!stripeObj) return; try{ if(cardEl) cardEl.destroy(); }catch(e){} cardEl=stripeObj.elements({locale: LANG==="es"?"es":"en"}).create("card",{style:{base:{fontSize:"16px"}}}); cardEl.mount("#cardEl"); }'
     + 'fetch("/api/stripe/config").then(function(r){return r.json();}).then(function(cfg){ if(cfg.publishableKey && typeof Stripe!=="undefined"){ stripeObj=Stripe(cfg.publishableKey); mountCard(); } }).catch(function(){});'
@@ -4575,7 +4623,8 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/admin/carts' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
-    const items = normalizeCartItems(b.items);
+    let items;
+    try { items = normalizeCartItems(b.items); } catch (e) { return send(res, 400, { error: e.message }); }
     if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
     const totals = cartTotals(items);
     if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });

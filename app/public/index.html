@@ -828,6 +828,20 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <label>Search the menu<input id="cartSearch" placeholder="Type to search services…" oninput="renderCartPicker()"></label>
       <div id="cartPicker" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:6px"></div>
       <div id="cartLines" style="margin-top:10px"></div>
+      <div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
+        <b>＋ Custom line</b> <span class="mut">— anything that is NOT in the menu: type the name, the price and the qty, then add it as labor or as materials. Labor lines get the member −20% on the cart page; materials never discount.</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:end">
+          <label style="flex:2;min-width:180px">Line name<input id="cartCustomName" placeholder="Labor, Materials — conduit, wire, parts…"></label>
+          <label style="width:110px">Price $<input id="cartCustomPrice" type="number" min="0" step="0.01" placeholder="0.00"></label>
+          <label style="width:80px">Qty<input id="cartCustomQty" type="number" min="1" max="99" step="1" value="1"></label>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button type="button" class="ghost" onclick="cartAddCustomLine('labor')">＋ Custom labor line</button>
+          <button type="button" class="ghost" onclick="cartAddCustomLine('other')">＋ Materials line</button>
+          <button type="button" class="black" onclick="cartAddLabor75()">Labor — $75/hr</button>
+        </div>
+        <p class="mut" style="margin:6px 0 0">“Labor — $75/hr” is one tap: it drops in a Labor line at $75 — set its qty to the hours. The other two buttons use the name / price / qty above.</p>
+      </div>
       <div class="est-summary" id="cartSummary">Cart is empty — add services above.</div>
       <div class="row"><div><label>Customer name (optional)</label><input id="cartCustName" placeholder="Prefill for the customer"></div><div><label>Customer phone (optional)</label><input id="cartCustPhone" placeholder="(707) 555-0123"></div></div>
       <label>Team note (optional)<input id="cartNote" placeholder="Anything about this quote — the customer sees it in the order"></label>
@@ -3542,19 +3556,34 @@ function cartAdd(idv){
   if(ex) ex.qty=Math.min(99, ex.qty+1); else cartDraft.push({ serviceId:idv, name:s.name, qty:1, unitPrice:s.price });
   renderCartLines();
 }
+function cartAddCustomLine(kind){
+  const name=((document.getElementById('cartCustomName')||{}).value||'').trim();
+  const price=Number((document.getElementById('cartCustomPrice')||{}).value);
+  const qty=Math.round(Number((document.getElementById('cartCustomQty')||{}).value)||1);
+  if(!name){ alert('Type the line name first — it is what the customer sees.'); return; }
+  if(!isFinite(price) || price<0){ alert('Add a price for the line (0 is allowed).'); return; }
+  cartDraft.push({ custom:true, kind:(kind==='other'?'other':'labor'), serviceId:'', name:name, qty:Math.max(1,Math.min(99,qty)), unitPrice:Math.round(price*100)/100 });
+  document.getElementById('cartCustomName').value=''; document.getElementById('cartCustomPrice').value=''; document.getElementById('cartCustomQty').value='1';
+  renderCartLines();
+}
+function cartAddLabor75(){
+  const ex=cartDraft.find(function(x){ return x.custom && x.kind==='labor' && x.name==='Labor' && x.unitPrice===75; });
+  if(ex) ex.qty=Math.min(99, ex.qty+1); else cartDraft.push({ custom:true, kind:'labor', serviceId:'', name:'Labor', qty:1, unitPrice:75 });
+  renderCartLines();
+}
 function cartSetQty(i,v){ cartDraft[i].qty=Math.max(1,Math.min(99,Math.round(Number(v)||1))); renderCartLines(); }
 function cartSetPrice(i,v){ cartDraft[i].unitPrice=Math.max(0,Math.round((Number(v)||0)*100)/100); renderCartSummary(); }
 function cartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
 function renderCartLines(){
   const box=document.getElementById('cartLines'); if(!box) return;
-  box.innerHTML=cartDraft.map(function(it,i){ return '<div class="est-row"><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name"><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="cartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
+  box.innerHTML=cartDraft.map(function(it,i){ const tag=it.custom?' <span class="pill" style="font-size:11px;padding:2px 8px">'+(it.kind==='other'?'Material':'CUSTOM · Labor')+'</span>':''; return '<div class="est-row"><span><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name" style="width:100%">'+tag+'</span><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="cartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
   renderCartSummary();
 }
 function renderCartSummary(){
   const el=document.getElementById('cartSummary'); if(!el) return;
   if(!cartDraft.length){ el.textContent='Cart is empty — add services above.'; return; }
   const list=cartDraft.reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
-  const member=cartDraft.reduce(function(s,it){ return s+it.qty*Math.round(it.unitPrice*0.8*100)/100; },0);
+  const member=cartDraft.reduce(function(s,it){ const u=(it.custom && it.kind==='other') ? it.unitPrice : Math.round(it.unitPrice*0.8*100)/100; return s+it.qty*u; },0);
   el.innerHTML='<b>Total:</b> <span class="st">'+moneyFmt(list)+'</span> • HomeCare member pays: <b>'+moneyFmt(member)+'</b> (member price applies only if the customer is — or becomes — a HomeCare / Plus member on the cart page)';
 }
 async function createCartLink(){
