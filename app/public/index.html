@@ -823,7 +823,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div class="card" style="margin-bottom:10px"><b>+ Nuevo estimado</b> <span class="mut">— for a customer with no request yet: create it here, then add lines from the menu / materials in its builder, preview it as the customer, and send.</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input id="neName" placeholder="Customer name" style="flex:1;min-width:140px"><input id="neEmail" placeholder="Email" style="flex:1;min-width:170px"><input id="nePhone" placeholder="Phone" style="flex:1;min-width:120px"><input id="neService" placeholder="Service / job" style="flex:2;min-width:180px"><input id="neCity" placeholder="City" style="flex:1;min-width:110px"><button type="button" class="black" onclick="newEstimate()">Create &amp; open builder</button></div><p class="mut" id="neMsg"></p></div>
     <div id="adminRequests"></div>
     <h3>Cart — build it, send ONE link</h3>
-    <div class="card">
+    <div class="card" id="cartBuilderCard">
+      <div id="cartEditBanner" style="display:none;background:#fff4d6;border:1px solid #e3c878;border-radius:10px;padding:10px;margin-bottom:10px">✏️ <b>Editing cart <span id="cartEditWhich"></span></b> — the link does NOT change; the customer sees the updated lines and totals. <button type="button" class="ghost" onclick="cancelCartEdit()">Cancel edit</button></div>
       <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays in full.</p>
       <label>Search the menu<input id="cartSearch" placeholder="Type to search services…" oninput="renderCartPicker()"></label>
       <div id="cartPicker" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:6px"></div>
@@ -846,7 +847,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="row"><div><label>Customer name (optional)</label><input id="cartCustName" placeholder="Prefill for the customer"></div><div><label>Customer phone (optional)</label><input id="cartCustPhone" placeholder="(707) 555-0123"></div></div>
       <label>Team note (optional)<input id="cartNote" placeholder="Anything about this quote — the customer sees it in the order"></label>
       <label>Cart page language<select id="cartLang"><option value="en">English</option><option value="es">Español</option></select></label>
-      <button class="black" onclick="createCartLink()">Generate cart link</button>
+      <button class="black" id="cartMainBtn" onclick="submitCart()">Generate cart link</button>
       <div id="cartLinkOut" style="margin-top:8px"></div>
     </div>
     <div id="adminCarts"></div>
@@ -3597,6 +3598,57 @@ async function createCartLink(){
     loadAdminCarts();
   }catch(e){ alert(e.message); }
 }
+// ---------- Cart edit mode (v55): change an OPEN cart in place ----------
+// The link never changes — Save PUTs the new lines to the same cart and
+// the customer opening the link sees the updated lines/totals. The
+// server expires any live Checkout session on edit, so nobody can pay
+// a stale total.
+let cartEditId = null;
+function setCartEditUi(){
+  const editing=!!cartEditId;
+  const banner=document.getElementById('cartEditBanner');
+  if(banner){ banner.style.display=editing?'block':'none'; if(editing) document.getElementById('cartEditWhich').textContent=cartEditId; }
+  const btn=document.getElementById('cartMainBtn');
+  if(btn) btn.textContent=editing?('Save changes — '+cartEditId):'Generate cart link';
+}
+async function editCart(idv){
+  try{
+    const d=await api('/api/admin/carts');
+    const c=(d.carts||[]).find(function(x){ return x.id===idv; });
+    if(!c){ alert('Cart not found — the list was refreshed.'); loadAdminCarts(); return; }
+    if(c.status!=='open'){ alert('Only OPEN carts can be edited — this one is '+c.status+'.'); return; }
+    cartEditId=c.id;
+    cartDraft=(c.items||[]).map(function(it){ return it.custom ? { custom:true, kind:(it.kind==='other'?'other':'labor'), serviceId:'', name:it.name, qty:it.qty, unitPrice:it.unitPrice } : { serviceId:it.serviceId||'', name:it.name, qty:it.qty, unitPrice:it.unitPrice }; });
+    document.getElementById('cartCustName').value=c.customerName||'';
+    document.getElementById('cartCustPhone').value=c.customerPhone||'';
+    document.getElementById('cartNote').value=c.note||'';
+    const langSel=document.getElementById('cartLang'); if(langSel) langSel.value=c.lang||'en';
+    document.getElementById('cartLinkOut').innerHTML='';
+    setCartEditUi();
+    renderCartLines();
+    const card=document.getElementById('cartBuilderCard'); if(card) card.scrollIntoView({behavior:'smooth', block:'start'});
+  }catch(e){ alert(e.message); }
+}
+function cancelCartEdit(){
+  cartEditId=null; cartDraft=[];
+  ['cartCustName','cartCustPhone','cartNote'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
+  const langSel=document.getElementById('cartLang'); if(langSel) langSel.value='en';
+  document.getElementById('cartLinkOut').innerHTML='';
+  setCartEditUi();
+  renderCartLines();
+}
+async function submitCart(){ if(cartEditId) return saveCartEdit(); return createCartLink(); }
+async function saveCartEdit(){
+  if(!cartDraft.length){ alert('Add at least one service first.'); return; }
+  const idv=cartEditId;
+  try{
+    const d=await api('/api/admin/carts/'+idv,{method:'PUT', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
+    const url=d.cart.link;
+    cancelCartEdit();
+    document.getElementById('cartLinkOut').innerHTML='<b>Cart '+idv+' updated:</b> total now <b>'+moneyFmt(d.cart.listTotal)+'</b> (member '+moneyFmt(d.cart.memberTotal)+') — same link: <a href="'+url+'" target="_blank" rel="noopener">'+url+'</a> <button type="button" class="ghost" onclick="copyCartLink(\''+idv+'\')">Copy link</button>';
+    loadAdminCarts();
+  }catch(e){ alert(e.message); }
+}
 function copyCartLink(idv){
   var url=location.origin+'/cart/'+idv;
   function done(){ alert('Cart link copied:\n'+url); }
@@ -3611,7 +3663,7 @@ async function loadAdminCarts(){
     box.innerHTML=d.carts.map(function(c){
       const items=(c.items||[]).map(function(it){ return escHtml(it.name)+' ×'+it.qty; }).join(' + ');
       const badge=c.status==='paid'?'<span class="pill" style="background:#1a7f37">paid → '+(c.requestId||'')+'</span>':(c.status==='cancelled'?'<span class="pill" style="background:#6b6762">cancelled</span>':'<span class="pill" style="background:#b26a00">open</span>');
-      return '<div class="card"><b>'+c.id+'</b> '+badge+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+(c.customerName?' • for '+escHtml(c.customerName):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button> <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
+      return '<div class="card"><b>'+c.id+'</b> '+badge+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+(c.customerName?' • for '+escHtml(c.customerName):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button>'+(c.status==='open'?' <button type="button" class="ghost" onclick="editCart(\''+c.id+'\')">Edit</button>':'')+' <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }
 }

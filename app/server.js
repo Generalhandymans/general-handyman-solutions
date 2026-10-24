@@ -1525,6 +1525,22 @@ function normalizeCartItems(rawItems) {
 function cartTotals(items) {
   return { listTotal: money(items.reduce((s, it) => s + it.lineTotal, 0)), memberTotal: money(items.reduce((s, it) => s + money(it.qty * it.memberUnit), 0)) };
 }
+// v55: kill any live Checkout session a cart still points at and forget
+// its ids. A session carries the amount from when it was created, so
+// after an edit it must never be completable. Expiry is best-effort —
+// a Stripe failure is logged and the local ids are cleared anyway;
+// the return path and pay-confirm only ever honor session ids the cart
+// still records, at amounts matching the cart's CURRENT totals, so a
+// failure here cannot leak a stale payment through either.
+async function expireCartSessions(c) {
+  const ids = [c.paySessionId, c.joinSessionId].filter((v, i, a) => !!v && a.indexOf(v) === i);
+  c.paySessionId = ''; c.joinSessionId = ''; c.joinPending = false;
+  if (!ids.length || !stripeReady()) return;
+  for (const sid of ids) {
+    try { await stripeApi('/checkout/sessions/' + encodeURIComponent(sid) + '/expire', {}); }
+    catch (e) { console.error('cart ' + c.id + ': could not expire Stripe session ' + sid + ' — ' + e.message); }
+  }
+}
 // The 20% menu discount belongs to HomeCare / HomeCare Plus ONLY — the
 // same homeCareStatus flag the checkout uses. A Yard-only member does NOT
 // get cart member prices.
@@ -4759,6 +4775,39 @@ const server = http.createServer(async (req, res) => {
     if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid — cancel/refund its order ' + (c.requestId || '') + ' instead' });
     c.status = 'cancelled';
     audit(user, 'cart.cancel', c.id, '');
+    save();
+    return send(res, 200, { cart: publicCart(c) });
+  }
+  // v55: edit an OPEN cart in place — same link, new lines (Gabriel:
+  // "make me the opportunity to change the open orders from cart").
+  // Lines are validated by the same normalizeCartItems as create and
+  // totals are recomputed server-side; paid/cancelled carts are final.
+  const cartEditMatch = p.match(/^\/api\/admin\/carts\/([\w-]+)$/);
+  if (cartEditMatch && req.method === 'PUT') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = cartsOf().find(x => x.id === cartEditMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid — it can no longer be edited' });
+    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — build a new cart instead' });
+    const b = await readBody(req);
+    let items;
+    try { items = normalizeCartItems(b.items); } catch (e) { return send(res, 400, { error: e.message }); }
+    if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
+    const totals = cartTotals(items);
+    if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
+    // SESSION SAFETY: any Checkout session already created for this
+    // cart carries the OLD total. Expire it at Stripe and forget its
+    // ids BEFORE the new totals land, so a customer mid-checkout can
+    // never complete a payment for the stale amount.
+    await expireCartSessions(c);
+    c.items = items; c.listTotal = totals.listTotal; c.memberTotal = totals.memberTotal;
+    c.memberApplied = false;
+    // Builder metadata rides along when present (same fields as create).
+    if (b.customerName !== undefined) c.customerName = cleanText(b.customerName, 80);
+    if (b.customerPhone !== undefined) c.customerPhone = cleanText(b.customerPhone, 40);
+    if (b.note !== undefined) c.note = cleanText(b.note, 500);
+    if (b.lang !== undefined) c.lang = b.lang === 'es' ? 'es' : 'en';
+    audit(user, 'cart.edit', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
     save();
     return send(res, 200, { cart: publicCart(c) });
   }
