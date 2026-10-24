@@ -1449,6 +1449,34 @@ function activateHomeCareFromCheckout(u, session) {
   }
   return !alreadyActiveHere;
 }
+// v57: which plan a public-page membership Checkout session belongs to.
+// Sessions created for a plan carry metadata.plan (server-set at creation
+// by createCheckoutSession for the yardcare / homecare-plus kinds); the
+// HomeCare kind carries kind='homecare' and no plan key. Anything else
+// (a plan kind WITHOUT a plan key) resolves to null — never guessed.
+function planForCheckoutSession(sess) {
+  const md = (sess && sess.metadata) || {};
+  if (md.plan && MEMBERSHIP_PLANS[md.plan]) return MEMBERSHIP_PLANS[md.plan];
+  if (md.kind === 'homecare') return MEMBERSHIP_PLANS.homecare;
+  return null;
+}
+// v57: plan-aware activation from a Stripe-hosted Checkout session — the
+// shared body of the public pages' ?joined=1 return paths (the webhook
+// finishes the same page work). HomeCare keeps its dedicated activator
+// (welcome copy + homecare_welcome automation). Yard / Plus record
+// through the SAME activateMembershipPlan the Memberships page and the
+// subscription webhooks use: Plus also flips homeCareStatus, so every
+// existing discount check (cartMemberUserFor and friends) recognizes it;
+// a Yard plan records ONLY the yard plan — no HomeCare benefits, no
+// order discount (Gabriel's rule).
+function activateMembershipFromCheckout(u, session) {
+  const plan = planForCheckoutSession(session);
+  if (!plan) return null;
+  if (plan.key === 'homecare') { activateHomeCareFromCheckout(u, session); return plan; }
+  if (session.customer) u.stripeCustomerId = session.customer;
+  activateMembershipPlan(u, plan.key, { subscriptionId: session.subscription || '', first: true });
+  return plan;
+}
 // ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
 // Gabriel's call (2026-10-23): the $75 menu-order authorization hold is
 // GONE. Menu orders (and admin carts) are charged the FULL total at order
@@ -1534,7 +1562,7 @@ function cartTotals(items) {
 // failure here cannot leak a stale payment through either.
 async function expireCartSessions(c) {
   const ids = [c.paySessionId, c.joinSessionId].filter((v, i, a) => !!v && a.indexOf(v) === i);
-  c.paySessionId = ''; c.joinSessionId = ''; c.joinPending = false;
+  c.paySessionId = ''; c.joinSessionId = ''; c.joinPending = false; c.joinPlan = '';
   if (!ids.length || !stripeReady()) return;
   for (const sid of ids) {
     try { await stripeApi('/checkout/sessions/' + encodeURIComponent(sid) + '/expire', {}); }
@@ -1722,6 +1750,13 @@ async function handleStripeEvent(event) {
       if (!plan || plan.kind !== kind) { console.error('stripe webhook: membership session ' + obj.id + ' has unknown plan ' + planKey); return; }
       if (obj.customer) u.stripeCustomerId = obj.customer;
       activateMembershipPlan(u, plan.key, { subscriptionId: obj.subscription || '', first: true });
+      // v57: a plan join that started on the public cart page finishes
+      // its page work here too (the ?joined=1 return path does the same,
+      // idempotently): clear the cart's pending-join flag.
+      if (obj.metadata && obj.metadata.cartId) {
+        const c = cartsOf().find(x => x.id === obj.metadata.cartId);
+        if (c && c.joinPending) { c.joinPending = false; c.joinSessionId = obj.id; }
+      }
     } else if (kind === 'estimate' || kind === 'member-estimate') {
       const r = db.requests.find(x => x.id === (obj.metadata && obj.metadata.requestId));
       const amount = Math.round(Number(obj.amount_total) || 0) / 100;
@@ -2562,6 +2597,14 @@ function installPageHtml(langOverride) {
 
 function cartPageHtml(c, user, langOverride, notice) {
   const sessionMember = !!(user && user.role === 'customer' && user.homeCareStatus === 'active');
+  // v57: a signed-in customer can hold an ACTIVE plan that is NOT a
+  // discount plan (Yard Care): the membership is real — yard visits are
+  // covered and the app's member-estimate rules recognize it — but
+  // orders stay at the regular price, because the 20% order discount
+  // belongs to HomeCare / HomeCare Plus only. The page shows that
+  // member an honest active-membership banner instead of the picker.
+  const sessionPlan = (user && user.role === 'customer') ? membershipPlanOf(user) : null;
+  const sessionYardMember = !sessionMember && !!sessionPlan && sessionPlan.status === 'active' && sessionPlan.type === 'yard';
   const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : (c.lang === 'es' ? 'es' : 'en');
   const CI = {
     en: {
@@ -2578,13 +2621,22 @@ function cartPageHtml(c, user, langOverride, notice) {
       whenExtra: 'Anything else about timing? (optional)', whenPh: 'Gate code, after 3 PM, talk to Maria…',
       memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings are already in this cart.',
       memberFoundBody: 'We found your active membership — your 20% savings are in this cart.',
-      joinLabel: 'Become a HomeCare member — $29/mo — and save 20% on this order',
+      joinLabel: 'Become a HomeCare member — or pick your plan below — and save 20% on this order',
       joinBody: 'Join right here and this proposal drops from {list} to {member} — you save {save} on this job. First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
+      planHomecare: 'HomeCare — $29/mo · 20% off this order and every order',
+      planPlus1: 'HomeCare Plus — $100/mo · 20% off orders + 1 yard visit / month',
+      planPlus2: 'HomeCare Plus — $175/mo · 20% off orders + 2 yard visits / month',
+      planYard1: 'Yard Care — $75/mo · 1 yard visit / month',
+      planYard2: 'Yard Care — $150/mo · 2 yard visits / month',
+      yardNote: 'Yard Care covers your yard visits — the 20% discount on orders comes with HomeCare / HomeCare Plus, so this order stays at the regular price.',
+      yardActiveH: '✓ Yard Care membership active', yardActiveBody: 'Your plan covers your yard visits. Orders are at the regular price — the 20% order discount comes with HomeCare / HomeCare Plus.',
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay {amt} in full',
-      joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your $29/mo HomeCare membership — then you come right back here to pay this member total for your order.',
+      joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this member total for your order.',
+      joinOrderNoteYard: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this order total.',
+      joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
       refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
-      working: 'Working…', joining: 'Joining HomeCare…', processing: 'Processing payment…',
+      working: 'Working…', joining: 'Starting your membership…', processing: 'Processing payment…',
       errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
       errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
       errLogin: 'That email already has an account — type its password above to log in and join.', errMemberFail: 'membership signup failed',
@@ -2608,13 +2660,22 @@ function cartPageHtml(c, user, langOverride, notice) {
       whenExtra: '¿Algo más sobre el horario? (opcional)', whenPh: 'Código de la puerta, después de las 3 PM, hablar con María…',
       memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% ya está aplicado en este carrito.',
       memberFoundBody: 'Encontramos tu membresía activa — tu ahorro del 20% está en este carrito.',
-      joinLabel: 'Hazte miembro de HomeCare — $29/mes — y ahorra 20% en esta orden',
+      joinLabel: 'Hazte miembro de HomeCare — o elige tu plan abajo — y ahorra 20% en esta orden',
       joinBody: 'Únete aquí mismo y esta propuesta baja de {list} a {member} — ahorras {save} en este trabajo. Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
+      planHomecare: 'HomeCare — $29/mes · 20% de descuento en esta orden y en todas',
+      planPlus1: 'HomeCare Plus — $100/mes · 20% de descuento en órdenes + 1 visita de yarda / mes',
+      planPlus2: 'HomeCare Plus — $175/mes · 20% de descuento en órdenes + 2 visitas de yarda / mes',
+      planYard1: 'Yard Care — $75/mes · 1 visita de yarda / mes',
+      planYard2: 'Yard Care — $150/mes · 2 visitas de yarda / mes',
+      yardNote: 'Yard Care cubre tus visitas de yarda — el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus, así que esta orden queda al precio normal.',
+      yardActiveH: '✓ Membresía Yard Care activa', yardActiveBody: 'Tu plan cubre tus visitas de yarda. Las órdenes quedan al precio normal — el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus.',
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
-      joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía HomeCare de $29/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
+      joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
+      joinOrderNoteYard: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar el total de esta orden.',
+      joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
       refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
-      working: 'Procesando…', joining: 'Uniéndote a HomeCare…', processing: 'Procesando el pago…',
+      working: 'Procesando…', joining: 'Activando tu membresía…', processing: 'Procesando el pago…',
       errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
       errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y unirte.', errMemberFail: 'la membresía no se pudo activar',
@@ -2645,6 +2706,11 @@ function cartPageHtml(c, user, langOverride, notice) {
   // memberApplied (the real, server-verified state) is untouched, and
   // the server still computes and verifies every charge exactly as
   // before; the preview changes nothing that is charged.
+  // v57 extends the preview BY PLAN (the picker's PLANS map mirrors the
+  // server rule): HomeCare / HomeCare Plus picked → joinPreview on, the
+  // figures drop. A Yard plan picked → joinPreview stays OFF (no drop —
+  // Yard has no order discount) and the yardNote says so on screen; the
+  // join-order note under the button names the picked plan + price.
   const rankOf = it => it.custom ? (it.kind === 'labor' ? 1 : 2) : 0;
   const orderedItems = (c.items || []).map((it, i) => ({ it, i })).sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i)).map(x => x.it);
   const rows = orderedItems.map(it => {
@@ -2692,14 +2758,32 @@ function cartPageHtml(c, user, langOverride, notice) {
   }
   const savings = money(c.listTotal - c.memberTotal);
   const memberBox = '<b data-i18n="memberAppliedH">' + S.memberAppliedH + '</b>';
+  // v57 plan picker (Gabriel, live test): the join used to be HomeCare-
+  // only with no way to choose. Checking the box now reveals radio rows
+  // for all five paid plans (HomeCare pre-picked, today's default). The
+  // 20% order discount belongs to HomeCare / HomeCare Plus ONLY: picking
+  // a Yard plan keeps the totals at the regular price and says so right
+  // there (yardNote) — no silent no-discount surprise at payment time.
+  const planRow = (key, i18n, checked) => '<label style="display:block;border:1px solid #ddd;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;background:#fff"><input type="radio" name="cPlan" value="' + key + '"' + (checked ? ' checked' : '') + ' style="margin-right:8px"> <span data-i18n="' + i18n + '">' + S[i18n] + '</span></label>';
+  const planPicker = '<div id="planPicker" style="display:none;margin-top:10px">'
+    + planRow('homecare', 'planHomecare', true)
+    + planRow('plus1', 'planPlus1', false)
+    + planRow('plus2', 'planPlus2', false)
+    + planRow('yard1', 'planYard1', false)
+    + planRow('yard2', 'planYard2', false)
+    + '<p id="yardNote" style="display:none;color:#7a5b00;background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:8px 10px;font-size:13.5px;margin:8px 0 0"><span data-i18n="yardNote">' + S.yardNote + '</span></p>'
+    + '</div>';
   const joinBlock = sessionMember
     ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>'
-    : '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
-      + '<label style="display:block;font-size:16px"><input type="checkbox" id="cJoin" style="transform:scale(1.3);margin-right:8px"> <b data-i18n="joinLabel">' + S.joinLabel + '</b></label>'
-      + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
-      + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#555"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
-      + '</div>'
-      + '<div id="memberFound" style="display:none;background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberFoundBody">' + S.memberFoundBody + '</p></div>';
+    : sessionYardMember
+      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="yardActiveH">' + S.yardActiveH + '</b><p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="yardActiveBody">' + S.yardActiveBody + '</p></div>'
+      : '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
+        + '<label style="display:block;font-size:16px"><input type="checkbox" id="cJoin" style="transform:scale(1.3);margin-right:8px"> <b data-i18n="joinLabel">' + S.joinLabel + '</b></label>'
+        + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
+        + planPicker
+        + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#555"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
+        + '</div>'
+        + '<div id="memberFound" style="display:none;background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberFoundBody">' + S.memberFoundBody + '</p></div>';
   const inp = 'padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px';
   const lbl = 'display:block;margin:10px 0;font-size:14px;color:#555';
   const startCents = Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100);
@@ -2708,9 +2792,11 @@ function cartPageHtml(c, user, langOverride, notice) {
   // alone never produce it); 'cancelled' is a plain friendly note.
   const noticeHtml = notice === 'joined'
     ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
-    : notice === 'cancelled'
-      ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
-      : '';
+    : notice === 'joined-yard'
+      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedYardNote">' + S.joinedYardNote + '</div>'
+      : notice === 'cancelled'
+        ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+        : '';
   return head
     + noticeHtml
     + '<h2 style="margin-top:0" data-i18n="titleCart">' + S.titleCart + '</h2>'
@@ -2746,10 +2832,16 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
+    + 'var PLANS={"homecare":{"name":"HomeCare","price":"$29","disc":1},"plus1":{"name":"HomeCare Plus","price":"$100","disc":1},"plus2":{"name":"HomeCare Plus","price":"$175","disc":1},"yard1":{"name":"Yard Care","price":"$75","disc":0},"yard2":{"name":"Yard Care","price":"$150","disc":0}};'
+    + 'function selPlan(){ var r=document.querySelector("input[name=cPlan]:checked"); return (r && PLANS[r.value]) ? r.value : "homecare"; }'
+    + 'function joinOn(){ return !!($("cJoin") && $("cJoin").checked && !memberApplied); }'
+    + 'function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }'
+    + 'function fillPlan(s, pl){ return String(s||"").replace("{planName}", pl.name).replace("{price}", pl.price); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var jn=$("joinOrderNote"); if(jn) jn.style.display=joinPreview?"block":"none"; }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
     + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
-    + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ joinPreview=!!this.checked && !memberApplied; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
+    + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ syncJoinPreview(); var pp=$("planPicker"); if(pp) pp.style.display=this.checked?"block":"none"; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
+    + 'document.querySelectorAll("input[name=cPlan]").forEach(function(r){ r.addEventListener("change",function(){ syncJoinPreview(); renderAmounts(); }); });'
     + 'if($("cEmail")){ $("cEmail").addEventListener("blur",function(){ if(memberApplied) return; var em=val("cEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/api/carts/"+CART_ID+"/member-check",{email:em}).then(function(o){ if(o.ok && o.d.member) applyMemberUi(); }).catch(function(){}); }); }'
     + 'function buildWhen(){ var parts=[]; var d=$("cDate").value; var w=$("cWin").value; var t=val("cWhenText"); if(d) parts.push(d); if(w) parts.push(w); if(t) parts.push(t); return parts.join(" · ")||"ASAP — first available"; }'
     // v54: joining needs an app account BEFORE Stripe (the Checkout
@@ -2773,7 +2865,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + ' var wantJoin=!!($("cJoin") && $("cJoin").checked && !memberApplied);'
     + ' if(wantJoin){ btn.textContent=T("joining"); await ensureAccount(); }'
     + ' btn.textContent=T("processing");'
-    + ' var o=await jpost("/api/carts/"+CART_ID+"/checkout",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen(),join:wantJoin});'
+    + ' var o=await jpost("/api/carts/"+CART_ID+"/checkout",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen(),join:wantJoin,plan:wantJoin?selPlan():""});'
     + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errPay"));'
     + ' location.href=o.d.url;'
     + ' }catch(e){ fail(e.message); } };'
@@ -4915,12 +5007,31 @@ const server = http.createServer(async (req, res) => {
     c.customer = cust;
     const memberUser = cartMemberUserFor(user, cust.email);
     try {
+      // v57: the page's plan picker sends the plan the customer chose.
+      // The join session is created for THAT plan at the server-side
+      // MEMBERSHIP_PLANS price (a client-sent price is never read). No
+      // plan key -> HomeCare (the pre-picker behavior); an unknown or
+      // tampered key is a hard 400. The join session belongs to an
+      // ACCOUNT: the page creates/logs in the customer first (its
+      // password field), exactly as before.
+      let joinPlan = null;
       if (b.join === true && !memberUser) {
-        // The join session belongs to an ACCOUNT: the page creates/logs
-        // in the customer first (its password field), exactly as before.
         if (!user) { save(); return send(res, 401, { error: 'create your account above first, then tap Pay to join' }); }
         if (!['customer', 'admin'].includes(user.role)) { save(); return send(res, 403, { error: 'not allowed' }); }
-        const s = await createCheckoutSession('homecare', user, {
+        if (b.plan !== undefined && b.plan !== null && b.plan !== '') {
+          joinPlan = MEMBERSHIP_PLANS[b.plan] || null;
+          if (!joinPlan) { save(); return send(res, 400, { error: 'unknown membership plan' }); }
+        } else joinPlan = MEMBERSHIP_PLANS.homecare;
+        // One active plan per account (the Memberships page rule): a
+        // customer who already holds an ACTIVE plan — e.g. a Yard
+        // member buying an order — never stacks a second subscription
+        // from this page. They just pay (guest totals, unless their
+        // plan is a discount plan, which memberUser above caught).
+        if (membershipPlanOf(user).status === 'active') joinPlan = null;
+      }
+      if (joinPlan) {
+        const s = await createCheckoutSession(joinPlan.kind, user, {
+          plan: joinPlan.key,
           successUrl: cartLink(c) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
           metadata: { cartId: c.id, src: 'cart' },
@@ -4928,8 +5039,9 @@ const server = http.createServer(async (req, res) => {
         });
         c.joinSessionId = s.id;
         c.joinPending = true;
+        c.joinPlan = joinPlan.key;
         save();
-        return send(res, 200, { next: 'join', url: s.url });
+        return send(res, 200, { next: 'join', url: s.url, plan: joinPlan.key });
       }
       c.memberApplied = !!memberUser;
       const amountCents = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
@@ -5036,7 +5148,16 @@ const server = http.createServer(async (req, res) => {
             const chk = await checkoutSessionSubscriptionPaid(sess);
             if (chk.paid) {
               const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
-              if (mu) { activateHomeCareFromCheckout(mu, sess); c.joinPending = false; notice = 'joined'; save(); }
+              if (mu) {
+                // v57: activate the plan the customer actually picked
+                // (HomeCare / Plus / Yard) through the shared activator;
+                // a Yard join gets its own banner — membership active,
+                // NO claim that a discount was applied to this order.
+                const jp = activateMembershipFromCheckout(mu, sess);
+                c.joinPending = false;
+                notice = (jp && jp.type === 'yard') ? 'joined-yard' : 'joined';
+                save();
+              }
             }
           }
         } else if (url.searchParams.get('paid') === '1' && c.paySessionId && retSessionId === c.paySessionId) {
