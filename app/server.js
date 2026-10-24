@@ -2582,6 +2582,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       joinBody: 'Join right here and this proposal drops from {list} to {member} — you save {save} on this job. First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay {amt} in full',
+      joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your $29/mo HomeCare membership — then you come right back here to pay this member total for your order.',
       refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Joining HomeCare…', processing: 'Processing payment…',
       errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
@@ -2611,6 +2612,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       joinBody: 'Únete aquí mismo y esta propuesta baja de {list} a {member} — ahorras {save} en este trabajo. Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
+      joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía HomeCare de $29/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
       refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Uniéndote a HomeCare…', processing: 'Procesando el pago…',
       errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
@@ -2634,6 +2636,15 @@ function cartPageHtml(c, user, langOverride, notice) {
   // never show a member price. Once member pricing applies (by session,
   // by the email check, or by joining on this page) renderAmounts swaps
   // every row to its member figure and hides the hints.
+  // v56 (Gabriel, live test): checking the join box must DROP the prices
+  // on screen THE INSTANT it is checked — a guest could not see the
+  // member total before paying. renderAmounts now also follows a
+  // display-only joinPreview flag: box checked → subtotal/total/lines/
+  // Pay label all show the member figures and the savings row appears;
+  // unchecked → everything returns to the guest figures. DISPLAY ONLY —
+  // memberApplied (the real, server-verified state) is untouched, and
+  // the server still computes and verifies every charge exactly as
+  // before; the preview changes nothing that is charged.
   const rankOf = it => it.custom ? (it.kind === 'labor' ? 1 : 2) : 0;
   const orderedItems = (c.items || []).map((it, i) => ({ it, i })).sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i)).map(x => x.it);
   const rows = orderedItems.map(it => {
@@ -2706,9 +2717,9 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<p style="color:#666" data-i18n="intro">' + S.intro + '</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
     + '<div style="margin-top:12px;border-top:2px solid #111;padding-top:10px">'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span>' + usd(c.listTotal) + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span id="ctSubtotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '">' + usd(c.listTotal) + '</span></div>'
     + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#1a9e4b;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
-    + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
+    + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
     + '</div>'
     + '<p style="color:#666;font-size:13px" data-i18n="laborNote">' + S.laborNote + '</p>'
     + '<div id="cartForm">'
@@ -2727,17 +2738,18 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<h3 style="margin-bottom:2px" data-i18n="paymentH">' + S.paymentH + '</h3>'
     + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(startCents / 100) }) + '</button>'
     + '<p id="payMsg" style="color:#666"></p>'
+    + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#555;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
     + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
-    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', loggedIn=' + (user ? 'true' : 'false') + ';'
+    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var cur=memberApplied?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=memberApplied?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=memberApplied?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=memberApplied?"flex":"none"; }'
-    + 'function applyMemberUi(){ memberApplied=true; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
-    + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; }); }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var jn=$("joinOrderNote"); if(jn) jn.style.display=joinPreview?"block":"none"; }'
+    + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
+    + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ joinPreview=!!this.checked && !memberApplied; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
     + 'if($("cEmail")){ $("cEmail").addEventListener("blur",function(){ if(memberApplied) return; var em=val("cEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/api/carts/"+CART_ID+"/member-check",{email:em}).then(function(o){ if(o.ok && o.d.member) applyMemberUi(); }).catch(function(){}); }); }'
     + 'function buildWhen(){ var parts=[]; var d=$("cDate").value; var w=$("cWin").value; var t=val("cWhenText"); if(d) parts.push(d); if(w) parts.push(w); if(t) parts.push(t); return parts.join(" · ")||"ASAP — first available"; }'
     // v54: joining needs an app account BEFORE Stripe (the Checkout
