@@ -373,6 +373,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $29/mo total.</b> Your card will be charged <b>$29 today</b>, then $29/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
+    <!-- v59: technician sign-in entry — a dedicated high-contrast pill.
+         BEFORE this, the only door from the customer auth screen to the
+         technician login was the small muted "Log in here →" text link
+         (#workerLinkRow) at the very bottom of the card, below the
+         HomeCare promo (Gabriel, 2026-10-23: "no veo el login bien").
+         Visibility only: the pill routes to the existing #worker entry
+         view, exactly like that link always did — no auth flow changes. -->
+    <button type="button" id="techSignInBtn" onclick="location.hash='#worker';applyWorkerEntry();return false;" style="width:100%;margin-top:12px;background:#0b0b0b;color:#fff;border:2px solid #0b0b0b;border-radius:999px;padding:15px 20px;min-height:54px;font-weight:800;font-size:16.5px;cursor:pointer">🔨 Technician sign in</button>
     <p class="mut" id="workerAgreeRow" style="display:none;text-align:center;margin-top:8px">By applying you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword();return false;">Forgot my password</a></p>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
@@ -1036,6 +1044,8 @@ function applyWorkerEntry(){
   if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
   const wl = document.getElementById('workerLinkRow');
   if (wl) wl.style.display = w ? 'none' : 'block';
+  const tsb = document.getElementById('techSignInBtn');
+  if (tsb) tsb.style.display = w ? 'none' : 'block';
   const cl = document.getElementById('custLinkRow');
   if (cl) cl.style.display = w ? 'block' : 'none';
   if (w && (curMode === 'customer' || curMode === 'homecare')) mode('login');

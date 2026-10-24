@@ -2626,6 +2626,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       savings: 'Regular total {list} • HomeCare member total {member} (save {save})',
       subtotalLabel: 'Subtotal', memberSavingsLabel: 'Member savings', tagLabor: 'Labor', tagMaterial: 'Materials',
       laborNote: 'Labor only — you buy materials/parts unless the Team says otherwise in writing.',
+      materialsNote: 'Materials listed above are included in your total.',
       yourInfo: 'Your info', fullName: 'Full name', phone: 'Phone', email: 'Email', address: 'Service address', city: 'City',
       whenH: 'When', whenNote: 'You propose the day and time — <b>the Team confirms</b> every appointment.', prefDate: 'Preferred date', timeWindow: 'Time window',
       optAsap: 'ASAP — first available', optMorning: 'Morning (8am–12pm)', optAfternoon: 'Afternoon (12pm–5pm)', optEvening: 'Evening (5pm–8pm)',
@@ -2665,6 +2666,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       savings: 'Total normal {list} • Total de miembro HomeCare {member} (ahorras {save})',
       subtotalLabel: 'Subtotal', memberSavingsLabel: 'Ahorro de miembro', tagLabor: 'Labor', tagMaterial: 'Materiales',
       laborNote: 'Solo mano de obra — tú compras los materiales y piezas, a menos que el Equipo diga lo contrario por escrito.',
+      materialsNote: 'Los materiales listados arriba están incluidos en tu total.',
       yourInfo: 'Tus datos', fullName: 'Nombre completo', phone: 'Teléfono', email: 'Correo electrónico', address: 'Dirección del servicio', city: 'Ciudad',
       whenH: 'Cuándo', whenNote: 'Tú propones el día y la hora — <b>el Equipo confirma</b> cada cita.', prefDate: 'Fecha preferida', timeWindow: 'Horario',
       optAsap: 'Lo antes posible — primera disponibilidad', optMorning: 'Mañana (8am–12pm)', optAfternoon: 'Tarde (12pm–5pm)', optEvening: 'Noche (5pm–8pm)',
@@ -2722,6 +2724,13 @@ function cartPageHtml(c, user, langOverride, notice) {
   // figures drop. A Yard plan picked → joinPreview stays OFF (no drop —
   // Yard has no order discount) and the yardNote says so on screen; the
   // join-order note under the button names the picked plan + price.
+  // v59: a cart that already carries Materials lines must not tell the
+  // customer "you buy materials/parts" — those lines are exactly what
+  // this page tags 'Materials' (custom non-labor lines; normalizeCartItems
+  // stores their kind as 'other'). Below, the note under the totals
+  // switches to the inclusion note when any are present — the same
+  // switch the estimate page already makes via estimateHasMaterials.
+  const cartHasMaterials = (c.items || []).some(it => it.custom && it.kind !== 'labor');
   const rankOf = it => it.custom ? (it.kind === 'labor' ? 1 : 2) : 0;
   const orderedItems = (c.items || []).map((it, i) => ({ it, i })).sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i)).map(x => x.it);
   const rows = orderedItems.map(it => {
@@ -2818,7 +2827,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#1a9e4b;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
     + '</div>'
-    + '<p style="color:#666;font-size:13px" data-i18n="laborNote">' + S.laborNote + '</p>'
+    + '<p style="color:#666;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + '<div id="cartForm">'
     + '<h3 style="margin-bottom:2px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
     + '<label style="' + lbl + '"><span data-i18n="fullName">' + S.fullName + '</span><input id="cName" autocomplete="name" value="' + escMail(user ? user.name : (c.customerName || '')) + '" style="' + inp + '"></label>'
