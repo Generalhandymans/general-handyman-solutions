@@ -1210,6 +1210,14 @@ async function createCheckoutSession(kind, user, opts) {
     'metadata[userId]': user.id,
     'metadata[kind]': kind
   };
+  // v54: callers that bring the customer BACK to a public page (cart /
+  // estimate) override the return URLs and merge their own session
+  // metadata (cartId / estimateId) — defaults above stay untouched for
+  // every existing SPA / invoice caller.
+  if (opts.successUrl) params.success_url = opts.successUrl;
+  if (opts.cancelUrl) params.cancel_url = opts.cancelUrl;
+  if (opts.metadata) for (const k of Object.keys(opts.metadata)) params['metadata[' + k + ']'] = opts.metadata[k];
+  if (opts.subMetadata) for (const k of Object.keys(opts.subMetadata)) params['subscription_data[metadata][' + k + ']'] = opts.subMetadata[k];
   // Only send customer_email when we actually have one — Stripe rejects an
   // empty string (e.g. text-message invoices created without an email).
   if (user.email) params.customer_email = user.email;
@@ -1264,6 +1272,19 @@ async function createCheckoutSession(kind, user, opts) {
     params['payment_method_options[card][request_incremental_authorization]'] = 'if_available';
     params['custom_text[submit][message]'] = 'This places an authorization HOLD for an estimated amount — it is NOT a final charge. The hold may increase if you approve a larger written quote, and you are only charged the final amount when the work is done.';
     params['custom_text[after_submit][message]'] = 'Your card was authorized (hold only, not charged). You can follow your payment live from your estimate page.';
+  } else if (kind === 'cart-order') {
+    // v54: public cart page payment — ONE line item at the server-computed
+    // cart total (member or guest, decided server-side at checkout time).
+    // The PI carries kind+cartId metadata so the existing PI webhook
+    // backup reconciles exactly like the old inline cart PIs did.
+    params.mode = 'payment';
+    params['line_items[0][price_data][currency]'] = 'usd';
+    params['line_items[0][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[0][price_data][product_data][name]'] = opts.label || 'Cart order — paid in full — General Handyman Solutions';
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[cartId]'] = opts.cartId || '';
+    params['payment_intent_data[metadata][kind]'] = 'cart-order';
+    params['payment_intent_data[metadata][cartId]'] = opts.cartId || '';
   } else if (kind === 'invoice') {
     // One-time invoice payment: the payer may not have an app account (the
     // invoice carries customerEmail directly), so user fields are optional.
@@ -1336,19 +1357,37 @@ async function createInlineSubscription(user, plan) {
   if (!pi || !pi.client_secret) throw new Error('stripe did not return a payment intent');
   return { clientSecret: pi.client_secret, subscriptionId: sub.id };
 }
+// The ONE paid rule for a subscription (v54 factorizes what
+// inlineSubscriptionPaid always did): the subscription is active/trialing,
+// or its latest invoice's PaymentIntent succeeded, or the invoice itself
+// is paid. Stripe is the only source of truth — a page flag never counts.
+async function subscriptionIsPaid(sub) {
+  if (!sub) return false;
+  if (sub.status === 'active' || sub.status === 'trialing') return true;
+  const invId = typeof sub.latest_invoice === 'string' ? sub.latest_invoice : (sub.latest_invoice && sub.latest_invoice.id);
+  if (invId) {
+    const inv = await stripeGet('/invoices/' + invId);
+    const piId = typeof inv.payment_intent === 'string' ? inv.payment_intent : (inv.payment_intent && inv.payment_intent.id);
+    if (piId) { const pi = await stripeGet('/payment_intents/' + piId); return pi.status === 'succeeded'; }
+    return inv.status === 'paid';
+  }
+  return false;
+}
 async function inlineSubscriptionPaid(user) {
   const sub = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
-  let paid = sub.status === 'active';
-  if (!paid) {
-    const invId = typeof sub.latest_invoice === 'string' ? sub.latest_invoice : (sub.latest_invoice && sub.latest_invoice.id);
-    if (invId) {
-      const inv = await stripeGet('/invoices/' + invId);
-      const piId = typeof inv.payment_intent === 'string' ? inv.payment_intent : (inv.payment_intent && inv.payment_intent.id);
-      if (piId) { const pi = await stripeGet('/payment_intents/' + piId); paid = pi.status === 'succeeded'; }
-      else paid = inv.status === 'paid';
-    }
-  }
+  const paid = await subscriptionIsPaid(sub);
   return { paid, sub, plan: planFromSubscription(sub, membershipPlanOf(user)) };
+}
+// v54: verify a Stripe-hosted Checkout session that a public page sent
+// the customer to. Returns { paid, sub } for subscription sessions —
+// paid ONLY when Stripe says the subscription is actually paid (the
+// session's payment_status is 'paid' AND the subscription passes the
+// shared paid rule). A tampered or abandoned return verifies nothing.
+async function checkoutSessionSubscriptionPaid(sess) {
+  if (!sess || !sess.subscription) return { paid: false, sub: null };
+  const sub = await stripeGet('/subscriptions/' + sess.subscription);
+  const paid = sess.payment_status === 'paid' && await subscriptionIsPaid(sub);
+  return { paid, sub };
 }
 function verifyStripeSig(payload, header) {
   if (!STRIPE_WEBHOOK_SECRET) return false;
@@ -1384,6 +1423,31 @@ function activateHomeCare(u, isFirst) {
     notifyAdmins('membership', u.name + ' (' + u.email + ') HomeCare payment succeeded — membership active.');
   }
   save();
+}
+// v54: HomeCare activation from a Stripe-hosted Checkout session — the
+// shared body of the webhook's checkout.session.completed 'homecare'
+// branch AND the public pages' ?joined=1 return path, so both activate
+// identically. Idempotent: when the account is ALREADY active on this
+// very subscription (the other path landed first), the state writes are
+// no-ops and the welcome notifications do NOT fire a second time.
+function activateHomeCareFromCheckout(u, session) {
+  const subId = session.subscription || '';
+  const alreadyActiveHere = u.homeCareStatus === 'active' && !!subId && u.stripeSubscriptionId === subId;
+  const hadMembership = !!(u.homeCareSince || (u.membershipPlan && u.membershipPlan.since));
+  u.homeCareStatus = 'active';
+  u.homeCareSince = new Date().toISOString();
+  u.homeCareCancelAt = null;
+  if (!hadMembership) u.freeEstimateUsed = false; // one free estimate per account — switches/rejoins never re-grant it
+  u.stripeCustomerId = session.customer || u.stripeCustomerId || '';
+  u.stripeSubscriptionId = subId || u.stripeSubscriptionId || '';
+  setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
+  applySourceAtActivation(u);
+  if (!alreadyActiveHere) {
+    notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
+    notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
+    fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+  }
+  return !alreadyActiveHere;
 }
 // ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
 // Gabriel's call (2026-10-23): the $75 menu-order authorization hold is
@@ -1607,21 +1671,31 @@ async function handleStripeEvent(event) {
     // Estimate holds are filed BEFORE the user lookup: a guest checkout has
     // no app user, and the request (via session metadata) is the identity.
     if (kind === 'estimate-hold') { await holdFromCheckoutSession(obj); return; }
+    // v54: public cart payments ride Checkout sessions too. Filed before
+    // the user lookup (a guest cart payer may have no session user in
+    // metadata); conversion is idempotent with the page-return path and
+    // the payment_intent.succeeded backup below.
+    if (kind === 'cart-order') {
+      const c = cartsOf().find(x => x.id === (obj.metadata && obj.metadata.cartId));
+      if (c && obj.payment_status === 'paid') convertCartToRequest(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) });
+      return;
+    }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
     if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
     if (kind === 'homecare') {
-      const hadMembership = !!(u.homeCareSince || (u.membershipPlan && u.membershipPlan.since));
-      u.homeCareStatus = 'active';
-      u.homeCareSince = new Date().toISOString();
-      u.homeCareCancelAt = null;
-      if (!hadMembership) u.freeEstimateUsed = false; // one free estimate per account — switches/rejoins never re-grant it
-      u.stripeCustomerId = obj.customer || u.stripeCustomerId || '';
-      u.stripeSubscriptionId = obj.subscription || u.stripeSubscriptionId || '';
-      setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
-      applySourceAtActivation(u);
-      notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
-      notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
-      fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+      activateHomeCareFromCheckout(u, obj);
+      // v54: a join that started on a public page finishes its page work
+      // here too (the ?joined=1 return path does the same, idempotently):
+      // clear the cart's pending-join flag, and apply the member discount
+      // to the estimate the customer joined from.
+      if (obj.metadata && obj.metadata.cartId) {
+        const c = cartsOf().find(x => x.id === obj.metadata.cartId);
+        if (c && c.joinPending) { c.joinPending = false; c.joinSessionId = obj.id; }
+      }
+      if (obj.metadata && obj.metadata.estimateId) {
+        const er = db.requests.find(x => x.id === obj.metadata.estimateId);
+        if (er && er.estimate) applyEstimateMemberDiscount(er, u);
+      }
     } else if (kind === 'yardcare' || kind === 'homecare-plus') {
       // Plan key comes from the checkout session metadata WE set server-side
       // (never from the client). activateMembershipPlan records the plan,
@@ -2148,6 +2222,27 @@ function estimatePageLink(r) { return appBase() + '/estimate/' + r.id; }
 // on the LABOR subtotal only (materials never discount). Returns the
 // estimate untouched when the member math would not improve the total
 // (e.g. Gabriel set a better manual discount himself).
+// v54: the member-apply body, factored so the estimate page's member-
+// apply endpoint AND the join return/webhook paths apply the discount
+// identically. Only ever called with a memberUser that Stripe truth
+// already verified (cartMemberUserFor / an activated subscription).
+// Returns true when the discount was newly applied.
+function applyEstimateMemberDiscount(r, memberUser) {
+  if (!r || !r.estimate || !memberUser || r.status !== 'Quoted') return false;
+  const est = r.estimate;
+  const variant = memberVariantOfEstimate(est);
+  if (variant === est) return false;
+  if (!r.customerId) r.customerId = memberUser.id;
+  est.discountPct = variant.discountPct;
+  est.discountAmount = variant.discountAmount;
+  est.memberDiscount = true;
+  settleEstimateTotals(est);
+  r.quote = est.total;
+  audit(memberUser, 'estimate.member_applied', r.id, 'member total ' + usd(est.total));
+  r.messages = r.messages || [];
+  r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'HomeCare member pricing applied to this estimate — you save 20% on the labor. New total: ' + usd(est.total) + '.', at: new Date().toISOString() });
+  return true;
+}
 function memberVariantOfEstimate(est) {
   const d = money((Number(est && est.laborSubtotal) || 0) * 0.2);
   if (!(d > 0) || (Number(est.discountAmount) || 0) >= d) return est;
@@ -2168,7 +2263,7 @@ function memberVariantOfEstimate(est) {
 // expiry, and — when the estimate carries two option bundles — the
 // customer's pick between them. Item descriptions are Gabriel's quote
 // data, not UI chrome.
-function estimatePageHtml(r, user, langOverride) {
+function estimatePageHtml(r, user, langOverride, notice) {
   const e = r.estimate || {};
   const EI = {
     en: {
@@ -2194,7 +2289,9 @@ function estimatePageHtml(r, user, langOverride) {
       badgeAwaiting: 'awaiting approval', badgeExpired: 'expired',
       errPass: 'Create a password (8+ characters) — it is your account for this estimate and your membership.', errSignup: 'could not create your account',
       errLogin: 'That email already has an account — type its password above to log in and join.', errMemberFail: 'membership signup failed',
-      errMemberPay: 'Your membership payment did not complete — check the card and try again.', errLoading: 'Online payment is still loading — give it a second and try again.',
+      errMemberPay: 'Your membership payment did not complete — check the card and try again.',
+      joinedNote: '🎉 Your HomeCare membership is active — your member pricing is applied to this estimate.',
+      cancelledNote: 'Checkout was cancelled — nothing was charged. You can join anytime from this page.',
       errEmail: 'Add a valid email for your account.'
     },
     es: {
@@ -2220,7 +2317,9 @@ function estimatePageHtml(r, user, langOverride) {
       badgeAwaiting: 'esperando aprobación', badgeExpired: 'vencido',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para este estimado y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
       errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y unirte.', errMemberFail: 'la membresía no se pudo activar',
-      errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.', errLoading: 'El pago en línea todavía está cargando — espera un segundo e inténtalo de nuevo.',
+      errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.',
+      joinedNote: '🎉 Tu membresía HomeCare está activa — tu precio de miembro ya está aplicado en este estimado.',
+      cancelledNote: 'El pago fue cancelado — no se hizo ningún cargo. Puedes unirte cuando quieras desde esta página.',
       errEmail: 'Agrega un correo válido para tu cuenta.'
     }
   };
@@ -2248,8 +2347,7 @@ function estimatePageHtml(r, user, langOverride) {
     + ' document.documentElement.lang=l;'
     + ' document.querySelectorAll("[data-i18n]").forEach(function(n){ var v=T(n.getAttribute("data-i18n")); if(v) n.innerHTML=v; });'
     + ' document.querySelectorAll("[data-i18n-ph]").forEach(function(n){ var v=T(n.getAttribute("data-i18n-ph")); if(v) n.setAttribute("placeholder", v); });'
-    + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; });'
-    + ' if(typeof mountCard==="function") mountCard(); }'
+    + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; }); }'
     + 'document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang-btn")); }); });'
     + 'try{ var sv=localStorage.getItem("ghsEstLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
     + '</scr' + 'ipt></body>';
@@ -2291,16 +2389,18 @@ function estimatePageHtml(r, user, langOverride) {
       + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0">' + fillS(S.joinBody, joinAmounts) + '</p>'
       + '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="emailLabel">' + S.emailLabel + '</span><input id="eJoinEmail" type="email" autocomplete="email" value="' + escMail(r.customerEmail || (user ? user.email : '')) + '" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>'
       + ((user) ? '' : '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="eJoinPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>')
-      + '<div id="cardEl" style="border:1px solid #ccc;border-radius:10px;padding:12px;background:#fff"></div>'
       + '<button id="estJoinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:13px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%;margin-top:10px">' + fillS(S.joinBtn, joinAmounts) + '</button>'
       + '<p id="joinMsg" style="color:#666;margin:6px 0 0"></p></div>'
-      + '<script src="https://js.stripe.com/v3/"></scr' + 'ipt>'
-      + '<script>var EST_ID=' + JSON.stringify(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ', stripeObj=null, cardEl=null, pmId="";'
+      + '<script>var EST_ID=' + JSON.stringify(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ';'
       + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();}'
       + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-      + 'function mountCard(){ if(!stripeObj) return; try{ if(cardEl) cardEl.destroy(); }catch(e){} cardEl=stripeObj.elements({locale: LANG==="es"?"es":"en"}).create("card",{style:{base:{fontSize:"16px"}}}); cardEl.mount("#cardEl"); }'
-    + 'var __sCfg=null,__sTry=0;function tryStripe(){ if(stripeObj||!__sCfg||!__sCfg.publishableKey) return; if(typeof Stripe!=="undefined"){ stripeObj=Stripe(__sCfg.publishableKey); mountCard(); return; } if(++__sTry<=80) setTimeout(tryStripe,250); }function initStripe(){ if(stripeObj) return; if(__sCfg){ tryStripe(); return; } fetch("/api/stripe/config").then(function(r){return r.json();}).then(function(cfg){ __sCfg=cfg; tryStripe(); }).catch(function(){}); }initStripe();'
       + 'if($("eJoinEmail")){ $("eJoinEmail").addEventListener("blur",function(){ var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/estimate/"+EST_ID+"/member-apply",{email:em}).then(function(o){ if(o.ok && o.d.member) location.reload(); }).catch(function(){}); }); }'
+      // v54: the join rides Stripe-hosted Checkout (redirect), like the
+      // invoices — no card renders on this page anymore. The account is
+      // created/logged in first (same as before), the server builds the
+      // subscription session, Stripe takes the card, and the customer
+      // lands back here where the SERVER verifies the subscription with
+      // Stripe before the member discount is applied.
       + 'async function joinNow(){'
       + ' var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) throw new Error(T("errEmail"));'
       + ' if(!loggedIn){ var pw=$("eJoinPass").value; if(pw.length<8) throw new Error(T("errPass"));'
@@ -2308,13 +2408,11 @@ function estimatePageHtml(r, user, langOverride) {
       + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
       + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});'
       + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
-      + ' var o=await jpost("/api/stripe/homecare-subscribe",{}); if(!o.ok) throw new Error(o.d.error||T("errMemberFail"));'
-      + ' var conf=await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:' + JSON.stringify(r.customerName || '') + ',email:em}}});'
-      + ' if(conf.error) throw new Error(conf.error.message); pmId=(conf.paymentIntent&&conf.paymentIntent.payment_method)||"";'
-      + ' var c2=await jpost("/api/stripe/homecare-confirm",{}); if(!c2.ok || !c2.d.active) throw new Error(T("errMemberPay"));'
-      + ' var ap=await jpost("/estimate/"+EST_ID+"/member-apply",{email:em}); if(!ap.ok || !ap.d.member) throw new Error(T("errMemberFail"));'
-      + ' location.reload(); }'
-      + '$("estJoinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("estJoinBtn"); if(!stripeObj || !cardEl){ m.textContent=T("errLoading"); return; } btn.disabled=true; btn.textContent=T("joining"); m.textContent=""; try{ await joinNow(); }catch(e){ m.textContent=e.message; btn.disabled=false; btn.textContent=' + JSON.stringify(fillS(S.joinBtn, joinAmounts)) + '; } };'
+      + ' var o=await jpost("/estimate/"+EST_ID+"/join-checkout",{});'
+      + ' if(o.ok && o.d.member){ var ap=await jpost("/estimate/"+EST_ID+"/member-apply",{email:em}); if(ap.ok && ap.d.member){ location.reload(); return; } }'
+      + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errMemberFail"));'
+      + ' location.href=o.d.url; }'
+      + '$("estJoinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("estJoinBtn"); btn.disabled=true; btn.textContent=T("joining"); m.textContent=""; try{ await joinNow(); }catch(e){ m.textContent=e.message; btn.disabled=false; btn.textContent=' + JSON.stringify(fillS(S.joinBtn, joinAmounts)) + '; } };'
       + '</scr' + 'ipt>';
   }
   // --- approve / decline / status blocks ---
@@ -2342,7 +2440,15 @@ function estimatePageHtml(r, user, langOverride) {
   } else if (r.status === 'Declined') {
     actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0" data-i18n="declinedH">' + S.declinedH + '</h3><p style="color:#666" data-i18n="declinedBody">' + S.declinedBody + '</p></div>';
   }
+  // v54 return banners — 'joined' renders only after the SERVER verified
+  // the subscription with Stripe on the GET handler (never from flags).
+  const noticeHtml = notice === 'joined'
+    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
+    : notice === 'cancelled'
+      ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+      : '';
   return head
+    + noticeHtml
     + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0"><span data-i18n="titleEst">' + S.titleEst + '</span> ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
     + '<p style="color:#666"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • <span data-i18n="forWord">' + S.forWord + '</span> <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
     + (r.description ? '<p style="color:#555">' + escMail(r.description) + '</p>' : '')
@@ -2438,7 +2544,7 @@ function installPageHtml(langOverride) {
     + '}catch(e){}})();</script></body></html>';
 }
 
-function cartPageHtml(c, user, langOverride) {
+function cartPageHtml(c, user, langOverride, notice) {
   const sessionMember = !!(user && user.role === 'customer' && user.homeCareStatus === 'active');
   const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : (c.lang === 'es' ? 'es' : 'en');
   const CI = {
@@ -2462,10 +2568,12 @@ function cartPageHtml(c, user, langOverride) {
       paymentH: 'Payment', payBtn: 'Pay {amt} in full',
       refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Joining HomeCare…', processing: 'Processing payment…',
-      errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.', errLoading: 'Online payment is still loading — give it a second and try again.',
+      errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
       errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
       errLogin: 'That email already has an account — type its password above to log in and join.', errMemberFail: 'membership signup failed',
       errMemberPay: 'Your membership payment did not complete — check the card and try again.', errPay: 'payment failed', errConfirm: 'could not confirm the payment',
+      joinedNote: '🎉 Your HomeCare membership is active — your member prices are in this cart. Tap the Pay button below to finish your order.',
+      cancelledNote: 'Checkout was cancelled — nothing was charged. Your cart is saved right here whenever you are ready.',
       doneH: '✅ Order placed — ', donePaid: 'Paid in full:', doneMember: ' with your HomeCare member price.',
       doneBody: 'The Team confirms your day and time shortly. Questions? Text or call (707) 862-3773.'
     },
@@ -2489,10 +2597,12 @@ function cartPageHtml(c, user, langOverride) {
       paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
       refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Uniéndote a HomeCare…', processing: 'Procesando el pago…',
-      errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.', errLoading: 'El pago en línea todavía está cargando — espera un segundo e inténtalo de nuevo.',
+      errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
       errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y unirte.', errMemberFail: 'la membresía no se pudo activar',
       errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.', errPay: 'el pago falló', errConfirm: 'no se pudo confirmar el pago',
+      joinedNote: '🎉 Tu membresía HomeCare está activa — tus precios de miembro ya están en este carrito. Toca el botón Pagar abajo para terminar tu orden.',
+      cancelledNote: 'El pago fue cancelado — no se hizo ningún cargo. Tu carrito queda guardado aquí para cuando quieras.',
       doneH: '✅ Orden recibida — ', donePaid: 'Pagado completo:', doneMember: ' con tu precio de miembro HomeCare.',
       doneBody: 'El Equipo confirma tu día y hora muy pronto. ¿Preguntas? Manda un texto o llama al (707) 862-3773.'
     }
@@ -2540,8 +2650,7 @@ function cartPageHtml(c, user, langOverride) {
     + ' document.querySelectorAll("[data-i18n]").forEach(function(n){ var v=T(n.getAttribute("data-i18n")); if(v) n.innerHTML=v; });'
     + ' document.querySelectorAll("[data-i18n-ph]").forEach(function(n){ var v=T(n.getAttribute("data-i18n-ph")); if(v) n.setAttribute("placeholder", v); });'
     + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; });'
-    + ' if(typeof renderAmounts==="function") renderAmounts();'
-    + ' if(typeof mountCard==="function") mountCard(); }'
+    + ' if(typeof renderAmounts==="function") renderAmounts(); }'
     + 'document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang-btn")); }); });'
     + 'try{ var sv=localStorage.getItem("ghsCartLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
     + '</scr' + 'ipt></body>';
@@ -2567,7 +2676,16 @@ function cartPageHtml(c, user, langOverride) {
   const inp = 'padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px';
   const lbl = 'display:block;margin:10px 0;font-size:14px;color:#555';
   const startCents = Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100);
+  // v54 return banners: 'joined' renders only after the SERVER verified
+  // the subscription with Stripe (the GET handler decides — page flags
+  // alone never produce it); 'cancelled' is a plain friendly note.
+  const noticeHtml = notice === 'joined'
+    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
+    : notice === 'cancelled'
+      ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+      : '';
   return head
+    + noticeHtml
     + '<h2 style="margin-top:0" data-i18n="titleCart">' + S.titleCart + '</h2>'
     + '<p style="color:#666" data-i18n="intro">' + S.intro + '</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
@@ -2591,50 +2709,45 @@ function cartPageHtml(c, user, langOverride) {
     + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
     + joinBlock
     + '<h3 style="margin-bottom:2px" data-i18n="paymentH">' + S.paymentH + '</h3>'
-    + '<div id="cardEl" style="border:1px solid #ccc;border-radius:10px;padding:12px;background:#fff"></div>'
     + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(startCents / 100) }) + '</button>'
     + '<p id="payMsg" style="color:#666"></p>'
     + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
-    + '<script src="https://js.stripe.com/v3/"></scr' + 'ipt>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
-    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', loggedIn=' + (user ? 'true' : 'false') + ', stripeObj=null, cardEl=null, pmId="";'
+    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', loggedIn=' + (user ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
     + 'function renderAmounts(){ var cur=memberApplied?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=memberApplied?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=memberApplied?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=memberApplied?"flex":"none"; }'
     + 'function applyMemberUi(){ memberApplied=true; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
-    + 'function mountCard(){ if(!stripeObj) return; try{ if(cardEl) cardEl.destroy(); }catch(e){} cardEl=stripeObj.elements({locale: LANG==="es"?"es":"en"}).create("card",{style:{base:{fontSize:"16px"}}}); cardEl.mount("#cardEl"); }'
-    + 'var __sCfg=null,__sTry=0;function tryStripe(){ if(stripeObj||!__sCfg||!__sCfg.publishableKey) return; if(typeof Stripe!=="undefined"){ stripeObj=Stripe(__sCfg.publishableKey); mountCard(); return; } if(++__sTry<=80) setTimeout(tryStripe,250); }function initStripe(){ if(stripeObj) return; if(__sCfg){ tryStripe(); return; } fetch("/api/stripe/config").then(function(r){return r.json();}).then(function(cfg){ __sCfg=cfg; tryStripe(); }).catch(function(){}); }initStripe();'
     + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; }); }'
     + 'if($("cEmail")){ $("cEmail").addEventListener("blur",function(){ if(memberApplied) return; var em=val("cEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/api/carts/"+CART_ID+"/member-check",{email:em}).then(function(o){ if(o.ok && o.d.member) applyMemberUi(); }).catch(function(){}); }); }'
     + 'function buildWhen(){ var parts=[]; var d=$("cDate").value; var w=$("cWin").value; var t=val("cWhenText"); if(d) parts.push(d); if(w) parts.push(w); if(t) parts.push(t); return parts.join(" · ")||"ASAP — first available"; }'
-    + 'async function joinNow(){'
-    + ' if(!loggedIn){ var pw=$("cPass").value; if(pw.length<8) throw new Error(T("errPass"));'
+    // v54: joining needs an app account BEFORE Stripe (the Checkout
+    // session is created for that account server-side) — same signup /
+    // login the page always did, minus the old in-page card step.
+    + 'async function ensureAccount(){'
+    + ' if(loggedIn) return; var pw=$("cPass").value; if(pw.length<8) throw new Error(T("errPass"));'
     + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:val("cName"),email:val("cEmail"),password:pw,phone:val("cPhone"),serviceAddress:val("cAddr"),role:"customer"})});'
     + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
     + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:val("cEmail"),password:pw})});'
     + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
-    + ' var o=await jpost("/api/stripe/homecare-subscribe",{}); if(!o.ok) throw new Error(o.d.error||T("errMemberFail"));'
-    + ' var conf=await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:val("cName"),email:val("cEmail"),phone:val("cPhone")}}});'
-    + ' if(conf.error) throw new Error(conf.error.message); pmId=(conf.paymentIntent&&conf.paymentIntent.payment_method)||"";'
-    + ' var c2=await jpost("/api/stripe/homecare-confirm",{}); if(!c2.ok || !c2.d.active) throw new Error(T("errMemberPay"));'
-    + ' applyMemberUi(); }'
+    // v54: payment AND the HomeCare join both happen on Stripe-hosted
+    // Checkout now (redirect) — no card ever renders on this page, so a
+    // blocked Stripe.js can no longer strand the customer. The server
+    // decides join-vs-pay and the exact amount; this page just follows
+    // the URL it is handed, and Stripe sends the customer back here.
     + '$("payBtn").onclick=async function(){ var m=$("payMsg"); var btn=$("payBtn"); function fail(t){ m.textContent=t; btn.disabled=false; renderAmounts(); }'
     + ' if(!val("cName")) return fail(T("errName")); if(!/.+@.+\\..+/.test(val("cEmail"))) return fail(T("errEmail")); if(!val("cAddr")) return fail(T("errAddr"));'
-    + ' if(!stripeObj || !cardEl) return fail(T("errLoading"));'
     + ' btn.disabled=true; btn.textContent=T("working"); m.textContent="";'
     + ' try{'
-    + ' if($("cJoin") && $("cJoin").checked && !memberApplied){ btn.textContent=T("joining"); await joinNow(); }'
+    + ' var wantJoin=!!($("cJoin") && $("cJoin").checked && !memberApplied);'
+    + ' if(wantJoin){ btn.textContent=T("joining"); await ensureAccount(); }'
     + ' btn.textContent=T("processing");'
-    + ' var o=await jpost("/api/carts/"+CART_ID+"/pay",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen()}); if(!o.ok) throw new Error(o.d.error||T("errPay"));'
-    + ' var conf2=pmId? await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:pmId}) : await stripeObj.confirmCardPayment(o.d.clientSecret,{payment_method:{card:cardEl,billing_details:{name:val("cName"),email:val("cEmail"),phone:val("cPhone")}}});'
-    + ' if(conf2.error) throw new Error(conf2.error.message);'
-    + ' var f=await jpost("/api/carts/"+CART_ID+"/pay-confirm",{paymentIntentId:o.d.paymentIntentId}); if(!f.ok) throw new Error(f.d.error||T("errConfirm"));'
-    + ' $("cartForm").style.display="none"; var dn=$("cartDone"); dn.style.display="block";'
-    + ' dn.innerHTML="<h2 style=\\"color:#1a7f37\\">"+T("doneH")+(f.d.requestId||"")+"</h2><p>"+T("donePaid")+" <b>"+fmt(Math.round((o.d.amount||0)*100))+"</b>"+(memberApplied?T("doneMember"):"")+"</p><p style=\\"color:#666\\">"+T("doneBody")+"</p>";'
-    + ' dn.scrollIntoView({behavior:"smooth"});'
+    + ' var o=await jpost("/api/carts/"+CART_ID+"/checkout",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen(),join:wantJoin});'
+    + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errPay"));'
+    + ' location.href=o.d.url;'
     + ' }catch(e){ fail(e.message); } };'
     + '</scr' + 'ipt>'
     + foot;
@@ -4710,6 +4823,68 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, requestId: r.id });
     } catch (e) { console.error('cart pay-confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
   }
+  // ---------- v54: cart payment via Stripe-hosted Checkout ----------
+  // Replaces the page's old inline Elements flow (/pay + /pay-confirm
+  // above stay for API compatibility — the page no longer calls them).
+  // The browser posts the same form it always did; the server validates,
+  // stores the customer block on the cart (conversion reads it later),
+  // decides member-vs-guest from Stripe truth, computes the amount
+  // itself, and answers with the Checkout URL to redirect to:
+  //   join && not member -> { next:'join', url } subscription session;
+  //     the cart records joinSessionId + joinPending, and the membership
+  //     counts ONLY when the ?joined=1 return (or the webhook) verifies
+  //     the subscription as paid with Stripe.
+  //   otherwise -> { next:'pay', url } payment session for the total;
+  //     the order is created by convertCartToRequest when the ?paid=1
+  //     return (or the webhook) verifies the session as paid — never
+  //     before the money lands, so an abandoned checkout leaves no
+  //     phantom paid order.
+  const cartCheckoutMatch = p.match(/^\/api\/carts\/([\w-]+)\/checkout$/);
+  if (cartCheckoutMatch && req.method === 'POST') {
+    const c = cartsOf().find(x => x.id === cartCheckoutMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid' });
+    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
+    const b = await readBody(req);
+    const cust = { name: cleanText(b.name, 80), phone: cleanText(b.phone, 40), email: cleanText(b.email, 160).toLowerCase(), address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200) };
+    if (!cust.name) return send(res, 400, { error: 'your name is required' });
+    if (!/.+@.+\..+/.test(cust.email)) return send(res, 400, { error: 'a valid email is required' });
+    if (!cust.address) return send(res, 400, { error: 'the service address is required' });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to book' });
+    c.customer = cust;
+    const memberUser = cartMemberUserFor(user, cust.email);
+    try {
+      if (b.join === true && !memberUser) {
+        // The join session belongs to an ACCOUNT: the page creates/logs
+        // in the customer first (its password field), exactly as before.
+        if (!user) { save(); return send(res, 401, { error: 'create your account above first, then tap Pay to join' }); }
+        if (!['customer', 'admin'].includes(user.role)) { save(); return send(res, 403, { error: 'not allowed' }); }
+        const s = await createCheckoutSession('homecare', user, {
+          successUrl: cartLink(c) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
+          cancelUrl: cartLink(c) + '?cancelled=1',
+          metadata: { cartId: c.id, src: 'cart' },
+          subMetadata: { cartId: c.id }
+        });
+        c.joinSessionId = s.id;
+        c.joinPending = true;
+        save();
+        return send(res, 200, { next: 'join', url: s.url });
+      }
+      c.memberApplied = !!memberUser;
+      const amountCents = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
+      if (!(amountCents > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
+      const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: cust.email }, {
+        amountCents,
+        cartId: c.id,
+        label: 'Cart ' + c.id + ' — paid in full — General Handyman Solutions',
+        successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
+        cancelUrl: cartLink(c) + '?cancelled=1'
+      });
+      c.paySessionId = s.id;
+      save();
+      return send(res, 200, { next: 'pay', url: s.url, amount: amountCents / 100, memberApplied: c.memberApplied });
+    } catch (e) { console.error('cart checkout failed', e.message); save(); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
   // ---------- invoices (customer payment) ----------
   if (p === '/api/invoices/mine' && req.method === 'GET') {
     if (!user) return send(res, 401, { error: 'login required' });
@@ -4776,12 +4951,47 @@ const server = http.createServer(async (req, res) => {
   if ((p === '/instalar' || p === '/install') && req.method === 'GET') {
     return send(res, 200, installPageHtml(url.searchParams.get('lang')));
   }
-  // ---------- public cart page (v44) ----------
+  // ---------- public cart page (v44; v54 Checkout returns) ----------
   const cartPageMatch = p.match(/^\/cart\/([\w-]+)$/);
   if (cartPageMatch && req.method === 'GET') {
     const c = cartsOf().find(x => x.id === cartPageMatch[1]);
     if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
-    return send(res, 200, cartPageHtml(c, user, url.searchParams.get('lang')));
+    // v54 return verification: Stripe sends the customer back with
+    // ?joined=1 / ?paid=1 AND the session_id — the flags alone change
+    // NOTHING. The server retrieves the session from Stripe and acts
+    // only on what Stripe proves: the session must be the very one this
+    // cart recorded, and (join) its subscription must pass the shared
+    // paid rule / (pay) its payment_status must be 'paid'. Both paths
+    // are idempotent with the webhook — whichever lands first wins and
+    // the second is a no-op, so an order is never created twice.
+    let notice = '';
+    const retSessionId = url.searchParams.get('session_id') || '';
+    if (url.searchParams.get('cancelled') === '1' && c.status === 'open') notice = 'cancelled';
+    if (c.status === 'open' && retSessionId && stripeReady()) {
+      try {
+        if (url.searchParams.get('joined') === '1' && c.joinSessionId && retSessionId === c.joinSessionId) {
+          const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+          if (sess && sess.id === retSessionId && sess.mode === 'subscription') {
+            const chk = await checkoutSessionSubscriptionPaid(sess);
+            if (chk.paid) {
+              const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
+              if (mu) { activateHomeCareFromCheckout(mu, sess); c.joinPending = false; notice = 'joined'; save(); }
+            }
+          }
+        } else if (url.searchParams.get('paid') === '1' && c.paySessionId && retSessionId === c.paySessionId) {
+          const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+          if (sess && sess.id === retSessionId && sess.payment_status === 'paid') {
+            const cents = Math.round(Number(sess.amount_total) || 0);
+            const listCents = Math.round(c.listTotal * 100), memberCents = Math.round(c.memberTotal * 100);
+            if (cents === memberCents && cents !== listCents) c.memberApplied = true;
+            else if (cents === listCents && cents !== memberCents) c.memberApplied = false;
+            else if (cents !== listCents && cents !== memberCents) console.error('cart return: session amount ' + cents + ' matches neither cart total — not converting cart ' + c.id);
+            if ((cents === listCents || cents === memberCents) && convertCartToRequest(c, { pi: sess.payment_intent || '', amountCents: cents })) save();
+          }
+        }
+      } catch (e) { console.error('cart return verification failed', e.message); }
+    }
+    return send(res, 200, cartPageHtml(c, user, url.searchParams.get('lang'), notice));
   }
 
   // ---------- public estimate approval (added 2026-10-12) ----------
@@ -4789,7 +4999,32 @@ const server = http.createServer(async (req, res) => {
   if (estPageMatch && req.method === 'GET') {
     const r = db.requests.find(x => x.id === estPageMatch[1]);
     if (!r || !r.estimate) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Estimate not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
-    return send(res, 200, estimatePageHtml(r, user, url.searchParams.get('lang')));
+    // v54 join return verification — same rule as the cart page: the
+    // ?joined=1 flag alone changes nothing; the server retrieves the
+    // session this estimate recorded and activates ONLY when Stripe
+    // proves the subscription paid, then applies the member discount
+    // through the shared helper. Idempotent with the webhook.
+    let notice = '';
+    const retSessionId = url.searchParams.get('session_id') || '';
+    if (url.searchParams.get('cancelled') === '1' && r.status === 'Quoted') notice = 'cancelled';
+    if (url.searchParams.get('joined') === '1' && retSessionId && r.joinSessionId && retSessionId === r.joinSessionId && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+        if (sess && sess.id === retSessionId && sess.mode === 'subscription') {
+          const chk = await checkoutSessionSubscriptionPaid(sess);
+          if (chk.paid) {
+            const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
+            if (mu) {
+              activateHomeCareFromCheckout(mu, sess);
+              applyEstimateMemberDiscount(r, mu);
+              notice = 'joined';
+              save();
+            }
+          }
+        }
+      } catch (e) { console.error('estimate return verification failed', e.message); }
+    }
+    return send(res, 200, estimatePageHtml(r, user, url.searchParams.get('lang'), notice));
   }
   const estActMatch = p.match(/^\/estimate\/([\w-]+)\/(approve|decline)$/);
   if (estActMatch && req.method === 'POST') {
@@ -4827,6 +5062,37 @@ const server = http.createServer(async (req, res) => {
     fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' }));
     return send(res, 200, { ok: true });
   }
+  // ---------- v54: estimate page join via Stripe-hosted Checkout ----------
+  // The join block's card step moved to Stripe-hosted Checkout: the page
+  // creates/logs in the account first (same as before), then calls this
+  // endpoint, which builds the HomeCare subscription session and sends
+  // the customer back to THIS estimate page (?joined=1), where the GET
+  // handler verifies the subscription with Stripe before the member
+  // discount applies. The booking-due payment itself already rode the
+  // invoice Checkout pattern (approve -> invoice -> hosted Checkout),
+  // so the join was the only Elements left on this page.
+  const estJoinCheckoutMatch = p.match(/^\/estimate\/([\w-]+)\/join-checkout$/);
+  if (estJoinCheckoutMatch && req.method === 'POST') {
+    const r = db.requests.find(x => x.id === estJoinCheckoutMatch[1]);
+    if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
+    if (!user) return send(res, 401, { error: 'create your account above first, then tap Join' });
+    if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
+    if (r.status !== 'Quoted') return send(res, 400, { error: 'this estimate is no longer awaiting approval (status: ' + r.status + ')' });
+    if (estimateIsExpired(r.estimate)) return send(res, 400, { error: 'this estimate has expired — ask the Team for a fresh one' });
+    if (cartMemberUserFor(user, r.customerEmail || '')) return send(res, 200, { member: true });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to join' });
+    try {
+      const s = await createCheckoutSession('homecare', user, {
+        successUrl: estimatePageLink(r) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
+        cancelUrl: estimatePageLink(r) + '?cancelled=1',
+        metadata: { estimateId: r.id, src: 'estimate' },
+        subMetadata: { estimateId: r.id }
+      });
+      r.joinSessionId = s.id;
+      save();
+      return send(res, 200, { next: 'join', url: s.url });
+    } catch (e) { console.error('estimate join checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
   // ---------- v45: estimate page actions (member-check / member-apply / option pick) ----------
   // Same trust model as the cart page: the estimate id in the link is
   // the credential. Membership is only ever granted from Stripe truth —
@@ -4847,23 +5113,7 @@ const server = http.createServer(async (req, res) => {
     const memberUser = cartMemberUserFor(user, cleanText(b.email, 160) || r.customerEmail || '');
     if (!memberUser) return send(res, 200, { member: false, applied: false });
     if (r.status !== 'Quoted') return send(res, 200, { member: true, applied: false });
-    const est = r.estimate;
-    const variant = memberVariantOfEstimate(est);
-    let applied = false;
-    if (variant !== est) {
-      // The joining customer is linked to the estimate when we know who
-      // they are — keeps the admin list + discount guards true.
-      if (!r.customerId) r.customerId = memberUser.id;
-      est.discountPct = variant.discountPct;
-      est.discountAmount = variant.discountAmount;
-      est.memberDiscount = true;
-      settleEstimateTotals(est);
-      r.quote = est.total;
-      applied = true;
-      audit(memberUser, 'estimate.member_applied', r.id, 'member total ' + usd(est.total));
-      r.messages = r.messages || [];
-      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'HomeCare member pricing applied to this estimate — you save 20% on the labor. New total: ' + usd(est.total) + '.', at: new Date().toISOString() });
-    }
+    const applied = applyEstimateMemberDiscount(r, memberUser);
     save();
     return send(res, 200, { member: true, applied, total: r.estimate.total, bookingDue: r.estimate.bookingDue });
   }
