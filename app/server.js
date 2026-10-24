@@ -1977,9 +1977,17 @@ function estCoreTotals(items, flags) {
   const labor = money(items.filter(it => it.type !== 'material').reduce((s, it) => s + it.lineTotal, 0));
   const material = money(items.filter(it => it.type === 'material').reduce((s, it) => s + it.lineTotal, 0));
   const subtotal = money(labor + material);
-  const asapAmount = flags && flags.asap ? money(labor * 0.25) : 0;
   const discountAmount = money(labor * Math.max(0, Math.min(90, Number(flags && flags.discountPct) || 0)) / 100);
-  return { laborSubtotal: labor, materialSubtotal: material, subtotal, asapAmount, discountAmount };
+  // v58 (Gabriel's decided rule — the same one the menu already follows):
+  // the ASAP +25% rides on the labor AFTER the member discount when member
+  // pricing applies; the guest/list ASAP stays 25% of the FULL labor.
+  // Materials are never part of the ASAP base. Both variants are returned
+  // because an estimate carries a regular AND a member total (option
+  // snapshots, join-and-save) and each must use its own labor base.
+  const asapAmountList = flags && flags.asap ? money(labor * 0.25) : 0;
+  const asapAmountMember = flags && flags.asap ? money((labor - money(labor * 0.2)) * 0.25) : 0;
+  const asapAmount = flags && flags.memberDiscount ? asapAmountMember : asapAmountList;
+  return { laborSubtotal: labor, materialSubtotal: material, subtotal, asapAmount, asapAmountList, asapAmountMember, discountAmount };
 }
 // Recomputes every derived number on an estimate from its selected items
 // + flags, and refreshes each option bundle's display snapshot. Shared by
@@ -1996,9 +2004,9 @@ function settleEstimateTotals(est) {
   est.balanceDue = money(est.total - est.bookingDue);
   (est.options || []).forEach(o => {
     const ot = estCoreTotals(o.items || [], est);
-    o.laborSubtotal = ot.laborSubtotal; o.materialSubtotal = ot.materialSubtotal; o.subtotal = ot.subtotal; o.asapAmount = ot.asapAmount;
-    o.listTotal = money(ot.subtotal + ot.asapAmount);
-    o.memberTotal = money(ot.laborSubtotal * 0.8 + ot.materialSubtotal + ot.asapAmount);
+    o.laborSubtotal = ot.laborSubtotal; o.materialSubtotal = ot.materialSubtotal; o.subtotal = ot.subtotal; o.asapAmount = ot.asapAmountList; o.asapAmountMember = ot.asapAmountMember;
+    o.listTotal = money(ot.subtotal + ot.asapAmountList);
+    o.memberTotal = money(ot.laborSubtotal * 0.8 + ot.materialSubtotal + ot.asapAmountMember);
   });
   return est;
 }
@@ -2299,8 +2307,11 @@ function memberVariantOfEstimate(est) {
   if (!(d > 0) || (Number(est.discountAmount) || 0) >= d) return est;
   const v = Object.assign({}, est);
   v.discountPct = 20; v.discountAmount = d; v.memberDiscount = true;
+  // v58: the member variant's ASAP is 25% of the member-discounted labor —
+  // the stored est.asapAmount is the guest figure, computed on full labor.
+  if (est.asap) v.asapAmount = money(((Number(est.laborSubtotal) || 0) - d) * 0.25);
   const credit = Number(est.credit) || 0;
-  v.total = Math.max(0, money((Number(est.subtotal) || 0) + (Number(est.asapAmount) || 0) - d - credit));
+  v.total = Math.max(0, money((Number(est.subtotal) || 0) + (Number(v.asapAmount) || 0) - d - credit));
   v.bookingDue = est.bookingAuto ? v.total : Math.min(Number(est.bookingDue) || 0, v.total);
   v.balanceDue = money(v.total - v.bookingDue);
   return v;

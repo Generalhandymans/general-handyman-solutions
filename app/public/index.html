@@ -2134,6 +2134,7 @@ function estimateBuilderHtml(r){
   + '<div class="est-opt2" id="estOptNames-'+r.id+'" style="display:'+(opts?'block':'none')+'"><label>Option 1 label<input id="estOptLabelA-'+r.id+'" value="'+escHtml(opts?opts[0].label:'Básico')+'" placeholder="Básico"></label><label>Option 2 label<input id="estOptLabelB-'+r.id+'" value="'+escHtml(opts?opts[1].label:'Completo')+'" placeholder="Completo"></label></div>'
   + '<div id="estRows-'+r.id+'">'+items.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\')">+ Add line</button>'
   + '<div class="est-opt2" id="estOpt2Box-'+r.id+'" style="display:'+(opts?'block':'none')+';margin-top:10px;border-top:1px dashed var(--line);padding-top:8px"><b>Option 2 lines</b> <button type="button" class="ghost" onclick="estCopyAtoB(\''+r.id+'\')">Copy option 1 lines here</button><div id="estRowsB-'+r.id+'">'+itemsB.map(function(it){ return estimateItemRowHtml(r.id,it); }).join('')+'</div><button type="button" class="ghost" onclick="addEstimateItem(\''+r.id+'\',\'B\')">+ Add line to option 2</button></div>'
+  + '<input type="hidden" id="estMemberDisc-'+r.id+'" value="'+((e&&e.memberDiscount)?'1':'0')+'">'
   + '<div class="est-grid" style="margin-top:10px"><label><input type="checkbox" id="estAsap-'+r.id+'" '+(e&&e.asap?'checked':'')+' onchange="updateEstimateSummary(\''+r.id+'\')"> ASAP / Emergency (+25% on labor)</label><label>Discount % <span class="mut">(on labor)</span><input type="number" min="0" max="90" step="0.5" id="estDiscount-'+r.id+'" value="'+(e?e.discountPct||0:0)+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Appointment credit $<input type="number" min="0" step="0.01" id="estCredit-'+r.id+'" value="'+credit+'" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Due to book $ <span class="mut">(editable)</span><input type="number" min="0" step="0.01" id="estBooking-'+r.id+'" value="'+booking+'" placeholder="Auto" oninput="updateEstimateSummary(\''+r.id+'\')"></label><label>Valid until<input type="date" id="estValid-'+r.id+'" value="'+escHtml((e&&e.validUntil)||validDefault)+'"></label></div>'
   + '<label style="margin-top:8px">Photos on the estimate <span class="mut">(the problem, or a similar finished job — the customer sees them on the page)</span></label><input type="file" id="estPhotoInput-'+r.id+'" accept="image/*" multiple onchange="estPhotosAdd(\''+r.id+'\',this)"><div id="estPhotoThumbs-'+r.id+'" style="display:flex;gap:10px;flex-wrap:wrap;margin:6px 0"></div>'
   + '<label style="margin-top:8px">Note on estimate</label><input id="qn-'+r.id+'" placeholder="Scheduling, deposit, scope notes..." value="'+escHtml(r.quoteNote||'')+'"><div class="est-summary" id="estSummary-'+r.id+'">Add the lines to see the total.</div><div class="est-actions"><button type="button" onclick="sendEstimate(\''+r.id+'\',false)">Save estimate in app</button><button type="button" class="black" onclick="sendEstimate(\''+r.id+'\',true)">Send estimate by email</button><button type="button" class="ghost" onclick="previewEstimate(\''+r.id+'\')">Preview — as the customer sees it</button>'+(e?'<button type="button" class="ghost" onclick="duplicateEstimate(\''+r.id+'\')">Duplicate estimate</button>':'')+'</div><p class="mut">“Send estimate by email” saves it in the app and emails it from generalhandymans@gmail.com, with a copy to your normal Gmail. You confirm the total before anything is sent.</p></div>';
@@ -2171,12 +2172,15 @@ function renderEstPhotoThumbs(idv){ const box=document.getElementById('estPhotoT
 function readEstRows(sel){
   return [...document.querySelectorAll(sel)].map(function(row){ const ty=row.querySelector('[data-est-type]'); return { description:row.querySelector('[data-est-desc]').value.trim(), type:(ty && ty.value==='material')?'material':'labor', qty:Number(row.querySelector('[data-est-qty]').value)||0, unitPrice:Number(row.querySelector('[data-est-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
 }
-function estBundleMath(items, asap, discountPct, credit){
+function estBundleMath(items, asap, discountPct, credit, memberDiscount){
   const labor=items.filter(function(it){ return it.type!=='material'; }).reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
   const material=items.filter(function(it){ return it.type==='material'; }).reduce(function(s,it){ return s+it.qty*it.unitPrice; },0);
   const subtotal=labor+material;
-  const asapAmount=asap?labor*0.25:0;
   const discountAmount=labor*Math.max(0,Math.min(90,discountPct))/100;
+  // v58: mirror the server — a member-priced estimate (its 20% member
+  // discount in the form) carries the ASAP +25% on the DISCOUNTED labor
+  // (labor − the rounded 20%), never on the full labor.
+  const asapAmount=asap?(memberDiscount ? (labor-Math.round(labor*20)/100)*0.25 : labor*0.25):0;
   const total=Math.max(0, Math.round((subtotal+asapAmount-discountAmount-credit)*100)/100);
   return { labor:Math.round(labor*100)/100, material:Math.round(material*100)/100, subtotal:Math.round(subtotal*100)/100, asapAmount:Math.round(asapAmount*100)/100, discountAmount:Math.round(discountAmount*100)/100, total };
 }
@@ -2188,15 +2192,21 @@ function readEstimate(idv){
   const discountPct=Number(document.getElementById('estDiscount-'+idv).value)||0;
   const credit=Number(document.getElementById('estCredit-'+idv).value)||0;
   const bookingRaw=document.getElementById('estBooking-'+idv).value;
-  const m=estBundleMath(items, asap, discountPct, credit);
+  // v58: the estimate being edited is member-priced when the saved estimate
+  // carries the member flag AND the form still holds the 20% member
+  // discount; the flag rides back in the payload so a re-save keeps the
+  // member pricing (and its discounted-labor ASAP) instead of dropping it.
+  const memberDisc=((document.getElementById('estMemberDisc-'+idv)||{}).value==='1') && discountPct===20;
+  const m=estBundleMath(items, asap, discountPct, credit, memberDisc);
   const bookingDue=bookingRaw===''? m.total : Math.min(Number(bookingRaw)||0, m.total); // v44: default = pay in full
   const out={ items, asap, discountPct, credit, bookingDue, validUntil:(document.getElementById('estValid-'+idv)||{}).value||'', photos:estPhotosOf(idv).slice(0,6), subtotal:m.subtotal, laborSubtotal:m.labor, materialSubtotal:m.material, asapAmount:m.asapAmount, discountAmount:m.discountAmount, total:m.total, balanceDue:Math.round((m.total-bookingDue)*100)/100 };
+  if(memberDisc) out.memberDiscount=true;
   if(two){
     const itemsB=readEstRows('#estRowsB-'+idv+' .est-row');
     const labelA=(document.getElementById('estOptLabelA-'+idv).value||'Option 1').trim()||'Option 1';
     const labelB=(document.getElementById('estOptLabelB-'+idv).value||'Option 2').trim()||'Option 2';
     out.options=[{ label:labelA, items }, { label:labelB, items:itemsB }];
-    out.optionTotals=[estBundleMath(items, asap, discountPct, 0), estBundleMath(itemsB, asap, discountPct, 0)];
+    out.optionTotals=[estBundleMath(items, asap, discountPct, 0, memberDisc), estBundleMath(itemsB, asap, discountPct, 0, memberDisc)];
   }
   return out;
 }
