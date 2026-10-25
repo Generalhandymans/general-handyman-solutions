@@ -383,6 +383,14 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <button type="button" id="techSignInBtn" onclick="location.hash='#worker';applyWorkerEntry();return false;" style="width:100%;margin-top:12px;background:#0b0b0b;color:#fff;border:2px solid #0b0b0b;border-radius:999px;padding:15px 20px;min-height:54px;font-weight:800;font-size:16.5px;cursor:pointer">🔨 Technician sign in</button>
     <p class="mut" id="workerAgreeRow" style="display:none;text-align:center;margin-top:8px">By applying you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" onclick="forgotPassword();return false;">Forgot my password</a></p>
+    <!-- v63: technician rescue — shown ONLY in the #worker entry. A big,
+         unmissable button that emails a set/reset-password link (covers
+         first-time techs who never set a password AND forgotten ones).
+         Reuses forgotPassword(), which reads the email typed above. -->
+    <div id="workerRescueRow" style="display:none;margin-top:10px">
+      <button type="button" class="ghost" onclick="forgotPassword();return false;" style="width:100%;padding:13px;font-weight:800;font-size:15px">¿Primera vez o no recuerdas tu contraseña? Toca aquí</button>
+      <p class="mut" style="text-align:center;margin-top:6px">First time or forgot your password? Tap the button — we email you a link to set it. Type your email above first.</p>
+    </div>
     <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
     <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e42535;border-radius:12px;background:#fff5f5">
@@ -392,7 +400,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <button class="ghost" onclick="location.hash='#memberships'" style="margin-top:8px;width:100%">Compare all memberships — Yard Care &amp; HomeCare Plus</button>
     </div>
     <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px">Are you a General Handyman Solutions technician? <a href="#worker">Log in here →</a></p>
-    <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
+    <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none">Are you a customer? <a href="#" onclick="try{localStorage.removeItem('ghs_entry')}catch(e){};location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
   </div>
 
   <!-- RESET PASSWORD (added 2026-10-21, v20) — shown when the app is
@@ -1047,7 +1055,7 @@ function applyWorkerEntry(){
   if (h) h.textContent = w ? 'Technician login' : 'Log in / Sign up';
   const hint = document.getElementById('authHint');
   if (hint) hint.innerHTML = w
-    ? 'Team login — use your technician email + password to see open jobs and claim them. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.'
+    ? '<b>1.</b> Escribe tu correo &nbsp;<b>2.</b> Tu contraseña &nbsp;<b>3.</b> Toca <b>ENTRAR</b> — y ves los jales abiertos.<br><span class="mut">Use the email + password from your application. New here? Tap <b>New worker</b> to apply — the Team reviews every application before jobs unlock.</span>'
     : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
   const hc = document.getElementById('hcPromo');
   if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
@@ -1058,6 +1066,16 @@ function applyWorkerEntry(){
   const cl = document.getElementById('custLinkRow');
   if (cl) cl.style.display = w ? 'block' : 'none';
   if (w && (curMode === 'customer' || curMode === 'homecare')) mode('login');
+  // v63: sticky technician door + the simple worker login face. A phone
+  // that came in as a technician reopens as a technician next time (the
+  // boot snippet below reads this flag); only the explicit "Are you a
+  // customer?" link clears it. In worker mode the login button says
+  // ENTRAR and the password-rescue button shows.
+  try{ if (w) localStorage.setItem('ghs_entry','worker'); }catch(e){}
+  const rr = document.getElementById('workerRescueRow');
+  if (rr) rr.style.display = w ? 'block' : 'none';
+  const ab = document.getElementById('authBtn');
+  if (ab && w && curMode === 'login') ab.textContent = '🔨 ENTRAR · Log in';
   if (!w && curMode === 'worker') mode('login');
 }
 window.addEventListener('hashchange', applyWorkerEntry);
@@ -4044,6 +4062,8 @@ async function createJob(){
     document.getElementById('jMsg').textContent = wid ? 'Job offered directly to the selected worker.' : 'Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; loadAdmin();
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
+// v63: reopen at the technician door on devices that entered as one.
+try{ if(!location.hash && localStorage.getItem('ghs_entry')==='worker') location.hash = '#worker'; }catch(e){}
 applyWorkerEntry();
 window.addEventListener('hashchange', function(){ render(); });
 // ---------- Menu checkout (added 2026-10-22, v32) ----------
