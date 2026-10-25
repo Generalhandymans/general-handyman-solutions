@@ -861,9 +861,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div id="adminCarts"></div>
     <div class="card">
       <h3 style="margin-top:0">🎟️ Invite a member — first month FREE</h3>
-      <p class="mut">A personal invitation from you: the customer joins HomeCare with the <b>first month free</b> (card on file, $0 charged today, then $29/mo — cancel anytime). One link per person, good for 7 days. If you add their email, only that email can claim it.</p>
+      <p class="mut">A personal invitation from you: the customer joins HomeCare with the <b>first month free</b> (card on file, $0 charged today, then $29/mo — cancel anytime). One link per person, good for 7 days. If you add their email, only that email can claim it. <b>Cart ID:</b> if you paste the customer's cart ID, the free month shows inside HIS OWN cart link — on the HomeCare $29 option — so he only ever gets one link.</p>
       <div class="row"><div><label>Customer name</label><input id="invName" placeholder="e.g. Brijesh"></div><div><label>Phone (optional)</label><input id="invPhone" placeholder="(707) 555-0123"></div></div>
-      <label>Email (optional)<input id="invEmail" placeholder="customer@email.com"></label>
+      <div class="row"><div><label>Email (optional)<input id="invEmail" placeholder="customer@email.com"></label></div><div><label>Cart ID (optional)<input id="invCartId" placeholder="CRT-…"></label></div></div>
       <button class="black" onclick="createInvite()">Create invitation link</button>
       <div id="inviteLinkOut" style="margin-top:8px"></div>
     </div>
@@ -3707,10 +3707,10 @@ async function createInvite(){
   var name=document.getElementById('invName').value.trim();
   if(!name){ alert('Add the customer name first.'); return; }
   try{
-    const d=await api('/api/admin/invites',{method:'POST', body:JSON.stringify({ name:name, email:document.getElementById('invEmail').value.trim(), phone:document.getElementById('invPhone').value.trim() })});
+    const d=await api('/api/admin/invites',{method:'POST', body:JSON.stringify({ name:name, email:document.getElementById('invEmail').value.trim(), phone:document.getElementById('invPhone').value.trim(), cartId:document.getElementById('invCartId').value.trim() })});
     const inv=d.invite;
-    document.getElementById('inviteLinkOut').innerHTML='<b>Invitation for '+escHtml(inv.name)+':</b> first month FREE, then $29/mo — link good 7 days: <a href="'+inv.link+'" target="_blank" rel="noopener">'+inv.link+'</a> <button type="button" class="ghost" onclick="copyInviteLink(\''+inv.id+'\')">Copy link</button>';
-    ['invName','invEmail','invPhone'].forEach(function(i){ document.getElementById(i).value=''; });
+    document.getElementById('inviteLinkOut').innerHTML='<b>Invitation for '+escHtml(inv.name)+':</b> first month FREE, then $29/mo — link good 7 days: <a href="'+inv.link+'" target="_blank" rel="noopener">'+inv.link+'</a> <button type="button" class="ghost" onclick="copyInviteLink(\''+inv.id+'\')">Copy link</button>'+(inv.cartId?'<br><span class="mut">Also live inside his cart: the free month shows on the HomeCare option of cart '+escHtml(inv.cartId)+' — you can just send him his cart link.</span>':'');
+    ['invName','invEmail','invPhone','invCartId'].forEach(function(i){ document.getElementById(i).value=''; });
     loadAdminInvites();
   }catch(e){ alert(e.message); }
 }
@@ -3719,6 +3719,12 @@ function copyInviteLink(idv){
   function done(){ alert('Invitation link copied:\n'+url); }
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('Copy the invitation link:',url); }); }
   else prompt('Copy the invitation link:',url);
+}
+async function attachInvite(idv){
+  var cid=prompt('Cart ID to put this free month in (e.g. CRT-511F03):');
+  if(!cid) return;
+  try{ await api('/api/admin/invites/'+idv+'/attach',{method:'POST', body:JSON.stringify({ cartId:cid.trim() })}); loadAdminInvites(); }
+  catch(e){ alert(e.message); }
 }
 async function revokeInvite(idv){
   if(!confirm('Revoke this invitation? The link will stop working.')) return;
@@ -3732,7 +3738,7 @@ async function loadAdminInvites(){
     if(!(d.invites||[]).length){ box.innerHTML=''; return; }
     box.innerHTML=d.invites.map(function(iv){
       const badge=iv.status==='accepted'?'<span class="pill" style="background:#1a7f37">member ✓</span>':(iv.status==='expired'?'<span class="pill" style="background:#6b6762">expired</span>':(iv.status==='revoked'?'<span class="pill" style="background:#6b6762">revoked</span>':'<span class="pill" style="background:#b26a00">waiting</span>'));
-      return '<div class="card"><b>'+escHtml(iv.name)+'</b> '+badge+'<br><span class="mut">🎟️ First month FREE, then $29/mo • created '+escHtml(String(iv.createdAt||'').slice(0,10))+(iv.email?' • '+escHtml(iv.email):'')+(iv.phone?' • '+escHtml(iv.phone):'')+'</span><div style="margin-top:8px"><button type="button" class="ghost" onclick="copyInviteLink(\''+iv.id+'\')">Copy link</button> <a href="'+iv.link+'" target="_blank" rel="noopener">Open</a>'+(iv.status==='pending'?' <button type="button" class="ghost" onclick="revokeInvite(\''+iv.id+'\')">Revoke</button>':'')+'</div></div>';
+      return '<div class="card"><b>'+escHtml(iv.name)+'</b> '+badge+'<br><span class="mut">🎟️ First month FREE, then $29/mo • created '+escHtml(String(iv.createdAt||'').slice(0,10))+(iv.email?' • '+escHtml(iv.email):'')+(iv.phone?' • '+escHtml(iv.phone):'')+(iv.cartId?' • in his cart '+escHtml(iv.cartId):'')+'</span><div style="margin-top:8px"><button type="button" class="ghost" onclick="copyInviteLink(\''+iv.id+'\')">Copy link</button> <a href="'+iv.link+'" target="_blank" rel="noopener">Open</a>'+(iv.status==='pending'?' <button type="button" class="ghost" onclick="attachInvite(\''+iv.id+'\')">Put it in his cart…</button> <button type="button" class="ghost" onclick="revokeInvite(\''+iv.id+'\')">Revoke</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }
 }

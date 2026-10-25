@@ -1559,7 +1559,7 @@ function inviteStatusOf(inv) {
   return 'pending';
 }
 function publicInvite(inv) {
-  return { id: inv.id, name: inv.name || '', email: inv.email || '', phone: inv.phone || '', status: inviteStatusOf(inv), link: inviteLink(inv), createdAt: inv.createdAt || '', expiresAt: inv.expiresAt || null, acceptedAt: inv.acceptedAt || null, acceptedByUserId: inv.acceptedByUserId || '' };
+  return { id: inv.id, name: inv.name || '', email: inv.email || '', phone: inv.phone || '', status: inviteStatusOf(inv), link: inviteLink(inv), createdAt: inv.createdAt || '', expiresAt: inv.expiresAt || null, acceptedAt: inv.acceptedAt || null, acceptedByUserId: inv.acceptedByUserId || '', cartId: inv.cartId || '' };
 }
 function markInviteAccepted(inv, u, session) {
   if (!inv || inv.status === 'accepted') return false;
@@ -1567,6 +1567,8 @@ function markInviteAccepted(inv, u, session) {
   inv.acceptedAt = new Date().toISOString();
   if (u && u.id) { inv.acceptedByUserId = u.id; u.inviteFreeMonthUsed = true; } // Gabriel's rule: the free month is once per account — the flag rides the claim, so no account can ever claim a second invitation free month
   if (session && session.subscription) inv.subscriptionId = session.subscription;
+  // Claimed anywhere = the offer leaves every cart it was attached to.
+  for (const cc of cartsOf()) if (cc.freeMonthInviteId === inv.id) delete cc.freeMonthInviteId;
   return true;
 }
 // The trial-aware session proof for the invite return path: the shared
@@ -2824,6 +2826,9 @@ function cartPageHtml(c, user, langOverride, notice) {
       paymentH: 'Payment', payBtn: 'Pay {amt} in full',
       joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this member total for your order.',
       joinOrderNoteYard: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this order total.',
+      joinOrderNoteFree: 'How it works: tapping Pay starts your HomeCare membership FREE — $0 today (your card is saved safely with Stripe and the first $29 charge is in 30 days) — then you come right back here to pay for your order at the member price.',
+      inviteBanner: '🎟️ Personal invitation: your first month of HomeCare is FREE.',
+      freeMonthTag: 'FIRST MONTH FREE',
       joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
       refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Starting your membership…', processing: 'Processing payment…',
@@ -2864,6 +2869,9 @@ function cartPageHtml(c, user, langOverride, notice) {
       paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
       joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
       joinOrderNoteYard: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar el total de esta orden.',
+      joinOrderNoteFree: 'Así funciona: al tocar Pagar activas tu membresía HomeCare GRATIS — hoy pagas $0 (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) — y luego regresas aquí mismo para pagar tu orden al precio de miembro.',
+      inviteBanner: '🎟️ Invitación personal: tu primer mes de HomeCare es GRATIS.',
+      freeMonthTag: 'PRIMER MES GRATIS',
       joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
       refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Activando tu membresía…', processing: 'Procesando el pago…',
@@ -2962,9 +2970,16 @@ function cartPageHtml(c, user, langOverride, notice) {
   // 20% order discount belongs to HomeCare / HomeCare Plus ONLY: picking
   // a Yard plan keeps the totals at the regular price and says so right
   // there (yardNote) — no silent no-discount surprise at payment time.
-  const planRow = (key, i18n, checked) => '<label style="display:block;border:1px solid #ddd;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;background:#fff"><input type="radio" name="cPlan" value="' + key + '"' + (checked ? ' checked' : '') + ' style="margin-right:8px"> <span data-i18n="' + i18n + '">' + S[i18n] + '</span></label>';
+  const planRow = (key, i18n, checked, extra) => '<label style="display:block;border:1px solid #ddd;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;background:#fff"><input type="radio" name="cPlan" value="' + key + '"' + (checked ? ' checked' : '') + ' style="margin-right:8px"> <span data-i18n="' + i18n + '">' + S[i18n] + '</span>' + (extra || '') + '</label>';
+  // v61 (Gabriel): a personal invitation attached to THIS cart puts the
+  // free month right here — the HomeCare $29 row carries the badge and
+  // the join can claim it here; no separate invite link needed. The
+  // other plans stay full price, exactly as he ordered.
+  const fmInv = c.freeMonthInviteId ? invitesOf().find(i => i.id === c.freeMonthInviteId) : null;
+  const freeMonth = !!(fmInv && inviteStatusOf(fmInv) === 'pending');
+  const freeTag = freeMonth ? ' <b style="background:#1a9e4b;color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;white-space:nowrap" data-i18n="freeMonthTag">' + S.freeMonthTag + '</b>' : '';
   const planPicker = '<div id="planPicker" style="display:none;margin-top:10px">'
-    + planRow('homecare', 'planHomecare', true)
+    + planRow('homecare', 'planHomecare', true, freeTag)
     + planRow('plus1', 'planPlus1', false)
     + planRow('plus2', 'planPlus2', false)
     + planRow('yard1', 'planYard1', false)
@@ -2977,6 +2992,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="yardActiveH">' + S.yardActiveH + '</b><p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="yardActiveBody">' + S.yardActiveBody + '</p></div>'
       : '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
         + '<label style="display:block;font-size:16px"><input type="checkbox" id="cJoin" style="transform:scale(1.3);margin-right:8px"> <b data-i18n="joinLabel">' + S.joinLabel + '</b></label>'
+        + (freeMonth ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:8px 10px;font-size:14.5px;margin:8px 0 0"><b data-i18n="inviteBanner">' + S.inviteBanner + '</b></p>' : '')
         + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
         + planPicker
         + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#555"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
@@ -3027,7 +3043,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
-    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ';'
+    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (freeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
     + 'var PLANS={"homecare":{"name":"HomeCare","price":"$29","disc":1},"plus1":{"name":"HomeCare Plus","price":"$100","disc":1},"plus2":{"name":"HomeCare Plus","price":"$175","disc":1},"yard1":{"name":"Yard Care","price":"$75","disc":0},"yard2":{"name":"Yard Care","price":"$150","disc":0}};'
@@ -3036,7 +3052,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }'
     + 'function fillPlan(s, pl){ return String(s||"").replace("{planName}", pl.name).replace("{price}", pl.price); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
     + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
     + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ syncJoinPreview(); var pp=$("planPicker"); if(pp) pp.style.display=this.checked?"block":"none"; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
     + 'document.querySelectorAll("input[name=cPlan]").forEach(function(r){ r.addEventListener("change",function(){ syncJoinPreview(); renderAmounts(); }); });'
@@ -5205,7 +5221,15 @@ const server = http.createServer(async (req, res) => {
     if (!name) return send(res, 400, { error: 'the customer name is required' });
     if (email && !/.+@.+\..+/.test(email)) return send(res, 400, { error: 'that email does not look valid' });
     const now = new Date();
-    const inv = { id: newInviteId(), name, email, phone, status: 'pending', createdBy: user.id, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * 864e5).toISOString(), joinSessionId: '', acceptedAt: null, acceptedByUserId: '', subscriptionId: '' };
+    const inv = { id: newInviteId(), name, email, phone, status: 'pending', createdBy: user.id, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * 864e5).toISOString(), joinSessionId: '', acceptedAt: null, acceptedByUserId: '', subscriptionId: '', cartId: '' };
+    // v61: optionally attach the invitation to a customer's cart — the
+    // free month then shows inside THAT cart page's HomeCare option.
+    if (b.cartId) {
+      const cc = cartsOf().find(x => x.id === cleanText(b.cartId, 40));
+      if (!cc) return send(res, 400, { error: 'cart not found: ' + b.cartId });
+      if (cc.status !== 'open') return send(res, 400, { error: 'that cart is not open' });
+      inv.cartId = cc.id; cc.freeMonthInviteId = inv.id;
+    }
     invitesOf().push(inv);
     save();
     return send(res, 201, { invite: publicInvite(inv) });
@@ -5215,9 +5239,25 @@ const server = http.createServer(async (req, res) => {
     if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
     const inv = invitesOf().find(x => x.id === invRevokeMatch[1]);
     if (!inv) return send(res, 404, { error: 'invite not found' });
-    if (inv.status !== 'accepted') inv.status = 'revoked';
+    if (inv.status !== 'accepted') { inv.status = 'revoked'; for (const cc of cartsOf()) if (cc.freeMonthInviteId === inv.id) delete cc.freeMonthInviteId; }
     save();
     return send(res, 200, { invite: publicInvite(inv) });
+  }
+  // v61: attach an existing invitation to a customer's open cart.
+  const invAttachMatch = p.match(/^\/api\/admin\/invites\/([\w-]+)\/attach$/);
+  if (invAttachMatch && req.method === 'POST') {
+    if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
+    const inv = invitesOf().find(x => x.id === invAttachMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invite not found' });
+    if (inviteStatusOf(inv) !== 'pending') return send(res, 400, { error: 'only a pending invitation can be attached' });
+    const b = await readBody(req);
+    const cc = cartsOf().find(x => x.id === cleanText(b.cartId, 40));
+    if (!cc) return send(res, 400, { error: 'cart not found' });
+    if (cc.status !== 'open') return send(res, 400, { error: 'that cart is not open' });
+    for (const oc of cartsOf()) if (oc.freeMonthInviteId === inv.id) delete oc.freeMonthInviteId;
+    inv.cartId = cc.id; cc.freeMonthInviteId = inv.id;
+    save();
+    return send(res, 200, { invite: publicInvite(inv), cartId: cc.id });
   }
   const joinCheckoutMatch = p.match(/^\/join\/([\w-]+)\/checkout$/);
   if (joinCheckoutMatch && req.method === 'POST') {
@@ -5286,13 +5326,24 @@ const server = http.createServer(async (req, res) => {
         if (membershipPlanOf(user).status === 'active') joinPlan = null;
       }
       if (joinPlan) {
+        // v61: an invitation attached to THIS cart makes the HomeCare
+        // join start with the free month — claimed right here, inside
+        // the customer's own cart link (Gabriel). HomeCare ONLY, and
+        // only while this account has never used a free month.
+        let fmInvite = null;
+        if (joinPlan.key === 'homecare' && c.freeMonthInviteId && !user.inviteFreeMonthUsed) {
+          const iv = invitesOf().find(i => i.id === c.freeMonthInviteId);
+          if (iv && inviteStatusOf(iv) === 'pending') fmInvite = iv;
+        }
         const s = await createCheckoutSession(joinPlan.kind, user, {
           plan: joinPlan.key,
+          trialDays: fmInvite ? INVITE_TRIAL_DAYS : 0,
           successUrl: cartLink(c) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
-          metadata: { cartId: c.id, src: 'cart' },
-          subMetadata: { cartId: c.id }
+          metadata: { cartId: c.id, src: fmInvite ? 'cart-invite' : 'cart', ...(fmInvite ? { inviteId: fmInvite.id } : {}) },
+          subMetadata: { cartId: c.id, ...(fmInvite ? { inviteId: fmInvite.id } : {}) }
         });
+        if (fmInvite) fmInvite.joinSessionId = s.id;
         c.joinSessionId = s.id;
         c.joinPending = true;
         c.joinPlan = joinPlan.key;
@@ -5441,6 +5492,13 @@ const server = http.createServer(async (req, res) => {
                 // a Yard join gets its own banner — membership active,
                 // NO claim that a discount was applied to this order.
                 const jp = activateMembershipFromCheckout(mu, sess);
+                // v61: a free month claimed inside the cart marks the
+                // invitation accepted here too (the webhook does the
+                // same — idempotent either way).
+                if (sess.metadata && sess.metadata.inviteId) {
+                  const iv3 = invitesOf().find(i => i.id === sess.metadata.inviteId);
+                  if (iv3 && markInviteAccepted(iv3, mu, sess)) notifyAdmins('🎟️ Invitation claimed by ' + (mu.name || mu.email) + ' (' + iv3.name + ') — first month FREE, then $29/mo.');
+                }
                 c.joinPending = false;
                 notice = (jp && jp.type === 'yard') ? 'joined-yard' : 'joined';
                 save();
