@@ -132,6 +132,75 @@ function notify(userId, type, text) {
   if (!Array.isArray(db.notifications)) db.notifications = [];
   db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, read: false, at: new Date().toISOString() });
   if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-2000);
+  // v66: the same event also goes out as a real Web Push (phone buzzes
+  // with the app closed). Fire-and-forget — a push failure never touches
+  // the flow that raised the notification.
+  sendPushToUser(userId, { type: type || 'info', text }).catch(() => {});
+}
+// ---------- Web Push (v66, Gabriel: alerts must reach them with the app closed) ----------
+// Zero-dependency RFC 8291 (aes128gcm payload encryption) + RFC 8292
+// (VAPID) on Node's crypto. The VAPID keypair is generated ONCE by the
+// server and kept in db.settings — the private key never enters the repo,
+// an env file, or a chat. Subscriptions live in db.pushSubs[userId]
+// (dedupe by endpoint, capped, pruned when the push service says
+// 404/410). If a client never subscribes, notify() behaves exactly as
+// before — push is a pure add-on.
+function b64u(buf) { return Buffer.from(buf).toString('base64url'); }
+function vapidKeys() {
+  const s = db.settings = db.settings || {};
+  if (s.vapid && s.vapid.publicKey && s.vapid.jwk && s.vapid.jwk.d) return s.vapid;
+  const kp = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const pub = kp.publicKey.export({ format: 'jwk' });
+  const priv = kp.privateKey.export({ format: 'jwk' });
+  const raw = Buffer.concat([Buffer.from([4]), Buffer.from(pub.x, 'base64url'), Buffer.from(pub.y, 'base64url')]);
+  s.vapid = { publicKey: raw.toString('base64url'), jwk: { x: pub.x, y: pub.y, d: priv.d }, createdAt: new Date().toISOString() };
+  save();
+  return s.vapid;
+}
+function vapidJwt(endpoint) {
+  const keys = vapidKeys();
+  const priv = crypto.createPrivateKey({ key: { kty: 'EC', crv: 'P-256', x: keys.jwk.x, y: keys.jwk.y, d: keys.jwk.d }, format: 'jwk' });
+  const head = b64u(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+  const body = b64u(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: process.env.VAPID_SUBJECT || 'mailto:generalhandymans@gmail.com' }));
+  const sig = crypto.sign('sha256', Buffer.from(head + '.' + body), { key: priv, dsaEncoding: 'ieee-p1363' });
+  return head + '.' + body + '.' + b64u(sig);
+}
+function hkdfExpand(prk, info, len) {
+  return crypto.createHmac('sha256', prk).update(Buffer.concat([info, Buffer.from([1])])).digest().subarray(0, len);
+}
+function encryptPushPayload(sub, payloadStr) {
+  const uaPub = Buffer.from(sub.keys.p256dh, 'base64url');
+  const auth = Buffer.from(sub.keys.auth, 'base64url');
+  const eph = crypto.createECDH('prime256v1'); eph.generateKeys();
+  const asPub = eph.getPublicKey();
+  const secret = eph.computeSecret(uaPub);
+  const prkKey = crypto.createHmac('sha256', auth).update(secret).digest();
+  const ikm = hkdfExpand(prkKey, Buffer.concat([Buffer.from('WebPush: info\0'), uaPub, asPub]), 32);
+  const salt = crypto.randomBytes(16);
+  const prk = crypto.createHmac('sha256', salt).update(ikm).digest();
+  const cek = hkdfExpand(prk, Buffer.from('Content-Encoding: aes128gcm\0'), 16);
+  const nonce = hkdfExpand(prk, Buffer.from('Content-Encoding: nonce\0'), 12);
+  const plain = Buffer.concat([Buffer.from(payloadStr, 'utf8'), Buffer.from([2])]);
+  const cipher = crypto.createCipheriv('aes-128-gcm', cek, nonce);
+  const ct = Buffer.concat([cipher.update(plain), cipher.final(), cipher.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096, 0);
+  return Buffer.concat([salt, rs, Buffer.from([asPub.length]), asPub, ct]);
+}
+async function sendPushToUser(userId, note) {
+  const subs = (db.pushSubs && db.pushSubs[userId]) || [];
+  if (!subs.length) return;
+  const keys = vapidKeys();
+  const payload = JSON.stringify({ title: 'General Handyman Solutions', body: String(note.text || '').slice(0, 180), url: '/', tag: String(note.type || 'ghs').slice(0, 32) });
+  for (const sub of subs.slice()) {
+    try {
+      const body = encryptPushPayload(sub, payload);
+      const r = await fetch(sub.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'Content-Encoding': 'aes128gcm', 'TTL': '86400', 'Urgency': 'high', 'Authorization': 'vapid t=' + vapidJwt(sub.endpoint) + ', k=' + keys.publicKey }, body });
+      if (r.status === 404 || r.status === 410) {
+        db.pushSubs[userId] = db.pushSubs[userId].filter(x => x.endpoint !== sub.endpoint);
+        save();
+      }
+    } catch (e) { /* a dead endpoint must never break the app */ }
+  }
 }
 function notifyAdmins(type, text) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text)); }
 // ---------- Admin audit log (v33 security) ----------
@@ -6039,6 +6108,34 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
   }
 
   // ---------- notifications ----------
+  // ---------- Web Push subscriptions (v66) ----------
+  if (p === '/api/push/key' && req.method === 'GET') {
+    return send(res, 200, { publicKey: vapidKeys().publicKey });
+  }
+  if (p === '/api/push/subscribe' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const sub = (b && b.subscription) || b || {};
+    const endpoint = String(sub.endpoint || '');
+    const p256dh = sub.keys && String(sub.keys.p256dh || '');
+    const auth = sub.keys && String(sub.keys.auth || '');
+    let okShape = /^https:\/\//.test(endpoint) || /^http:\/\/127\.0\.0\.1/.test(endpoint);
+    try { if (Buffer.from(p256dh, 'base64url').length !== 65 || Buffer.from(auth, 'base64url').length < 12) okShape = false; } catch (e) { okShape = false; }
+    if (!okShape) return send(res, 400, { error: 'invalid subscription' });
+    if (!db.pushSubs) db.pushSubs = {};
+    const mine = db.pushSubs[user.id] || (db.pushSubs[user.id] = []);
+    const isNew = !mine.some(x => x.endpoint === endpoint);
+    if (isNew) { mine.push({ endpoint, keys: { p256dh, auth }, at: new Date().toISOString() }); while (mine.length > 5) mine.shift(); }
+    save();
+    if (isNew) sendPushToUser(user.id, { type: 'welcome', text: '🔔 Push notifications are ON — job alerts will reach you even with the app closed. · Notificaciones push ACTIVADAS.' }).catch(() => {});
+    return send(res, 200, { ok: true, isNew });
+  }
+  if (p === '/api/push/unsubscribe' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    if (db.pushSubs && db.pushSubs[user.id]) { db.pushSubs[user.id] = db.pushSubs[user.id].filter(x => x.endpoint !== String((b && b.endpoint) || '')); save(); }
+    return send(res, 200, { ok: true });
+  }
   if (p === '/api/notifications' && req.method === 'GET') {
     if (!user) return send(res, 401, { error: 'login required' });
     const mine = (db.notifications || []).filter(n => n.userId === user.id).slice(-100).reverse();

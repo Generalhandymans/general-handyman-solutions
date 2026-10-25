@@ -1954,7 +1954,7 @@ async function doAuth(){
 async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
 let notifs=[]; let lastUnread=-1;
-async function loadNotifs(){ if(!me) return; refreshPermCard(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
+async function loadNotifs(){ if(!me) return; refreshPermCard(); maybeSubscribePush(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
 function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(function(n){
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
@@ -2851,9 +2851,30 @@ async function activarNotifs(){
   if (!('Notification' in window)) { showInfo('Este navegador no soporta notificaciones. · This browser does not support notifications.'); return; }
   let r = 'default';
   try { r = await Notification.requestPermission(); } catch(e) {}
-  if (r === 'granted') { playHammer(); showInfo('🔔 ¡Listo! Así suena el martillo cuando te cae un aviso. · Done — that hammer sound is your alert.'); }
+  if (r === 'granted') { playHammer(); showInfo('🔔 ¡Listo! Así suena el martillo cuando te cae un aviso. · Done — that hammer sound is your alert.'); subscribePush(); }
   refreshPermCard();
 }
+// ---------- Web Push subscription (v66) ----------
+// Once notification permission is granted, register this device for real
+// push (alerts arrive with the app closed). Runs at most once per page
+// session, plus right after the permission is granted from the card.
+let pushSubTried = false;
+function urlB64ToUint8Array(s){ const pad = '='.repeat((4 - (s.length % 4)) % 4); const b = (s + pad).replace(/-/g, '+').replace(/_/g, '/'); const raw = atob(b); const arr = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i); return arr; }
+async function subscribePush(){
+  try {
+    if (!me || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      const kr = await api('/api/push/key');
+      if (!kr || !kr.publicKey) return;
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(kr.publicKey) });
+    }
+    await api('/api/push/subscribe', { method: 'POST', body: JSON.stringify({ subscription: sub.toJSON() }) });
+  } catch(e) {}
+}
+function maybeSubscribePush(){ if (pushSubTried) return; pushSubTried = true; subscribePush(); }
 function activarUbicacion(){
   if (!navigator.geolocation) { showInfo('Este navegador no soporta ubicación. · This browser does not support location.'); return; }
   navigator.geolocation.getCurrentPosition(function(){ try { localStorage.setItem('ghsLoc', 'on'); } catch(e) {} showInfo('📍 ¡Listo! Ubicación activada. · Done — location is on.'); refreshPermCard(); }, function(){ showInfo('No se pudo activar — revisa los permisos de tu navegador. · Could not turn it on — check your browser permissions.'); refreshPermCard(); }, { timeout: 10000 });
