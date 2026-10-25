@@ -720,6 +720,22 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <p class="mut" id="permHelp" style="display:none;margin:8px 0 0">¿Tocaste "Bloquear"? Actívalos desde los ajustes de tu navegador: toca el candado 🔒 junto a la dirección → Permisos. · Blocked it? Turn them on in your browser settings: the 🔒 next to the address → Permissions.</p>
   </div>
 
+  <!-- v65: in-app dialog — replaces the browser's native confirm()/prompt()
+       in every admin flow (the native ones look broken, get swallowed by
+       some browsers, and cannot be styled). Promise-based twins:
+       appConfirm(msg) -> true/false, appPrompt(msg, def) -> string/null,
+       exactly the semantics the call sites already expect. -->
+  <div id="appDlg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:10001;align-items:center;justify-content:center;padding:18px">
+    <div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4)">
+      <p id="appDlgMsg" style="margin:0 0 12px;font-size:15.5px;line-height:1.45;white-space:pre-line"></p>
+      <input id="appDlgInput" style="display:none;width:100%;padding:11px;border:1.5px solid #ccc;border-radius:9px;font-size:15.5px;margin-bottom:12px;box-sizing:border-box">
+      <div style="display:flex;gap:10px">
+        <button type="button" class="ghost" style="flex:1;padding:12px;font-weight:700" onclick="appDlgCancelClicked()">Cancelar</button>
+        <button type="button" id="appDlgOk" style="flex:1;padding:12px;background:#e42535;color:#fff;border:0;border-radius:9px;font-weight:800;cursor:pointer" onclick="appDlgOkClicked()">OK</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
     <h2>Request a handyman — pide tu servicio</h2>
@@ -2277,7 +2293,7 @@ async function previewEstimate(idv){
   }catch(e){ alert(e.message); }
 }
 async function duplicateEstimate(idv){
-  if(!confirm('Duplicate this estimate? A fresh draft for the same customer is created at the top of the list — review it, set the valid-until date, and send.')) return;
+  if(!await appConfirm('Duplicate this estimate? A fresh draft for the same customer is created at the top of the list — review it, set the valid-until date, and send.')) return;
   try{ const d=await api('/api/requests/'+idv+'/duplicate-estimate',{method:'POST', body:JSON.stringify({})});
     alert('Duplicated as '+d.request.id+'.'); loadAdmin();
   }catch(e){ alert(e.message); }
@@ -2300,7 +2316,7 @@ async function sendEstimate(idv, sendEmail){
   const est=readEstimate(idv); const note=document.getElementById('qn-'+idv).value;
   if(!est.items.length || est.total<=0){ alert('Add at least one priced line first.'); return; }
   const action=sendEmail?'Save this estimate and email it from generalhandymans@gmail.com?':'Save this estimate in the app only?';
-  if(!confirm(action+'\n\nCustomer total: '+moneyFmt(est.total)+'\nDue to book: '+moneyFmt(est.bookingDue)+'\nBalance: '+moneyFmt(est.balanceDue))) return;
+  if(!await appConfirm(action+'\n\nCustomer total: '+moneyFmt(est.total)+'\nDue to book: '+moneyFmt(est.bookingDue)+'\nBalance: '+moneyFmt(est.balanceDue))) return;
   try{ const d=await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({estimate:est, note, sendEmail:!!sendEmail})});
     if(sendEmail && d.automation && !d.automation.sent) alert('Estimate saved in the app. Email is not connected yet, so no email was sent. Reason: '+(d.automation.reason||'not configured'));
     loadAdmin();
@@ -2336,7 +2352,7 @@ async function createInvoice(){
   const msg=document.getElementById('iMsg');
   if(!name){ msg.textContent='Customer name is required.'; return; }
   if(!f.items.length || f.total<=0){ msg.textContent='Add at least one priced line first.'; return; }
-  if(!confirm('Create draft invoice?\n\nCustomer: '+name+'\nTotal: '+moneyFmt(f.total)+'\n\nYou can review it and send it by email next.')) return;
+  if(!await appConfirm('Create draft invoice?\n\nCustomer: '+name+'\nTotal: '+moneyFmt(f.total)+'\n\nYou can review it and send it by email next.')) return;
   try{ await api('/api/admin/invoices',{method:'POST', body:JSON.stringify({customerName:name, customerEmail:email, customerPhone:document.getElementById('iPhone').value.trim(), jobId:document.getElementById('iJob').value.trim(), dueDate:document.getElementById('iDue').value, notes:document.getElementById('iNotes').value.trim(), items:f.items, discount:f.discount})});
     msg.textContent='Draft invoice created.'; document.getElementById('invRows').innerHTML=''; addInvoiceItem(); document.getElementById('iDiscount').value='0'; document.getElementById('iNotes').value=''; updateInvoiceSummary(); loadInvoices();
   }catch(e){ msg.textContent=e.message; }
@@ -2366,10 +2382,10 @@ async function loadInvoices(){
 }
 async function invoiceAct(idv, action){
   let body={};
-  if(action==='mark-paid'){ const m=prompt('Payment method (cash, zelle, check, other):','cash'); if(m===null) return; body={method:m||'cash'}; if(!confirm('Mark invoice '+idv+' as PAID?')) return; }
-  else if(action==='cancel'){ if(!confirm('Cancel invoice '+idv+'?')) return; }
-  else if(action==='send'){ if(!confirm('Send invoice '+idv+' by email now?')) return; }
-  else if(action==='remind'){ if(!confirm('Send a payment reminder for invoice '+idv+'?\n\nThe customer gets an in-app notification and a reminder email with the payment link.')) return; }
+  if(action==='mark-paid'){ const m=await appPrompt('Payment method (cash, zelle, check, other):','cash'); if(m===null) return; body={method:m||'cash'}; if(!await appConfirm('Mark invoice '+idv+' as PAID?')) return; }
+  else if(action==='cancel'){ if(!await appConfirm('Cancel invoice '+idv+'?')) return; }
+  else if(action==='send'){ if(!await appConfirm('Send invoice '+idv+' by email now?')) return; }
+  else if(action==='remind'){ if(!await appConfirm('Send a payment reminder for invoice '+idv+'?\n\nThe customer gets an in-app notification and a reminder email with the payment link.')) return; }
   try{ const d=await api('/api/admin/invoices/'+idv+'/'+action,{method:'POST', body:JSON.stringify(body)});
     if(action==='send' && d.automation && !d.automation.sent) alert('Invoice marked as sent, but the email did not go through. Reason: '+(d.automation.reason||'not configured')+'\n\nUse "Copy payment link" to send it manually.');
     if(action==='remind' && d.automation && !d.automation.sent) alert('Reminder logged, but the reminder email did not go through. Reason: '+(d.automation.reason||'not configured')+'\n\nUse "Copy payment link" to send it manually.');
@@ -2379,7 +2395,7 @@ async function invoiceAct(idv, action){
 async function confirmSchedule(idv){
   var d=document.getElementById('cfd-'+idv), t=document.getElementById('cft-'+idv);
   if(!d||!d.value){ alert('Pick a confirmed date first.'); return; }
-  if(!confirm('Confirm schedule for '+idv+': '+d.value+(t&&t.value?' • '+t.value:'')+'?')) return;
+  if(!await appConfirm('Confirm schedule for '+idv+': '+d.value+(t&&t.value?' • '+t.value:'')+'?')) return;
   try{ await api('/api/admin/invoices/'+idv,{method:'PUT', body:JSON.stringify({confirmedDate:d.value, confirmedTime:t?t.value:''})}); loadInvoices(); }
   catch(e){ alert(e.message); }
 }
@@ -2419,14 +2435,14 @@ async function saveInvoiceEdit(idv){
   if(!f.items.length || f.total<=0){ alert('Add at least one priced line first.'); return; }
   const name=document.getElementById('ieName-'+idv).value.trim();
   if(!name){ alert('Customer name is required.'); return; }
-  if(!confirm('Save changes to invoice '+idv+'?\n\nNew total: '+moneyFmt(f.total))) return;
+  if(!await appConfirm('Save changes to invoice '+idv+'?\n\nNew total: '+moneyFmt(f.total))) return;
   try{ await api('/api/admin/invoices/'+idv,{method:'PUT', body:JSON.stringify({customerName:name, customerEmail:document.getElementById('ieEmail-'+idv).value.trim(), customerPhone:document.getElementById('iePhone-'+idv).value.trim(), jobId:document.getElementById('ieJob-'+idv).value.trim(), dueDate:document.getElementById('ieDue-'+idv).value, notes:document.getElementById('ieNotes-'+idv).value.trim(), items:f.items, discount:f.discount})});
     loadInvoices();
   }catch(e){ alert(e.message); }
 }
 function cancelInvoiceEdit(idv){ const box=document.getElementById('invEdit-'+idv); if(box) box.innerHTML=''; }
 async function delInvoice(idv, st){
-  if(!confirm('Delete invoice '+idv+' ('+(st||'')+')? This removes it for good. Only use for invoices that were never paid — paid invoices cannot be deleted.')) return;
+  if(!await appConfirm('Delete invoice '+idv+' ('+(st||'')+')? This removes it for good. Only use for invoices that were never paid — paid invoices cannot be deleted.')) return;
   try{ await api('/api/admin/invoices/'+idv,{method:'DELETE'}); loadInvoices(); }
   catch(e){ alert(e.message); }
 }
@@ -2774,6 +2790,30 @@ function toggleSoundMute(){
   paintSoundBtn();
 }
 function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔔' : '🔕'; }
+// ---------- In-app dialog (v65) ----------
+let appDlgResolve = null;
+function appDlgShow(msg, opts){
+  opts = opts || {};
+  return new Promise(function(res){
+    appDlgResolve = res;
+    document.getElementById('appDlgMsg').textContent = msg;
+    const inp = document.getElementById('appDlgInput');
+    inp.style.display = opts.input ? 'block' : 'none';
+    inp.value = opts.def || '';
+    inp.placeholder = opts.placeholder || '';
+    document.getElementById('appDlgOk').textContent = opts.okText || 'OK';
+    document.getElementById('appDlg').style.display = 'flex';
+    if (opts.input) setTimeout(function(){ try { inp.focus(); inp.select(); } catch(e) {} }, 60);
+  });
+}
+function appDlgDone(val){
+  document.getElementById('appDlg').style.display = 'none';
+  if (appDlgResolve) { const r = appDlgResolve; appDlgResolve = null; r(val); }
+}
+function appDlgOkClicked(){ const inp = document.getElementById('appDlgInput'); appDlgDone(inp && inp.style.display !== 'none' ? inp.value : true); }
+function appDlgCancelClicked(){ const inp = document.getElementById('appDlgInput'); appDlgDone(inp && inp.style.display !== 'none' ? null : false); }
+function appConfirm(msg){ return appDlgShow(msg, { okText: 'Sí, continuar' }); }
+function appPrompt(msg, def, placeholder){ return appDlgShow(msg, { input: true, def: def, placeholder: placeholder, okText: 'OK' }); }
 // ---------- Permissions setup card (v64, Gabriel) ----------
 // "Cuando instalen la aplicación, que les notifique que tienen que activar
 // notificaciones y su ubicación — cliente y trabajador." The card sits on
@@ -3217,7 +3257,7 @@ async function refreshLiveTracking(){
     updateLivePoll(jobs);
   } catch(e) {}
 }
-async function releaseInfo(idv,on){ if(on && !confirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
+async function releaseInfo(idv,on){ if(on && !await appConfirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
 // ---------- Estimate authorization holds (2026-10-20) ----------
 function holdsOf(r){ return Array.isArray(r.holds) ? r.holds : []; }
 function holdsPoolCents(r){ return holdsOf(r).filter(function(h){ return h.status==='authorized'; }).reduce(function(s,h){ return s+(Number(h.authorizedCents)||0); },0); }
@@ -3254,7 +3294,7 @@ function adminPaymentHtml(r){
   return h;
 }
 async function refundRequest(idv){
-  if(!confirm('Cancel this order and refund the customer?\n\nRule: FULL refund if no technician has been dispatched yet. If a technician was already dispatched, $75 stays as a non-refundable booking fee and the rest is refunded.')) return;
+  if(!await appConfirm('Cancel this order and refund the customer?\n\nRule: FULL refund if no technician has been dispatched yet. If a technician was already dispatched, $75 stays as a non-refundable booking fee and the rest is refunded.')) return;
   try{
     const d=await api('/api/requests/'+idv+'/refund',{method:'POST', body:JSON.stringify({})});
     alert('Refunded '+moneyFmt(d.refunded)+(d.keptFee?' • kept '+moneyFmt(d.keptFee)+' booking fee (was dispatched)':' • full refund'));
@@ -3300,18 +3340,18 @@ async function holdAct(idv, action, body){
   catch(e){ if(m) m.textContent=e.message; throw e; }
 }
 async function holdCapture(idv, defCents){
-  const v=prompt('Final amount to charge NOW ($). You decide the amount and the moment — nothing is ever charged automatically.', ((defCents||0)/100).toFixed(2));
+  const v=await appPrompt('Final amount to charge NOW ($). You decide the amount and the moment — nothing is ever charged automatically.', ((defCents||0)/100).toFixed(2));
   if(v==null) return;
   const cents=Math.round(parseFloat(v)*100);
   if(!(cents>0)){ alert('Enter an amount over $0.'); return; }
   try{ await holdAct(idv,'capture',{finalCents:cents}); loadAdmin(); }catch(e){}
 }
 async function holdCaptureVisit(idv, visitCents){
-  if(!confirm('Charge ONLY the visit fee ('+moneyFmt((visitCents||0)/100)+') from the hold now? Use this when the customer declined the work or did not show up.')) return;
+  if(!await appConfirm('Charge ONLY the visit fee ('+moneyFmt((visitCents||0)/100)+') from the hold now? Use this when the customer declined the work or did not show up.')) return;
   try{ await holdAct(idv,'capture',{finalCents:visitCents}); loadAdmin(); }catch(e){}
 }
 async function holdIncrement(idv, targetCents){
-  const v=prompt('New TOTAL authorization ($):', ((targetCents||0)/100).toFixed(2));
+  const v=await appPrompt('New TOTAL authorization ($):', ((targetCents||0)/100).toFixed(2));
   if(v==null) return;
   const cents=Math.round(parseFloat(v)*100);
   if(!(cents>0)){ alert('Enter a total over $0.'); return; }
@@ -3324,11 +3364,11 @@ async function holdAuthorizeBalance(idv){
   }catch(e){}
 }
 async function holdRelease(idv){
-  if(!confirm('Release (cancel) ALL active authorization holds on this request? The customer is NOT charged for the released amounts.')) return;
+  if(!await appConfirm('Release (cancel) ALL active authorization holds on this request? The customer is NOT charged for the released amounts.')) return;
   try{ await holdAct(idv,'release',{}); loadAdmin(); }catch(e){}
 }
 async function holdClose(idv, poolCents){
-  if(poolCents>0 && !confirm('There is still '+moneyFmt(poolCents/100)+' authorized but NOT charged on this request. Close billing anyway? (Closing never charges or releases anything by itself.)')) return;
+  if(poolCents>0 && !await appConfirm('There is still '+moneyFmt(poolCents/100)+' authorized but NOT charged on this request. Close billing anyway? (Closing never charges or releases anything by itself.)')) return;
   try{
     const d=await holdAct(idv,'close',{});
     if(d && d.warning) alert('Billing closed. Warning: '+moneyFmt((d.poolCents||0)/100)+' is still authorized and uncharged on this request.');
@@ -3575,7 +3615,7 @@ async function ycReschedule(idv){
   await loadYardCalendar();
 }
 async function ycDeleteVisit(idv){
-  if(!confirm('Delete this yard visit? This removes the visit record for good.')) return;
+  if(!await appConfirm('Delete this yard visit? This removes the visit record for good.')) return;
   try{ await api('/api/admin/yard-visits/'+idv,{method:'DELETE'}); await loadYardCalendar(); }
   catch(e){ alert(e.message); }
 }
@@ -3823,7 +3863,7 @@ async function loadAdminCarts(){
   }catch(e){ box.innerHTML=''; }
 }
 async function cancelCart(idv){
-  if(!confirm('Cancel this cart link? The customer will no longer be able to pay it.')) return;
+  if(!await appConfirm('Cancel this cart link? The customer will no longer be able to pay it.')) return;
   try{ await api('/api/admin/carts/'+idv+'/cancel',{method:'POST', body:JSON.stringify({})}); loadAdminCarts(); }
   catch(e){ alert(e.message); }
 }
@@ -3846,13 +3886,13 @@ function copyInviteLink(idv){
   else prompt('Copy the invitation link:',url);
 }
 async function attachInvite(idv){
-  var cid=prompt('Cart ID to put this free month in (e.g. CRT-511F03):');
+  var cid=await appPrompt('Cart ID to put this free month in (e.g. CRT-511F03):');
   if(!cid) return;
   try{ await api('/api/admin/invites/'+idv+'/attach',{method:'POST', body:JSON.stringify({ cartId:cid.trim() })}); loadAdminInvites(); }
   catch(e){ alert(e.message); }
 }
 async function revokeInvite(idv){
-  if(!confirm('Revoke this invitation? The link will stop working.')) return;
+  if(!await appConfirm('Revoke this invitation? The link will stop working.')) return;
   try{ await api('/api/admin/invites/'+idv+'/revoke',{method:'POST', body:JSON.stringify({})}); loadAdminInvites(); }
   catch(e){ alert(e.message); }
 }
@@ -3877,6 +3917,24 @@ async function loadAdminInvites(){
 // is ADMIN-ONLY — customers never see it.
 let adminMasterMap = null;
 let adminMapLoading = false;
+let leafletTried = false;
+// v65: self-heal a missing Leaflet (the audit browser hit "map
+// unavailable" because the CDN script never landed). Re-inject the script
+// once and wait for it, instead of giving up on the first check.
+function ensureLeaflet(){
+  return new Promise(function(res){
+    if (window.L && L.map) return res(true);
+    if (!leafletTried) {
+      leafletTried = true;
+      try { const s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; document.head.appendChild(s); } catch(e) {}
+    }
+    let n = 0;
+    const iv = setInterval(function(){
+      n++;
+      if ((window.L && L.map) || n >= 24) { clearInterval(iv); res(!!(window.L && L.map)); }
+    }, 200);
+  });
+}
 // v46 MAP FIX (Gabriel: "el mapa no me funciona en admin"): the old code
 // created the Leaflet map inline during loadAdmin's async chain with no
 // size correction and set the view only AFTER adding markers. If the
@@ -3922,7 +3980,8 @@ async function loadAdminMap(preloadedJobs){
       + '</div>';
     if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
     const mapEl = document.getElementById('adminMap');
-    if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>'; return; }
+    if (!(window.L && L.map)) await ensureLeaflet();
+    if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.<br><button type="button" class="ghost" style="margin-top:10px;padding:9px 18px;font-weight:700" onclick="loadAdminMap()">Reintentar · Retry</button></div>'; return; }
     adminMapWhenVisible(mapEl, function () {
       try {
         const map = L.map(mapEl);
@@ -3977,7 +4036,7 @@ async function capAssign(areaId){
   catch(e){ alert(e.message); }
 }
 async function capUnassign(areaId){
-  if(!confirm('Unassign the captain of this area? Override he already accrued stays his.')) return;
+  if(!await appConfirm('Unassign the captain of this area? Override he already accrued stays his.')) return;
   try{ await api('/api/admin/captains/unassign', { method: 'POST', body: JSON.stringify({ areaId: areaId }) }); loadAdminCaptains(); }
   catch(e){ alert(e.message); }
 }
@@ -3996,7 +4055,7 @@ async function capCreateArea(){
   catch(e){ alert(e.message); }
 }
 async function capDeleteArea(areaId){
-  if(!confirm('Delete this area? Its captain (if any) is unassigned. Accrued override history is kept.')) return;
+  if(!await appConfirm('Delete this area? Its captain (if any) is unassigned. Accrued override history is kept.')) return;
   try{ await api('/api/admin/captains/areas/' + areaId, { method: 'DELETE' }); loadAdminCaptains(); }
   catch(e){ alert(e.message); }
 }
@@ -4004,7 +4063,7 @@ async function capMarkPaid(areaId, captainId){
   const inp = document.getElementById('capPay-' + areaId);
   const amount = Number(inp && inp.value);
   if(!(amount > 0)){ alert('Enter the amount you paid him.'); return; }
-  if(!confirm('Mark ' + capUsd(amount) + ' of this captain\'s override as PAID? (You pay it out by hand — the app only records it.)')) return;
+  if(!await appConfirm('Mark ' + capUsd(amount) + ' of this captain\'s override as PAID? (You pay it out by hand — the app only records it.)')) return;
   try{ await api('/api/admin/captains/payout', { method: 'POST', body: JSON.stringify({ captainId: captainId, amount: amount }) }); loadAdminCaptains(); }
   catch(e){ alert(e.message); }
 }
@@ -4039,7 +4098,7 @@ async function postFromRequest(idv, custPrice){
   const extra=document.getElementById('jn-'+idv).value;
   const payN=Number(pay);
   if(!payN || payN<=0){ alert('Set the worker pay first.'); return; }
-  if(!confirm('Post this job to the workers?\n\nWorker pay: $'+payN+'\nCustomer price: $'+custPrice+'\nExtra info for the worker: '+(extra||'—')+'\n\nActive workers in the area get notified right away.')) return;
+  if(!await appConfirm('Post this job to the workers?\n\nWorker pay: $'+payN+'\nCustomer price: $'+custPrice+'\nExtra info for the worker: '+(extra||'—')+'\n\nActive workers in the area get notified right away.')) return;
   try{ await api('/api/requests/'+idv+'/create-job',{method:'POST', body:JSON.stringify({payOffer:payN, notes:extra})}); loadAdmin(); }
   catch(e){ alert(e.message); }
 }
@@ -4098,7 +4157,7 @@ async function adminSetVerified(wid, key, val){
   loadAdmin();
 }
 async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdmin(); }
-async function removeWorkerPhoto(wid){ if(!confirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdmin(); }catch(e){ alert(e.message); } }
+async function removeWorkerPhoto(wid){ if(!await appConfirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdmin(); }catch(e){ alert(e.message); } }
 function escAttr(v){ return (''+(v||'')).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function editWorkerForm(idv){
   const w = adminWorkersCache.find(function(x){return x.id===idv;});
@@ -4128,9 +4187,9 @@ async function saveWorkerEdit(idv){
     loadAdmin();
   }catch(e){ alert(e.message); }
 }
-async function delRequest(idv){ if(!confirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
-async function delJob(idv){ if(!confirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); loadAdmin(); }
-async function delWorker(idv, name){ if(!confirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdmin(); }
+async function delRequest(idv){ if(!await appConfirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
+async function delJob(idv){ if(!await appConfirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); loadAdmin(); }
+async function delWorker(idv, name){ if(!await appConfirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdmin(); }
 // ---------- Dispatch picker (v41) ----------
 // For the service typed in the Create-a-job card, the server ranks the
 // ACTIVE workers by their effective level + tools in that job's trade.
@@ -4162,7 +4221,7 @@ async function createJob(){
   const body = {service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, schedDate:document.getElementById('jSchedDate').value, schedTime:document.getElementById('jSchedTime').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value};
   if (wid) {
     const cand = jCandCache.find(function(c){ return c.id === wid; });
-    if (cand && cand.paused && !confirm('⚠️ ' + cand.name + ' está EN PAUSA (él mismo se puso no disponible).\n\n¿Ofrecerle el trabajo de todos modos? / He is PAUSED — offer anyway?')) return;
+    if (cand && cand.paused && !await appConfirm('⚠️ ' + cand.name + ' está EN PAUSA (él mismo se puso no disponible).\n\n¿Ofrecerle el trabajo de todos modos? / He is PAUSED — offer anyway?')) return;
     body.assignedWorkerId = wid; body.silent = true; // direct offer: only he is alerted (in-app + email)
   }
   try{ await api('/api/jobs',{method:'POST', body:JSON.stringify(body)});
@@ -4862,7 +4921,11 @@ try {
     });
   }
 } catch (e) {}
-if (window.Notification && Notification.permission === 'default') { Notification.requestPermission().catch(() => {}); }
+// v65: the blunt boot-time Notification.requestPermission() that used to
+// live here is GONE — it fired the browser's bare permission popup with
+// zero explanation the moment the app opened, and a dismissal/block there
+// burned the ask before the friendly v64 permissions card could make it.
+// The card (activarNotifs) is now the only place that asks.
 </script>
 <!-- GHS-INSTALL-V47 -->
 <button id="ghsInstallBtn" style="display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:88px;z-index:9999;background:#e42535;color:#fff;border:none;border-radius:999px;padding:13px 22px;font-size:16px;font-weight:700;box-shadow:0 6px 22px rgba(0,0,0,.45);cursor:pointer">&#128242; Install app</button>
