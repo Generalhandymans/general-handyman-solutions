@@ -699,6 +699,27 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     </div>
   </div>
 
+  <!-- v64: permissions setup card (Gabriel: "que les notifique que tienen
+       que activar notificaciones y su ubicación" — cliente y trabajador).
+       Shows for any signed-in account until BOTH permissions are granted;
+       each ACTIVATE button fires the browser's own permission popup from
+       the tap, the way browsers require. -->
+  <div id="permCard" style="display:none;background:#fff8e6;border:2px solid #f5a623;border-radius:14px;padding:14px 16px;margin:12px 0">
+    <div style="font-weight:800;font-size:16.5px">⚙️ Termina de activar tu app · Finish setting up your app</div>
+    <p class="mut" id="permWhy" style="margin:6px 0 10px"></p>
+    <div id="permNotifRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f0dcae">
+      <div style="flex:1"><b>🔔 Notificaciones</b><br><span class="mut">Avisos con el sonido del martillo 🔨 · Alerts with the hammer sound</span></div>
+      <span id="permNotifState" class="mut"></span>
+      <button type="button" id="permNotifBtn" onclick="activarNotifs()" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;cursor:pointer">ACTIVAR</button>
+    </div>
+    <div id="permLocRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f0dcae">
+      <div style="flex:1"><b>📍 Tu ubicación</b><br><span class="mut">Trabajos y ruta en vivo · Jobs and live route</span></div>
+      <span id="permLocState" class="mut"></span>
+      <button type="button" id="permLocBtn" onclick="activarUbicacion()" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;cursor:pointer">ACTIVAR</button>
+    </div>
+    <p class="mut" id="permHelp" style="display:none;margin:8px 0 0">¿Tocaste "Bloquear"? Actívalos desde los ajustes de tu navegador: toca el candado 🔒 junto a la dirección → Permisos. · Blocked it? Turn them on in your browser settings: the 🔒 next to the address → Permissions.</p>
+  </div>
+
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
     <h2>Request a handyman — pide tu servicio</h2>
@@ -1917,7 +1938,7 @@ async function doAuth(){
 async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
 let notifs=[]; let lastUnread=-1;
-async function loadNotifs(){ if(!me) return; try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
+async function loadNotifs(){ if(!me) return; refreshPermCard(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
 function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(function(n){
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
@@ -2689,8 +2710,50 @@ function armSound(){
   try { audioCtx = new AC(); } catch(e) {}
 }
 if (document && document.addEventListener) { document.addEventListener('pointerdown', armSound); document.addEventListener('click', armSound); }
+// v64: THE HAMMER (Gabriel: "un sonido... como un hammer o pum... que suene
+// buenísimo"). A synthesized strike — pitch-dropping thump (the "PUM") +
+// inharmonic metal partials (the ring) + a noise click (the impact) —
+// replaces the soft two-tone chime as the primary alert sound. Pure
+// WebAudio on purpose: no audio file to ship (the repo push path is
+// text-only) and it plays the moment the context is armed. The old chime
+// remains as the fallback. Mute rules everything via 'ghsSound'.
+function playHammer(){
+  if (!soundOn || !audioCtx) return false;
+  if (audioCtx.state === 'suspended' && audioCtx.resume) { try { audioCtx.resume(); } catch(e) {} }
+  if (audioCtx.state !== 'running') return false;
+  try {
+    const t0 = audioCtx.currentTime;
+    const master = audioCtx.createGain(); master.gain.value = 0.95;
+    if (audioCtx.createDynamicsCompressor) { const cp = audioCtx.createDynamicsCompressor(); cp.threshold.value = -18; cp.ratio.value = 8; master.connect(cp); cp.connect(audioCtx.destination); }
+    else master.connect(audioCtx.destination);
+    const o = audioCtx.createOscillator(), og = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(250, t0);
+    o.frequency.exponentialRampToValueAtTime(62, t0 + 0.14);
+    og.gain.setValueAtTime(0.95, t0);
+    og.gain.exponentialRampToValueAtTime(0.001, t0 + 0.22);
+    o.connect(og); og.connect(master); o.start(t0); o.stop(t0 + 0.24);
+    [[622, 0.38, 0.34], [1244, 0.44, 0.28], [2093, 0.26, 0.2], [3412, 0.14, 0.13]].forEach(function(pt){
+      const p = audioCtx.createOscillator(), pg = audioCtx.createGain();
+      p.type = 'triangle'; p.frequency.setValueAtTime(pt[0], t0);
+      pg.gain.setValueAtTime(pt[1], t0);
+      pg.gain.exponentialRampToValueAtTime(0.001, t0 + pt[2]);
+      p.connect(pg); pg.connect(master); p.start(t0); p.stop(t0 + pt[2] + 0.02);
+    });
+    const nb = audioCtx.createBuffer(1, Math.floor(audioCtx.sampleRate * 0.04), audioCtx.sampleRate);
+    const nd = nb.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / nd.length, 2);
+    const ns = audioCtx.createBufferSource(); ns.buffer = nb;
+    const hp = audioCtx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1600;
+    const ng = audioCtx.createGain(); ng.gain.value = 0.7;
+    ns.connect(hp); hp.connect(ng); ng.connect(master); ns.start(t0);
+    return true;
+  } catch(e) { return false; }
+}
 function playChime(){
-  if (!soundOn || !audioCtx || audioCtx.state !== 'running') return;
+  if (!soundOn) return;
+  if (playHammer()) return;
+  if (!audioCtx || audioCtx.state !== 'running') return;
   try {
     const t0 = audioCtx.currentTime;
     [[880, 0], [1318.5, 0.13]].forEach(function(n){
@@ -2711,6 +2774,50 @@ function toggleSoundMute(){
   paintSoundBtn();
 }
 function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔔' : '🔕'; }
+// ---------- Permissions setup card (v64, Gabriel) ----------
+// "Cuando instalen la aplicación, que les notifique que tienen que activar
+// notificaciones y su ubicación — cliente y trabajador." The card sits on
+// the account's home until BOTH permissions are granted; each ACTIVATE
+// button triggers the browser's own permission popup from the tap (the
+// only way browsers allow it). Location state reads the Permissions API
+// where available, with a localStorage flag as the fallback record.
+function permLocGranted(){ try { return localStorage.getItem('ghsLoc') === 'on'; } catch(e) { return false; } }
+async function refreshPermCard(){
+  const card = document.getElementById('permCard');
+  if (!card) return;
+  if (!me) { card.style.display = 'none'; return; }
+  const nPerm = ('Notification' in window) ? Notification.permission : 'unsupported';
+  let locState = permLocGranted() ? 'granted' : 'default';
+  if (navigator.permissions && navigator.permissions.query) {
+    try { const st = await navigator.permissions.query({ name: 'geolocation' }); locState = st.state; if (st.state === 'granted' && !permLocGranted()) { try { localStorage.setItem('ghsLoc', 'on'); } catch(e) {} } } catch(e) {}
+  }
+  const nBtn = document.getElementById('permNotifBtn'), lBtn = document.getElementById('permLocBtn');
+  const nState = document.getElementById('permNotifState'), lState = document.getElementById('permLocState');
+  const why = document.getElementById('permWhy');
+  if (why) why.textContent = me.role === 'worker'
+    ? 'Para avisarte cuando caiga un jale en tu área y compartir tu ruta necesitas estos dos permisos. · So we can alert you to jobs in your area and share your route, turn on these two permissions.'
+    : 'Para avisarte cuando tu técnico vaya en camino necesitas estos dos permisos. · So we can tell you when your technician is on the way, turn on these two permissions.';
+  let missing = false, blocked = false;
+  if (nPerm === 'granted') { nState.textContent = '✅ Activadas'; nBtn.style.display = 'none'; }
+  else { missing = true; nBtn.style.display = ''; nState.textContent = nPerm === 'denied' ? '❌ Bloqueadas' : ''; if (nPerm === 'denied') blocked = true; }
+  if (locState === 'granted') { lState.textContent = '✅ Activada'; lBtn.style.display = 'none'; }
+  else { missing = true; lBtn.style.display = ''; lState.textContent = locState === 'denied' ? '❌ Bloqueada' : ''; if (locState === 'denied') blocked = true; }
+  const help = document.getElementById('permHelp');
+  if (help) help.style.display = blocked ? 'block' : 'none';
+  card.style.display = missing ? 'block' : 'none';
+}
+async function activarNotifs(){
+  armSound();
+  if (!('Notification' in window)) { showInfo('Este navegador no soporta notificaciones. · This browser does not support notifications.'); return; }
+  let r = 'default';
+  try { r = await Notification.requestPermission(); } catch(e) {}
+  if (r === 'granted') { playHammer(); showInfo('🔔 ¡Listo! Así suena el martillo cuando te cae un aviso. · Done — that hammer sound is your alert.'); }
+  refreshPermCard();
+}
+function activarUbicacion(){
+  if (!navigator.geolocation) { showInfo('Este navegador no soporta ubicación. · This browser does not support location.'); return; }
+  navigator.geolocation.getCurrentPosition(function(){ try { localStorage.setItem('ghsLoc', 'on'); } catch(e) {} showInfo('📍 ¡Listo! Ubicación activada. · Done — location is on.'); refreshPermCard(); }, function(){ showInfo('No se pudo activar — revisa los permisos de tu navegador. · Could not turn it on — check your browser permissions.'); refreshPermCard(); }, { timeout: 10000 });
+}
 const sndSeen = { workerOpen: null, custStatus: null, adminReqs: null, yardVisits: null };
 function sndWorkerJobs(jobs){
   const open = {}; (jobs || []).forEach(function(j){ if (j.status === 'Open') open[j.id] = 1; });
