@@ -1288,8 +1288,10 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][price_data][product_data][name]'] = opts.label || 'Cart order — paid in full — General Handyman Solutions';
     params['line_items[0][quantity]'] = '1';
     params['metadata[cartId]'] = opts.cartId || '';
+    params['metadata[payStep]'] = opts.payStep || '';
     params['payment_intent_data[metadata][kind]'] = 'cart-order';
     params['payment_intent_data[metadata][cartId]'] = opts.cartId || '';
+    params['payment_intent_data[metadata][payStep]'] = opts.payStep || '';
   } else if (kind === 'invoice') {
     // One-time invoice payment: the payer may not have an app account (the
     // invoice carries customerEmail directly), so user fields are optional.
@@ -1527,7 +1529,7 @@ function recordRequestPayment(r, info) {
 function cartsOf() { if (!Array.isArray(db.carts)) db.carts = []; return db.carts; }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, balancePaid: !!c.payment.balanceAt } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -1754,6 +1756,33 @@ function cartMemberUserFor(user, email) {
 // A paid cart becomes a normal menu request with every customer field the
 // customer typed on the cart page. Idempotent: converting twice returns
 // the same request and never duplicates the order.
+// ---------- v62: THE 40/60 POLICY (Gabriel, 2026-10-24) ----------
+// "Todo el mundo así funciona — es la nueva política": on OUR estimates
+// and proposals (admin cart links + estimate links) the customer pays
+// 40% down to book the job and the remaining 60% when the work is done.
+// In-app MENU orders stay pay-in-full ("en la app como tal no").
+const DEPOSIT_RATE = 0.4;
+function depositSplit(totalCents) {
+  const t = Math.max(0, Math.round(Number(totalCents) || 0));
+  const d = Math.round(t * DEPOSIT_RATE);
+  return { depositCents: d, balanceCents: t - d };
+}
+// Recorder for a landed DEPOSIT on a request: status 'deposit' — NOT
+// paid. requestIsPaid() stays false, so worker payouts and captain
+// accrual keep waiting for the balance, exactly like the money rules
+// require; the balance landing flips it through recordRequestPayment.
+function recordRequestDeposit(r, info) {
+  info = info || {};
+  if (r.payment && (r.payment.status === 'paid' || r.payment.status === 'deposit')) return false;
+  const dep = Math.round(Number(info.depositCents) || 0), tot = Math.round(Number(info.totalCents) || 0);
+  r.payment = { status: 'deposit', kind: info.kind || 'cart-order', pi: info.pi || '', amountCents: dep, totalCents: tot, balanceCents: Math.max(0, tot - dep), at: new Date().toISOString() };
+  r.messages = r.messages || [];
+  r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Deposit received: ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' — your job ' + r.id + ' is booked. The balance of ' + usd(r.payment.balanceCents / 100) + ' is due when the work is done. The Team confirms your time right here.', at: new Date().toISOString() });
+  if (r.customerId) notify(r.customerId, 'payment', 'Deposit received (' + usd(dep / 100) + ') on job ' + r.id + ' — booked. Balance ' + usd(r.payment.balanceCents / 100) + ' due at completion.');
+  notifyAdmins('payment', 'DEPOSIT (40%): ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — balance ' + usd(r.payment.balanceCents / 100) + ' at completion.');
+  fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: dep / 100 }));
+  return true;
+}
 function convertCartToRequest(c, payInfo) {
   payInfo = payInfo || {};
   if (c.requestId) { const ex = db.requests.find(x => x.id === c.requestId); if (ex) return ex; }
@@ -1763,14 +1792,67 @@ function convertCartToRequest(c, payInfo) {
   let customerId = null;
   if (email) { const u = db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === email); if (u) customerId = u.id; }
   const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
-  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: (Number(payInfo.amountCents) || 0) / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: 'Ordered from cart ' + c.id + ' and paid in full: ' + usd((Number(payInfo.amountCents) || 0) / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const isDeposit = Number(payInfo.depositCents) > 0 && Number(payInfo.balanceCents) > 0 && Number(payInfo.totalCents) > 0;
+  const totalCents = isDeposit ? Math.round(Number(payInfo.totalCents)) : Math.round(Number(payInfo.amountCents) || 0);
+  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — 40% deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
-  c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString(); c.payment = { pi: payInfo.pi || '', amountCents: Math.round(Number(payInfo.amountCents) || 0) };
-  recordRequestPayment(r, { pi: payInfo.pi, amountCents: payInfo.amountCents, kind: 'cart-order' });
-  notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — paid in full ' + usd((Number(payInfo.amountCents) || 0) / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + '.');
+  c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString();
+  if (isDeposit) {
+    c.payment = { pi: payInfo.pi || '', amountCents: totalCents, depositCents: Math.round(Number(payInfo.depositCents)), balanceCents: Math.round(Number(payInfo.balanceCents)), depositPi: payInfo.pi || '', depositAt: new Date().toISOString(), balancePi: '', balanceAt: null };
+    recordRequestDeposit(r, { pi: payInfo.pi, depositCents: payInfo.depositCents, totalCents, kind: 'cart-order' });
+    notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — 40% deposit ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + ' (balance ' + usd(Number(payInfo.balanceCents) / 100) + ' at completion).');
+  } else {
+    c.payment = { pi: payInfo.pi || '', amountCents: totalCents };
+    recordRequestPayment(r, { pi: payInfo.pi, amountCents: totalCents, kind: 'cart-order' });
+    notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — paid in full ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + '.');
+  }
   emitRequestNew(r);
   fireAutomation('new_request', requestAutomationPayload(r));
   return r;
+}
+// v62: the balance (60%) lands — flip the request to PAID IN FULL via
+// the shared recorder (which then gives any finished job its payout +
+// captain-accrual chance, same as any full payment).
+function completeCartBalance(c, payInfo) {
+  payInfo = payInfo || {};
+  if (!c || c.status !== 'paid' || !c.payment || !(Number(c.payment.balanceCents) > 0) || c.payment.balanceAt) return false;
+  const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+  if (!r) return false;
+  c.payment.balancePi = payInfo.pi || '';
+  c.payment.balanceAt = new Date().toISOString();
+  recordRequestPayment(r, { pi: payInfo.pi || '', amountCents: c.payment.amountCents, kind: 'cart-balance' });
+  notifyAdmins('payment', 'BALANCE PAID: cart ' + c.id + ' order ' + r.id + ' is now paid in full (' + usd((Number(c.payment.amountCents) || 0) / 100) + ').');
+  return true;
+}
+// v62: ONE settlement path for a landed cart payment (page return,
+// session webhook and PI webhook all reconcile through here). The step
+// is decided from the cart's own server-side state — the deposit
+// expected (c.pendingDeposit, stamped at checkout) or the balance
+// outstanding — never from client input.
+function settleCartPayment(c, payInfo) {
+  payInfo = payInfo || {};
+  const cents = Math.round(Number(payInfo.amountCents) || 0);
+  if (!c || !(cents > 0)) return false;
+  if (c.status === 'open' && c.pendingDeposit && cents === Math.round(Number(c.pendingDeposit.depositCents) || 0)) {
+    c.memberApplied = !!c.pendingDeposit.memberApplied;
+    const conv = convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: cents, totalCents: c.pendingDeposit.totalCents, depositCents: c.pendingDeposit.depositCents, balanceCents: c.pendingDeposit.balanceCents });
+    if (conv) { delete c.pendingDeposit; return true; }
+    return false;
+  }
+  if (c.status === 'paid' && c.payment && !c.payment.balanceAt && cents === Math.round(Number(c.payment.balanceCents) || 0)) {
+    return completeCartBalance(c, payInfo);
+  }
+  if (c.status === 'open') {
+    // Legacy/full-amount fallback (a session opened before v62, or a
+    // total that no longer matches the deposit split): keep the old
+    // behavior — the amount itself decides member vs list.
+    const listCents = Math.round(c.listTotal * 100), memberCents = Math.round(c.memberTotal * 100);
+    if (cents === memberCents && cents !== listCents) c.memberApplied = true;
+    else if (cents === listCents && cents !== memberCents) c.memberApplied = false;
+    else if (cents !== listCents && cents !== memberCents) { console.error('cart settle: session amount ' + cents + ' matches neither cart total — not converting cart ' + c.id); return false; }
+    return !!convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: cents });
+  }
+  return false;
 }
 // ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
 // Gabriel's payment model: the in-person estimate fee ($75 regular / $50
@@ -1894,7 +1976,7 @@ async function handleStripeEvent(event) {
     // the payment_intent.succeeded backup below.
     if (kind === 'cart-order') {
       const c = cartsOf().find(x => x.id === (obj.metadata && obj.metadata.cartId));
-      if (c && obj.payment_status === 'paid') convertCartToRequest(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) });
+      if (c && obj.payment_status === 'paid') { settleCartPayment(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) }); save(); }
       return;
     }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
@@ -2057,7 +2139,7 @@ async function handleStripeEvent(event) {
         if (r) recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' });
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
-        if (c) convertCartToRequest(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 });
+        if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
       }
       return;
     }
@@ -2180,7 +2262,7 @@ function settleEstimateTotals(est) {
   const credit = Math.min(clampMoney(est.credit == null ? 0 : est.credit), money(est.subtotal + est.asapAmount - est.discountAmount));
   est.credit = credit;
   est.total = Math.max(0, money(est.subtotal + est.asapAmount - est.discountAmount - credit));
-  est.bookingDue = est.bookingAuto ? est.total : Math.min(clampMoney(est.bookingDue || 0), est.total);
+  est.bookingDue = est.bookingAuto ? money(est.total * DEPOSIT_RATE) : Math.min(clampMoney(est.bookingDue || 0), est.total); // v62 policy: the AUTO booking amount is the 40% deposit (was the full total in v44); a hand-set bookingDue still wins
   est.balanceDue = money(est.total - est.bookingDue);
   (est.options || []).forEach(o => {
     const ot = estCoreTotals(o.items || [], est);
@@ -2492,7 +2574,7 @@ function memberVariantOfEstimate(est) {
   if (est.asap) v.asapAmount = money(((Number(est.laborSubtotal) || 0) - d) * 0.25);
   const credit = Number(est.credit) || 0;
   v.total = Math.max(0, money((Number(est.subtotal) || 0) + (Number(v.asapAmount) || 0) - d - credit));
-  v.bookingDue = est.bookingAuto ? v.total : Math.min(Number(est.bookingDue) || 0, v.total);
+  v.bookingDue = est.bookingAuto ? money(v.total * DEPOSIT_RATE) : Math.min(Number(est.bookingDue) || 0, v.total); // v62: member variant of the same 40% auto deposit
   v.balanceDue = money(v.total - v.bookingDue);
   return v;
 }
@@ -2823,14 +2905,18 @@ function cartPageHtml(c, user, langOverride, notice) {
       yardNote: 'Yard Care covers your yard visits — the 20% discount on orders comes with HomeCare / HomeCare Plus, so this order stays at the regular price.',
       yardActiveH: '✓ Yard Care membership active', yardActiveBody: 'Your plan covers your yard visits. Orders are at the regular price — the 20% order discount comes with HomeCare / HomeCare Plus.',
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
-      paymentH: 'Payment', payBtn: 'Pay {amt} in full',
+      paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
+      depositDueLabel: 'Due today — 40% deposit to book', balanceDueLabel: 'Balance at completion',
+      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion',
+      depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
+      balanceBtn: 'Pay balance {amt}',
       joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this member total for your order.',
       joinOrderNoteYard: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this order total.',
       joinOrderNoteFree: 'How it works: tapping Pay starts your HomeCare membership FREE — $0 today (your card is saved safely with Stripe and the first $29 charge is in 30 days) — then you come right back here to pay for your order at the member price.',
       inviteBanner: '🎟️ Personal invitation: your first month of HomeCare is FREE.',
       freeMonthTag: 'FIRST MONTH FREE',
       joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
-      refundLine: 'Paid in full today. If you cancel before a technician is dispatched, you get a full refund; after dispatch, $75 is non-refundable and the rest comes back to you.',
+      refundLine: 'You pay a 40% deposit today to book your job; the rest is due when the work is done — right here on this same link. If you cancel before a technician is dispatched, everything you paid comes back; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Starting your membership…', processing: 'Processing payment…',
       errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
       errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
@@ -2866,14 +2952,18 @@ function cartPageHtml(c, user, langOverride, notice) {
       yardNote: 'Yard Care cubre tus visitas de yarda — el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus, así que esta orden queda al precio normal.',
       yardActiveH: '✓ Membresía Yard Care activa', yardActiveBody: 'Tu plan cubre tus visitas de yarda. Las órdenes quedan al precio normal — el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus.',
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
-      paymentH: 'Pago', payBtn: 'Pagar {amt} completo',
+      paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
+      depositDueLabel: 'Hoy — anticipo del 40% para agendar', balanceDueLabel: 'Resto al terminar',
+      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo',
+      depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
+      balanceBtn: 'Pagar el resto {amt}',
       joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
       joinOrderNoteYard: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar el total de esta orden.',
       joinOrderNoteFree: 'Así funciona: al tocar Pagar activas tu membresía HomeCare GRATIS — hoy pagas $0 (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) — y luego regresas aquí mismo para pagar tu orden al precio de miembro.',
       inviteBanner: '🎟️ Invitación personal: tu primer mes de HomeCare es GRATIS.',
       freeMonthTag: 'PRIMER MES GRATIS',
       joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
-      refundLine: 'Pagas completo hoy. Si cancelas antes de que salga un técnico, te devolvemos todo; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
+      refundLine: 'Hoy pagas un anticipo del 40% para agendar tu trabajo; el resto se paga al terminar — aquí mismo, en este mismo link. Si cancelas antes de que salga un técnico, te devolvemos todo lo pagado; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Activando tu membresía…', processing: 'Procesando el pago…',
       errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
@@ -2957,6 +3047,23 @@ function cartPageHtml(c, user, langOverride, notice) {
     return head + '<h2 style="margin-top:0" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#666" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
   }
   if (c.status === 'paid') {
+    // v62: a cart in DEPOSIT state (40% in, balance outstanding) shows
+    // the booked state + the balance with its own Pay button on this
+    // same link; only when the balance lands does it render the
+    // classic paid-in-full view.
+    const balOut = c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt;
+    if (balOut) {
+      const balScript = '<script>document.getElementById("balBtn").addEventListener("click", async function(){ var b=this; b.disabled=true; document.getElementById("balMsg").textContent="..."; try{ var r=await fetch("/api/carts/' + c.id + '/checkout", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ balance:true }) }); var d=await r.json(); if(d.url){ location.href=d.url; } else { document.getElementById("balMsg").textContent=(d.error||"error"); b.disabled=false; } }catch(e){ document.getElementById("balMsg").textContent="connection error — try again"; b.disabled=false; } });</scr' + 'ipt>';
+      return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="depPaidH">' + S.depPaidH + '</h2>'
+        + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '</p>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+        + '<p style="font-size:17px;margin-bottom:2px"><span data-i18n="totalLabel">' + S.totalLabel + '</span> <b>' + usd((Number(c.payment.amountCents) || 0) / 100) + '</b></p>'
+        + '<p style="font-size:17px;margin:2px 0"><span data-i18n="depPaidLine">' + S.depPaidLine + '</span> <b>' + usd((Number(c.payment.depositCents) || 0) / 100) + '</b></p>'
+        + '<p style="font-size:20px;margin:2px 0"><span data-i18n="balLine">' + S.balLine + '</span> <b>' + usd((Number(c.payment.balanceCents) || 0) / 100) + '</b></p>'
+        + '<p style="color:#555;font-size:14px" data-i18n="depPaidBody">' + S.depPaidBody + '</p>'
+        + '<button id="balBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:8px">' + fillS(S.balanceBtn, { amt: usd((Number(c.payment.balanceCents) || 0) / 100) }) + '</button><p id="balMsg" style="color:#666"></p>'
+        + balScript + foot;
+    }
     return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="paidH">' + S.paidH + '</h2>'
       + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b> <span data-i18n="paidBodyA">' + S.paidBodyA + '</span>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '. <span data-i18n="paidBodyB">' + S.paidBodyB + '</span></p>'
       + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
@@ -3020,6 +3127,8 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span id="ctSubtotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '">' + usd(c.listTotal) + '</span></div>'
     + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#1a9e4b;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="depositDueLabel">' + S.depositDueLabel + '</span><b id="ctDeposit" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).depositCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).depositCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).depositCents / 100) + '</b></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;color:#555"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).balanceCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).balanceCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).balanceCents / 100) + '</span></div>'
     + '</div>'
     + '<p style="color:#666;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + '<div id="cartForm">'
@@ -3036,13 +3145,14 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
     + joinBlock
     + '<h3 style="margin-bottom:2px" data-i18n="paymentH">' + S.paymentH + '</h3>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(startCents / 100) }) + '</button>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(depositSplit(startCents).depositCents / 100) }) + '</button>'
     + '<p id="payMsg" style="color:#666"></p>'
     + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#555;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
     + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
+    + 'var DEP_L=' + depositSplit(Math.round(c.listTotal * 100)).depositCents + ', DEP_M=' + depositSplit(Math.round(c.memberTotal * 100)).depositCents + ', BAL_L=' + depositSplit(Math.round(c.listTotal * 100)).balanceCents + ', BAL_M=' + depositSplit(Math.round(c.memberTotal * 100)).balanceCents + ';'
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (freeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
@@ -3052,7 +3162,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }'
     + 'function fillPlan(s, pl){ return String(s||"").replace("{planName}", pl.name).replace("{price}", pl.price); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(cur)); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(asM?DEP_M:DEP_L)); var dp=$("ctDeposit"); if(dp) dp.textContent=asM?dp.getAttribute("data-m"):dp.getAttribute("data-l"); var bl=$("ctBalance"); if(bl) bl.textContent=asM?bl.getAttribute("data-m"):bl.getAttribute("data-l"); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
     + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
     + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ syncJoinPreview(); var pp=$("planPicker"); if(pp) pp.style.display=this.checked?"block":"none"; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
     + 'document.querySelectorAll("input[name=cPlan]").forEach(function(r){ r.addEventListener("change",function(){ syncJoinPreview(); renderAmounts(); }); });'
@@ -4995,7 +5105,16 @@ const server = http.createServer(async (req, res) => {
     if (r.refund && Number(r.refund.refundedCents) > 0) return send(res, 400, { error: 'this order was already refunded' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
     const sources = [];
-    if (r.payment && r.payment.status === 'paid' && r.payment.pi) sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.amountCents) || 0), type: 'payment', refundedCents: 0 });
+    // v62: a cart order's money can sit in TWO payments (40% deposit +
+    // 60% balance). Refund over what actually landed, per payment —
+    // never the combined total against a single PI.
+    const cart62 = r.menuOrder && r.menuOrder.cartId ? cartsOf().find(x => x.id === r.menuOrder.cartId) : null;
+    if (cart62 && cart62.payment && cart62.payment.depositPi) {
+      sources.push({ pi: cart62.payment.depositPi, cents: Math.round(Number(cart62.payment.depositCents) || 0), type: 'payment', refundedCents: 0 });
+      if (cart62.payment.balancePi) sources.push({ pi: cart62.payment.balancePi, cents: Math.round(Number(cart62.payment.balanceCents) || 0), type: 'payment', refundedCents: 0 });
+    } else if (r.payment && (r.payment.status === 'paid' || r.payment.status === 'deposit') && r.payment.pi) {
+      sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.amountCents) || 0), type: 'payment', refundedCents: 0 });
+    }
     for (const h of requestHolds(r)) if (h.status === 'captured' && h.pi) sources.push({ pi: h.pi, cents: Math.round(Number(h.capturedCents) || 0), type: 'hold', hold: h, refundedCents: 0 });
     const paidCents = sources.reduce((s, x) => s + x.cents, 0);
     if (!(paidCents > 0)) return send(res, 400, { error: 'no captured payment to refund on this request' });
@@ -5292,9 +5411,30 @@ const server = http.createServer(async (req, res) => {
   if (cartCheckoutMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartCheckoutMatch[1]);
     if (!c) return send(res, 404, { error: 'cart not found' });
-    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid' });
-    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
     const b = await readBody(req);
+    if (c.status === 'paid') {
+      // v62: the SAME link collects the balance (60%) when the work is
+      // done. Only the exact outstanding balance can be opened, and
+      // only when the page's balance button asks for it.
+      if (b && b.balance === true && c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt) {
+        if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to pay another way' });
+        try {
+          const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: (c.customer && c.customer.email) || '' }, {
+            amountCents: Math.round(Number(c.payment.balanceCents)),
+            cartId: c.id,
+            payStep: 'balance',
+            label: 'Cart ' + c.id + ' — balance at completion — General Handyman Solutions',
+            successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
+            cancelUrl: cartLink(c) + '?cancelled=1'
+          });
+          c.paySessionId = s.id;
+          save();
+          return send(res, 200, { next: 'pay', url: s.url, amount: Math.round(Number(c.payment.balanceCents)) / 100, balance: true });
+        } catch (e) { console.error('cart balance checkout failed', e.message); save(); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+      }
+      return send(res, 400, { error: 'this cart is already paid' });
+    }
+    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
     const cust = { name: cleanText(b.name, 80), phone: cleanText(b.phone, 40), email: cleanText(b.email, 160).toLowerCase(), address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200) };
     if (!cust.name) return send(res, 400, { error: 'your name is required' });
     if (!/.+@.+\..+/.test(cust.email)) return send(res, 400, { error: 'a valid email is required' });
@@ -5351,18 +5491,23 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { next: 'join', url: s.url, plan: joinPlan.key });
       }
       c.memberApplied = !!memberUser;
-      const amountCents = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
-      if (!(amountCents > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
+      const totalCents = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
+      if (!(totalCents > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
+      // v62 POLICY: a cart link is one of OUR proposals — 40% books
+      // the job, the other 60% is due at completion (same link).
+      const split = depositSplit(totalCents);
       const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: cust.email }, {
-        amountCents,
+        amountCents: split.depositCents,
         cartId: c.id,
-        label: 'Cart ' + c.id + ' — paid in full — General Handyman Solutions',
+        payStep: 'deposit',
+        label: 'Cart ' + c.id + ' — 40% deposit to book — General Handyman Solutions',
         successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: cartLink(c) + '?cancelled=1'
       });
       c.paySessionId = s.id;
+      c.pendingDeposit = { totalCents, depositCents: split.depositCents, balanceCents: split.balanceCents, memberApplied: c.memberApplied };
       save();
-      return send(res, 200, { next: 'pay', url: s.url, amount: amountCents / 100, memberApplied: c.memberApplied });
+      return send(res, 200, { next: 'pay', url: s.url, amount: split.depositCents / 100, deposit: split.depositCents / 100, balance: split.balanceCents / 100, total: totalCents / 100, memberApplied: c.memberApplied });
     } catch (e) { console.error('cart checkout failed', e.message); save(); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
   // ---------- invoices (customer payment) ----------
@@ -5478,7 +5623,7 @@ const server = http.createServer(async (req, res) => {
     let notice = '';
     const retSessionId = url.searchParams.get('session_id') || '';
     if (url.searchParams.get('cancelled') === '1' && c.status === 'open') notice = 'cancelled';
-    if (c.status === 'open' && retSessionId && stripeReady()) {
+    if ((c.status === 'open' || (c.status === 'paid' && url.searchParams.get('paid') === '1')) && retSessionId && stripeReady()) { // v62: a BALANCE return arrives on an already-'paid' (deposit-state) cart — it must verify too; the joined branch stays guarded by its own session checks
       try {
         if (url.searchParams.get('joined') === '1' && c.joinSessionId && retSessionId === c.joinSessionId) {
           const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
@@ -5508,12 +5653,11 @@ const server = http.createServer(async (req, res) => {
         } else if (url.searchParams.get('paid') === '1' && c.paySessionId && retSessionId === c.paySessionId) {
           const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
           if (sess && sess.id === retSessionId && sess.payment_status === 'paid') {
-            const cents = Math.round(Number(sess.amount_total) || 0);
-            const listCents = Math.round(c.listTotal * 100), memberCents = Math.round(c.memberTotal * 100);
-            if (cents === memberCents && cents !== listCents) c.memberApplied = true;
-            else if (cents === listCents && cents !== memberCents) c.memberApplied = false;
-            else if (cents !== listCents && cents !== memberCents) console.error('cart return: session amount ' + cents + ' matches neither cart total — not converting cart ' + c.id);
-            if ((cents === listCents || cents === memberCents) && convertCartToRequest(c, { pi: sess.payment_intent || '', amountCents: cents })) save();
+            // v62: settle through the shared path — the deposit
+            // converts the cart as BOOKED (40% in), the balance flips
+            // it to paid in full; legacy full-amount sessions still
+            // convert exactly as before.
+            if (settleCartPayment(c, { pi: sess.payment_intent || '', amountCents: Math.round(Number(sess.amount_total) || 0) })) save();
           }
         }
       } catch (e) { console.error('cart return verification failed', e.message); }
