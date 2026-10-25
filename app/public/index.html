@@ -859,6 +859,15 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div id="cartLinkOut" style="margin-top:8px"></div>
     </div>
     <div id="adminCarts"></div>
+    <div class="card">
+      <h3 style="margin-top:0">🎟️ Invite a member — first month FREE</h3>
+      <p class="mut">A personal invitation from you: the customer joins HomeCare with the <b>first month free</b> (card on file, $0 charged today, then $29/mo — cancel anytime). One link per person, good for 7 days. If you add their email, only that email can claim it.</p>
+      <div class="row"><div><label>Customer name</label><input id="invName" placeholder="e.g. Brijesh"></div><div><label>Phone (optional)</label><input id="invPhone" placeholder="(707) 555-0123"></div></div>
+      <label>Email (optional)<input id="invEmail" placeholder="customer@email.com"></label>
+      <button class="black" onclick="createInvite()">Create invitation link</button>
+      <div id="inviteLinkOut" style="margin-top:8px"></div>
+    </div>
+    <div id="adminInvites"></div>
     <h3>Workers (activate after review)</h3>
     <div id="adminWorkers"></div>
     <h3>Capitanes — Area Captains</h3>
@@ -3561,6 +3570,7 @@ async function loadAdmin(){
   loadAdminAudit();
   renderCartPicker();
   loadAdminCarts();
+  loadAdminInvites();
   } finally { _adminLoading = false; if (_adminReloadQueued) { _adminReloadQueued = false; loadAdmin(); } }
 }
 // ---------- Admin cart builder (v44) ----------
@@ -3691,6 +3701,40 @@ async function cancelCart(idv){
   if(!confirm('Cancel this cart link? The customer will no longer be able to pay it.')) return;
   try{ await api('/api/admin/carts/'+idv+'/cancel',{method:'POST', body:JSON.stringify({})}); loadAdminCarts(); }
   catch(e){ alert(e.message); }
+}
+// ---------- Admin membership invites (v60) ----------
+async function createInvite(){
+  var name=document.getElementById('invName').value.trim();
+  if(!name){ alert('Add the customer name first.'); return; }
+  try{
+    const d=await api('/api/admin/invites',{method:'POST', body:JSON.stringify({ name:name, email:document.getElementById('invEmail').value.trim(), phone:document.getElementById('invPhone').value.trim() })});
+    const inv=d.invite;
+    document.getElementById('inviteLinkOut').innerHTML='<b>Invitation for '+escHtml(inv.name)+':</b> first month FREE, then $29/mo — link good 7 days: <a href="'+inv.link+'" target="_blank" rel="noopener">'+inv.link+'</a> <button type="button" class="ghost" onclick="copyInviteLink(\''+inv.id+'\')">Copy link</button>';
+    ['invName','invEmail','invPhone'].forEach(function(i){ document.getElementById(i).value=''; });
+    loadAdminInvites();
+  }catch(e){ alert(e.message); }
+}
+function copyInviteLink(idv){
+  var url=location.origin+'/join/'+idv;
+  function done(){ alert('Invitation link copied:\n'+url); }
+  if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(url).then(done).catch(function(){ prompt('Copy the invitation link:',url); }); }
+  else prompt('Copy the invitation link:',url);
+}
+async function revokeInvite(idv){
+  if(!confirm('Revoke this invitation? The link will stop working.')) return;
+  try{ await api('/api/admin/invites/'+idv+'/revoke',{method:'POST', body:JSON.stringify({})}); loadAdminInvites(); }
+  catch(e){ alert(e.message); }
+}
+async function loadAdminInvites(){
+  const box=document.getElementById('adminInvites'); if(!box || !me || me.role!=='admin') return;
+  try{
+    const d=await api('/api/admin/invites');
+    if(!(d.invites||[]).length){ box.innerHTML=''; return; }
+    box.innerHTML=d.invites.map(function(iv){
+      const badge=iv.status==='accepted'?'<span class="pill" style="background:#1a7f37">member ✓</span>':(iv.status==='expired'?'<span class="pill" style="background:#6b6762">expired</span>':(iv.status==='revoked'?'<span class="pill" style="background:#6b6762">revoked</span>':'<span class="pill" style="background:#b26a00">waiting</span>'));
+      return '<div class="card"><b>'+escHtml(iv.name)+'</b> '+badge+'<br><span class="mut">🎟️ First month FREE, then $29/mo • created '+escHtml(String(iv.createdAt||'').slice(0,10))+(iv.email?' • '+escHtml(iv.email):'')+(iv.phone?' • '+escHtml(iv.phone):'')+'</span><div style="margin-top:8px"><button type="button" class="ghost" onclick="copyInviteLink(\''+iv.id+'\')">Copy link</button> <a href="'+iv.link+'" target="_blank" rel="noopener">Open</a>'+(iv.status==='pending'?' <button type="button" class="ghost" onclick="revokeInvite(\''+iv.id+'\')">Revoke</button>':'')+'</div></div>';
+    }).join('');
+  }catch(e){ box.innerHTML=''; }
 }
 // ---------- Admin master map (v41) ----------
 // Gabriel's master map: ONE Leaflet map with every ACTIVE worker who is

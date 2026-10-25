@@ -1227,6 +1227,11 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][quantity]'] = '1';
     params['subscription_data[metadata][userId]'] = user.id;
     params['subscription_data[metadata][kind]'] = 'homecare';
+    // v60: invite-only free first month — the subscription starts as a
+    // Stripe trial (card collected today, $0 charged, first $29 charge
+    // when the trial ends). Only the invite flow passes trialDays; every
+    // other HomeCare checkout is untouched.
+    if (opts.trialDays) params['subscription_data[trial_period_days]'] = String(Math.max(1, Math.round(Number(opts.trialDays) || 0)));
   } else if (kind === 'yardcare' || kind === 'homecare-plus') {
     // Membership plans (added 2026-10-21): the price ALWAYS comes from the
     // fixed server-side plan map keyed by opts.plan (yard1/yard2/plus1/
@@ -1524,6 +1529,172 @@ function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
   return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null };
 }
+// ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
+// Gabriel adds members by PERSONAL INVITATION from his admin: an invite
+// is a single-use link (/join/INV-…) whose holder joins HomeCare with
+// the FIRST MONTH FREE (a 30-day Stripe trial on the normal $29 plan —
+// card collected up front, $0 charged today, first $29 charge when the
+// trial ends; Gabriel's call: "porque estamos intentando el sistema" —
+// the invitee is helping test the system, so month one is on the house).
+// After the trial the membership is the ordinary $29 HomeCare: no
+// permanent discount tier, no special price to leak. Invites expire 7
+// days after creation and are claimed by the first account that
+// completes the join (when Gabriel records an email on the invite, only
+// that email's account can claim it). Activation rides the SAME
+// verified paths as every other join: the ?joined=1 return verifies the
+// session with Stripe (a trialing subscription passes the shared paid
+// rule), and the checkout.session.completed webhook activates through
+// activateHomeCareFromCheckout and marks the invite accepted — both
+// idempotent, whichever lands first wins.
+const INVITE_TRIAL_DAYS = 30;
+const INVITE_TTL_DAYS = 7;
+function invitesOf() { if (!Array.isArray(db.invites)) db.invites = []; return db.invites; }
+function newInviteId() { return 'INV-' + crypto.randomBytes(5).toString('hex').toUpperCase(); }
+function inviteLink(inv) { return appBase() + '/join/' + inv.id; }
+function inviteStatusOf(inv) {
+  if (!inv) return 'missing';
+  if (inv.status === 'accepted') return 'accepted';
+  if (inv.status === 'revoked') return 'revoked';
+  if (inv.expiresAt && Date.now() > new Date(inv.expiresAt).getTime()) return 'expired';
+  return 'pending';
+}
+function publicInvite(inv) {
+  return { id: inv.id, name: inv.name || '', email: inv.email || '', phone: inv.phone || '', status: inviteStatusOf(inv), link: inviteLink(inv), createdAt: inv.createdAt || '', expiresAt: inv.expiresAt || null, acceptedAt: inv.acceptedAt || null, acceptedByUserId: inv.acceptedByUserId || '' };
+}
+function markInviteAccepted(inv, u, session) {
+  if (!inv || inv.status === 'accepted') return false;
+  inv.status = 'accepted';
+  inv.acceptedAt = new Date().toISOString();
+  if (u && u.id) { inv.acceptedByUserId = u.id; u.inviteFreeMonthUsed = true; } // Gabriel's rule: the free month is once per account — the flag rides the claim, so no account can ever claim a second invitation free month
+  if (session && session.subscription) inv.subscriptionId = session.subscription;
+  return true;
+}
+// The trial-aware session proof for the invite return path: the shared
+// checkoutSessionSubscriptionPaid() requires payment_status 'paid',
+// which a free-trial session never has ('no_payment_required'). Here the
+// proof is: the session is complete, is a subscription session, and its
+// subscription passes the shared paid rule (active OR trialing).
+async function inviteSessionVerified(sess) {
+  if (!sess || sess.mode !== 'subscription' || sess.status !== 'complete' || !sess.subscription) return { paid: false, sub: null };
+  const sub = await stripeGet('/subscriptions/' + sess.subscription);
+  const paid = await subscriptionIsPaid(sub);
+  return { paid, sub };
+}
+// v60: the public invitation page (/join/INV-…). One language at a time
+// (EN | ES toggle, Gabriel's rule), same shell as the cart/estimate
+// pages. The offer, stated identically in both languages: first month
+// FREE (30-day trial), then $29/mo, cancel anytime; the card step rides
+// Stripe-hosted Checkout exactly like the other public joins — no card
+// ever renders on this page. The account step mirrors the cart page:
+// signup (201/409 both fine) then login, then POST the checkout.
+function invitePageHtml(inv, user, lang, notice) {
+  const initLang = lang === 'es' ? 'es' : 'en';
+  const JI = {
+    en: {
+      titleInvite: 'Your personal invitation', hi: 'Hi {name} — ',
+      intro: 'Gabriel from General Handyman Solutions invited you personally: <b>your first month of HomeCare is FREE</b>, then $29/month. Cancel anytime.',
+      b1: '20% off labor on every job', b2: 'Your first in-person estimate is FREE — then $50 (regular $75)', b3: 'Priority scheduling', b4: 'Member pricing applies the moment you join — including a cart or estimate you already have open',
+      how: 'How it works: you add your card on Stripe\'s secure page today — <b>$0 is charged today</b>. Your first $29 charge is in 30 days; cancel before then and you never pay a cent.',
+      yourInfo: 'Your info', fName: 'Full name', fPhone: 'Phone (optional)', fEmail: 'Email', passLabel: 'Create your account password (8+ characters) — or your existing account password',
+      joinBtn: '🎟️ Claim my free month', working: 'Processing…', opening: 'Opening secure checkout…',
+      errName: 'Add your name.', errEmail: 'Add a valid email.', errPass: 'Create a password (8+ characters) — it is your account for your membership.', errSignup: 'could not create your account', errLogin: 'That email already has an account — enter its password above to log in and claim.', errJoin: 'the join could not be started',
+      joinedH: '🎉 You\'re in!', joinedBody: 'Your HomeCare membership is active and your first month is on us. Member pricing now applies to your orders — welcome aboard!',
+      openApp: 'Open the app', alreadyH: 'You\'re already a member ✓', alreadyBody: 'This account already has an active membership — member pricing is already yours. No need to join twice.',
+      expiredH: 'This invitation has expired', expiredBody: 'Personal invitations last 7 days. Text or call (707) 862-3773 and the Team can send you a fresh one.',
+      goneH: 'This invitation is no longer available', goneBody: 'It may have been replaced by a newer one. Text or call (707) 862-3773 and the Team will sort it out.',
+      cancelledNote: 'The checkout was cancelled — no charge was made. Your invitation is still here when you\'re ready.',
+      questions: 'Questions? Text or call (707) 862-3773.'
+    },
+    es: {
+      titleInvite: 'Tu invitación personal', hi: 'Hola {name} — ',
+      intro: 'Gabriel, de General Handyman Solutions, te invitó personalmente: <b>tu primer mes de HomeCare es GRATIS</b>, luego $29/mes. Cancela cuando quieras.',
+      b1: '20% de descuento en mano de obra en cada trabajo', b2: 'Tu primer estimado en persona es GRATIS — luego $50 (regular $75)', b3: 'Prioridad al agendar', b4: 'El precio de miembro aplica desde que te unes — incluyendo un carrito o estimado que ya tengas abierto',
+      how: 'Cómo funciona: hoy agregas tu tarjeta en la página segura de Stripe — <b>hoy no se te cobra nada</b>. Tu primer cobro de $29 es en 30 días; si cancelas antes, nunca pagas ni un centavo.',
+      yourInfo: 'Tu información', fName: 'Nombre completo', fPhone: 'Teléfono (opcional)', fEmail: 'Correo electrónico', passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
+      joinBtn: '🎟️ Reclamar mi mes gratis', working: 'Procesando…', opening: 'Abriendo el pago seguro…',
+      errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para tu membresía.', errSignup: 'no se pudo crear tu cuenta', errLogin: 'Ese correo ya tiene una cuenta — escribe su contraseña arriba para entrar y reclamar.', errJoin: 'no se pudo iniciar la unión',
+      joinedH: '🎉 ¡Ya estás dentro!', joinedBody: 'Tu membresía HomeCare está activa y tu primer mes va por nuestra cuenta. El precio de miembro ya aplica en tus órdenes — ¡bienvenido!',
+      openApp: 'Abrir la app', alreadyH: 'Ya eres miembro ✓', alreadyBody: 'Esta cuenta ya tiene una membresía activa — el precio de miembro ya es tuyo. No necesitas unirte dos veces.',
+      expiredH: 'Esta invitación venció', expiredBody: 'Las invitaciones personales duran 7 días. Manda un texto o llama al (707) 862-3773 y el Equipo te manda una nueva.',
+      goneH: 'Esta invitación ya no está disponible', goneBody: 'Puede haber sido reemplazada por una más nueva. Manda un texto o llama al (707) 862-3773 y el Equipo lo resuelve.',
+      cancelledNote: 'El pago fue cancelado — no se hizo ningún cargo. Tu invitación sigue aquí para cuando quieras.',
+      questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.'
+    }
+  };
+  const S = JI[initLang];
+  const status = inviteStatusOf(inv);
+  const loggedIn = !!user;
+  const isMember = !!(user && user.role === 'customer' && membershipPlanOf(user).status === 'active');
+  const firstName = escMail(String(inv.name || '').split(' ')[0] || '');
+  const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleInvite + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+    + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
+    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
+  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<script>var I18N=' + JSON.stringify(JI) + ';var LANG=' + JSON.stringify(initLang) + ';'
+    + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
+    + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsCartLang", l); }catch(e){}'
+    + ' document.documentElement.lang=l;'
+    + ' document.querySelectorAll("[data-i18n]").forEach(function(n){ var v=T(n.getAttribute("data-i18n")); if(v) n.innerHTML=v; });'
+    + ' document.querySelectorAll("[data-i18n-ph]").forEach(function(n){ var v=T(n.getAttribute("data-i18n-ph")); if(v) n.setAttribute("placeholder", v); });'
+    + ' document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.style.background = b.getAttribute("data-lang-btn")===l ? "#e42535" : "transparent"; }); }'
+    + 'document.querySelectorAll("[data-lang-btn]").forEach(function(b){ b.addEventListener("click", function(){ setLang(b.getAttribute("data-lang-btn")); }); });'
+    + 'try{ var sv=localStorage.getItem("ghsCartLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
+    + '</scr' + 'ipt></body>';
+  if (status === 'accepted') {
+    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="joinedH">' + S.joinedH + '</h2><p data-i18n="joinedBody">' + S.joinedBody + '</p>'
+      + '<p><a href="/" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block" data-i18n="openApp">' + S.openApp + '</a></p>' + foot;
+  }
+  if (status === 'expired') {
+    return head + '<h2 style="margin-top:0" data-i18n="expiredH">' + S.expiredH + '</h2><p style="color:#666" data-i18n="expiredBody">' + S.expiredBody + '</p>' + foot;
+  }
+  if (status === 'revoked') {
+    return head + '<h2 style="margin-top:0" data-i18n="goneH">' + S.goneH + '</h2><p style="color:#666" data-i18n="goneBody">' + S.goneBody + '</p>' + foot;
+  }
+  if (isMember) {
+    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="alreadyH">' + S.alreadyH + '</h2><p data-i18n="alreadyBody">' + S.alreadyBody + '</p>'
+      + '<p><a href="/" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block" data-i18n="openApp">' + S.openApp + '</a></p>' + foot;
+  }
+  const input = 'width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font-size:15px;box-sizing:border-box';
+  const cancelled = notice === 'cancelled' ? '<p style="background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:10px 12px;font-size:14px" data-i18n="cancelledNote">' + S.cancelledNote + '</p>' : '';
+  const acct = loggedIn ? '' : (
+    '<h3 style="margin:18px 0 8px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
+    + '<label style="font-size:13px;color:#444" data-i18n="fName">' + S.fName + '</label><input id="jName" style="' + input + '" value="' + escMail(inv.name || '') + '">'
+    + '<label style="font-size:13px;color:#444" data-i18n="fEmail">' + S.fEmail + '</label><input id="jEmail" type="email" style="' + input + '" value="' + escMail(inv.email || '') + '">'
+    + '<label style="font-size:13px;color:#444" data-i18n="fPhone">' + S.fPhone + '</label><input id="jPhone" style="' + input + '" value="' + escMail(inv.phone || '') + '">'
+    + '<label style="font-size:13px;color:#444" data-i18n="passLabel">' + S.passLabel + '</label><input id="jPass" type="password" style="' + input + '">'
+  );
+  return head
+    + '<h2 style="margin-top:0">🎟️ <span data-i18n="titleInvite">' + S.titleInvite + '</span></h2>'
+    + cancelled
+    + '<p style="font-size:16px">' + (firstName ? '<span>' + S.hi.replace('{name}', firstName) + '</span>' : '') + '<span data-i18n="intro">' + S.intro + '</span></p>'
+    + '<ul style="line-height:1.75;font-size:15px;padding-left:20px"><li data-i18n="b1">' + S.b1 + '</li><li data-i18n="b2">' + S.b2 + '</li><li data-i18n="b3">' + S.b3 + '</li><li data-i18n="b4">' + S.b4 + '</li></ul>'
+    + '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px 12px;font-size:14.5px" data-i18n="how">' + S.how + '</p>'
+    + acct
+    + '<button id="joinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:15px 26px;font-weight:700;font-size:16px;width:100%;margin-top:16px;cursor:pointer" data-i18n="joinBtn">' + S.joinBtn + '</button>'
+    + '<p id="joinMsg" style="color:#b00020;font-size:14px;min-height:18px"></p>'
+    + '<script>var INV_ID=' + JSON.stringify(inv.id) + ';var loggedIn=' + (loggedIn ? 'true' : 'false') + ';'
+    + 'function $(i){return document.getElementById(i);} function val(i){var n=$(i);return n?n.value.trim():"";}'
+    + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
+    + 'async function ensureAccount(){ if(loggedIn) return; var pw=$("jPass").value; if(pw.length<8) throw new Error(T("errPass"));'
+    + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:val("jName"),email:val("jEmail"),password:pw,phone:val("jPhone"),role:"customer"})});'
+    + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
+    + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:val("jEmail"),password:pw})});'
+    + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
+    + '$("joinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("joinBtn"); function fail(t){ m.textContent=t; btn.disabled=false; btn.textContent=T("joinBtn"); }'
+    + ' if(!loggedIn){ if(!val("jName")) return fail(T("errName")); if(!/.+@.+\\..+/.test(val("jEmail"))) return fail(T("errEmail")); }'
+    + ' btn.disabled=true; btn.textContent=T("working"); m.textContent="";'
+    + ' try{ await ensureAccount(); btn.textContent=T("opening");'
+    + ' var o=await jpost("/join/"+INV_ID+"/checkout",{});'
+    + ' if(o.d && o.d.member){ location.reload(); return; }'
+    + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errJoin"));'
+    + ' location.href=o.d.url;'
+    + ' }catch(e){ fail(e.message); } };'
+    + '</scr' + 'ipt>'
+    + foot;
+}
 function normalizeCartItems(rawItems) {
   return (Array.isArray(rawItems) ? rawItems : []).slice(0, 20).map(it => {
     // v52: free-form custom lines (Gabriel: the builder could not add a
@@ -1739,6 +1910,13 @@ async function handleStripeEvent(event) {
       if (obj.metadata && obj.metadata.estimateId) {
         const er = db.requests.find(x => x.id === obj.metadata.estimateId);
         if (er && er.estimate) applyEstimateMemberDiscount(er, u);
+      }
+      // v60: a join that started from a personal invitation marks the
+      // invite accepted here too (the ?joined=1 return path on /join
+      // does the same — markInviteAccepted is idempotent).
+      if (obj.metadata && obj.metadata.inviteId) {
+        const inv = invitesOf().find(x => x.id === obj.metadata.inviteId);
+        if (inv && markInviteAccepted(inv, u, obj)) notifyAdmins('membership', '🎟️ Invitation claimed by ' + u.name + ' (' + u.email + ') — first month FREE, then $29/mo.');
       }
     } else if (kind === 'yardcare' || kind === 'homecare-plus') {
       // Plan key comes from the checkout session metadata WE set server-side
@@ -5012,6 +5190,64 @@ const server = http.createServer(async (req, res) => {
   //     return (or the webhook) verifies the session as paid — never
   //     before the money lands, so an abandoned checkout leaves no
   //     phantom paid order.
+  // ---------- v60: membership invites — admin creates them, the
+  // invitee claims one from the public /join page (routes below) ------
+  if (p === '/api/admin/invites' && req.method === 'GET') {
+    if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
+    return send(res, 200, { invites: invitesOf().slice().reverse().map(publicInvite) });
+  }
+  if (p === '/api/admin/invites' && req.method === 'POST') {
+    if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
+    const b = await readBody(req);
+    const name = cleanText(b.name, 80);
+    const email = cleanText(b.email, 160).toLowerCase();
+    const phone = cleanText(b.phone, 40);
+    if (!name) return send(res, 400, { error: 'the customer name is required' });
+    if (email && !/.+@.+\..+/.test(email)) return send(res, 400, { error: 'that email does not look valid' });
+    const now = new Date();
+    const inv = { id: newInviteId(), name, email, phone, status: 'pending', createdBy: user.id, createdAt: now.toISOString(), expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * 864e5).toISOString(), joinSessionId: '', acceptedAt: null, acceptedByUserId: '', subscriptionId: '' };
+    invitesOf().push(inv);
+    save();
+    return send(res, 201, { invite: publicInvite(inv) });
+  }
+  const invRevokeMatch = p.match(/^\/api\/admin\/invites\/([\w-]+)\/revoke$/);
+  if (invRevokeMatch && req.method === 'POST') {
+    if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
+    const inv = invitesOf().find(x => x.id === invRevokeMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invite not found' });
+    if (inv.status !== 'accepted') inv.status = 'revoked';
+    save();
+    return send(res, 200, { invite: publicInvite(inv) });
+  }
+  const joinCheckoutMatch = p.match(/^\/join\/([\w-]+)\/checkout$/);
+  if (joinCheckoutMatch && req.method === 'POST') {
+    const inv = invitesOf().find(x => x.id === joinCheckoutMatch[1]);
+    if (!inv) return send(res, 404, { error: 'invite not found' });
+    if (!user) return send(res, 401, { error: 'create your account above first, then tap the button again' });
+    if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
+    const st = inviteStatusOf(inv);
+    if (st === 'accepted') return send(res, 400, { error: 'this invitation was already claimed' });
+    if (st !== 'pending') return send(res, 400, { error: 'this invitation is no longer available' });
+    if (inv.email && (user.email || '').toLowerCase() !== inv.email) return send(res, 400, { error: 'this invitation belongs to a different email — log in with the invited email to claim it' });
+    if (membershipPlanOf(user).status === 'active') return send(res, 200, { member: true });
+    // Gabriel's rule (v60): the free first month is ONCE per account —
+    // an account that already claimed an invitation can never claim
+    // another free month, even after cancelling and being re-invited.
+    if (user.inviteFreeMonthUsed) return send(res, 400, { error: 'the free first month is one per account — this account already used its invitation. You can join HomeCare at $29/mo anytime from the app.' });
+    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to join' });
+    try {
+      const s = await createCheckoutSession('homecare', user, {
+        trialDays: INVITE_TRIAL_DAYS,
+        successUrl: inviteLink(inv) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
+        cancelUrl: inviteLink(inv) + '?cancelled=1',
+        metadata: { inviteId: inv.id, src: 'invite' },
+        subMetadata: { inviteId: inv.id }
+      });
+      inv.joinSessionId = s.id;
+      save();
+      return send(res, 200, { next: 'join', url: s.url });
+    } catch (e) { console.error('invite checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
   const cartCheckoutMatch = p.match(/^\/api\/carts\/([\w-]+)\/checkout$/);
   if (cartCheckoutMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartCheckoutMatch[1]);
@@ -5145,6 +5381,37 @@ const server = http.createServer(async (req, res) => {
     return send(res, 200, installPageHtml(url.searchParams.get('lang')));
   }
   // ---------- public cart page (v44; v54 Checkout returns) ----------
+  // ---------- v60: public invitation page ----------
+  const joinPageMatch = p.match(/^\/join\/([\w-]+)$/);
+  if (joinPageMatch && req.method === 'GET') {
+    const inv = invitesOf().find(x => x.id === joinPageMatch[1]);
+    if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invitation not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
+    // Return verification — same discipline as the cart/estimate pages:
+    // the ?joined=1 flag alone changes NOTHING. The session must be the
+    // very one this invite recorded, and its subscription must pass the
+    // shared paid rule (a free-trial subscription is 'trialing', which
+    // the rule accepts). Idempotent with the webhook.
+    let notice = '';
+    const retSessionId = url.searchParams.get('session_id') || '';
+    if (url.searchParams.get('cancelled') === '1' && inviteStatusOf(inv) === 'pending') notice = 'cancelled';
+    if (url.searchParams.get('joined') === '1' && retSessionId && inv.joinSessionId && retSessionId === inv.joinSessionId && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+        if (sess && sess.id === retSessionId) {
+          const chk = await inviteSessionVerified(sess);
+          if (chk.paid) {
+            const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
+            if (mu) {
+              activateHomeCareFromCheckout(mu, sess);
+              if (markInviteAccepted(inv, mu, sess)) notifyAdmins('membership', '🎟️ Invitation claimed by ' + mu.name + ' (' + mu.email + ') — first month FREE, then $29/mo.');
+              save();
+            }
+          }
+        }
+      } catch (e) { console.error('invite return verification failed', e.message); }
+    }
+    return send(res, 200, invitePageHtml(inv, user, url.searchParams.get('lang'), notice));
+  }
   const cartPageMatch = p.match(/^\/cart\/([\w-]+)$/);
   if (cartPageMatch && req.method === 'GET') {
     const c = cartsOf().find(x => x.id === cartPageMatch[1]);
