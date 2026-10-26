@@ -260,6 +260,23 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .menu-card-body .mut{color:#c9c4bc}
 .menu-card-body .grow{flex:1}
 .menu-prices{display:flex;gap:10px;align-items:baseline;margin:4px 0 8px}
+/* ---------- v78: guest cart (Amazon-style) + embedded checkout ---------- */
+#cartBtn{position:relative;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;border-radius:12px;cursor:pointer}
+#cartBadge{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 6px;display:none}
+#cartBtn.bump{animation:cartBump .35s ease}
+@keyframes cartBump{30%{transform:scale(1.18)}}
+#cartToast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;border:1px solid var(--line-d);border-radius:999px;padding:10px 16px;font-weight:700;font-size:14px;box-shadow:var(--sh-pop);opacity:0;pointer-events:none;transition:all .25s ease;z-index:10002;max-width:92vw;text-align:center}
+#cartToast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+#cartToast a{color:#ffb3ba;margin-left:8px;white-space:nowrap}
+.cart-add-btn{margin-top:8px}
+.cart-line{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #eee}
+.cart-line-main{flex:1;min-width:0}
+.cart-qty{display:inline-flex;align-items:center;gap:8px;border:1px solid #d4d4d8;border-radius:999px;padding:2px 6px}
+.cart-qty button{background:none;border:0;color:var(--ink);font-size:17px;font-weight:800;padding:2px 8px;box-shadow:none;cursor:pointer}
+.cart-remove{background:none;border:0;color:#b91c1c;font-weight:700;box-shadow:none;padding:4px;cursor:pointer}
+.cart-total-row{display:flex;justify-content:space-between;padding:3px 0}
+#cartPayElement{border:1px solid #d4d4d8;border-radius:12px;padding:12px;background:#fff;min-height:52px}
+.wz-mi .cart-add-mini{flex:none;padding:8px 10px}
 .menu-price{font-size:19px;font-weight:800;color:#fff}
 .menu-member{color:#2fbf71;font-weight:700;font-size:13.5px}
 
@@ -304,6 +321,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
   <span style="display:flex;align-items:center;gap:10px">
     <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app">Inicio</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menú</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
+    <button id="cartBtn" onclick="openCart();return false;" title="Your cart" aria-label="Your cart">🛒<span id="cartBadge"></span></button>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e42535;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
     <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔊</button>
     <span id="who" class="mut" style="color:#ccc"></span>
@@ -697,6 +715,61 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     </div>
     <div class="card" id="orderDone" style="display:none"></div>
   </div>
+
+  <!-- CART + EMBEDDED CHECKOUT (v78) — public page at #cart. Gabriel's
+       Amazon model: the cart always exists (guests included), persists
+       on the phone, and the account is created at the END, inside this
+       checkout. The card is typed right here (Stripe Payment Element) —
+       no redirect to a hosted page; the order is created ONLY after
+       Stripe verifies the payment server-side (P0-4). -->
+  <div id="cartBox" style="display:none">
+    <div class="card">
+      <button class="ghost" onclick="exitCart()" style="margin-bottom:10px">← Back</button>
+      <h3 style="margin:0 0 4px" id="cartTitle">Your cart</h3>
+      <p class="mut" style="margin:0 0 6px">General Handyman Solutions · Solano County</p>
+      <div id="cartEmpty" style="display:none"><p class="mut">Your cart is empty — add services from the menu and they will wait for you right here.</p><button onclick="exitCart();goMenu();return false;">Browse the menu</button></div>
+      <div id="cartLines"></div>
+      <div id="cartTotals"></div>
+      <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"><button id="cartCheckoutBtn" onclick="cartShowCheckout()">Checkout →</button><button class="ghost" id="cartClearBtn" onclick="cartClearAll()">Clear cart</button></div>
+    </div>
+    <div class="card" id="cartCheckoutCard" style="display:none">
+      <h3 style="margin-top:0">Checkout</h3>
+      <div id="ccAcct">
+        <h4>Your account — last step</h4>
+        <label>Your name<input id="ccName" autocomplete="name"></label>
+        <label>Email<input id="ccEmail" type="email" autocomplete="email"></label>
+        <label>Phone<input id="ccPhone" type="tel" autocomplete="tel"></label>
+        <label>Password<input id="ccPass" type="password" autocomplete="current-password" placeholder="Create one (8+ characters) — or your account password"></label>
+        <p class="mut" id="ccAcctNote">New here? This creates your account as part of checkout. Already a customer? Use your account email + password and we log you in.</p>
+      </div>
+      <h4>Where &amp; when</h4>
+      <label>Service address<input id="ccAddress" placeholder="Street address" autocomplete="street-address"></label>
+      <label>City<input id="ccCity" placeholder="Fairfield"></label>
+      <div class="pick" id="ccWhenPick">
+        <button type="button" data-w="Today" class="sel" onclick="cartWhenPick(this)">Today</button>
+        <button type="button" data-w="Tomorrow" onclick="cartWhenPick(this)">Tomorrow</button>
+        <button type="button" data-w="ASAP" onclick="cartWhenPick(this)">ASAP</button>
+      </div>
+      <label>Preferred time / details<input id="ccWhenText" placeholder="e.g. after 3 PM — you propose, we confirm"></label>
+      <label>Notes for the technician<textarea id="ccNotes" rows="2" placeholder="Gate code, parking, pets…"></textarea></label>
+      <div id="ccOffer" class="auth-offer" style="margin:14px 0;display:none">
+        <label style="display:block"><input type="checkbox" id="ccJoin" onchange="cartJoinToggled()"> <b>⭐ Add HomeCare — first month FREE</b></label>
+        <p class="mut" style="margin:6px 0 0">Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.</p>
+      </div>
+      <div id="ccLines"></div>
+      <div style="margin:4px 0 6px"><button type="button" class="ghost" id="ccAddMoreBtn" onclick="cartToggleAddMore()">＋ Add more services</button></div>
+      <div id="ccAddList" style="display:none"></div>
+      <div id="cartTotalsDue" style="margin:10px 0"></div>
+      <h4>Payment</h4>
+      <p class="mut">You pay the full total today — one charge, no balance later. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
+      <div id="cartPayElement"></div>
+      <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
+      <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%">Pay</button>
+      <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · Paid in full today</p>
+    </div>
+    <div class="card" id="cartDone" style="display:none"></div>
+  </div>
+  <div id="cartToast" role="status"></div>
 
   <!-- TERMS & CONDITIONS (added 2026-10-21, v21) — public page at #terms -->
   <div id="termsBox" style="display:none">
@@ -2273,6 +2346,9 @@ function render(){
   paintSoundBtn();
   if (me) esStart(); else esClose(); // v23: live event stream follows the session
   paintMemberLoginBtn();
+  paintCartBtn();
+  const cbx78 = document.getElementById('cartBox');
+  if (cbx78 && !isCartRoute()) cbx78.style.display = 'none';
   // v42: the in-app Menu is one tap away on every CUSTOMER view (guest,
   // logged-in panel, memberships/yard browsing). Worker/admin views are
   // exempt — their isolation stands.
@@ -2314,6 +2390,21 @@ function render(){
     document.getElementById('adminBox').style.display = 'none';
     const ybOrd = document.getElementById('yardCalendarBox'); if (ybOrd) ybOrd.style.display = 'none';
     renderOrder();
+    return;
+  }
+  // v78: the cart + embedded checkout is a public page of its own (#cart):
+  // while it is the route, it replaces every other box — guests included.
+  if (isCartRoute()) {
+    const cb78 = document.getElementById('cartBox');
+    if (cb78) cb78.style.display = 'block';
+    const cgC = document.getElementById('compareGridBox'); if (cgC) cgC.style.display = 'none';
+    const mbC = document.getElementById('membershipsBox'); if (mbC) mbC.style.display = 'none';
+    document.getElementById('authBox').style.display = 'none';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    const ybC = document.getElementById('yardCalendarBox'); if (ybC) ybC.style.display = 'none';
+    renderCart();
     return;
   }
   const obOff = document.getElementById('orderBox');
@@ -4978,6 +5069,396 @@ async function submitOrder(){
   }
 }
 
+// ---------- v78: guest cart + embedded checkout (Payment Element) ----------
+// Gabriel's Amazon model (2026-10-25): the cart ALWAYS exists — guests
+// add services from the home tiles and the Menu, the cart persists on
+// the phone (localStorage 'ghsCart') across sessions, and the account
+// is created at the END, inside the checkout, never as a door. Prices
+// shown here come from the client catalog mirror; the CHARGED total is
+// always recomputed server-side from SERVER_MENU (POST /api/cart/quote
+// + /api/cart/checkout). Members (verified homeCareStatus) see the
+// −20% labor price applied live; guests see BOTH totals, the member
+// one as the savings hook. P0-4: the order is created ONLY after the
+// server verifies the payment (checkout-confirm / webhook) — a
+// declined card creates NO order and shows NO success: the cart stays
+// intact and the error renders in-theme. ROLE RULE: this module is
+// customer-side only — paintCartBtn hides the cart button for worker /
+// admin sessions and inside the technician entry, and nothing in this
+// module is referenced from the worker or admin boxes.
+const CART_LS_KEY = 'ghsCart';
+let cartBusy = false, cartPayCtx = null, cartElements = null, cartWhenVal = 'Today', cartJoinedOnce = false, cartQuote = null;
+function cartLoad(){ try { const v = JSON.parse(localStorage.getItem(CART_LS_KEY) || '[]'); return Array.isArray(v) ? v.filter(function(it){ return it && typeof it.id === 'string' && typeof MENU_CATALOG !== 'undefined' && MENU_CATALOG[it.id]; }) : []; } catch (e) { return []; } }
+function cartSave(items){ try { localStorage.setItem(CART_LS_KEY, JSON.stringify(items)); } catch (e) {} paintCartBtn(); }
+function cartCount(){ return cartLoad().reduce(function(s, it){ return s + Math.max(1, Math.round(Number(it.q) || 1)); }, 0); }
+function cartIsMember(){ return !!(me && me.homeCareStatus === 'active'); }
+function isCartRoute(){ return (location.hash || '') === '#cart'; }
+function openCart(){ if (isCartRoute()) render(); else location.hash = '#cart'; }
+function exitCart(){ location.hash = ''; }
+function paintCartBtn(){
+  const b = document.getElementById('cartBtn'); if (!b) return;
+  let hide = false;
+  try { if (typeof isWorkerEntry === 'function' && isWorkerEntry()) hide = true; } catch (e) {}
+  if (me && me.role !== 'customer') hide = true;
+  b.style.display = hide ? 'none' : '';
+  const n = cartCount();
+  const bd = document.getElementById('cartBadge');
+  if (bd) { bd.textContent = n ? String(n) : ''; bd.style.display = n ? 'block' : 'none'; }
+}
+let cartToastTimer = null;
+function cartToast(msg){
+  paintCartBtn();
+  const b = document.getElementById('cartBtn');
+  if (b) { b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
+  const t = document.getElementById('cartToast'); if (!t) return;
+  t.innerHTML = escHtml(msg) + ' <a href="#cart">View cart →</a>';
+  t.classList.add('show');
+  if (cartToastTimer) clearTimeout(cartToastTimer);
+  cartToastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+function cartAdd(id){
+  if (typeof MENU_CATALOG === 'undefined' || !MENU_CATALOG[id]) return;
+  const items = cartLoad();
+  const ex = items.find(function(it){ return it.id === id && !(it.x && it.x.length); });
+  if (ex) ex.q = Math.min(10, Math.max(1, Math.round(Number(ex.q) || 1)) + 1); else items.push({ id: id, q: 1 });
+  cartSave(items);
+  cartToast(svcName(id) + ' added to your cart');
+  if (isCartRoute()) { cartResetCheckout(); renderCart(); }
+}
+function cartQty(i, d){
+  const items = cartLoad(); if (!items[i]) return;
+  items[i].q = Math.max(1, Math.min(10, Math.round(Number(items[i].q) || 1) + d));
+  cartSave(items); cartResetCheckout(); renderCart();
+}
+function cartRemove(i){
+  const items = cartLoad(); if (!items[i]) return;
+  items.splice(i, 1);
+  cartSave(items); cartResetCheckout(); renderCart();
+}
+function cartClearAll(){ cartSave([]); cartResetCheckout(); renderCart(); }
+// Same per-line math as the #order checkout (orderTotalsCalc): catalog
+// member price + add-ons at 0.8, nodisc (hauling) add-ons in full.
+function cartCalc(){
+  const lines = []; let list = 0, member = 0;
+  for (const it of cartLoad()) {
+    const s = MENU_CATALOG[it.id]; if (!s) continue;
+    const q = Math.max(1, Math.round(Number(it.q) || 1));
+    const ads = (s.addons || []).filter(function(a){ return (it.x || []).indexOf(a.id) >= 0; });
+    const extrasSum = ads.reduce(function(sum, a){ return sum + a.price; }, 0);
+    const discSum = ads.filter(function(a){ return !a.nodisc; }).reduce(function(sum, a){ return sum + a.price; }, 0);
+    const unitList = s.price + extrasSum;
+    const unitMember = (s.member != null ? s.member : s.price) + Math.round(discSum * 0.8) + (extrasSum - discSum);
+    lines.push({ id: it.id, qty: q, name: svcName(it.id), meta: svcMeta(it.id), addons: ads, unitList: unitList, unitMember: unitMember, lineList: unitList * q, lineMember: unitMember * q });
+    list += unitList * q; member += unitMember * q;
+  }
+  return { lines: lines, list: list, member: member, savings: list - member };
+}
+function renderCart(){
+  const host = document.getElementById('cartLines'); if (!host) return;
+  const title = document.getElementById('cartTitle'); if (title) title.textContent = 'Your cart';
+  const items = cartLoad();
+  const t = cartCalc();
+  const member = cartIsMember();
+  paintCartBtn();
+  const emptyEl = document.getElementById('cartEmpty'); if (emptyEl) emptyEl.style.display = items.length ? 'none' : 'block';
+  const coBtn = document.getElementById('cartCheckoutBtn'); if (coBtn) coBtn.style.display = items.length ? '' : 'none';
+  const clBtn = document.getElementById('cartClearBtn'); if (clBtn) clBtn.style.display = items.length ? '' : 'none';
+  host.innerHTML = t.lines.map(function(l, i){
+    const unit = member ? l.unitMember : l.unitList;
+    const line = member ? l.lineMember : l.lineList;
+    let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
+    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
+    s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
+    s += '<div style="text-align:right"><b>$' + line + '</b><br><button type="button" class="cart-remove" onclick="cartRemove(' + i + ')">Remove</button></div></div>';
+    return s;
+  }).join('');
+  const th = document.getElementById('cartTotals'); if (!th) return;
+  if (!items.length) { th.innerHTML = ''; return; }
+  let s = '<div style="margin-top:8px"><div class="cart-total-row"><span>Subtotal</span><span>$' + t.list + '</span></div>';
+  if (member) {
+    if (t.savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>HomeCare member savings (−20%)</span><span>−$' + t.savings + '</span></div>';
+    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.member + '</b></div><p class="mut">✓ Your HomeCare member price is applied.</p>';
+  } else {
+    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.list + '</b></div>';
+    if (t.savings > 0) s += '<div class="auth-offer" style="margin-top:10px"><b>⭐ HomeCare members pay $' + t.member + ' — save $' + t.savings + '</b><p class="mut" style="margin:4px 0 0">Join at checkout (first month FREE) and the member price applies to this order right away.</p></div>';
+  }
+  th.innerHTML = s + '</div>';
+  // keep the checkout card (when open) in sync with cart-view edits
+  const ccCard = document.getElementById('cartCheckoutCard');
+  if (ccCard && ccCard.style.display !== 'none' && items.length) { renderCcLines(); renderCartTotalsDue(); }
+}
+function cartWhenPick(btn){
+  cartWhenVal = btn.getAttribute('data-w') || 'Today';
+  document.querySelectorAll('#ccWhenPick button').forEach(function(x){ x.classList.toggle('sel', x === btn); });
+}
+function cartPaintOffer(){ const o = document.getElementById('ccOffer'); if (o) o.style.display = cartIsMember() ? 'none' : 'block'; }
+function renderCartTotalsDue(){
+  const host = document.getElementById('cartTotalsDue'); if (!host) return;
+  // After any checkout edit the totals paint from the LAST SERVER QUOTE
+  // (cartQuote) — never from stale local math alone.
+  const t = cartQuote || cartCalc();
+  const savings = t.list - t.member;
+  const member = cartIsMember();
+  const joinEl = document.getElementById('ccJoin');
+  const joinOn = !member && !!(joinEl && joinEl.checked);
+  const due = cartPayCtx ? cartPayCtx.due : ((member || joinOn) ? t.member : t.list);
+  let s = '<div class="cart-total-row"><span>Subtotal</span><span>$' + t.list + '</span></div>';
+  if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>HomeCare member price (−20%)</span><span>−$' + savings + '</span></div>';
+  if (joinOn) s += '<div class="cart-total-row"><span>HomeCare membership — first month</span><span><b>FREE</b></span></div>';
+  s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total — pay in full today</b><b>$' + due + '</b></div>';
+  host.innerHTML = s;
+}
+// ---------- v78 refine (Gabriel 2026-10-25 21:57): the cart is FULLY
+// editable AT the checkout itself — fix a mistake, drop a service, add
+// another one — without leaving the step or losing what was typed.
+// Every edit: (1) updates the persisted cart, (2) DROPS the mounted
+// Payment Element and the pending intent context (a stale intent is
+// never charged from here; the server also supersedes + cancels the
+// old PaymentIntent when the fresh checkout is created), (3) re-quotes
+// against POST /api/cart/quote so the totals shown are the server's,
+// and (4) re-prepares automatically when a payment was already armed,
+// so the Pay button always names the NEW server total. The typed
+// account/address/when/notes live in DOM inputs this code never
+// rebuilds, so they survive every edit. Edits are locked while a
+// payment is preparing or processing (cartBusy).
+function cartQuoteItems(){
+  return cartLoad().map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; });
+}
+async function cartQuoteRefresh(){
+  try {
+    const body = { items: cartQuoteItems() };
+    const em = document.getElementById('ccEmail');
+    if (!cartIsMember() && em && /.+@.+\..+/.test((em.value || '').trim())) body.email = em.value.trim();
+    const r = await api('/api/cart/quote', { method: 'POST', body: JSON.stringify(body) });
+    if (r && r.totals) cartQuote = r.totals;
+  } catch (e) { /* display-only: the charge is re-derived server-side at prepare */ }
+  renderCartTotalsDue();
+}
+function renderCcLines(){
+  const host = document.getElementById('ccLines'); if (!host) return;
+  const t = cartCalc();
+  const member = cartIsMember();
+  const joinEl = document.getElementById('ccJoin');
+  const joinOn = !member && !!(joinEl && joinEl.checked);
+  const mem = member || joinOn;
+  if (!t.lines.length) { host.innerHTML = ''; return; }
+  host.innerHTML = '<h4 style="margin-bottom:6px">Your services — tap to fix anything</h4>' + t.lines.map(function(l, i){
+    const unit = mem ? l.unitMember : l.unitList;
+    const line = mem ? l.lineMember : l.lineList;
+    let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
+    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
+    s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
+    s += '<div style="text-align:right"><b>$' + line + '</b><br><button type="button" class="cart-remove" onclick="ccRemove(' + i + ')">Remove</button></div></div>';
+    return s;
+  }).join('');
+}
+function renderCcAddList(){
+  const al = document.getElementById('ccAddList'); if (!al || al.style.display !== 'block') return;
+  const items = cartLoad();
+  al.innerHTML = Object.keys(MENU_CATALOG || {}).map(function(id){
+    const s = MENU_CATALOG[id]; if (!s) return '';
+    const inCart = items.filter(function(it){ return it.id === id; }).reduce(function(n, it){ return n + Math.max(1, Math.round(Number(it.q) || 1)); }, 0);
+    return '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(svcName(id)) + '</b><br><span class="mut">$' + s.price + ' · members $' + (s.member != null ? s.member : s.price) + '</span></div><div style="text-align:right">' + (inCart ? '<span class="mut">In cart ×' + inCart + '</span><br>' : '') + '<button type="button" onclick="ccAddMore(\'' + id + '\')">＋ Add</button></div></div>';
+  }).join('');
+}
+function cartToggleAddMore(){
+  const al = document.getElementById('ccAddList'); if (!al) return;
+  if (al.style.display === 'block') { al.style.display = 'none'; return; }
+  al.style.display = 'block';
+  renderCcAddList();
+}
+function ccQty(i, d){
+  if (cartBusy) return;
+  const items = cartLoad(); if (!items[i]) return;
+  items[i].q = Math.max(1, Math.min(10, Math.round(Number(items[i].q) || 1) + d));
+  cartSave(items);
+  return cartCheckoutEdited();
+}
+function ccRemove(i){
+  if (cartBusy) return;
+  const items = cartLoad(); if (!items[i]) return;
+  items.splice(i, 1);
+  cartSave(items);
+  return cartCheckoutEdited();
+}
+function ccAddMore(id){
+  if (cartBusy) return;
+  if (typeof MENU_CATALOG === 'undefined' || !MENU_CATALOG[id]) return;
+  const items = cartLoad();
+  const ex = items.find(function(it){ return it.id === id && !(it.x && it.x.length); });
+  if (ex) ex.q = Math.min(10, Math.max(1, Math.round(Number(ex.q) || 1)) + 1); else items.push({ id: id, q: 1 });
+  cartSave(items);
+  return cartCheckoutEdited();
+}
+async function cartCheckoutEdited(){
+  renderCart();
+  renderCcLines();
+  renderCcAddList();
+  if (!cartLoad().length) { cartCheckoutEmptied(); return; }
+  const hadCtx = !!cartPayCtx;
+  cartResetCheckout(); // stale Payment Element + intent context dropped NOW
+  await cartQuoteRefresh();
+  // The form already validated once (an intent existed), so re-arm the
+  // payment at the NEW total right away — the customer never taps Pay
+  // against a stale amount.
+  if (hadCtx && !cartBusy) await cartPrepare();
+}
+function cartCheckoutEmptied(){
+  // Removing the last service AT checkout: no dead end and no charge
+  // surface left armed — the checkout card closes and the cart's own
+  // empty state (with Browse the menu) takes over. No account is
+  // created by emptying: accounts are only born inside cartPrepare,
+  // which never runs with an empty cart (and the server now refuses
+  // an empty checkout before account resolution, too).
+  cartResetCheckout();
+  cartQuote = null;
+  const card = document.getElementById('cartCheckoutCard'); if (card) card.style.display = 'none';
+  const due = document.getElementById('cartTotalsDue'); if (due) due.innerHTML = '';
+  const lines = document.getElementById('ccLines'); if (lines) lines.innerHTML = '';
+  const al = document.getElementById('ccAddList'); if (al) { al.style.display = 'none'; al.innerHTML = ''; }
+  renderCart();
+  const box = document.getElementById('cartBox'); if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth' });
+}
+function cartResetCheckout(){
+  cartPayCtx = null; cartElements = null;
+  const pe = document.getElementById('cartPayElement'); if (pe) pe.innerHTML = '';
+  const e = document.getElementById('cartPayErr'); if (e) { e.textContent = ''; e.style.display = 'none'; }
+  const b = document.getElementById('cartPayBtn'); if (b) { b.disabled = false; b.textContent = 'Pay'; }
+}
+function cartShowCheckout(){
+  if (!cartLoad().length) return;
+  const card = document.getElementById('cartCheckoutCard'); if (!card) return;
+  card.style.display = 'block';
+  const done = document.getElementById('cartDone'); if (done) done.style.display = 'none';
+  const acct = document.getElementById('ccAcct'); if (acct) acct.style.display = me ? 'none' : 'block';
+  if (me && me.serviceAddress) { const ad = document.getElementById('ccAddress'); if (ad && !ad.value) ad.value = me.serviceAddress; }
+  cartPaintOffer();
+  renderCcLines();
+  renderCartTotalsDue();
+  cartQuoteRefresh();
+  if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth' });
+  cartPrepare();
+}
+function cartJoinToggled(){
+  const had = !!cartPayCtx;
+  cartResetCheckout();
+  renderCcLines();
+  renderCartTotalsDue();
+  if (had) cartPrepare();
+}
+async function cartEnsureStripe(){
+  if (typeof Stripe === 'undefined') return false;
+  const cfg = await api('/api/stripe/config');
+  if (!cfg.publishableKey) return false;
+  if (!stripeObj) stripeObj = Stripe(cfg.publishableKey);
+  return true;
+}
+function cartMountPayment(clientSecret){
+  const host = document.getElementById('cartPayElement'); if (!host) return;
+  host.innerHTML = '';
+  cartElements = stripeObj.elements({ clientSecret: clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#e42535', borderRadius: '12px' } } });
+  const pe = cartElements.create('payment');
+  pe.mount(host);
+}
+function cartShowErr(t){
+  const e = document.getElementById('cartPayErr');
+  if (e) { e.textContent = t || ''; e.style.display = t ? 'block' : 'none'; }
+}
+async function cartPrepare(){
+  if (cartBusy) return;
+  cartShowErr('');
+  const items = cartLoad();
+  if (!items.length) return;
+  const btn = document.getElementById('cartPayBtn');
+  cartBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing secure payment…'; }
+  try {
+    if (!(await cartEnsureStripe())) throw new Error('Online payment is still being connected — text or call (707) 862-3773 and the Team will take your order.');
+    const joinEl = document.getElementById('ccJoin');
+    const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
+    const payload = {
+      items: items.map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; }),
+      address: document.getElementById('ccAddress').value.trim(),
+      city: document.getElementById('ccCity').value.trim(),
+      when: cartWhenVal + (document.getElementById('ccWhenText').value.trim() ? ' · ' + document.getElementById('ccWhenText').value.trim() : ''),
+      notes: document.getElementById('ccNotes').value.trim()
+    };
+    if (!payload.address) throw new Error('Enter the service address — where the technician will do the work.');
+    if (!me) {
+      payload.name = document.getElementById('ccName').value.trim();
+      payload.email = document.getElementById('ccEmail').value.trim();
+      payload.phone = document.getElementById('ccPhone').value.trim();
+      payload.password = document.getElementById('ccPass').value;
+      if (!payload.name || !/.+@.+\..+/.test(payload.email)) throw new Error('Add your name and a valid email — your account is created with this step.');
+      if (!payload.password || payload.password.length < 8) throw new Error('Create a password of 8+ characters (or enter your account password).');
+    }
+    const resp = await api('/api/cart/checkout', { method: 'POST', body: JSON.stringify(Object.assign({ step: joinOn ? 'join' : 'pay', joinedMembership: cartJoinedOnce }, payload)) });
+    if (resp.user) {
+      me = resp.user;
+      const acct = document.getElementById('ccAcct'); if (acct) acct.style.display = 'none';
+      cartPaintOffer();
+    }
+    cartPayCtx = { phase: resp.step, clientSecret: resp.clientSecret, checkoutId: resp.checkoutId || '', paymentIntentId: resp.paymentIntentId || '', subscriptionId: resp.subscriptionId || '', due: resp.totals ? resp.totals.due : 0 };
+    if (resp.totals) cartQuote = resp.totals; // server-true totals paint the summary
+    cartMountPayment(resp.clientSecret);
+    renderCartTotalsDue();
+    if (btn) { btn.disabled = false; btn.textContent = resp.step === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.due + ' for your order' : 'Pay $' + cartPayCtx.due; }
+  } catch (e) {
+    if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap Pay again to continue.'; }
+    cartShowErr(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Pay'; }
+  } finally { cartBusy = false; }
+}
+async function cartPayNow(){
+  if (cartBusy) return;
+  if (!cartPayCtx) { cartPrepare(); return; }
+  const btn = document.getElementById('cartPayBtn');
+  cartShowErr('');
+  cartBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+  try {
+    const res = await stripeObj.confirmPayment({ elements: cartElements, redirect: 'if_required', confirmParams: { return_url: location.origin + location.pathname + '#cart' } });
+    if (res.error) throw new Error(res.error.message);
+    if (cartPayCtx.phase === 'join') {
+      const chk = await api('/api/stripe/homecare-confirm', { method: 'POST' });
+      if (!chk.active) throw new Error('Your membership payment did not complete — your cart is intact and no order was created. Try the card again.');
+      cartJoinedOnce = true;
+      if (me) me.homeCareStatus = 'active'; // the confirm endpoint just verified it; /api/me below refreshes the full record
+      try { const d = await api('/api/me'); if (d.user) me = d.user; } catch (e) {}
+      cartPayCtx = null;
+      cartPaintOffer();
+      cartBusy = false;
+      cartToast('🎉 HomeCare is active — member price applied to your order');
+      await cartPrepare();
+      return;
+    }
+    const piId = (res.paymentIntent && res.paymentIntent.id) || cartPayCtx.paymentIntentId;
+    const done = await api('/api/cart/checkout-confirm', { method: 'POST', body: JSON.stringify({ checkoutId: cartPayCtx.checkoutId, paymentIntentId: piId }) });
+    cartOnPaid(done.requestId);
+  } catch (e) {
+    // P0-4: a failed payment creates NO order and shows NO success —
+    // the cart is untouched and the error renders right here, in-theme.
+    cartShowErr(e.message);
+    if (btn && cartPayCtx) { btn.disabled = false; btn.textContent = cartPayCtx.phase === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.due + ' for your order' : 'Pay $' + cartPayCtx.due; }
+  } finally { cartBusy = false; }
+}
+function cartOnPaid(requestId){
+  cartSave([]);
+  cartResetCheckout();
+  const cc = document.getElementById('cartCheckoutCard'); if (cc) cc.style.display = 'none';
+  const lines = document.getElementById('cartLines'); if (lines) lines.innerHTML = '';
+  const totals = document.getElementById('cartTotals'); if (totals) totals.innerHTML = '';
+  const emptyEl = document.getElementById('cartEmpty'); if (emptyEl) emptyEl.style.display = 'none';
+  const coBtn = document.getElementById('cartCheckoutBtn'); if (coBtn) coBtn.style.display = 'none';
+  const clBtn = document.getElementById('cartClearBtn'); if (clBtn) clBtn.style.display = 'none';
+  const d = document.getElementById('cartDone');
+  if (d) {
+    d.style.display = 'block';
+    d.innerHTML = '<h3>✅ Order placed — ' + escHtml(requestId || '') + '</h3><p>💳 <b>Paid in full.</b> The Team confirms your time within minutes. Follow your order live — and message the Team — right here in the app.</p>' + (cartJoinedOnce ? '<p>🎉 Welcome to HomeCare! Your membership is active and its member price was applied to this order.</p>' : '') + '<button onclick="exitCart()">Go to my orders</button>';
+    if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+try { paintCartBtn(); } catch (e) {}
+
 // ---------- Solicitud Profesional + in-app Menu (added 2026-10-23, v42) ----------
 // The plain one-long-form request is now a 4-step wizard (progress bar,
 // one topic per screen) that submits through the SAME /api/requests path
@@ -5055,7 +5536,7 @@ function wzRenderMenuPanel() {
     return;
   }
   let h = '<p class="mut" style="margin:12px 0 6px"><b>' + ui.wzHead + '</b></p>';
-  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button></div>'; }).join('');
+  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button><button type="button" class="ghost cart-add-mini" title="' + ui.addCart + '" onclick="cartAdd(\'' + id + '\');return false;">＋🛒</button></div>'; }).join('');
   h += '<p class="mut" style="margin:8px 0 0">' + ui.wzFoot + '</p>';
   p.innerHTML = h;
 }
@@ -5266,8 +5747,8 @@ const MENU_ES = {
   'heavy-furniture-move': ['Mover mueble pesado (2 técnicos)', '~1 h · Por trabajo']
 };
 const MENU_UI = {
-  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.' },
-  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados y pagados en la app — pagas completo al ordenar (si cancelas antes de que salga el técnico: reembolso completo). Miembros HomeCare / HomeCare Plus: tu precio de miembro está en cada tarjeta.', order: 'Ordenar', members: 'Miembros', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.' }
+  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered and paid in the app — you pay in full when you order (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.' },
+  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados y pagados en la app — pagas completo al ordenar (si cancelas antes de que salga el técnico: reembolso completo). Miembros HomeCare / HomeCare Plus: tu precio de miembro está en cada tarjeta.', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.' }
 };
 let _menuLang = null;
 function menuLang() {
@@ -5307,7 +5788,7 @@ function renderMenu() {
   if (!box || typeof MENU_CATALOG === 'undefined') return;
   const L = menuLang(), ui = MENU_UI[L];
   box.innerHTML = MENU_GROUPS.map(function (g) {
-    const cards = g.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="menu-card">' + svcImgHtml(id, g.key, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button></div></div>'; }).join('');
+    const cards = g.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="menu-card">' + svcImgHtml(id, g.key, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="location.hash=\'#order/' + id + '\'">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>'; }).join('');
     return '<h3 class="menu-group-title">' + escHtml(L === 'es' ? g.es : g.en) + '</h3><div class="menu-grid">' + cards + '</div>';
   }).join('');
 }

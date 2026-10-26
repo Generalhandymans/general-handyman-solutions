@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v77', swSrc.includes("const CACHE = 'ghs-app-v77'"));
+t('static: SW cache is ghs-app-v78', swSrc.includes("const CACHE = 'ghs-app-v78'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -919,6 +919,148 @@ run("location.hash = '#reset=" + 'a'.repeat(64) + "';"); run('checkResetHash()')
 t('v77 rescue: an emailed #reset= link opens the reset box', elById.get('resetBox').style.display === 'block');
 run("location.hash = '';"); run('checkResetHash()');
 
+// --- v78 client: guest cart (localStorage) + embedded checkout ---
+// Gabriel's Amazon model: the cart exists for GUESTS, persists on the
+// phone, and the account is created at the END of the checkout. The
+// card is typed on our own page (Payment Element) and — P0-4 — the
+// order is created ONLY after server-verified payment: a decline
+// keeps the cart, shows an in-theme error and NO success state.
+// A superset Stripe fake (Payment Element create('payment') +
+// confirmPayment, switchable to a decline); confirmCardPayment kept so
+// nothing downstream can miss it.
+let v78ConfirmMode = 'ok';
+let v78PeCreates = 0;
+sandbox.Stripe = function v78StripeFactory(pk) {
+  return {
+    elements() { return { create(kind) { if (kind === 'payment') v78PeCreates++; return makeFakeCardEl(); } }; },
+    confirmCardPayment: async () => ({}),
+    confirmPayment: async () => v78ConfirmMode === 'ok' ? ({ paymentIntent: { id: 'pi_v78_vm', status: 'succeeded' } }) : ({ error: { message: 'Your card was declined.' } })
+  };
+};
+// Scripted backend for the v78 endpoints (everything else delegates).
+const v78Calls = [];
+let v78JoinArmed = false;
+// v78 refine: the stub prices from the posted items (tv/fan are $125 /
+// member $100 — the same figures the canned 375/300 totals came from),
+// so at-checkout edits move the stubbed totals exactly like the server.
+const v78VmPrices = { 'tv-mounting': [125, 100], 'ceiling-fan': [125, 100] };
+function v78VmTotals(items){ let list = 0, member = 0; (items || []).forEach(function(it){ const p = v78VmPrices[it.serviceId] || [0, 0]; const q = Math.max(1, Math.round(Number(it.qty) || 1)); list += p[0] * q; member += p[1] * q; }); return { list, member }; }
+const v78Fetch = async (url, opts = {}) => {
+  let body = null; try { body = opts && opts.body ? JSON.parse(opts.body) : null; } catch (e) {}
+  if (url === '/api/me' && v78JoinArmed) return { ok: true, status: 200, json: async () => ({ user: { id: 'USR-V78', role: 'customer', name: 'Cart Ana', email: 'cartana@t.local', homeCareStatus: 'active' } }) };
+  if (url === '/api/cart/quote') {
+    const tt = v78VmTotals(body && body.items);
+    v78Calls.push({ step: 'quote', due: tt.list });
+    return { ok: true, status: 200, json: async () => ({ member: false, totals: { list: tt.list, member: tt.member, due: tt.list } }) };
+  }
+  if (url === '/api/cart/checkout') {
+    v78Calls.push({ step: body && body.step, joinedMembership: !!(body && body.joinedMembership) });
+    const tt = v78VmTotals(body && body.items);
+    const user = { id: 'USR-V78', role: 'customer', name: 'Cart Ana', email: 'cartana@t.local', homeCareStatus: (v78JoinArmed && body.step === 'pay') ? 'active' : 'none' };
+    if (body && body.step === 'join') return { ok: true, status: 200, json: async () => ({ step: 'join', clientSecret: 'sub_secret_v78', subscriptionId: 'sub_v78', user, totals: { list: tt.list, member: tt.member, due: tt.member } }) };
+    return { ok: true, status: 200, json: async () => ({ step: 'pay', checkoutId: 'CCK-V78', clientSecret: 'pi_secret_v78', paymentIntentId: 'pi_v78_vm', user, totals: { list: tt.list, member: tt.member, due: v78JoinArmed ? tt.member : tt.list } }) };
+  }
+  if (url === '/api/stripe/homecare-confirm') { v78Calls.push({ step: 'homecare-confirm' }); return { ok: true, status: 200, json: async () => ({ active: true }) }; }
+  if (url === '/api/cart/checkout-confirm') { v78Calls.push({ step: 'checkout-confirm' }); return { ok: true, status: 200, json: async () => ({ ok: true, requestId: 'GHS-V78OK' }) }; }
+  return fetchStub(url, opts);
+};
+const v78OrigFetch = sandbox.fetch;
+sandbox.fetch = v78Fetch;
+resetStripeState();
+stripeCfgMode = 'ok';
+run("me = null; location.hash = ''; localStorage.removeItem('ghsCart');");
+// add + merge + persist across a "reload" (state lives in localStorage)
+run("cartAdd('tv-mounting'); cartAdd('tv-mounting'); cartAdd('ceiling-fan');");
+t('v78 cart: adds merge quantity (2x tv + 1x fan = 3 items)', run('cartCount()') === 3);
+t('v78 cart: the cart persists in localStorage ghsCart', (run("localStorage.getItem('ghsCart')") || '').includes('tv-mounting') && (run("localStorage.getItem('ghsCart')") || '').includes('ceiling-fan'));
+t('v78 cart: the header badge shows the count', el('cartBadge').textContent === '3' && el('cartBadge').style.display === 'block');
+const calc78 = JSON.parse(run('JSON.stringify(cartCalc())'));
+t('v78 cart math: guest list 375 / member 300 (2x $125 tv + $125 fan, member = x0.8)', calc78.list === 375 && calc78.member === 300 && calc78.savings === 75);
+// guest view: BOTH totals + the member total as the savings hook
+run("location.hash = '#cart';"); run('render();');
+const cartHtmlGuest = el('cartLines').innerHTML + el('cartTotals').innerHTML;
+t('v78 cart view: guest sees list total AND member total as the savings hook', cartHtmlGuest.includes('$375') && cartHtmlGuest.includes('$300') && cartHtmlGuest.includes('save $75'));
+// verified member: the member price is applied live
+run("me = { id:'USR-V78M', role:'customer', name:'Mem Ber', email:'mem@t.local', homeCareStatus:'active' };"); run('renderCart();');
+const cartHtmlMem = el('cartLines').innerHTML + el('cartTotals').innerHTML;
+t('v78 cart view: a verified member sees the member price applied live', cartHtmlMem.includes('member price is applied') && cartHtmlMem.includes('$300'));
+run('me = null;');
+// checkout WITHOUT membership: account fields filled at the END, prepare
+// creates the intent + mounts the Payment Element, pay confirms in-app.
+el('ccName').value = 'Cart Ana'; el('ccEmail').value = 'cartana@t.local'; el('ccPhone').value = '7075550100'; el('ccPass').value = 'cartpass12';
+el('ccAddress').value = '5 Oak St'; el('ccCity').value = 'Fairfield'; el('ccWhenText').value = ''; el('ccNotes').value = '';
+await run('cartPrepare()');
+t('v78 checkout: prepare hits step pay + mounts the Payment Element in-page', v78Calls.length === 1 && v78Calls[0].step === 'pay' && v78PeCreates >= 1 && run('!!cartPayCtx') === true && (el('cartPayBtn').textContent || '').includes('Pay $375'));
+await run('cartPayNow()');
+t('v78 checkout: success clears the cart + shows the themed in-app confirmation (no external page)', run("localStorage.getItem('ghsCart')") === '[]' && el('cartDone').style.display === 'block' && (el('cartDone').innerHTML || '').includes('GHS-V78OK') && (el('cartDone').innerHTML || '').includes('Paid in full'));
+t('v78 checkout: rail order is checkout(pay) then checkout-confirm', v78Calls.map(c => c.step).join(',') === 'pay,checkout-confirm');
+// P0-4: a DECLINED card creates NO order and NO success — cart intact,
+// in-theme error, button re-enabled for another try.
+run("document.getElementById('cartDone').style.display = 'none';");
+run("cartAdd('tv-mounting');");
+el('ccAddress').value = '5 Oak St';
+await run('cartPrepare()');
+v78ConfirmMode = 'decline';
+await run('cartPayNow()');
+t('v78 P0-4: declined card keeps the cart + shows the in-theme error + NO success state + button re-enabled', run('cartCount()') === 1 && (el('cartPayErr').textContent || '').includes('declined') && el('cartPayErr').style.display === 'block' && el('cartDone').style.display === 'none' && el('cartPayBtn').disabled === false && !v78Calls.slice(2).some(c => c.step === 'checkout-confirm'));
+v78ConfirmMode = 'ok';
+// checkout WITH the optional membership: join first (its own rails),
+// activation verified, THEN the order at the member total.
+run('cartClearAll();');
+run("cartAdd('tv-mounting'); cartAdd('tv-mounting'); cartAdd('ceiling-fan');");
+run("me = { id:'USR-V78', role:'customer', name:'Cart Ana', email:'cartana@t.local', homeCareStatus:'none' };");
+el('ccJoin').checked = true;
+v78JoinArmed = true;
+v78Calls.length = 0;
+el('ccAddress').value = '5 Oak St';
+await run('cartPrepare()');
+t('v78 join: with HomeCare checked, prepare takes the JOIN step first', v78Calls.length === 1 && v78Calls[0].step === 'join' && (el('cartPayBtn').textContent || '').includes('Join HomeCare'));
+await run('cartPayNow()');
+t('v78 join: rail order is join -> homecare-confirm -> pay, with joinedMembership flagged on the pay step', v78Calls.map(c => c.step).join(',') === 'join,homecare-confirm,pay' && v78Calls[2].joinedMembership === true);
+await run('cartPayNow()');
+t('v78 join: the order confirms at the member flow + the cart clears', v78Calls.map(c => c.step).join(',') === 'join,homecare-confirm,pay,checkout-confirm' && run("localStorage.getItem('ghsCart')") === '[]');
+el('ccJoin').checked = false;
+v78JoinArmed = false;
+// ROLE PIN (behavioral): the cart button exists ONLY on the customer side.
+run("me = { id:'USR-W78', role:'worker', name:'Tech', homeCareStatus:'none' }; location.hash = '';"); run('paintCartBtn();');
+t('v78 role: a technician session never sees the cart button', el('cartBtn').style.display === 'none');
+run("me = { id:'USR-A78', role:'admin', name:'Admin', homeCareStatus:'none' };"); run('paintCartBtn();');
+t('v78 role: an admin session never sees the cart button', el('cartBtn').style.display === 'none');
+run("me = null; location.hash = '#worker';"); run('paintCartBtn();');
+t('v78 role: the technician entry hides the cart button even for a guest', el('cartBtn').style.display === 'none');
+run("location.hash = '';"); run('paintCartBtn();');
+t('v78 role: a guest on the customer side sees the cart button', el('cartBtn').style.display !== 'none');
+// --- v78 refine (Gabriel 21:57): the cart is FULLY editable at the
+// checkout itself — per-line qty/remove, add-more without losing the
+// typed data, a server re-quote on every edit, and the stale intent
+// dropped + recreated at the new total.
+run("localStorage.removeItem('ghsCart'); me = null; cartJoinedOnce = false;");
+run("location.hash = '#cart';"); run('render();');
+run("cartAdd('tv-mounting'); cartAdd('ceiling-fan');");
+el('ccName').value = 'Edit Eve'; el('ccEmail').value = 'eve@t.local'; el('ccPhone').value = '7075550111'; el('ccPass').value = 'evepass123';
+el('ccAddress').value = '12 Vine St'; el('ccCity').value = 'Fairfield'; el('ccWhenText').value = 'after 3 PM'; el('ccNotes').value = 'gate 42';
+el('ccJoin').checked = false;
+run('cartShowCheckout();');
+await new Promise(r => setTimeout(r, 20));
+if (!run('!!cartPayCtx')) await run('cartPrepare()');
+t('v78 refine: the checkout summary is EDITABLE — per-line qty + remove controls inside the checkout card', (el('ccLines').innerHTML || '').includes('ccQty(') && (el('ccLines').innerHTML || '').includes('ccRemove(') && (el('ccLines').innerHTML || '').includes('TV Mounting') && (el('cartPayBtn').textContent || '').includes('Pay $250'));
+v78Calls.length = 0;
+await run('ccQty(0, 1)');
+t('v78 refine: a qty edit AT CHECKOUT re-quotes with the server + recreates the intent at the NEW total (Pay $375)', v78Calls.some(c => c.step === 'quote') && v78Calls.filter(c => c.step === 'pay').length === 1 && (el('cartPayBtn').textContent || '').includes('Pay $375') && run('cartPayCtx.due') === 375);
+v78Calls.length = 0;
+await run('ccRemove(1)');
+t('v78 refine: removing a line AT CHECKOUT drops it, re-quotes, and the pay button names the new total (Pay $250)', run('cartCount()') === 2 && v78Calls.some(c => c.step === 'quote') && (el('cartPayBtn').textContent || '').includes('Pay $250') && !(el('ccLines').innerHTML || '').includes('Ceiling Fan'));
+run('cartToggleAddMore();');
+t('v78 refine: add-more at checkout opens the catalog picker with Add buttons', el('ccAddList').style.display === 'block' && (el('ccAddList').innerHTML || '').includes('ccAddMore('));
+await run("ccAddMore('ceiling-fan')");
+t('v78 refine: add-more adds the service WITHOUT losing the typed checkout data (account, address, when, notes preserved)', el('ccName').value === 'Edit Eve' && el('ccEmail').value === 'eve@t.local' && el('ccAddress').value === '12 Vine St' && el('ccWhenText').value === 'after 3 PM' && el('ccNotes').value === 'gate 42' && run('cartCount()') === 3 && (el('cartPayBtn').textContent || '').includes('Pay $375'));
+await run('ccRemove(0)');
+await run('ccRemove(0)');
+t('v78 refine: removing the LAST item at checkout exits gracefully — checkout card hidden, empty state up, no payment surface, no stale intent', el('cartCheckoutCard').style.display === 'none' && el('cartEmpty').style.display === 'block' && run('cartPayCtx === null') === true && (el('cartPayElement').innerHTML || '') === '' && run('cartCount()') === 0);
+sandbox.fetch = v78OrigFetch;
+stripeCfgMode = 'empty';
+run("me = null; location.hash = ''; localStorage.removeItem('ghsCart'); cartPayCtx = null;");
+
 // --- v41: worker entry (#worker) hides the customer request section ---
 // Owner screenshot 2026-10-23: at #worker the CUSTOMER "Request a
 // handyman" form dominated the screen and squeezed the worker login.
@@ -1367,7 +1509,9 @@ const stripeMock = http.createServer(async (req, res) => {
     if (capM[1].includes('fail')) return send(402, { error: { message: 'Your card was declined.' } });
     return send(200, { id: capM[1], amount_received: Number(form.amount_to_capture || 0) });
   }
-  if (req.method === 'POST' && path === '/payment_intents') { const pi = { id: 'pi_mock_' + (++stripeState.n), client_secret: 'pi_mock_secret_' + stripeState.n, amount: Number(form.amount || 0), status: 'requires_capture', capture_method: form.capture_method || 'automatic', metadata: { requestId: form['metadata[requestId]'] || '', holdKey: form['metadata[holdKey]'] || '', kind: form['metadata[kind]'] || '', cartId: form['metadata[cartId]'] || '' }, latest_charge: null }; stripeState.pis[pi.id] = pi; return send(200, pi); }
+  const pcCancelM = path.match(/^\/payment_intents\/([^/]+)\/cancel$/);
+  if (req.method === 'POST' && pcCancelM) { const pi = stripeState.pis[pcCancelM[1]]; if (!pi) return send(404, { error: { message: 'no such payment_intent' } }); if (pi.status === 'succeeded') return send(402, { error: { message: 'You cannot cancel a PaymentIntent with a status of succeeded.' } }); pi.status = 'canceled'; return send(200, pi); }
+  if (req.method === 'POST' && path === '/payment_intents') { const pi = { id: 'pi_mock_' + (++stripeState.n), client_secret: 'pi_mock_secret_' + stripeState.n, amount: Number(form.amount || 0), status: 'requires_capture', capture_method: form.capture_method || 'automatic', metadata: { requestId: form['metadata[requestId]'] || '', holdKey: form['metadata[holdKey]'] || '', kind: form['metadata[kind]'] || '', cartId: form['metadata[cartId]'] || '', checkoutId: form['metadata[checkoutId]'] || '' }, latest_charge: null }; stripeState.pis[pi.id] = pi; return send(200, pi); }
   if (req.method === 'GET' && path.startsWith('/payment_intents/')) { const pid = path.split('/')[2]; if (stripeState.pis[pid]) return send(200, stripeState.pis[pid]); return send(200, { id: pid, status: 'succeeded' }); }
   if (req.method === 'GET' && path.startsWith('/invoices/')) { const invId = path.split('/')[2]; const owner = Object.values(stripeState.subs).find(s => s.latest_invoice && s.latest_invoice.id === invId); if (owner) { const pi = owner.latest_invoice.payment_intent; return send(200, { id: invId, status: owner.status === 'active' ? 'paid' : 'open', payment_intent: typeof pi === 'string' ? pi : ((pi && pi.id) || '') }); } return send(200, { id: invId, status: 'paid', payment_intent: 'pi_mock_paid' }); }
   if (req.method === 'GET' && path.startsWith('/prices/')) return send(200, { id: path.split('/')[2], unit_amount: 2900, recurring: { interval: 'month' }, active: true });
@@ -3534,6 +3678,113 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const instAnd = await (await fetch(BASE2 + '/instalar')).text();
   t('v72 P-2: /instalar orders the platform cards by visitor UA (iPhone UA → iOS card first, default → Android first)',
     instIos.indexOf('On iPhone / iPad (Safari)') > -1 && instIos.indexOf('On iPhone / iPad (Safari)') < instIos.indexOf('On Android (Chrome)') && instAnd.indexOf('On Android (Chrome)') > -1 && instAnd.indexOf('On Android (Chrome)') < instAnd.indexOf('On iPhone / iPad (Safari)'));
+}
+
+// ---------------- v78 server: guest cart quote + embedded checkout ----------------
+// The live app2 at this point is the v75-respawned instance (mock
+// Stripe on 8980, whsec_mock_test); admin re-logs in for a token.
+{
+  const adm78 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const A78 = adm78.j.token;
+  const items78 = [
+    { serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] },
+    { serviceId: 'ceiling-fan', name: 'Ceiling Fan Install', qty: 1, addons: [] }
+  ];
+  const adminReqs78 = async () => (await req2('GET', '/api/requests', { token: A78 })).j.requests || [];
+  // quote: display pricing from the server catalog — guest vs member
+  const qGuest = await req2('POST', '/api/cart/quote', { body: { items: items78 } });
+  t('v78 quote: guest gets list 250 / member 200 / due 250 from SERVER_MENU', qGuest.status === 200 && qGuest.j.member === false && qGuest.j.totals.list === 250 && qGuest.j.totals.member === 200 && qGuest.j.totals.due === 250);
+  const qBad = await req2('POST', '/api/cart/quote', { body: { items: [{ serviceId: 'not-a-service', qty: 1, addons: [] }] } });
+  t('v78 quote: an unknown service id is refused (400), never priced by guess', qBad.status === 400);
+  // guest checkout, NO membership: account created at the END, a
+  // tampered client total is ignored, and P0-4 — NO order exists
+  // until the payment verifies.
+  const coGuest = await req2('POST', '/api/cart/checkout', { body: { name: 'Cart Guest', email: 'cartguest@t.local', phone: '7075550178', password: 'guestpass1', address: '9 Pine St', city: 'Fairfield', when: 'Today', notes: '', items: items78, totals: { due: 1 } } });
+  t('v78 checkout: guest step pay returns an intent + the SERVER total 250 (tampered $1 ignored) + the new account', coGuest.status === 200 && coGuest.j.step === 'pay' && !!coGuest.j.clientSecret && !!coGuest.j.checkoutId && coGuest.j.totals.due === 250 && coGuest.j.user.email === 'cartguest@t.local');
+  t('v78 P0-4: the intent exists but NO order was created before verified payment', (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 0);
+  const cgTok = (await req2('POST', '/api/login', { body: { email: 'cartguest@t.local', password: 'guestpass1' } })).j.token;
+  const confEarly = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
+  t('v78 P0-4: confirm before the payment completes is refused (400) and still creates nothing', confEarly.status === 400 && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 0);
+  await mockPiStatus(coGuest.j.paymentIntentId, 'succeeded');
+  const confOk = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
+  const orderGuest = (await adminReqs78()).find(r => r.id === (confOk.j && confOk.j.requestId));
+  t('v78 checkout: verified payment creates the order — PAID IN FULL at the server total, cart lines attached', confOk.status === 200 && !!orderGuest && orderGuest.payment && orderGuest.payment.status === 'paid' && orderGuest.menuOrder.cart === true && orderGuest.menuOrder.totals.due === 250 && orderGuest.menuOrder.items.length === 2);
+  const confAgain = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
+  t('v78 checkout: re-confirm is idempotent (same order id, no duplicate)', confAgain.status === 200 && confAgain.j.requestId === confOk.j.requestId && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 1);
+  // existing email: wrong password refused (inline login), right one continues
+  const coWrong = await req2('POST', '/api/cart/checkout', { body: { name: 'X', email: 'cartguest@t.local', password: 'wrongpass9', address: '9 Pine St', items: items78 } });
+  t('v78 checkout: an existing email with the WRONG password is refused (409 ACCOUNT_EXISTS)', coWrong.status === 409 && coWrong.j.code === 'ACCOUNT_EXISTS');
+  const coRight = await req2('POST', '/api/cart/checkout', { body: { name: 'X', email: 'cartguest@t.local', password: 'guestpass1', address: '9 Pine St', items: items78 } });
+  t('v78 checkout: the RIGHT password logs the account in inline and the checkout continues', coRight.status === 200 && coRight.j.step === 'pay' && coRight.j.user.email === 'cartguest@t.local');
+  // verified member: quote + checkout at the member total
+  const mm78 = await mkMember('cartmember@t.local', '(707) 555-0179');
+  const subM78 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mm78.token, body: {} });
+  await mockActivate(subM78.j.subscriptionId);
+  const confM78 = await req2('POST', '/api/stripe/homecare-confirm', { token: mm78.token, body: {} });
+  const qMem = await req2('POST', '/api/cart/quote', { token: mm78.token, body: { items: items78 } });
+  t('v78 quote: a verified member gets member=true and due = 200', confM78.j.active === true && qMem.status === 200 && qMem.j.member === true && qMem.j.totals.due === 200);
+  const coMem = await req2('POST', '/api/cart/checkout', { token: mm78.token, body: { address: '3 Elm St', city: 'Fairfield', items: items78 } });
+  t('v78 checkout: member pays the MEMBER total (200), no account step needed', coMem.status === 200 && coMem.j.step === 'pay' && coMem.j.totals.due === 200);
+  // optional membership branch: join first (subscription rails), the
+  // activation lands, THEN the order charges at the member total.
+  const coJoin = await req2('POST', '/api/cart/checkout', { body: { step: 'join', name: 'Join Jenna', email: 'joiner@t.local', phone: '7075550180', password: 'joinpass12', address: '4 Birch St', city: 'Vacaville', items: items78 } });
+  t('v78 join: step join returns a subscription secret + member-priced preview (200), still NO order', coJoin.status === 200 && coJoin.j.step === 'join' && !!coJoin.j.clientSecret && coJoin.j.totals.due === 200);
+  const jTok = (await req2('POST', '/api/login', { body: { email: 'joiner@t.local', password: 'joinpass12' } })).j.token;
+  await mockActivate(coJoin.j.subscriptionId);
+  const jConf = await req2('POST', '/api/stripe/homecare-confirm', { token: jTok, body: {} });
+  const coJoinPay = await req2('POST', '/api/cart/checkout', { token: jTok, body: { step: 'pay', joinedMembership: true, address: '4 Birch St', items: items78 } });
+  await mockPiStatus(coJoinPay.j.paymentIntentId, 'succeeded');
+  const jDone = await req2('POST', '/api/cart/checkout-confirm', { token: jTok, body: { checkoutId: coJoinPay.j.checkoutId, paymentIntentId: coJoinPay.j.paymentIntentId } });
+  const jOrder = (await adminReqs78()).find(r => r.id === (jDone.j && jDone.j.requestId));
+  t('v78 join: after activation the order charges the MEMBER total and records joinedMembership', jConf.j.active === true && coJoinPay.status === 200 && coJoinPay.j.totals.due === 200 && jDone.status === 200 && !!jOrder && jOrder.menuOrder.joinedMembership === true && jOrder.payment.status === 'paid');
+  // webhook parity: the tab dies after paying — the order is born from
+  // payment_intent.succeeded with kind 'cart-checkout', exactly once.
+  const coHook = await req2('POST', '/api/cart/checkout', { body: { name: 'Hook Hank', email: 'hook@t.local', phone: '7075550181', password: 'hookpass12', address: '8 Cedar St', city: 'Napa', items: items78 } });
+  await mockPiStatus(coHook.j.paymentIntentId, 'succeeded');
+  const whPayload78 = JSON.stringify({ id: 'evt_wh_cart78', type: 'payment_intent.succeeded', data: { object: { id: coHook.j.paymentIntentId, amount: 25000, amount_received: 25000, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coHook.j.checkoutId, userId: coHook.j.user.id } } } });
+  const whTs78 = Math.floor(Date.now() / 1000);
+  const whSig78 = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(whTs78 + '.' + whPayload78, 'utf8').digest('hex');
+  const whRes78 = await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + whTs78 + ',v1=' + whSig78 }, body: whPayload78 });
+  const hookOrder = (await adminReqs78()).find(r => r.menuOrder && r.menuOrder.checkoutId === coHook.j.checkoutId);
+  t('v78 webhook parity: payment_intent.succeeded creates the paid order when the in-app confirm never lands', whRes78.status === 200 && !!hookOrder && hookOrder.payment.status === 'paid');
+  // --- v78 refine (Gabriel 21:57): editing the cart AT checkout
+  // supersedes the stale intent — it can never settle — and an empty
+  // cart is refused BEFORE any account is created.
+  const edItems1 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }];
+  const edItems2 = edItems1.concat([{ serviceId: 'ceiling-fan', name: 'Ceiling Fan Install', qty: 1, addons: [] }]);
+  const coEd1 = await req2('POST', '/api/cart/checkout', { body: { name: 'Edit Ed', email: 'edited@t.local', phone: '7075550182', password: 'editpass12', address: '2 Ash St', city: 'Fairfield', items: edItems1 } });
+  t('v78 refine: the first checkout prices the cart as built (125)', coEd1.status === 200 && coEd1.j.totals.due === 125 && !!coEd1.j.paymentIntentId);
+  const edTok = (await req2('POST', '/api/login', { body: { email: 'edited@t.local', password: 'editpass12' } })).j.token;
+  const coEd2 = await req2('POST', '/api/cart/checkout', { token: edTok, body: { address: '2 Ash St', city: 'Fairfield', items: edItems2 } });
+  t('v78 refine: re-checkout after the at-checkout edit prices the EDITED cart (250) under a NEW checkout id', coEd2.status === 200 && coEd2.j.checkoutId !== coEd1.j.checkoutId && coEd2.j.totals.due === 250);
+  await mockPiStatus(coEd1.j.paymentIntentId, 'succeeded');
+  const confStale = await req2('POST', '/api/cart/checkout-confirm', { token: edTok, body: { checkoutId: coEd1.j.checkoutId, paymentIntentId: coEd1.j.paymentIntentId } });
+  t('v78 refine: the STALE checkout can never settle — confirm refused (superseded), no order at the old total', confStale.status === 400 && /replaced by a newer one/.test(confStale.j.error || '') && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coEd1.j.checkoutId).length === 0);
+  const whPayloadStale = JSON.stringify({ id: 'evt_wh_stale78', type: 'payment_intent.succeeded', data: { object: { id: coEd1.j.paymentIntentId, amount: 12500, amount_received: 12500, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coEd1.j.checkoutId, userId: coEd1.j.user.id } } } });
+  const whTsStale = Math.floor(Date.now() / 1000);
+  const whSigStale = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(whTsStale + '.' + whPayloadStale, 'utf8').digest('hex');
+  await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + whTsStale + ',v1=' + whSigStale }, body: whPayloadStale });
+  t('v78 refine: the webhook also refuses the superseded checkout (no order from the stale intent)', (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coEd1.j.checkoutId).length === 0);
+  await mockPiStatus(coEd2.j.paymentIntentId, 'succeeded');
+  const confEd = await req2('POST', '/api/cart/checkout-confirm', { token: edTok, body: { checkoutId: coEd2.j.checkoutId, paymentIntentId: coEd2.j.paymentIntentId } });
+  const edOrder = (await adminReqs78()).find(r => r.id === (confEd.j && confEd.j.requestId));
+  t('v78 refine: the EDITED checkout settles at the EDITED total — order paid, both lines, $250', confEd.status === 200 && !!edOrder && edOrder.payment.status === 'paid' && edOrder.menuOrder.totals.due === 250 && edOrder.menuOrder.items.length === 2);
+  const cbBeforeE = await customersByEmail();
+  const coEmpty = await req2('POST', '/api/cart/checkout', { body: { name: 'Empty Eve', email: 'empty@t.local', password: 'emptypass1', address: '1 Void St', items: [] } });
+  const cbAfterE = await customersByEmail();
+  t('v78 refine: an EMPTY cart is refused (400) BEFORE any account is created — no orphan account', coEmpty.status === 400 && !cbAfterE['empty@t.local'] && Object.keys(cbAfterE).length === Object.keys(cbBeforeE).length);
+  // graceful degradation: app1 runs WITHOUT a Stripe key
+  const coNoStripe = await req('POST', '/api/cart/checkout', { body: { name: 'No Stripe', email: 'nostripe@t.local', password: 'nostripe12', address: '1 Nowhere St', items: items78 } });
+  t('v78 degrade: without Stripe the checkout stops cleanly with the house message (no account, no order)', coNoStripe.status === 400 && /payments are not connected yet/.test(coNoStripe.j.error || ''));
+  // static pins
+  t('static v78: server prices carts from the catalog + exposes quote/checkout/checkout-confirm', serverSrc.includes('function serverCartTotals(') && serverSrc.includes("p === '/api/cart/quote'") && serverSrc.includes("p === '/api/cart/checkout'") && serverSrc.includes("p === '/api/cart/checkout-confirm'"));
+  t('static v78: the order settles ONLY from a verified payment (settleCartCheckout + webhook kind cart-checkout)', serverSrc.includes('function settleCartCheckout(') && serverSrc.includes("obj.metadata.kind === 'cart-checkout'"));
+  t('static v78: client keeps the cart in localStorage ghsCart + mounts a Payment Element + calls the cart endpoints', htmlSrc.includes("CART_LS_KEY = 'ghsCart'") && htmlSrc.includes("create('payment')") && htmlSrc.includes('confirmPayment') && htmlSrc.includes("api('/api/cart/checkout'"));
+  t('static v78 refine: at-checkout editing — editable lines + add-more + server re-quote (client), supersede + PI cancel (server)', htmlSrc.includes('id="ccLines"') && htmlSrc.includes('ccQty(') && htmlSrc.includes('ccRemove(') && htmlSrc.includes('ccAddMore(') && htmlSrc.includes("api('/api/cart/quote'") && serverSrc.includes('pc.superseded') && serverSrc.includes("'/cancel'"));
+  const wSlice78 = htmlSrc.slice(htmlSrc.indexOf('id="workerBox"'), htmlSrc.indexOf('id="adminBox"'));
+  const aStart78 = htmlSrc.indexOf('id="adminBox"');
+  const aSlice78 = htmlSrc.slice(aStart78, htmlSrc.indexOf('<script>', aStart78));
+  t('static v78 ROLE PIN: worker + admin markup carry NO guest-cart UI (technicians never see the cart or customer totals)', !/ghsCart|cartBtn|id="cartBox"|cartAdd\('/.test(wSlice78) && !/ghsCart|cartBtn|id="cartBox"|cartAdd\('/.test(aSlice78));
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}

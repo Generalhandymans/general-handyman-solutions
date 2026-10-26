@@ -1640,6 +1640,31 @@ function recordRequestPayment(r, info) {
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
+// ---------- v78: guest cart checkouts (pending until the money lands) ----------
+// P0-4 (audit, Gabriel): the cart checkout NEVER creates the order
+// before the charge — a PaymentIntent is created against a server-side
+// pending-checkout snapshot (items + totals priced from SERVER_MENU,
+// never from the client), and the order is born ONLY when Stripe
+// verifies the payment: here, in settleCartCheckout, called by the
+// in-app confirm endpoint AND by the payment_intent.succeeded webhook
+// (kind 'cart-checkout') — whichever lands first; the second is a
+// no-op because pc.requestId is already stamped. A declined or
+// abandoned payment leaves the snapshot orphaned and creates NOTHING.
+function cartCheckoutsOf() { if (!Array.isArray(db.cartCheckouts)) db.cartCheckouts = []; return db.cartCheckouts; }
+function settleCartCheckout(pc, pi) {
+  if (pc.superseded) return null; // v78 refine: a replaced checkout NEVER settles
+  if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
+  const itemsTxt = pc.items.map(it => it.name + ' ×' + it.qty).join(', ');
+  const r = { id: id('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  db.requests.push(r);
+  pc.requestId = r.id;
+  pc.settledAt = new Date().toISOString();
+  recordRequestPayment(r, { pi: pi.id, amountCents: Math.round(Number(pi.amount_received || pi.amount) || 0), kind: 'menu-order' });
+  notifyAdmins('request', 'New cart order ' + r.id + ': ' + r.service + ' in ' + (r.city || '') + ' from ' + r.customerName + '.');
+  emitRequestNew(r);
+  fireAutomation('new_request', requestAutomationPayload(r));
+  return r;
+}
 // ---------- Admin carts (v44, DISENO-PAGO-COMPLETO) ----------
 // Gabriel builds a cart from the menu in the admin ("meter las 2 cosas al
 // carrito y mandárselo a mi cliente") and sends ONE public link. The
@@ -2316,13 +2341,19 @@ async function handleStripeEvent(event) {
     // v44 pay-in-full PIs (menu orders + admin carts): the confirm
     // endpoints record these synchronously; this webhook is the backup
     // and reconciles idempotently if a confirm call never landed.
-    if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order')) {
+    if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order' || obj.metadata.kind === 'cart-checkout')) {
       if (obj.metadata.kind === 'menu-order' && obj.metadata.requestId) {
         const r = db.requests.find(x => x.id === obj.metadata.requestId);
         if (r) recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' });
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
         if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
+      } else if (obj.metadata.kind === 'cart-checkout' && obj.metadata.checkoutId) {
+        // v78: the guest-cart order is born here when the in-app
+        // confirm never landed (tab closed after paying) — the same
+        // settleCartCheckout the confirm endpoint uses; idempotent.
+        const pc = cartCheckoutsOf().find(x => x.id === obj.metadata.checkoutId);
+        if (pc && !pc.superseded) { settleCartCheckout(pc, obj); save(); }
       }
       return;
     }
@@ -3668,6 +3699,39 @@ function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   let asapFee = 0;
   if (asap) { asapFee = Math.round(due * 0.25); due += asapFee; }
   return { list, member, due, asapFee, extras };
+}
+// ---------- v78: multi-service cart totals (guest cart / embedded checkout) ----------
+// The Amazon-style cart holds SEVERAL catalog services at once. Every
+// line is priced by the SAME serverMenuTotals the single-service flow
+// uses (identical member math: catalog member price + discounted
+// add-ons at 0.8 + nodisc add-ons in full), multiplied by the line
+// quantity — client-sent prices are never read. An unknown service or
+// add-on id poisons the WHOLE cart (null), never a guessed price.
+function serverCartTotals(items, isMember) {
+  if (!Array.isArray(items) || !items.length || items.length > 20) return null;
+  const lines = [];
+  let list = 0, member = 0;
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') return null;
+    const serviceId = cleanText(raw.serviceId, 60);
+    const svc = SERVER_MENU[serviceId];
+    if (!svc) return null;
+    const qty = Math.round(Number(raw.qty) || 1);
+    if (!(qty >= 1 && qty <= 10)) return null;
+    const addonIds = [];
+    for (const x of (Array.isArray(raw.addons) ? raw.addons.slice(0, 8) : [])) {
+      const aid = cleanText(typeof x === 'string' ? x : (x && x.id), 40);
+      if (!aid || !svc.a || !svc.a[aid]) return null;
+      if (!addonIds.includes(aid)) addonIds.push(aid);
+    }
+    const t = serverMenuTotals(serviceId, addonIds, isMember, false);
+    if (!t) return null;
+    const line = { serviceId, qty, extras: t.extras, unitList: t.list, unitMember: t.member, lineList: t.list * qty, lineMember: t.member * qty };
+    line.lineDue = (isMember ? line.lineMember : line.lineList);
+    lines.push(line);
+    list += line.lineList; member += line.lineMember;
+  }
+  return { lines, list, member, due: isMember ? member : list };
 }
 
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
@@ -5361,6 +5425,150 @@ const server = http.createServer(async (req, res) => {
       activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
+  }
+  // ---------- v78: guest cart + EMBEDDED checkout (Payment Element) ----------
+  // Gabriel's Amazon model (2026-10-25): the customer fills a cart as a
+  // GUEST, and the account is created at the END, inside this checkout —
+  // it never blocks the purchase. The card is typed on OUR themed page
+  // (Stripe Payment Element); nobody is redirected to a hosted page.
+  // P0-4: NO order exists until Stripe verifies the payment — this
+  // handler only (a) resolves/creates the account, (b) optionally starts
+  // the HomeCare subscription (its own verified rails), and (c) creates
+  // a PaymentIntent against a server-priced pending checkout. The order
+  // is created by settleCartCheckout at confirm/webhook time.
+  if (p === '/api/cart/quote' && req.method === 'POST') {
+    const b = await readBody(req);
+    // Display pricing only. Membership = the Stripe-verified state on
+    // the account record (homeCareStatus is set exclusively by verified
+    // activation paths) — by session, or by the email the visitor typed
+    // (the same display-grade lookup the public cart page uses). The
+    // CHARGED amount is always re-derived at checkout from the account
+    // verified with its password, so a typed email can never discount
+    // a charge by itself.
+    let member = !!user && user.role === 'customer' && user.homeCareStatus === 'active';
+    if (!member && b.email) {
+      const cu = db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === cleanText(b.email, 160).toLowerCase());
+      if (cu && cu.homeCareStatus === 'active') member = true;
+    }
+    const t = serverCartTotals(b.items, member);
+    if (!t) return send(res, 400, { error: 'cart has an item we could not price' });
+    return send(res, 200, { member, lines: t.lines, totals: { list: t.list, member: t.member, due: t.due } });
+  }
+  if (p === '/api/cart/checkout' && req.method === 'POST') {
+    const b = await readBody(req);
+    // Graceful degradation (brief): without Stripe there is nothing to
+    // verify a payment against, so the checkout stops HERE — no
+    // account, no pending checkout, no order — with the house message.
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    // v78 refine: an EMPTY cart stops here too — BEFORE any account is
+    // resolved or created — so merely reaching checkout with no items
+    // can never leave an orphaned account behind.
+    if (!Array.isArray(b.items) || !b.items.length) return send(res, 400, { error: 'your cart is empty — add a service first' });
+    // --- account resolution (Gabriel: the account step lives at the END) ---
+    let u = user;
+    let setCookie = '';
+    if (!u) {
+      const email = cleanText(b.email, 160).toLowerCase();
+      if (!/.+@.+\..+/.test(email)) return send(res, 400, { error: 'valid email required' });
+      const existing = db.users.find(x => (x.email || '').toLowerCase() === email);
+      if (existing) {
+        // The email has an account: the password IS the inline login.
+        // Same throttle as /api/login, so this is never a guessing oracle.
+        const blocked = loginBlockedSecs(req, email);
+        if (blocked > 0) return send(res, 429, { error: 'too many failed attempts — try again in ' + Math.ceil(blocked / 60) + ' minute(s)' });
+        let pwOk = false;
+        try { pwOk = !!existing.pw && checkPw(String(b.password || ''), existing.pw); } catch (e) { pwOk = false; }
+        if (!pwOk) { noteLoginFailure(req, email); return send(res, 409, { error: 'That email already has an account — enter your account password to continue.', code: 'ACCOUNT_EXISTS' }); }
+        u = existing;
+      } else {
+        const name = cleanText(b.name, 80);
+        if (!name) return send(res, 400, { error: 'name required' });
+        if (!b.password || String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
+        const hf = homeFieldsFrom(Object.assign({}, b, { homeNotes: b.notes || b.homeNotes || '' }));
+        u = { id: id('USR'), name, email, phone: cleanText(b.phone, 40), serviceAddress: cleanText(b.address, 300), zipCode: hf.zipCode, homeType: hf.homeType, yardSize: hf.yardSize, homeNotes: hf.homeNotes, startPreference: cleanStartPreference(b.startPreference), role: 'customer', status: 'active', skills: [], vehicle: '', profile: {}, tradeSkills: {}, availability: null, pw: hashPw(String(b.password)), createdAt: new Date().toISOString() };
+        db.users.push(u);
+        save();
+      }
+      setCookie = sessionCookie(newSession(u), req);
+    }
+    if (!['customer', 'admin'].includes(u.role)) return send(res, 400, { error: 'this account cannot check out as a customer' });
+    const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
+    // The cart is priced BEFORE anything is created — a line the
+    // catalog cannot price stops the whole checkout (never a guess).
+    if (!serverCartTotals(b.items, u.homeCareStatus === 'active')) return send(res, 400, { error: 'cart has an item we could not price' });
+    // --- optional membership (v77 pattern): HomeCare only, default none ---
+    if (b.step === 'join') {
+      if (u.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
+      try {
+        const sub = await createInlineSubscription(u, MEMBERSHIP_PLANS.homecare);
+        const mt = serverCartTotals(b.items, true);
+        return send(res, 200, { step: 'join', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member } }, cookieHdr);
+      } catch (e) { console.error('cart checkout join failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+    }
+    // --- step 'pay': pending checkout + PaymentIntent (NO order yet) ---
+    const isMem = u.homeCareStatus === 'active';
+    const t = serverCartTotals(b.items, isMem);
+    if (!t) return send(res, 400, { error: 'cart has an item we could not price' });
+    const names = {};
+    for (const raw of (Array.isArray(b.items) ? b.items : [])) { const sid = cleanText(raw && raw.serviceId, 60); if (sid) names[sid] = cleanText(raw && raw.name, 80); }
+    const pc = {
+      id: id('CCK'), userId: u.id, pi: '', requestId: '',
+      customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
+      address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
+      isMember: isMem, joinedMembership: !!b.joinedMembership && isMem,
+      items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
+      totals: { list: t.list, member: t.member, due: t.due },
+      createdAt: new Date().toISOString()
+    };
+    // v78 refine (Gabriel 21:57 — the cart is editable AT the checkout):
+    // this new pending checkout SUPERSEDES the user's earlier unsettled
+    // ones, and their PaymentIntents are canceled at Stripe so the
+    // stale intent can never be charged. A PI that already succeeded
+    // cannot be canceled — that snapshot stays settleable ON PURPOSE:
+    // the customer did pay it, so the verified path must still create
+    // its order. Settled snapshots (requestId set) are never touched.
+    for (const old of cartCheckoutsOf()) {
+      if (old.userId !== u.id || old.requestId || old.superseded) continue;
+      if (!old.pi) { old.superseded = true; continue; }
+      try { const cxl = await stripeApi('/payment_intents/' + old.pi + '/cancel', {}); if (cxl && cxl.status === 'canceled') old.superseded = true; } catch (e) { /* un-cancelable (already succeeded): stays settleable */ }
+    }
+    cartCheckoutsOf().push(pc);
+    save();
+    try {
+      const params = {
+        amount: String(Math.round(t.due * 100)),
+        currency: 'usd',
+        description: 'Cart order — General Handyman Solutions',
+        'metadata[checkoutId]': pc.id, 'metadata[kind]': 'cart-checkout', 'metadata[userId]': u.id
+      };
+      if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
+      const pi = await stripeApi('/payment_intents', params);
+      pc.pi = pi.id;
+      save();
+      return send(res, 200, { step: 'pay', checkoutId: pc.id, clientSecret: pi.client_secret, paymentIntentId: pi.id, totals: pc.totals, user: pubUser(u) }, cookieHdr);
+    } catch (e) { console.error('cart checkout intent failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/cart/checkout-confirm' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const pc = cartCheckoutsOf().find(x => x.id === cleanText(b.checkoutId, 40));
+    if (!pc) return send(res, 404, { error: 'checkout not found' });
+    if (!(user.role === 'admin' || pc.userId === user.id)) return send(res, 403, { error: 'not allowed' });
+    if (pc.requestId) return send(res, 200, { ok: true, requestId: pc.requestId, already: true });
+    if (pc.superseded) return send(res, 400, { error: 'this checkout was replaced by a newer one — use the latest payment form' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    const piId = cleanText(b.paymentIntentId, 160) || pc.pi;
+    if (!piId || piId !== pc.pi) return send(res, 400, { error: 'payment does not match this checkout' });
+    try {
+      const pi = await stripeGet('/payment_intents/' + piId);
+      if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
+      if (!pi.metadata || pi.metadata.checkoutId !== pc.id || pi.metadata.kind !== 'cart-checkout') return send(res, 400, { error: 'payment does not match this checkout' });
+      const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
+      if (cents !== Math.round(pc.totals.due * 100)) return send(res, 400, { error: 'payment amount does not match the order total' });
+      const r = settleCartCheckout(pc, pi);
+      save();
+      return send(res, 200, { ok: true, requestId: r.id });
+    } catch (e) { console.error('cart checkout confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
   }
   // ---------- Menu-order payment (inline, v44 — pay in full) ----------
   // The checkout's payment step: the customer enters their card ONCE in
