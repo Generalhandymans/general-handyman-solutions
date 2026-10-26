@@ -1830,6 +1830,64 @@ function requestIsPaid(r) {
   if (r.payment && r.payment.status === 'paid') return true;
   return (r.holds || []).some(h => h && h.status === 'captured');
 }
+// ---------- v80.5: THE BALANCE SEAL (AUDITORIA-SALDOS GAP-1 + GAP-2) ----------
+// Gabriel's law: after the deposit, the FULL remaining balance is
+// charged exactly once, through exactly one door, and never on a dead
+// order. The seal is ONE fact written on TWO records in the SAME
+// settlement: the request flips to payment.status 'paid' AND the linked
+// admin cart gets payment.balanceAt (+ balanceVia) stamped — whichever
+// rail (app /api/orders/pay, or Gabriel's cart link) lands the money.
+// Every rail CHECKS both halves before creating any Stripe charge, and
+// the refund flow disarms the cart in the same operation it cancels
+// the order. A payment that still lands against a sealed or dead
+// balance (a session/PI created before the seal) is NEVER a silent
+// no-op and NEVER resurrects the order: it raises an admin alert
+// (notification + audit entry 'balance.duplicate') — a refund is owed.
+const ORDER_DEAD_MSG = {
+  en: 'This order was cancelled — nothing is owed. If that is a mistake, text or call (707) 862-3773.',
+  es: 'Esta orden fue cancelada — no se debe nada. Si es un error, manda un texto o llama al (707) 862-3773.'
+};
+const ORDER_DEAD_MSG_BI = 'This order was cancelled — nothing is owed · Esta orden fue cancelada — no se debe nada';
+function orderBalanceDead(r) {
+  if (!r) return false;
+  if (r.status === 'Cancelled') return true;
+  const ps = r.payment && r.payment.status;
+  return ps === 'refunded' || ps === 'partially_refunded';
+}
+function linkedCartForRequest(r) {
+  if (!r) return null;
+  const byReq = cartsOf().find(x => x.requestId && x.requestId === r.id);
+  if (byReq) return byReq;
+  if (r.menuOrder && r.menuOrder.cartId) return cartsOf().find(x => x.id === r.menuOrder.cartId) || null;
+  return null;
+}
+function alertDuplicateBalance(where, r, c, pi, cents) {
+  const amt = Math.round(Number(cents) || 0);
+  const msg = 'DUPLICATE BALANCE PAYMENT — ' + usd(amt / 100) + ' landed via ' + where + ' on ' + (r ? 'order ' + r.id : 'an order') + (c ? ' / cart ' + c.id : '') + ' (PI ' + (pi || 'n/a') + '), but that balance was already settled or the order is cancelled/refunded — REFUND NEEDED; the books were NOT changed.';
+  console.error('v80.5 ' + msg);
+  notifyAdmins('payment', '⚠️ ' + msg);
+  audit(null, 'balance.duplicate', (r && r.id) || (c && c.id) || '', msg);
+}
+// Stamp the cart half of the seal. via: 'link' | 'app' | 'adjust'.
+// Returns true only when it actually changed the cart.
+function sealCartBalance(c, via, pi) {
+  if (!c || !c.payment || c.payment.balanceAt) return false;
+  c.payment.balanceAt = new Date().toISOString();
+  c.payment.balanceVia = via || '';
+  if (pi && !c.payment.balancePi) c.payment.balancePi = pi;
+  return true;
+}
+// Refund/cancel: close the cart's balance door forever. balanceAt is
+// stamped (every existing door check keys off it) and balanceVoid
+// records WHY, so the page renders the cancelled state — never a
+// "paid in full" the customer did not earn.
+function disarmCartBalance(c, reason) {
+  if (!c || !c.payment || !(Number(c.payment.balanceCents) > 0) || c.payment.balanceAt) return false;
+  c.payment.balanceAt = new Date().toISOString();
+  c.payment.balanceVia = 'void';
+  c.payment.balanceVoid = reason || 'cancelled';
+  return true;
+}
 // Single recorder for a landed full payment on a request. Idempotent — a
 // payment already recorded (confirm endpoint + webhook can both fire) is
 // never double-counted. Notifies the customer + the Team and fires the
@@ -1837,7 +1895,17 @@ function requestIsPaid(r) {
 // any already-finished job on this request its payout chance.
 function recordRequestPayment(r, info) {
   info = info || {};
-  if (r.payment && r.payment.status === 'paid') return false;
+  if (r.payment && r.payment.status === 'paid') {
+    // v80.5: the confirm/webhook TWIN of the same payment (same PI) is
+    // a legitimate no-op; a DIFFERENT PI carrying money onto a settled
+    // order is a duplicate charge — alert, never silence.
+    if (info.pi && info.pi !== r.payment.pi && info.pi !== (r.payment.balancePi || '') && Number(info.amountCents) > 0) alertDuplicateBalance('record', r, linkedCartForRequest(r), info.pi, info.amountCents);
+    return false;
+  }
+  // v80.5 GAP-1: a dead order (cancelled / refunded) is NEVER
+  // resurrected into "paid in full" — money landing against it is a
+  // duplicate that needs a refund, not a state change.
+  if (orderBalanceDead(r)) { alertDuplicateBalance('record', r, linkedCartForRequest(r), info.pi, info.amountCents); return false; }
   r.payment = { status: 'paid', kind: info.kind || 'menu-order', pi: info.pi || '', amountCents: Math.round(Number(info.amountCents) || 0), at: new Date().toISOString() };
   r.messages = r.messages || [];
   r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: ' + usd(r.payment.amountCents / 100) + ' — your order ' + r.id + ' is paid in full. Thank you! The Team confirms your time right here.', at: new Date().toISOString() });
@@ -1995,7 +2063,7 @@ function workerBlockedPage(res, what) {
 }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -2331,6 +2399,11 @@ function settleRequestBalance(r, piId, cents) {
   if (r.customerId) notify(r.customerId, 'payment', 'Balance received (' + usd(bal / 100) + ') on job ' + r.id + ' — paid in full.', '#req=' + r.id);
   notifyAdmins('payment', 'PAID IN FULL (balance landed): ' + usd(tot / 100) + ' total on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: bal / 100 }));
+  // v80.5 GAP-2: seal the CART half in the same state write — a balance
+  // paid in the app closes Gabriel's cart link too, so the same balance
+  // can never be charged a second time through the other door.
+  const lc805 = linkedCartForRequest(r);
+  if (lc805) sealCartBalance(lc805, 'app', piId);
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
@@ -2367,10 +2440,20 @@ function convertCartToRequest(c, payInfo) {
 function completeCartBalance(c, payInfo) {
   payInfo = payInfo || {};
   if (!c || c.status !== 'paid' || !c.payment || !(Number(c.payment.balanceCents) > 0) || c.payment.balanceAt) return false;
+  // v80.5: the DEPOSIT's own PI is never a balance payment — when the
+  // deposit equals the balance (a $100 total: $50/$50) its late
+  // webhook must not "settle" a balance nobody paid.
+  if (payInfo.pi && c.payment.depositPi && payInfo.pi === c.payment.depositPi) return false;
   const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
   if (!r) return false;
+  // v80.5 GAP-1: the money landed but the order is dead (cancelled /
+  // refunded — the session was opened before the refund disarmed the
+  // cart). Do NOT record it, do NOT resurrect the order: void-seal the
+  // cart and raise the duplicate alert — a refund is owed.
+  if (orderBalanceDead(r)) { alertDuplicateBalance('cart-link', r, c, payInfo.pi, c.payment.balanceCents); sealCartBalance(c, 'void', payInfo.pi); if (!c.payment.balanceVoid) c.payment.balanceVoid = 'dead-order'; return false; }
   c.payment.balancePi = payInfo.pi || '';
   c.payment.balanceAt = new Date().toISOString();
+  c.payment.balanceVia = 'link'; // v80.5: which door sealed it
   recordRequestPayment(r, { pi: payInfo.pi || '', amountCents: c.payment.amountCents, kind: 'cart-balance' });
   notifyAdmins('payment', 'BALANCE PAID: cart ' + c.id + ' order ' + r.id + ' is now paid in full (' + usd((Number(c.payment.amountCents) || 0) / 100) + ').');
   return true;
@@ -2397,6 +2480,18 @@ function settleCartPayment(c, payInfo) {
     c.memberApplied = !!c.pendingDeposit.memberApplied;
     const conv = convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: cents, totalCents: c.pendingDeposit.totalCents, depositCents: c.pendingDeposit.depositCents, balanceCents: c.pendingDeposit.balanceCents });
     if (conv) { delete c.pendingDeposit; return true; }
+    return false;
+  }
+  if (c.status === 'paid' && c.payment && c.payment.balanceAt && cents > 0 && cents === Math.round(Number(c.payment.balanceCents) || 0)) {
+    // v80.5 GAP-2: a balance-sized success arriving AFTER the seal —
+    // the same PI returning (page return + webhook twins) is a no-op,
+    // but a DIFFERENT PI means Stripe charged the balance twice (a
+    // session opened before the other rail sealed it). Alert the
+    // admins — never the old silent no-op with its "paid in full" lie.
+    // (The deposit's own PI is excluded: when deposit == balance —
+    // a $100 total — its late webhook is not a balance event at all.)
+    if (payInfo.pi && c.payment.depositPi && payInfo.pi === c.payment.depositPi) return false;
+    if (!payInfo.pi || payInfo.pi !== c.payment.balancePi) alertDuplicateBalance('cart-link', c.requestId ? db.requests.find(x => x.id === c.requestId) : null, c, payInfo.pi, cents);
     return false;
   }
   if (c.status === 'paid' && c.payment && !c.payment.balanceAt && cents === Math.round(Number(c.payment.balanceCents) || 0)) {
@@ -3543,6 +3638,7 @@ function cartPageHtml(c, user, langOverride, notice) {
   const CI = {
     en: {
       titleCart: 'Your cart', cancelledH: 'This cart was cancelled', cancelledBody: 'The Team cancelled this cart. If that is a mistake, text or call (707) 862-3773 and we will send you a fresh link.',
+      orderCancelledH: 'This order was cancelled', orderCancelledBody: 'This order was cancelled and its payment was refunded — nothing is owed, and this link can no longer take a payment. If that is a mistake, text or call (707) 862-3773.',
       paidH: '✅ Paid in full — thank you!', paidBodyA: 'is paid', paidOrder: '— your order number is', paidBodyB: 'The Team confirms your day and time shortly; you can also follow your order in the app.',
       totalPaid: 'Total paid:', thService: 'Service', thQty: 'Qty', thEach: 'Each', thLine: 'Line', questions: 'Questions? Text or call (707) 862-3773.',
       intro: 'The Team put this together for you. Review it, add your info, and pay — all on this one page.', totalLabel: 'Total:',
@@ -3590,6 +3686,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     },
     es: {
       titleCart: 'Tu carrito', cancelledH: 'Este carrito fue cancelado', cancelledBody: 'El Equipo canceló este carrito. Si es un error, manda un texto o llama al (707) 862-3773 y te enviamos un enlace nuevo.',
+      orderCancelledH: 'Esta orden fue cancelada', orderCancelledBody: 'Esta orden fue cancelada y su pago fue reembolsado — no se debe nada, y este enlace ya no puede aceptar pagos. Si es un error, manda un texto o llama al (707) 862-3773.',
       paidH: '✅ Pagado completo — ¡gracias!', paidBodyA: 'está pagado', paidOrder: '— tu número de orden es', paidBodyB: 'El Equipo confirma tu día y hora muy pronto; también puedes seguir tu orden en la app.',
       totalPaid: 'Total pagado:', thService: 'Servicio', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe', questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.',
       intro: 'El Equipo preparó esto para ti. Revísalo, agrega tus datos y paga — todo en esta página.', totalLabel: 'Total:',
@@ -3708,6 +3805,16 @@ function cartPageHtml(c, user, langOverride, notice) {
     return head + '<h2 style="margin-top:0" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#666" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
   }
   if (c.status === 'paid') {
+    // v80.5 GAP-1: a cart whose ORDER was cancelled + refunded renders
+    // the cancelled state — never the balance button and never a
+    // "paid in full" the customer did not earn. Two signals, either
+    // suffices: the void stamp the refund flow leaves on the cart, or
+    // the linked request itself sitting Cancelled (which also covers
+    // orders cancelled before this patch existed).
+    const reqLinked805 = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+    if ((c.payment && c.payment.balanceVoid) || (reqLinked805 && reqLinked805.status === 'Cancelled')) {
+      return head + '<h2 style="margin-top:0" data-i18n="orderCancelledH">' + S.orderCancelledH + '</h2><p style="color:#666" data-i18n="orderCancelledBody">' + S.orderCancelledBody + '</p>' + foot;
+    }
     // v69: materials adjustments (admin, append-only) render as their
     // own signed lines under the items — the customer sees exactly
     // what changed and why, in his page language.
@@ -6196,6 +6303,9 @@ const server = http.createServer(async (req, res) => {
     if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
     if (r.estimateType !== 'menu') return send(res, 400, { error: 'not a menu order' });
     if (r.payment && r.payment.status === 'paid') return send(res, 400, { error: 'this order is already paid in full' });
+    // v80.5 GAP-1: a cancelled / refunded order can never be charged
+    // again — not its balance, not its total. Clean bilingual refusal.
+    if (orderBalanceDead(r)) return send(res, 400, { error: ORDER_DEAD_MSG_BI });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     const dueTotal = r.menuOrder && r.menuOrder.totals ? Number(r.menuOrder.totals.due) : 0;
     // v79 PIEZA 8: a DEPOSIT-state order collects ONLY its balance here.
@@ -6221,13 +6331,27 @@ const server = http.createServer(async (req, res) => {
     if (!(user.role === 'admin' || (user.role === 'customer' && r.customerId === user.id))) return send(res, 403, { error: 'not allowed' });
     const piId = cleanText(b.paymentIntentId, 160);
     if (!piId) return send(res, 400, { error: 'paymentIntentId required' });
-    if (r.payment && r.payment.status === 'paid') return send(res, 200, { ok: true, already: r.payment.pi === piId });
+    if (r.payment && r.payment.status === 'paid') {
+      // v80.5: a FOREIGN succeeded PI confirming against a settled
+      // order is a duplicate charge (a second tab's intent that also
+      // captured) — verify it with Stripe and raise the admin alert
+      // instead of the old silent ok.
+      if (piId !== r.payment.pi && piId !== (r.payment.balancePi || '')) {
+        try { const piD = await stripeGet('/payment_intents/' + piId); if (piD && piD.status === 'succeeded' && piD.metadata && piD.metadata.requestId === r.id && piD.metadata.kind === 'menu-order') alertDuplicateBalance('app-confirm', r, linkedCartForRequest(r), piId, Number(piD.amount_received || piD.amount) || 0); } catch (e) { /* the alert is best-effort; the refusal below is the guarantee */ }
+      }
+      return send(res, 200, { ok: true, already: r.payment.pi === piId });
+    }
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
     try {
       const pi = await stripeGet('/payment_intents/' + piId);
       if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
       if (!pi.metadata || pi.metadata.requestId !== r.id || pi.metadata.kind !== 'menu-order') return send(res, 400, { error: 'payment does not match this order' });
       const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
+      // v80.5 GAP-1: real money just landed on a CANCELLED / refunded
+      // order (an intent opened before the cancellation). Refuse the
+      // settle and alert the admins — a refund is owed; the books
+      // stay exactly as the refund left them.
+      if (orderBalanceDead(r)) { alertDuplicateBalance('app-confirm', r, linkedCartForRequest(r), piId, cents); return send(res, 400, { error: ORDER_DEAD_MSG_BI }); }
       if (r.payment && r.payment.status === 'deposit') {
         if (!settleRequestBalance(r, piId, cents)) return send(res, 400, { error: 'payment amount does not match the balance due' });
         save();
@@ -6299,6 +6423,13 @@ const server = http.createServer(async (req, res) => {
     }
     r.refund = { refundIds, refundedCents, keptFeeCents: keptCents, dispatched, at: new Date().toISOString(), by: user.id };
     r.status = 'Cancelled';
+    // v80.5 GAP-1: DISARM the linked cart in the same operation — its
+    // public link must stop offering (and charging) the balance the
+    // moment the order dies. Live Stripe sessions for the old amount
+    // are expired too; a session that still completes lands in the
+    // duplicate-alert path, never in the books.
+    const linkedCart805 = cart62 || linkedCartForRequest(r);
+    if (linkedCart805) { await expireCartSessions(linkedCart805); disarmCartBalance(linkedCart805, 'order-refunded'); }
     jobs.forEach(j => { if (j.status !== 'Done — photos sent' && j.status !== 'Cancelled') { j.status = 'Cancelled'; delete j.liveLoc; } });
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'This order was cancelled by the Team. Refund: ' + usd(refundedCents / 100) + ' back to your card.' + (keptCents > 0 ? ' A ' + usd(keptCents / 100) + ' booking fee was kept because a technician had already been dispatched.' : ''), at: new Date().toISOString() });
@@ -6427,6 +6558,10 @@ const server = http.createServer(async (req, res) => {
     if (!c) return send(res, 404, { error: 'cart not found' });
     if (c.status !== 'paid' || !c.payment || !(Number(c.payment.depositCents) > 0)) return send(res, 400, { error: 'only a booked order with a deposit can be adjusted' });
     if (c.payment.balanceAt) return send(res, 400, { error: 'the balance is already paid — this order is closed' });
+    // v80.5: a cancelled/refunded order's balance is not adjustable —
+    // there is nothing left to collect (its cart door is disarmed).
+    const rDead805 = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+    if (orderBalanceDead(rDead805)) return send(res, 400, { error: 'this order was cancelled — its balance can no longer be adjusted' });
     const b = await readBody(req);
     const deltaCents = Math.round(Number(b.delta) * 100);
     if (!Number.isFinite(deltaCents) || deltaCents === 0) return send(res, 400, { error: 'give the adjustment in dollars (e.g. 35 or -20) — it cannot be 0' });
@@ -6470,60 +6605,24 @@ const server = http.createServer(async (req, res) => {
   }
   const cartPayMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay$/);
   if (cartPayMatch && req.method === 'POST') {
-    const c = cartsOf().find(x => x.id === cartPayMatch[1]);
-    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
-    if (!c) return send(res, 404, { error: 'cart not found' });
-    if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid' });
-    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
-    const b = await readBody(req);
-    const cust = { name: cleanText(b.name, 80), phone: cleanText(b.phone, 40), email: cleanText(b.email, 160).toLowerCase(), address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200) };
-    if (!cust.name) return send(res, 400, { error: 'your name is required' });
-    if (!/.+@.+\..+/.test(cust.email)) return send(res, 400, { error: 'a valid email is required' });
-    if (!cust.address) return send(res, 400, { error: 'the service address is required' });
-    if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to book' });
-    const memberUser = cartMemberUserFor(user, cust.email);
-    c.customer = cust;
-    c.memberApplied = !!memberUser;
-    const amount = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
-    if (!(amount > 0)) return send(res, 400, { error: 'nothing to pay on this cart' });
-    try {
-      const params = { amount: String(amount), currency: 'usd', description: 'Cart ' + c.id + ' — paid in full — General Handyman Solutions', 'metadata[cartId]': c.id, 'metadata[kind]': 'cart-order' };
-      if (user && user.stripeCustomerId) params.customer = user.stripeCustomerId;
-      const pi = await stripeApi('/payment_intents', params);
-      c.payPi = pi.id;
-      save();
-      return send(res, 200, { clientSecret: pi.client_secret, paymentIntentId: pi.id, amount: amount / 100, memberApplied: c.memberApplied });
-    } catch (e) { console.error('cart payment failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+    // v80.5 GAP-3: RETIRED (410 Gone). This endpoint charged the FULL
+    // cart total up front through an inline Elements PI — a live
+    // bypass of Gabriel's deposit law. Caller-free verified by grep
+    // across the SPA, the public pages and the repo on 2026-10-26
+    // (the cart page rides /checkout since v54; nothing else ever
+    // called it). /api/orders/pay — the LIVE balance rail — is a
+    // different route and is untouched.
+    return send(res, 410, { error: 'this payment method was retired — pay from the cart page · este método de pago fue retirado — paga desde la página del carrito' });
   }
   const cartConfirmMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay-confirm$/);
   if (cartConfirmMatch && req.method === 'POST') {
-    const c = cartsOf().find(x => x.id === cartConfirmMatch[1]);
-    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
-    if (!c) return send(res, 404, { error: 'cart not found' });
-    if (c.status === 'paid') return send(res, 200, { ok: true, already: true, requestId: c.requestId });
-    if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
-    const b = await readBody(req);
-    const piId = cleanText(b.paymentIntentId, 160);
-    if (!piId) return send(res, 400, { error: 'paymentIntentId required' });
-    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
-    try {
-      const pi = await stripeGet('/payment_intents/' + piId);
-      if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
-      if (!pi.metadata || pi.metadata.cartId !== c.id || pi.metadata.kind !== 'cart-order') return send(res, 400, { error: 'payment does not match this cart' });
-      const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
-      const listCents = Math.round(c.listTotal * 100), memberCents = Math.round(c.memberTotal * 100);
-      if (cents === memberCents && cents !== listCents) c.memberApplied = true;
-      else if (cents === listCents && cents !== memberCents) c.memberApplied = false;
-      else if (cents !== listCents && cents !== memberCents) return send(res, 400, { error: 'payment amount does not match the cart total' });
-      const r = convertCartToRequest(c, { pi: piId, amountCents: cents });
-      if (!r) return send(res, 400, { error: 'this cart can no longer be paid' });
-      save();
-      return send(res, 200, { ok: true, requestId: r.id });
-    } catch (e) { console.error('cart pay-confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
+    // v80.5 GAP-3: RETIRED (410 Gone) — the confirm twin of the legacy
+    // full-charge endpoint above. See its note.
+    return send(res, 410, { error: 'this payment method was retired — pay from the cart page · este método de pago fue retirado — paga desde la página del carrito' });
   }
   // ---------- v54: cart payment via Stripe-hosted Checkout ----------
-  // Replaces the page's old inline Elements flow (/pay + /pay-confirm
-  // above stay for API compatibility — the page no longer calls them).
+  // Replaces the page's old inline Elements flow (the /pay +
+  // /pay-confirm endpoints above were retired in v80.5 — GAP-3).
   // The browser posts the same form it always did; the server validates,
   // stores the customer block on the cart (conversion reads it later),
   // decides member-vs-guest from Stripe truth, computes the amount
@@ -6631,10 +6730,20 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const cartLang80 = (b && (b.lang === 'es' || b.lang === 'en')) ? b.lang : (c.lang === 'es' ? 'es' : 'en'); // v80: page language wins, cart's stored language is the fallback
     if (c.status === 'paid') {
+      // v80.5 GAP-1: a VOIDED cart (its order was cancelled + refunded)
+      // refuses every paid-branch attempt with the cancelled state —
+      // never the misleading "already paid". (Pre-patch residue whose
+      // cart was never disarmed is caught by the linked request too.)
+      const linkedReq805 = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+      if ((c.payment && c.payment.balanceVoid) || orderBalanceDead(linkedReq805)) return send(res, 400, { error: ORDER_DEAD_MSG[cartLang80] || ORDER_DEAD_MSG.en });
       // v62: the SAME link collects the balance (60%) when the work is
       // done. Only the exact outstanding balance can be opened, and
       // only when the page's balance button asks for it.
       if (b && b.balance === true && c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt) {
+        // v80.5 GAP-2: an order already PAID IN FULL through the app
+        // rail self-heals the cart's seal here and refuses as already
+        // paid — the two doors can never both create a charge.
+        if (linkedReq805 && linkedReq805.payment && linkedReq805.payment.status === 'paid') { sealCartBalance(c, 'app', linkedReq805.payment.balancePi || ''); save(); return send(res, 400, { error: 'this cart is already paid' }); }
         if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to pay another way' });
         try {
           const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: (c.customer && c.customer.email) || '' }, {

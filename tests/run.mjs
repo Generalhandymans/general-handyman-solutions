@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-4', swSrc.includes("const CACHE = 'ghs-app-v80-4'"));
+t('static: SW cache is ghs-app-v80-5', swSrc.includes("const CACHE = 'ghs-app-v80-5'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -2823,6 +2823,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
 }
 
 
+
 try { child2.kill('SIGTERM'); } catch (e) {}
 await sleep(400);
 const seedDb = JSON.parse(fs.readFileSync(DATA_FILE2, 'utf8'));
@@ -4120,7 +4121,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.4: ghs-app-v80-4)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-4'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.5: ghs-app-v80-5)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-5'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4462,6 +4463,118 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   sandbox.fetch = fetchOrig804;
   run('cartResetCheckout();');
   run("me = null; localStorage.removeItem('ghsCart'); cartJoinedOnce = false;");
+}
+
+// ---------------- v80.5 BALANCE SEAL: one balance, one door, never on a dead order (AUDITORIA-SALDOS GAP-1/2/3, Gabriel 2026-10-26) ----------------
+t('static v80.5 server: the seal helpers + dead-order predicate + duplicate alert exist; the legacy cart pay handlers answer 410', serverSrc.includes('function orderBalanceDead(') && serverSrc.includes('function sealCartBalance(') && serverSrc.includes('function disarmCartBalance(') && serverSrc.includes('function alertDuplicateBalance(') && serverSrc.includes("'balance.duplicate'") && serverSrc.includes('send(res, 410'));
+{
+  const A805 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const reqs805 = async () => (await req2('GET', '/api/requests', { token: A805 })).j.requests || [];
+  const ordOf805 = async (cartId) => (await reqs805()).find(x => x.menuOrder && x.menuOrder.cartId === cartId);
+  const sessCount805 = (cartId) => Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === cartId).length;
+  const bookCart805 = async (email, phone, name) => {
+    const cust = await mkMember(email, phone);
+    const cart = await req2('POST', '/api/admin/carts', { token: A805, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }], customerName: name } });
+    const cid = cart.j.cart.id;
+    const det = { name, phone: phone.replace(/\D/g, ''), email, address: '5 Seal St', city: 'Fairfield', when: 'Today' };
+    const co = await req2('POST', '/api/carts/' + cid + '/checkout', { token: cust.token, body: det });
+    const sess = sessionForCart(cid, 'payment');
+    await mockSessionPaid(sess.id);
+    await fetch(BASE2 + '/cart/' + cid + '?paid=1&session_id=' + sess.id, { headers: { Authorization: 'Bearer ' + cust.token } });
+    const ord = await ordOf805(cid);
+    return { cust, cid, ord, sess };
+  };
+
+  // --- A (GAP-1): refund a DEPOSIT order -> BOTH rails refuse, no new
+  // Stripe charge, the page renders the cancelled state, the order is
+  // never resurrected. ---
+  const aA = await bookCart805('seal-a@t.local', '(707) 555-0211', 'Seal Ann');
+  t('v80.5 A setup: the cart books a DEPOSIT order ($50 of $250, balance $200)', !!aA.ord && aA.ord.payment.status === 'deposit' && aA.ord.payment.balanceCents === 20000);
+  const rfA = await req2('POST', '/api/requests/' + aA.ord.id + '/refund', { token: A805, body: {} });
+  t('v80.5 A: the deposit refunds in full (not dispatched)', rfA.status === 200 && rfA.j.refunded === 50);
+  const pgA = await (await fetch(BASE2 + '/cart/' + aA.cid)).text();
+  t('v80.5 A (GAP-1c): the refunded order\'s cart page renders the CANCELLED state — no balance button, no paid-in-full', pgA.includes('data-i18n="orderCancelledH"') && pgA.includes('This order was cancelled') && !pgA.includes('id="balBtn"') && !pgA.includes('data-i18n="paidH"'));
+  const sessBeforeA = sessCount805(aA.cid), pisBeforeA = Object.keys(stripeState.pis).length;
+  const balA = await req2('POST', '/api/carts/' + aA.cid + '/checkout', { body: { balance: true } });
+  t('v80.5 A (GAP-1): the cart LINK refuses the balance on the refunded order (400, cancelled message) and creates NO Stripe session', balA.status === 400 && /cancelled/i.test(balA.j.error || '') && sessCount805(aA.cid) === sessBeforeA);
+  const payA = await req2('POST', '/api/orders/pay', { token: aA.cust.token, body: { requestId: aA.ord.id } });
+  t('v80.5 A (GAP-1): the APP rail refuses too (400, cancelled message) and creates NO PaymentIntent', payA.status === 400 && /cancelled/i.test(payA.j.error || '') && Object.keys(stripeState.pis).length === pisBeforeA);
+  const ordA2 = (await reqs805()).find(x => x.id === aA.ord.id);
+  t('v80.5 A: the dead order was NOT resurrected — still Cancelled + refunded, refund record intact', !!ordA2 && ordA2.status === 'Cancelled' && ordA2.payment.status === 'refunded' && !!ordA2.refund && ordA2.refund.refundedCents === 5000);
+  const cartsAdmA = await req2('GET', '/api/admin/carts', { token: A805 });
+  const cartAdmA = (cartsAdmA.j.carts || []).find(x => x.id === aA.cid);
+  t('v80.5 A: the refund DISARMED the cart in the same operation (balanceVoid stamped, door closed)', !!cartAdmA && !!cartAdmA.payState && cartAdmA.payState.balanceVoid === true);
+  const adjA = await req2('POST', '/api/admin/carts/' + aA.cid + '/adjust-balance', { token: A805, body: { delta: 10, note: 'too late' } });
+  t('v80.5 A: a disarmed cart refuses balance adjustments (400)', adjA.status === 400);
+
+  // --- B (GAP-2): balance paid IN THE APP seals the cart link. ---
+  const aB = await bookCart805('seal-b@t.local', '(707) 555-0212', 'Seal Bob');
+  const payB = await req2('POST', '/api/orders/pay', { token: aB.cust.token, body: { requestId: aB.ord.id } });
+  t('v80.5 B setup: the app rail opens the balance PI for exactly $200', payB.status === 200 && payB.j.amount === 200);
+  await mockPiStatus(payB.j.paymentIntentId, 'succeeded');
+  const confB = await req2('POST', '/api/orders/pay-confirm', { token: aB.cust.token, body: { requestId: aB.ord.id, paymentIntentId: payB.j.paymentIntentId } });
+  const ordB = (await reqs805()).find(x => x.id === aB.ord.id);
+  t('v80.5 B: the in-app balance settles the order PAID IN FULL with both legs kept', confB.status === 200 && confB.j.balance === true && !!ordB && ordB.payment.status === 'paid' && ordB.payment.depositCents === 5000 && ordB.payment.balancePi === payB.j.paymentIntentId);
+  const sessBeforeB = sessCount805(aB.cid);
+  const balB = await req2('POST', '/api/carts/' + aB.cid + '/checkout', { body: { balance: true } });
+  const pgB = await (await fetch(BASE2 + '/cart/' + aB.cid)).text();
+  t('v80.5 B (GAP-2): the cart LINK is sealed by the app payment — balance refused (400), NO new session, page shows paid-in-full with no balance button', balB.status === 400 && sessCount805(aB.cid) === sessBeforeB && pgB.includes('data-i18n="paidH"') && !pgB.includes('id="balBtn"'));
+  const cartsAdmB = await req2('GET', '/api/admin/carts', { token: A805 });
+  const cartAdmB = (cartsAdmB.j.carts || []).find(x => x.id === aB.cid);
+  t('v80.5 B: the cart record carries the seal (balancePaid, balanceVia app)', !!cartAdmB && cartAdmB.payState.balancePaid === true && cartAdmB.payState.balanceVia === 'app');
+
+  // --- C: the reverse direction — balance paid via the LINK closes
+  // the app rail (already paid in full). ---
+  const aC = await bookCart805('seal-c@t.local', '(707) 555-0213', 'Seal Cid');
+  const balC = await req2('POST', '/api/carts/' + aC.cid + '/checkout', { body: { balance: true } });
+  const sessCB = sessionForCart(aC.cid, 'payment');
+  await mockSessionPaid(sessCB.id);
+  await fetch(BASE2 + '/cart/' + aC.cid + '?paid=1&session_id=' + sessCB.id);
+  const payC = await req2('POST', '/api/orders/pay', { token: aC.cust.token, body: { requestId: aC.ord.id } });
+  t('v80.5 C: after the link collects the balance, the app rail refuses (already paid in full)', balC.status === 200 && payC.status === 400 && /already paid/i.test(payC.j.error || ''));
+
+  // --- D: a FORCED second success is an admin ALERT, never silence;
+  // the legitimate confirm/webhook TWIN of the same PI stays silent. ---
+  const dupWh1 = await wh2('payment_intent.succeeded', { id: 'pi_dup_805a', status: 'succeeded', amount: 20000, amount_received: 20000, metadata: { kind: 'cart-order', cartId: aB.cid } });
+  const audD1 = await req2('GET', '/api/admin/audit', { token: A805 });
+  const dupsD1 = (audD1.j.entries || []).filter(e => e.action === 'balance.duplicate' && e.target === aB.ord.id);
+  t('v80.5 D (GAP-2): a second balance-sized success via the cart PI webhook raises the balance.duplicate ADMIN ALERT (audit), order untouched', dupWh1.status === 200 && dupsD1.length === 1);
+  const dupWh2 = await wh2('payment_intent.succeeded', { id: 'pi_dup_805b', status: 'succeeded', amount: 20000, amount_received: 20000, metadata: { kind: 'menu-order', requestId: aB.ord.id } });
+  const audD2 = await req2('GET', '/api/admin/audit', { token: A805 });
+  const dupsD2 = (audD2.j.entries || []).filter(e => e.action === 'balance.duplicate' && e.target === aB.ord.id);
+  t('v80.5 D: a foreign PI on the app webhook ALSO alerts (recordRequestPayment guard) — two alerts total, books unchanged', dupWh2.status === 200 && dupsD2.length === 2);
+  await wh2('payment_intent.succeeded', { id: payB.j.paymentIntentId, status: 'succeeded', amount: 20000, amount_received: 20000, metadata: { kind: 'menu-order', requestId: aB.ord.id } });
+  const audD3 = await req2('GET', '/api/admin/audit', { token: A805 });
+  const dupsD3 = (audD3.j.entries || []).filter(e => e.action === 'balance.duplicate' && e.target === aB.ord.id);
+  const ordD = (await reqs805()).find(x => x.id === aB.ord.id);
+  t('v80.5 D: the TWIN webhook of the SAME balance PI stays a silent no-op (no third alert) and the recorded balance PI never moved', dupsD3.length === 2 && !!ordD && ordD.payment.balancePi === payB.j.paymentIntentId && ordD.payment.status === 'paid');
+
+  // --- F: deposit == balance ($100 total) — the deposit PI's own
+  // late webhook must NOT settle a balance nobody paid. ---
+  const custF = await mkMember('seal-f@t.local', '(707) 555-0214');
+  const cartF = await req2('POST', '/api/admin/carts', { token: A805, body: { items: [{ custom: true, kind: 'labor', name: 'Small Fix', qty: 1, unitPrice: 100 }], customerName: 'Seal Fay' } });
+  const cidF = cartF.j.cart.id;
+  const coF = await req2('POST', '/api/carts/' + cidF + '/checkout', { token: custF.token, body: { name: 'Seal Fay', phone: '7075550214', email: 'seal-f@t.local', address: '5 Seal St', city: 'Fairfield', when: 'Today' } });
+  const sessF = sessionForCart(cidF, 'payment');
+  await mockSessionPaid(sessF.id);
+  await fetch(BASE2 + '/cart/' + cidF + '?paid=1&session_id=' + sessF.id, { headers: { Authorization: 'Bearer ' + custF.token } });
+  const ordF0 = await ordOf805(cidF);
+  t('v80.5 F setup: a $100 cart books DEPOSIT $50 / balance $50 (the equal-legs case)', coF.status === 200 && !!ordF0 && ordF0.payment.status === 'deposit' && ordF0.payment.balanceCents === 5000);
+  await wh2('payment_intent.succeeded', { id: sessF.payment_intent, status: 'succeeded', amount: 5000, amount_received: 5000, metadata: { kind: 'cart-order', cartId: cidF } });
+  const ordF1 = await ordOf805(cidF);
+  t('v80.5 F: the DEPOSIT PI\'s late webhook does NOT settle the balance — the order stays DEPOSIT', !!ordF1 && ordF1.payment.status === 'deposit');
+  const balF = await req2('POST', '/api/carts/' + cidF + '/checkout', { body: { balance: true } });
+  const sessFB = sessionForCart(cidF, 'payment');
+  await mockSessionPaid(sessFB.id);
+  await fetch(BASE2 + '/cart/' + cidF + '?paid=1&session_id=' + sessFB.id);
+  const ordF2 = await ordOf805(cidF);
+  t('v80.5 F: the REAL balance still collects normally afterwards (order paid in full)', balF.status === 200 && !!ordF2 && ordF2.payment.status === 'paid');
+
+  // --- E (GAP-3): the legacy full-charge endpoints are GONE (410);
+  // the live balance rail /api/orders/pay is untouched (proven in B). ---
+  const leg1 = await req2('POST', '/api/carts/' + aB.cid + '/pay', { body: { name: 'X', email: 'x@t.local', address: '1 St' } });
+  const leg2 = await req2('POST', '/api/carts/' + aB.cid + '/pay-confirm', { body: { paymentIntentId: 'pi_whatever' } });
+  t('v80.5 E (GAP-3): legacy /api/carts/:id/pay and /pay-confirm answer 410 Gone — the 100%-up-front bypass is retired', leg1.status === 410 && leg2.status === 410);
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}
