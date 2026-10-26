@@ -882,6 +882,13 @@ const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
 // STRIPE_API_BASE exists so local tests can point the Stripe client at a
 // mock; production leaves it unset and always talks to api.stripe.com.
 const STRIPE_API = process.env.STRIPE_API_BASE || 'https://api.stripe.com/v1';
+// v80.6: /api/admin/stripe/health used to fetch Stripe LIVE on every
+// call — and loadAdmin() calls it (via loadInvoices) after nearly
+// every admin action. The result is now cached server-side for ~60 s;
+// the response says when it is cached (cached + ageSec) so the admin
+// panel never presents a stale check as fresh.
+const STRIPE_HEALTH_TTL_MS = 60000;
+let stripeHealthCache = { at: 0, body: null };
 const HOMECARE_MONTHLY_CENTS = 2900;
 // Membership plans (added 2026-10-21): one active plan is stored on the user
 // as u.membershipPlan = { planKey, type, visitsPerMonth, priceId, productId,
@@ -5798,16 +5805,29 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/admin/stripe/health' && req.method === 'GET') {
     // Admin-only live check: actually calls Stripe so a bad/rotated key shows
     // up here BEFORE a customer hits "pay". Not just "key exists".
+    // v80.6: the answer is cached for STRIPE_HEALTH_TTL_MS (~60 s) —
+    // loadAdmin() runs after nearly every admin action and used to
+    // re-fetch Stripe live every single time. A cached answer is
+    // labeled (cached + ageSec) so it never poses as a fresh check.
     if (!requireRole(user, ['admin'], res)) return;
-    if (!stripeReady()) return send(res, 200, { ok: false, reason: 'no key set — add STRIPE_SECRET_KEY in Render env' });
-    try {
-      const r = await fetch(STRIPE_API + '/account', { headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY }, signal: AbortSignal.timeout(10000) });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) return send(res, 200, { ok: false, reason: 'Stripe rejected the key (' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)) + ') — update STRIPE_SECRET_KEY in Render and redeploy' });
-      return send(res, 200, { ok: true, live: !(data.livemode === false), account: data.id || 'ok' });
-    } catch (e) {
-      return send(res, 200, { ok: false, reason: 'could not reach Stripe: ' + e.message });
+    const hNow = Date.now();
+    if (stripeHealthCache.body && (hNow - stripeHealthCache.at) < STRIPE_HEALTH_TTL_MS) {
+      return send(res, 200, Object.assign({}, stripeHealthCache.body, { cached: true, ageSec: Math.floor((hNow - stripeHealthCache.at) / 1000) }));
     }
+    let hBody;
+    if (!stripeReady()) hBody = { ok: false, reason: 'no key set — add STRIPE_SECRET_KEY in Render env' };
+    else {
+      try {
+        const r = await fetch(STRIPE_API + '/account', { headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY }, signal: AbortSignal.timeout(10000) });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) hBody = { ok: false, reason: 'Stripe rejected the key (' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)) + ') — update STRIPE_SECRET_KEY in Render and redeploy' };
+        else hBody = { ok: true, live: !(data.livemode === false), account: data.id || 'ok' };
+      } catch (e) {
+        hBody = { ok: false, reason: 'could not reach Stripe: ' + e.message };
+      }
+    }
+    stripeHealthCache = { at: hNow, body: hBody };
+    return send(res, 200, Object.assign({}, hBody, { cached: false, ageSec: 0 }));
   }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
     const b = await readBody(req);

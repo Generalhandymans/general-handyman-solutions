@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-5', swSrc.includes("const CACHE = 'ghs-app-v80-5'"));
+t('static: SW cache is ghs-app-v80-6', swSrc.includes("const CACHE = 'ghs-app-v80-6'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -71,8 +71,8 @@ t('static v24: yard view = 4 designed cards, one per plan', htmlSrc.includes('id
 t('static v24: no bare signup-link list remains in the yard view', !htmlSrc.includes('Direct signup links — copy the plan you want to send') && !htmlSrc.includes('share-links-grid'));
 t('static v24: each yard card CTA arms its own plan', ["startMembershipCheckout('yardcare','yard1')", "startMembershipCheckout('yardcare','yard2')", "startMembershipCheckout('homecare-plus','plus1')", "startMembershipCheckout('homecare-plus','plus2')"].every(x => htmlSrc.includes(x)));
 t('static v24: each yard card has image + price + benefits markup', ['ycImg-yard1','ycImg-yard2','ycImg-plus1','ycImg-plus2'].every(x => htmlSrc.includes('id="' + x + '"')) && htmlSrc.includes('Free first in-person estimate'));
-t('static v24: calendar form has worker select + silent checkbox with the exact label', htmlSrc.includes('id="cWorker"') && htmlSrc.includes('id="cSilent"') && htmlSrc.includes('No avisar a los demás (trabajo ya asignado)'));
-t('static v24: calAddJob sends assignedWorkerId + silent', htmlSrc.includes('assignedWorkerId:assignedWorkerId, silent:silent'));
+t('static v80.6 (S-1, replaces the v24 form pins): the calendar add-job form + its 4 helpers are REMOVED (dup ids cService/cCity broke its submit; Create a job is canonical)', !htmlSrc.includes('id="cWorker"') && !htmlSrc.includes('id="cSilent"') && !htmlSrc.includes('function calAddJob(') && !htmlSrc.includes('function calWorkerOptions(') && !htmlSrc.includes('function calEnsureWorkers(') && !htmlSrc.includes('function calWorkerChanged(') && !htmlSrc.includes('onclick="calAddJob()"'));
+t('static v80.6 (S-2): the dead sendQuote wrapper (zero callers) is REMOVED', !htmlSrc.includes('sendQuote'));
 t('static v24: admin member info shows the source (vía / orgánico)', htmlSrc.includes("'vía '") && htmlSrc.includes('orgánico'));
 
 // ---- v42 statics: Solicitud Profesional wizard + in-app menu ----
@@ -1538,6 +1538,7 @@ const stripeMock = http.createServer(async (req, res) => {
   if (req.method === 'GET' && path.startsWith('/invoices/')) { const invId = path.split('/')[2]; const owner = Object.values(stripeState.subs).find(s => s.latest_invoice && s.latest_invoice.id === invId); if (owner) { const pi = owner.latest_invoice.payment_intent; return send(200, { id: invId, status: owner.status === 'active' ? 'paid' : 'open', payment_intent: typeof pi === 'string' ? pi : ((pi && pi.id) || '') }); } return send(200, { id: invId, status: 'paid', payment_intent: 'pi_mock_paid' }); }
   if (req.method === 'GET' && path.startsWith('/prices/')) return send(200, { id: path.split('/')[2], unit_amount: 2900, recurring: { interval: 'month' }, active: true });
   if (req.method === 'GET' && path.startsWith('/products/')) return send(200, { id: path.split('/')[2] });
+  if (req.method === 'GET' && path === '/account') { stripeState.accountHits = (stripeState.accountHits || 0) + 1; return send(200, { id: 'acct_mock_health', livemode: false }); }
   if (req.method === 'POST' && path === '/accounts') { const poor = String(form.email || '').includes('poor'); return send(200, { id: poor ? 'acct_mock_poor' : 'acct_mock_' + (++stripeState.n) }); }
   if (req.method === 'GET' && path.startsWith('/accounts/')) return send(200, { id: path.split('/')[2], payouts_enabled: true, details_submitted: true });
   if (req.method === 'POST' && path === '/account_links') return send(200, { url: 'https://connect.mock/onboarding' });
@@ -2818,7 +2819,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 map: default Solano County view is set BEFORE any marker + invalidateSize after layout', mapFn.includes('setView([38.25, -122.04], 10)') && mapFn.indexOf('setView([38.25, -122.04], 10)') < mapFn.indexOf('L.marker(') && mapFn.includes('invalidateSize()'));
   t('v46 map: empty state explains itself + the worker list renders first (primary)', mapFn.includes('Showing Solano County') && mapFn.indexOf("'<div>' + listHtml") > -1 && mapFn.indexOf("'<div>' + listHtml") < mapFn.indexOf('id="adminMap"'));
   t('v46 map: bad coordinates can no longer kill the whole map (per-marker guards)', mapFn.includes('isFinite(Number(w.lat))') && mapFn.includes('isFinite(Number(j.destLat))') && (mapFn.match(/try \{/g) || []).length >= 3);
-  t('v46 admin: loadAdmin coalesces stacked reloads + reuses its jobs fetch for the map', htmlSrc.includes('_adminReloadQueued') && htmlSrc.includes('loadAdminMap(jb.jobs)'));
+  t('v46 admin: loadAdmin coalesces stacked reloads + reuses its jobs fetch for the map', htmlSrc.includes('_adminReloadQueued') && htmlSrc.includes('loadAdminMap(jobs)') && htmlSrc.includes('async function loadAdminJobs()'));
   t('v46 csp: tile.openstreetmap.org images are allowed by the v33 CSP (img-src https:)', serverSrc.includes("img-src 'self' data: blob: https:"));
 }
 
@@ -4121,7 +4122,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.5: ghs-app-v80-5)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-5'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.6: ghs-app-v80-6)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-6'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4576,6 +4577,36 @@ t('static v80.5 server: the seal helpers + dead-order predicate + duplicate aler
   const leg2 = await req2('POST', '/api/carts/' + aB.cid + '/pay-confirm', { body: { paymentIntentId: 'pi_whatever' } });
   t('v80.5 E (GAP-3): legacy /api/carts/:id/pay and /pay-confirm answer 410 Gone — the 100%-up-front bypass is retired', leg1.status === 410 && leg2.status === 410);
 }
+
+// ---------------- v80.6 ADMIN PACKAGE: tiles, no-churn map, removals, scoped reloads, stripe-health cache (Gabriel 2026-10-26) ----------------
+t('static v80.6 tiles: BOTH Leaflet surfaces draw from ONE helper on the keyless OSM-DE source (the osm.org host + the CARTO key-placeholder are gone)', htmlSrc.includes('function ghsTileLayer(') && htmlSrc.includes('https://tile.openstreetmap.de/{z}/{x}/{y}.png') && !htmlSrc.includes('tile.openstreetmap.org') && !htmlSrc.includes('cartocdn'));
+const mapFn806 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminMap('), htmlSrc.indexOf('// ---------- Admin captains (v40) ----------'));
+t('static v80.6 map: signature guard + force flag + ONE error retry + 30 s hard deadline (the 7 s slow-connection fallback is gone)', mapFn806.includes('adminMapSignature(') && mapFn806.includes('preloadedJobs, force') && mapFn806.includes('tileRetried') && mapFn806.includes('}, 30000)') && !mapFn806.includes('}, 7000)') && mapFn806.includes('map-loading-note'));
+t('static v80.6 cartLines: exactly ONE id="cartLines" (the customer cart) + the builder owns #cartBuilderLines + its renderer looks it up', (htmlSrc.match(/id="cartLines"/g) || []).length === 1 && (htmlSrc.match(/id="cartBuilderLines"/g) || []).length === 1 && htmlSrc.includes("getElementById('cartBuilderLines')"));
+t('static v80.6 membership: the two action templates no longer share an error id (membershipActionErr vs membershipCancelErr)', (htmlSrc.match(/id="membershipActionErr"/g) || []).length === 1 && (htmlSrc.match(/id="membershipCancelErr"/g) || []).length === 1 && htmlSrc.includes("membershipActionErr(e.message, 'membershipCancelErr')"));
+t('static v80.6 perf: loadAdmin composes the scoped section loaders', htmlSrc.includes('async function loadAdminRequests()') && htmlSrc.includes('async function loadAdminWorkers()') && htmlSrc.includes('async function loadAdminJobs()') && htmlSrc.includes('await loadAdminRequests();') && htmlSrc.includes('await loadAdminWorkers();') && htmlSrc.includes('const jobs = await loadAdminJobs();'));
+t('static v80.6 server: the stripe-health cache exists (TTL + cache state)', serverSrc.includes('STRIPE_HEALTH_TTL_MS') && serverSrc.includes('stripeHealthCache'));
+// the signature guard as a pure function: freshness alone never rebuilds, real movement does
+const sigA806 = run("adminMapSignature([{ id: 'W1', name: 'Ana', photo: '', lat: 38.25, lng: -122.04, updatedAt: '2026-10-26T00:00:00Z' }], [{ id: 'J1', destLat: 38.3, destLng: -122.1, status: 'Open' }])");
+const sigB806 = run("adminMapSignature([{ id: 'W1', name: 'Ana', photo: '', lat: 38.25, lng: -122.04, updatedAt: '2026-10-26T00:05:00Z' }], [{ id: 'J1', destLat: 38.3, destLng: -122.1, status: 'Open' }])");
+const sigC806 = run("adminMapSignature([{ id: 'W1', name: 'Ana', photo: '', lat: 38.26, lng: -122.04, updatedAt: '2026-10-26T00:00:00Z' }], [{ id: 'J1', destLat: 38.3, destLng: -122.1, status: 'Open' }])");
+t('v80.6 map signature: a fresher timestamp at the same spot keeps the signature (no rebuild, no tile re-download)', sigA806 === sigB806);
+t('v80.6 map signature: real movement changes the signature (the map rebuilds)', sigA806 !== sigC806);
+// the two cart containers render independently
+run("cartDraft = [{ custom: true, kind: 'labor', serviceId: '', name: 'ZZ Builder Line', qty: 1, unitPrice: 10 }];");
+const custLinesBefore806 = el('cartLines').innerHTML;
+run('renderCartLines();');
+t('v80.6 cartLines: the admin builder paints its draft into #cartBuilderLines', el('cartBuilderLines').innerHTML.includes('ZZ Builder Line'));
+t('v80.6 cartLines: the customer #cartLines is byte-identical afterwards (no cross-paint)', el('cartLines').innerHTML === custLinesBefore806 && !el('cartLines').innerHTML.includes('ZZ Builder Line'));
+run('cartDraft = []; renderCartLines();');
+// stripe health: first call live, second call cached with NO new upstream fetch
+const A806 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+const hh1 = await req2('GET', '/api/admin/stripe/health', { token: A806 });
+const hitsAfterFirst806 = stripeState.accountHits || 0;
+const hh2 = await req2('GET', '/api/admin/stripe/health', { token: A806 });
+t('v80.6 server: the first stripe-health call is LIVE (ok, cached:false, exactly one upstream /account hit)', hh1.status === 200 && hh1.j.ok === true && hh1.j.cached === false && hitsAfterFirst806 === 1);
+t('v80.6 server: the second call inside the TTL answers from cache (cached:true + numeric ageSec) and Stripe is NOT fetched again', hh2.j.cached === true && typeof hh2.j.ageSec === 'number' && (stripeState.accountHits || 0) === 1);
+
 
 try { child2.kill('SIGTERM'); } catch (e) {}
 try { stripeMock.close(); } catch (e) {}

@@ -1001,7 +1001,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
       <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays in full.</p>
       <label>Search the menu<input id="cartSearch" placeholder="Type to search services…" oninput="renderCartPicker()"></label>
       <div id="cartPicker" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:6px"></div>
-      <div id="cartLines" style="margin-top:10px"></div>
+      <div id="cartBuilderLines" style="margin-top:10px"></div>
       <div style="margin-top:12px;border-top:1px dashed var(--line);padding-top:10px">
         <b>＋ Custom line</b> <span class="mut">— anything that is NOT in the menu: type the name, the price and the qty, then add it as labor or as materials. Labor lines get the member −20% on the cart page; materials never discount.</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:end">
@@ -1967,7 +1967,7 @@ function fmtDateLong(iso){ if (!iso) return ''; try { return new Date(iso).toLoc
 function planVisitsText(k){ return (k === 'yard1' || k === 'plus1') ? '1 yard visit/month' : ((k === 'yard2' || k === 'plus2') ? '2 yard visits/month' : 'no yard visits'); }
 function membershipActionBox(){ return document.getElementById('membershipAction'); }
 function cancelMembershipAction(){ const b = membershipActionBox(); if (b) b.innerHTML = ''; }
-function membershipActionErr(t){ const e = document.getElementById('membershipActionErr'); if (e) { e.textContent = t; e.classList.add('show'); } else alert(t); }
+function membershipActionErr(t, id){ const e = document.getElementById(id || 'membershipActionErr'); if (e) { e.textContent = t; e.classList.add('show'); } else alert(t); }
 function showChangePlan(){
   const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
   const cur = me.membershipPlan;
@@ -2005,7 +2005,7 @@ async function showCancelMembership(){
   box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Cancel your membership?</b>'
     + '<p style="margin:6px 0">Your ' + escHtml(cur.name) + ' stays active until ' + escHtml(until) + '. After that it ends and you won\'t be charged again.</p>'
     + '<button onclick="doCancelMembership()">Yes, cancel</button> <button class="ghost" onclick="cancelMembershipAction()">Keep my membership</button>'
-    + '<div class="err" id="membershipActionErr"></div></div>';
+    + '<div class="err" id="membershipCancelErr"></div></div>';
 }
 async function doCancelMembership(){
   try {
@@ -2013,7 +2013,7 @@ async function doCancelMembership(){
     if (d.user) me = d.user;
     cancelMembershipAction();
     renderMyMembership();
-  } catch (e) { membershipActionErr(e.message); }
+  } catch (e) { membershipActionErr(e.message, 'membershipCancelErr'); }
 }
 async function doReactivateMembership(){
   try {
@@ -2717,7 +2717,7 @@ async function previewEstimate(idv){
 async function duplicateEstimate(idv){
   if(!await appConfirm('Duplicate this estimate? A fresh draft for the same customer is created at the top of the list — review it, set the valid-until date, and send.')) return;
   try{ const d=await api('/api/requests/'+idv+'/duplicate-estimate',{method:'POST', body:JSON.stringify({})});
-    alert('Duplicated as '+d.request.id+'.'); loadAdmin();
+    alert('Duplicated as '+d.request.id+'.'); loadAdminRequests(); loadCalendar();
   }catch(e){ alert(e.message); }
 }
 async function newEstimate(){
@@ -2727,7 +2727,7 @@ async function newEstimate(){
   if(!body.customerName && !body.customerEmail){ msg.textContent='Add at least the customer name or email.'; return; }
   try{ const d=await api('/api/admin/estimates/new',{method:'POST', body:JSON.stringify(body)});
     ['neName','neEmail','nePhone','neService','neCity'].forEach(function(x){ document.getElementById(x).value=''; });
-    await loadAdmin();
+    await loadAdminRequests(); loadCalendar();
     msg.textContent='Created '+d.request.id+' — its estimate builder is at the top of Customer requests below.';
     const card=document.getElementById('reqcard-'+d.request.id); if(card) card.scrollIntoView({behavior:'smooth', block:'start'});
   }catch(e){ msg.textContent=e.message; }
@@ -2741,7 +2741,7 @@ async function sendEstimate(idv, sendEmail){
   if(!await appConfirm(action+'\n\nCustomer total: '+moneyFmt(est.total)+'\nDue to book: '+moneyFmt(est.bookingDue)+'\nBalance: '+moneyFmt(est.balanceDue))) return;
   try{ const d=await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({estimate:est, note, sendEmail:!!sendEmail})});
     if(sendEmail && d.automation && !d.automation.sent) alert('Estimate saved in the app. Email is not connected yet, so no email was sent. Reason: '+(d.automation.reason||'not configured'));
-    loadAdmin();
+    loadAdminRequests();
   }catch(e){ alert(e.message); }
 }
 // ---------- Invoices (frontend) ----------
@@ -2750,7 +2750,7 @@ async function checkStripeHealth(){
   try{
     const h=await api('/api/admin/stripe/health');
     el.innerHTML = h.ok
-      ? '<span class="pill" style="border-color:#1a7f37;color:#1a7f37">💳 Stripe: payments live'+(h.live?'':' (test mode)')+'</span>'
+      ? '<span class="pill" style="border-color:#1a7f37;color:#1a7f37">💳 Stripe: payments live'+(h.live?'':' (test mode)')+'</span>' + (h.cached ? ' <span class="mut">(checked ' + (h.ageSec || 0) + 's ago)</span>' : '')
       : '<span class="pill" style="border-color:#e42535;color:#e42535">💳 Stripe: NOT WORKING</span><br><span class="mut">'+escHtml(h.reason||'unknown')+'</span>';
   }catch(e){ el.innerHTML='<span class="mut">💳 Stripe status unknown.</span>'; }
 }
@@ -2893,7 +2893,7 @@ function threadHtml(r){
 async function sendMsg(idv){
   const inp=document.getElementById('m-'+idv); if(!inp) return;
   const text=inp.value.trim(); if(!text) return;
-  try{ await api('/api/requests/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me && me.role==='admin') loadAdmin(); else loadRequests(); }
+  try{ await api('/api/requests/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me && me.role==='admin') loadAdminRequests(); else loadRequests(); }
   catch(e){ alert(e.message); }
 }
 // ---------- v79: PROPUESTAS EN LA CUENTA (Gabriel, 2026-10-25) ----------
@@ -2965,7 +2965,7 @@ function jobChatHtml(j){
 async function sendJobMsg(idv){
   const inp=document.getElementById('jm-'+idv); if(!inp) return;
   const text=inp.value.trim(); if(!text) return;
-  try{ await api('/api/jobs/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me.role==='admin') loadAdmin(); else if(me.role==='worker') loadJobs(); else loadMyJobs(); }
+  try{ await api('/api/jobs/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me.role==='admin') loadAdminJobs(); else if(me.role==='worker') loadJobs(); else loadMyJobs(); }
   catch(e){ alert(e.message); }
 }
 // ---------- Ratings (v25, C1): the customer rates a completed job once ----------
@@ -3183,7 +3183,7 @@ async function saveWorkerTrades(){
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
 function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
-async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdmin(); }catch(e){ alert(e.message); } }
+async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdminJobs(); }catch(e){ alert(e.message); } }
 // v75: Gabriel's Connect-gate override, right on the job card — pick the
 // worker, one tap releases THIS job to him despite the claim gate
 // (server audits it). The pill shows when a release is already in place.
@@ -3191,7 +3191,7 @@ function connectOverrideHtml(j){
   const opts = (adminWorkersCache || []).filter(function(w){ return w.status === 'active'; }).map(function(w){ return '<option value="' + w.id + '"' + (j.connectOverrideFor === w.id ? ' selected' : '') + '>' + escHtml(w.name) + '</option>'; }).join('');
   return '<div style="margin-top:8px"><span class="mut">🔒 Connect gate:</span> <select id="cov-' + j.id + '">' + opts + '</select> <button class="ghost" onclick="connectOverride(\'' + j.id + '\')">Unlock claim for this worker</button>' + (j.connectOverrideFor ? ' <span class="pill">Unlocked for one worker</span>' : '') + '</div>';
 }
-async function connectOverride(idv){ const sel=document.getElementById('cov-'+idv); if(!sel||!sel.value){ alert('Pick a worker first'); return; } try{ await api('/api/admin/jobs/'+idv+'/connect-override',{method:'POST', body:JSON.stringify({workerId: sel.value})}); }catch(e){ alert(e.message); } loadAdmin(); }
+async function connectOverride(idv){ const sel=document.getElementById('cov-'+idv); if(!sel||!sel.value){ alert('Pick a worker first'); return; } try{ await api('/api/admin/jobs/'+idv+'/connect-override',{method:'POST', body:JSON.stringify({workerId: sel.value})}); }catch(e){ alert(e.message); } loadAdminJobs(); }
 async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ if (e.code === 'CONNECT_REQUIRED') { connectGateStateCache = null; paintConnectGateCard(); if (await appConfirm(WT('connectGateMsg') + '\n\n' + WT('connectGateBody'))) startConnect(); } else alert(e.message); } }
 // v75: the persistent Connect unlock card at the top of the worker home.
 // While his Stripe Connect payouts are not enabled, paid jobs stay
@@ -3716,6 +3716,16 @@ function trackBlockHtml(j, audience){
 function trackFallbackHtml(j){
   return '<div style="padding:20px 14px;text-align:center">📍<br><b>Your technician is on the way</b>' + (j.address ? '<br><span class="mut">Heading to ' + escHtml(j.address) + '</span>' : '') + '<br><span class="mut">Location updated ' + agoText(j.liveLoc.updatedAt) + '</span></div>';
 }
+// v80.6 TILES: both Leaflet surfaces draw from ONE helper on
+// tile.openstreetmap.de — the OSM chapter's keyless tile service,
+// built for embedding. Production browsers were served 403 "Access
+// blocked" tiles by the main OSM tile host (its usage policy blocks
+// unidentified / high-churn embedding, and this app used to re-ask
+// for every tile on every admin reload), and CARTO basemaps now
+// answer every keyless tile with an "API KEY REQUIRED" placeholder
+// image. Curl evidence for all three: V80.6-PARCHE.md.
+const GHS_TILE_URL = 'https://tile.openstreetmap.de/{z}/{x}/{y}.png';
+function ghsTileLayer(){ return L.tileLayer(GHS_TILE_URL, { maxZoom: 18, attribution: '© OpenStreetMap contributors' }); }
 function pinIcon(txt){ return L.divIcon({ className: 'trk-pin', html: '<div style="font-size:24px;line-height:1">' + txt + '</div>', iconSize: [26, 26], iconAnchor: [13, 13] }); }
 // Technician pins (v41): OUR tech is identified by the brand — his round
 // photo avatar with the red ring and a small hammer badge (the hammer
@@ -3733,7 +3743,7 @@ function buildTrackMap(j, box){
   if (!(window.L && L.map)) { box.innerHTML = trackFallbackHtml(j); return; }
   try {
     const map = L.map(box);
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+    ghsTileLayer().addTo(map);
     const tech = L.marker([j.liveLoc.lat, j.liveLoc.lng], { icon: techPinIcon(j) }).addTo(map);
     const pts = [[j.liveLoc.lat, j.liveLoc.lng]];
     if (j.destLat != null && j.destLng != null) { L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); pts.push([j.destLat, j.destLng]); }
@@ -3787,7 +3797,7 @@ async function refreshLiveTracking(){
     updateLivePoll(jobs);
   } catch(e) {}
 }
-async function releaseInfo(idv,on){ if(on && !await appConfirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdmin(); }catch(e){ alert(e.message); } }
+async function releaseInfo(idv,on){ if(on && !await appConfirm('Share this job\u2019s ADDRESS and TIME with the assigned worker? The customer phone and name are never shared.')) return; try{ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({infoReleased:on})}); loadAdminJobs(); }catch(e){ alert(e.message); } }
 // ---------- Estimate authorization holds (2026-10-20) ----------
 function holdsOf(r){ return Array.isArray(r.holds) ? r.holds : []; }
 function holdsPoolCents(r){ return holdsOf(r).filter(function(h){ return h.status==='authorized'; }).reduce(function(s,h){ return s+(Number(h.authorizedCents)||0); },0); }
@@ -3828,7 +3838,7 @@ async function refundRequest(idv){
   try{
     const d=await api('/api/requests/'+idv+'/refund',{method:'POST', body:JSON.stringify({})});
     alert('Refunded '+moneyFmt(d.refunded)+(d.keptFee?' • kept '+moneyFmt(d.keptFee)+' booking fee (was dispatched)':' • full refund'));
-    loadAdmin();
+    loadAdminRequests(); loadAdminCarts();
   }catch(e){ alert(e.message); }
 }
 function adminHoldPanelHtml(r){
@@ -3874,18 +3884,18 @@ async function holdCapture(idv, defCents){
   if(v==null) return;
   const cents=Math.round(parseFloat(v)*100);
   if(!(cents>0)){ alert('Enter an amount over $0.'); return; }
-  try{ await holdAct(idv,'capture',{finalCents:cents}); loadAdmin(); }catch(e){}
+  try{ await holdAct(idv,'capture',{finalCents:cents}); loadAdminRequests(); }catch(e){}
 }
 async function holdCaptureVisit(idv, visitCents){
   if(!await appConfirm('Charge ONLY the visit fee ('+moneyFmt((visitCents||0)/100)+') from the hold now? Use this when the customer declined the work or did not show up.')) return;
-  try{ await holdAct(idv,'capture',{finalCents:visitCents}); loadAdmin(); }catch(e){}
+  try{ await holdAct(idv,'capture',{finalCents:visitCents}); loadAdminRequests(); }catch(e){}
 }
 async function holdIncrement(idv, targetCents){
   const v=await appPrompt('New TOTAL authorization ($):', ((targetCents||0)/100).toFixed(2));
   if(v==null) return;
   const cents=Math.round(parseFloat(v)*100);
   if(!(cents>0)){ alert('Enter a total over $0.'); return; }
-  try{ await holdAct(idv,'increment',{totalCents:cents}); loadAdmin(); }catch(e){ alert('Increment failed — send a balance authorization instead. Details are in the panel message.'); }
+  try{ await holdAct(idv,'increment',{totalCents:cents}); loadAdminRequests(); }catch(e){ alert('Increment failed — send a balance authorization instead. Details are in the panel message.'); }
 }
 async function holdAuthorizeBalance(idv){
   try{
@@ -3895,14 +3905,14 @@ async function holdAuthorizeBalance(idv){
 }
 async function holdRelease(idv){
   if(!await appConfirm('Release (cancel) ALL active authorization holds on this request? The customer is NOT charged for the released amounts.')) return;
-  try{ await holdAct(idv,'release',{}); loadAdmin(); }catch(e){}
+  try{ await holdAct(idv,'release',{}); loadAdminRequests(); }catch(e){}
 }
 async function holdClose(idv, poolCents){
   if(poolCents>0 && !await appConfirm('There is still '+moneyFmt(poolCents/100)+' authorized but NOT charged on this request. Close billing anyway? (Closing never charges or releases anything by itself.)')) return;
   try{
     const d=await holdAct(idv,'close',{});
     if(d && d.warning) alert('Billing closed. Warning: '+moneyFmt((d.poolCents||0)/100)+' is still authorized and uncharged on this request.');
-    loadAdmin();
+    loadAdminRequests();
   }catch(e){}
 }
 // ---------- Master calendar (admin) ----------
@@ -3943,59 +3953,24 @@ function renderCalendar(){
 }
 function calSelect(key){ calSel=key; renderCalendar(); renderCalDay(); }
 function renderCalDay(){
-  calEnsureWorkers();
   const el=document.getElementById('calDay'); if(!el) return;
-  if(!calSel){ el.innerHTML='<p class="mut" style="margin-top:10px">Tap a day to see jobs and add one.</p>'; return; }
+  if(!calSel){ el.innerHTML='<p class="mut" style="margin-top:10px">Tap a day to see its jobs.</p>'; return; }
   const evs=calEvents.filter(function(e){return e.date===calSel;});
   let h='<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>'+escCal(calSel)+'</b>';
   h+=evs.length? evs.map(function(e){
     return '<div class="card" style="margin:8px 0;padding:10px"><b>'+escCal(e.title)+'</b> <span class="pill">'+escCal(e.kind)+'</span><br><span class="mut">'+
       escCal((e.time?e.time+' • ':'')+(e.location||''))+(e.customerName?' • '+escCal(e.customerName):'')+(e.workerName?' • '+escCal(e.workerName):'')+(e.status?' • '+escCal(e.status):'')+'</span></div>';
   }).join('') : '<div class="empty"><p class="mut">No jobs this day.</p></div>';
-  h+='<h3 style="margin-top:10px">Add job</h3><div class="row"><div><label>Service</label><input id="cService" placeholder="Door lock install"></div><div><label>Location / address</label><input id="cAddr" placeholder="123 Main St, Hercules"></div></div>'+
-    '<div class="row"><div><label>Date</label><input id="cDate" type="date" value="'+escCal(calSel)+'"></div><div><label>Time</label><input id="cTime" placeholder="10:00 AM"></div></div>'+
-    '<div class="row"><div><label>Pay offer to worker $ (optional)</label><input id="cPay" type="number" placeholder="120"></div><div><label>City</label><input id="cCity" placeholder="Hercules"></div></div>'+
-    '<div class="row"><div><label>Assign to worker (optional)</label><select id="cWorker" onchange="calWorkerChanged()"><option value="">— Open job: matched workers are notified —</option>'+calWorkerOptions()+'</select></div><div><label id="cSilentRow" style="display:none;margin-top:24px"><input type="checkbox" id="cSilent" style="width:auto;margin-right:6px">No avisar a los demás (trabajo ya asignado)</label></div></div>'+
-    '<button onclick="calAddJob()">Add to calendar</button> <span id="cMsg" class="mut"></span></div>';
+  h+='</div>';
   el.innerHTML=h;
 }
-// v24 (E2): the calendar add-job form can pre-assign a worker; the
-// "No avisar a los demás" checkbox only appears once a worker is picked.
-let calWorkersRequested=false;
-function calWorkerOptions(){
-  return (adminWorkersCache||[]).filter(function(w){ return w.status==='active'; }).map(function(w){ return '<option value="'+w.id+'">'+escCal(w.name)+'</option>'; }).join('');
-}
-function calEnsureWorkers(){
-  if (calWorkersRequested) return;
-  calWorkersRequested = true;
-  api('/api/workers').then(function(w){ adminWorkersCache = w.workers||[]; if (calSel) renderCalDay(); }).catch(function(){});
-}
-function calWorkerChanged(){
-  const sel=document.getElementById('cWorker'), row=document.getElementById('cSilentRow');
-  if (row) row.style.display = (sel && sel.value) ? '' : 'none';
-}
-async function calAddJob(){
-  const msg=document.getElementById('cMsg');
-  const service=document.getElementById('cService').value.trim();
-  const date=document.getElementById('cDate').value;
-  if(!service){ msg.textContent='Service is required.'; return; }
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ msg.textContent='Pick a valid date.'; return; }
-  const time=document.getElementById('cTime').value.trim();
-  const addr=document.getElementById('cAddr').value.trim();
-  const city=document.getElementById('cCity').value.trim();
-  const pay=document.getElementById('cPay').value;
-  const wsel=document.getElementById('cWorker');
-  const assignedWorkerId = wsel && wsel.value ? wsel.value : null;
-  const silentBox=document.getElementById('cSilent');
-  const silent = !!(assignedWorkerId && silentBox && silentBox.checked);
-  msg.textContent='Adding…';
-  try{
-    await api('/api/jobs',{method:'POST', body:JSON.stringify({service:service, city:city, address:addr, when:(date+(time?' '+time:'')), schedDate:date, schedTime:time, payOffer:pay, description:'Added from master calendar', assignedWorkerId:assignedWorkerId, silent:silent})});
-    msg.textContent='Added.';
-    calSel=date;
-    await loadCalendar(); loadAdmin();
-  }catch(e){ msg.textContent=e.message; }
-}
+// v80.6 (S-1): the calendar's own "Add job" form and its helpers
+// (calAddJob / calWorkerOptions / calEnsureWorkers / calWorkerChanged)
+// were REMOVED. The form was broken — its inputs reused the customer
+// wizard's cService/cCity ids, so getElementById handed calAddJob a
+// <div> and its submit died on a TypeError — and it duplicated the
+// Create a job panel (same POST /api/jobs, more fields). Create a
+// job is the one canonical job creator now.
 // ---------- Yard calendar (admin, added 2026-10-21) ----------
 // SEPARATE from the master calendar above: this schedules the included
 // monthly yard visits of Yard Care / HomeCare Plus members. Visits are NOT
@@ -4238,19 +4213,20 @@ function toggleWorkerDetail(wid, btn){
   d.style.display = open ? 'none' : 'block';
   if (btn) btn.textContent = open ? 'Ver detalle ▾' : 'Ocultar detalle ▴';
 }
-async function loadAdmin(){
-  // v46 ADMIN PERF: loadAdmin used to stack — every render()/action fired
-  // a full reload (3 API fetches + full re-render + every Leaflet map torn
-  // down and rebuilt), and overlapping runs interleaved. Now a run in
-  // flight coalesces further calls into ONE trailing re-run.
-  if (_adminLoading) { _adminReloadQueued = true; return; }
-  _adminLoading = true;
-  try {
-  loadCalendar();
+// v80.6 PERF: loadAdmin's heaviest sections are scoped loaders now
+// (the pattern loadAdminCaptains already used): loadAdmin()
+// composes them for a full refresh, and single-section admin
+// actions reload ONLY the section they mutated instead of
+// paying the full 12-fetch reload (+ a live Stripe health
+// fetch + a master-map rebuild) for every click. The render
+// code inside each loader is the exact code loadAdmin ran.
+async function loadAdminRequests(){
   const rq=await api('/api/requests').catch(()=>({requests:[]}));
   document.getElementById('adminRequests').innerHTML = rq.requests.map(function(r){ return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span>'+estimateStatusBadgeHtml(r)+'<br><span class="mut">'+escHtml(r.customerName||'Customer')+(r.customerEmail?' • '+escHtml(r.customerEmail):'')+(r.customerPhone?' • '+escHtml(r.customerPhone):'')+'<br>'+escHtml(r.description)+' • '+escHtml(r.city)+' • '+escHtml(r.address)+' • '+escHtml(r.when)+'</span>'+estimateHtml(r,false)+(r.estimate?'<div style="margin:8px 0"><button class="ghost" onclick="copyEstimateLink(\''+r.id+'\')">Copy public estimate link</button> <span class="mut">no account needed — customer approves + pays from the link</span></div>':'')+adminPaymentHtml(r)+adminHoldPanelHtml(r)+threadHtml(r)+estimateBuilderHtml(r)+'<div style="margin-top:10px"><button class="ghost" onclick="delRequest(\''+r.id+'\')">Delete quote/request</button></div>'+(r.quote!=null?'<div style="margin-top:10px;border-top:1px dashed #ddd;padding-top:10px"><b>Post as a job for the workers</b> <span class="mut">(prefilled from this quote — you confirm before posting)</span><br><span class="mut">Worker pay $</span> <input id="jp-'+r.id+'" type="number" style="width:120px" value="'+(r.quote?Math.round(r.quote*2/3):'')+'"> <span class="mut">Customer price $'+(r.quote||'')+' • Extra info for the worker (Team only, customer never sees this)</span><br><input id="jn-'+r.id+'" placeholder="Gate code, parking, tools needed, heads-up..." style="width:100%"><br><button class="black" onclick="postFromRequest(\''+r.id+'\','+(r.quote||0)+')">Review & post job</button></div>':'')+'</div>'; }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
   window._adminReqCache={}; rq.requests.forEach(function(r){ window._adminReqCache[r.id]=r; seedEstimateBuilder(r); });
   sndAdminRequests(rq.requests);
+}
+async function loadAdminWorkers(){
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
@@ -4278,13 +4254,29 @@ async function loadAdmin(){
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w) + workerTradesHtml(w)
     + '<br><button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button><div id="editWorker-'+w.id+'"></div></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
+}
+async function loadAdminJobs(){
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
+  return jb.jobs;
+}
+async function loadAdmin(){
+  // v46 ADMIN PERF: loadAdmin used to stack — every render()/action fired
+  // a full reload (3 API fetches + full re-render + every Leaflet map torn
+  // down and rebuilt), and overlapping runs interleaved. Now a run in
+  // flight coalesces further calls into ONE trailing re-run.
+  if (_adminLoading) { _adminReloadQueued = true; return; }
+  _adminLoading = true;
+  try {
+  loadCalendar();
+  await loadAdminRequests();
+  await loadAdminWorkers();
+  const jobs = await loadAdminJobs();
   loadInvoices();
   loadAdminRatings();
   loadAdminCaptains();
-  loadAdminMap(jb.jobs);
+  loadAdminMap(jobs);
   loadAdminAudit();
   renderCartPicker();
   loadAdminSources();
@@ -4331,8 +4323,14 @@ function cartAddLabor75(){
 function cartSetQty(i,v){ cartDraft[i].qty=Math.max(1,Math.min(99,Math.round(Number(v)||1))); renderCartLines(); }
 function cartSetPrice(i,v){ cartDraft[i].unitPrice=Math.max(0,Math.round((Number(v)||0)*100)/100); renderCartSummary(); }
 function cartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
+// v80.6: the builder paints into its OWN container (#cartBuilderLines).
+// It used to share the cartLines id with the customer cart, so
+// getElementById handed BOTH renderers the customer's (hidden) node —
+// the builder's line editor painted where Gabriel could not see it.
+// It only "worked" because submitCart() reads the cartDraft array,
+// never the DOM. The customer cart keeps #cartLines, untouched.
 function renderCartLines(){
-  const box=document.getElementById('cartLines'); if(!box) return;
+  const box=document.getElementById('cartBuilderLines'); if(!box) return;
   box.innerHTML=cartDraft.map(function(it,i){ const tag=it.custom?' <span class="pill" style="font-size:11px;padding:2px 8px">'+(it.kind==='other'?'Material':'CUSTOM · Labor')+'</span>':''; return '<div class="est-row"><span><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name" style="width:100%">'+tag+'</span><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="cartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
   renderCartSummary();
 }
@@ -4505,6 +4503,7 @@ async function loadAdminInvites(){
 // is ADMIN-ONLY — customers never see it.
 let adminMasterMap = null;
 let adminMapLoading = false;
+let adminMapSig = ''; // v80.6: signature of the inputs the live master map was built from
 let adminMapRO = null; // v75: ResizeObserver watching the map container
 let leafletTried = false;
 // v75 MAP: ONE bilingual fallback for every map failure (Leaflet missing,
@@ -4512,7 +4511,7 @@ let leafletTried = false;
 // grey box again — Gabriel has never been able to see it, and a blank
 // rectangle gives him nothing to report. The list above it always works.
 function adminMapFallbackHtml(){
-  return '<div style="padding:16px" class="mut">El mapa no cargó — revisa tu conexión; la lista de arriba muestra quién está compartiendo. / The map could not load — check your connection; the list above shows who is sharing.<br><button type="button" class="ghost" style="margin-top:10px;padding:9px 18px;font-weight:700" onclick="loadAdminMap()">Reintentar · Retry</button></div>';
+  return '<div style="padding:16px" class="mut">El mapa no cargó — revisa tu conexión; la lista de arriba muestra quién está compartiendo. / The map could not load — check your connection; the list above shows who is sharing.<br><button type="button" class="ghost" style="margin-top:10px;padding:9px 18px;font-weight:700" onclick="loadAdminMap(null,true)">Reintentar · Retry</button></div>';
 }
 // v65: self-heal a missing Leaflet (the audit browser hit "map
 // unavailable" because the CDN script never landed). Re-inject the script
@@ -4551,7 +4550,23 @@ function adminMapWhenVisible(el, cb) {
   };
   tick();
 }
-async function loadAdminMap(preloadedJobs){
+// v80.6: the signature of everything the master map SHOWS — which
+// techs are sharing (id, name, has-photo, coords rounded to ~11 m so
+// GPS jitter at a standstill does not count as movement) and which of
+// today's job destinations are pinned. updatedAt is deliberately NOT
+// in the signature: a fresher timestamp at the same spot changes
+// nothing on the map (the list above it is a snapshot either way).
+function adminMapSignature(liveWorkers, jobPins){
+  const w = (liveWorkers || []).map(function(w){
+    const ph = w.photo ? String(w.photo).length + ':' + String(w.photo).slice(0, 12) : '';
+    return [w.id || '', w.name || '', ph, Math.round(Number(w.lat) * 10000), Math.round(Number(w.lng) * 10000)].join(':');
+  }).sort().join('|');
+  const j = (jobPins || []).map(function(j){
+    return [j.id || '', Math.round(Number(j.destLat) * 10000), Math.round(Number(j.destLng) * 10000), j.status || ''].join(':');
+  }).sort().join('|');
+  return w + '#' + j;
+}
+async function loadAdminMap(preloadedJobs, force){
   const box = document.getElementById('adminMapBox'); if (!box || !me || me.role !== 'admin') return;
   if (adminMapLoading) return;
   adminMapLoading = true;
@@ -4563,6 +4578,18 @@ async function loadAdminMap(preloadedJobs){
     const today = new Date().toISOString().slice(0, 10);
     const jobPins = jobs.filter(function(j){ return j.destLat != null && j.destLng != null && isFinite(Number(j.destLat)) && isFinite(Number(j.destLng)) && ['Done — photos sent', 'Cancelled', 'Canceled'].indexOf(j.status) === -1 && (!j.schedDate || j.schedDate === today); });
     const liveWorkers = wk.filter(function(w){ return isFinite(Number(w.lat)) && isFinite(Number(w.lng)); });
+    // v80.6 NO CHURN: when nothing map-relevant changed since the
+    // last build, the live map — and its already-downloaded tiles —
+    // stays exactly as it is. loadAdmin() fires after nearly every
+    // admin action and every job-status stream event; rebuilding
+    // here re-downloaded every tile every time and could keep the
+    // map permanently inside its loading window on a limited plan.
+    const sig = adminMapSignature(liveWorkers, jobPins);
+    if (!force && adminMapSig && sig === adminMapSig && adminMasterMap) {
+      let mapAlive = false;
+      try { mapAlive = !!adminMasterMap.getContainer() && document.contains(adminMasterMap.getContainer()); } catch(e) {}
+      if (mapAlive) return;
+    }
     const listHtml = liveWorkers.length
       ? liveWorkers.map(function(w){ return '<div style="padding:4px 0">' + avatarHtml(w.photo, w.name, 28) + ' <b>' + escHtml(w.name) + '</b> <span class="mut">📍 ' + escHtml(agoText(w.updatedAt)) + '</span></div>'; }).join('')
       : '<p class="mut">Ningún técnico está compartiendo ubicación ahora / No technician is sharing location right now.</p>';
@@ -4574,6 +4601,7 @@ async function loadAdminMap(preloadedJobs){
       + emptyNote
       + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df;margin-top:8px"></div>'
       + '</div>';
+    adminMapSig = sig;
     if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
     if (adminMapRO) { try { adminMapRO.disconnect(); } catch(e) {} adminMapRO = null; }
     const mapEl = document.getElementById('adminMap');
@@ -4586,34 +4614,53 @@ async function loadAdminMap(preloadedJobs){
         // Default view FIRST — Solano County (Fairfield) — before any
         // marker can throw or the bounds logic runs.
         map.setView([38.25, -122.04], 10);
-        const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
-        // v75 MAP (root cause, finally attacked head-on): the audit for
-        // Gabriel's "el mapa no lo he podido ver" cleared the easy
-        // suspects — the v33 CSP already allows the tile host (img-src
-        // https:), the Leaflet CSS/JS and a sample OSM tile all answer
-        // 200, and the worker-locations feed is correct. What remained
-        // is timing: loadAdmin builds this map during its long async
-        // chain, and if the container is not laid out yet Leaflet locks
-        // onto a 0x0 viewport; v46/v65 re-measured once (400ms) and
-        // gave up. And if the tile host is unreachable from his network,
-        // the failure painted as the same silent grey box. Two cures:
-        // (1) a ResizeObserver on the container re-measures on ANY size
-        // change — panel shown, rotation, keyboard, late layout — for
-        // the life of the map; (2) tile health: if not one tile has
-        // loaded seconds after init, swap in the bilingual fallback
-        // with a Retry button instead of a grey rectangle.
-        let tilesOk = 0;
-        tileLayer.on('tileload', function(){ tilesOk++; });
-        tileLayer.on('tileerror', function(){});
-        const tileDeadline = setTimeout(function(){
-          if (tilesOk === 0 && adminMasterMap === map) {
-            adminMasterMap = null;
-            try { map.remove(); } catch(e) {}
-            if (adminMapRO) { try { adminMapRO.disconnect(); } catch(e) {} adminMapRO = null; }
-            mapEl.innerHTML = adminMapFallbackHtml();
+        // v80.6 TILE HEALTH (evolves the v75 cure): the old 7 s
+        // first-tile deadline painted the failure fallback whenever
+        // Gabriel's connection was merely SLOW — the first impression
+        // read as "the map is broken" even though the tiles were on
+        // their way. Now the waiting state (with a small bilingual
+        // loading note) PERSISTS while tiles are in flight; genuine
+        // tile ERRORS earn exactly ONE fresh-layer retry; the
+        // bilingual fallback paints only when tiles still have not
+        // loaded after that, or a 30 s hard deadline passes with
+        // zero tiles. Once a single tile lands, the map is healthy
+        // and every timer stands down. (The v75 ResizeObserver below
+        // still re-measures on any size change for the map's life.)
+        let tileLayer = null, tilesOk = 0, tilesErr = 0, tileRetried = false, tileGaveUp = false;
+        let tileSoftTimer = null, tileHardTimer = null;
+        function tileGiveUp(){
+          if (tileGaveUp || adminMasterMap !== map) return; tileGaveUp = true;
+          adminMasterMap = null; adminMapSig = '';
+          try { map.remove(); } catch(e) {}
+          if (adminMapRO) { try { adminMapRO.disconnect(); } catch(e) {} adminMapRO = null; }
+          mapEl.innerHTML = adminMapFallbackHtml();
+        }
+        function wireTileLayer(){
+          tileLayer.on('tileload', function(){
+            tilesOk++;
+            if (tilesOk === 1) {
+              if (tileSoftTimer) clearTimeout(tileSoftTimer);
+              if (tileHardTimer) clearTimeout(tileHardTimer);
+              const note = mapEl.querySelector('.map-loading-note'); if (note) note.remove();
+            }
+          });
+          tileLayer.on('tileerror', function(){ tilesErr++; });
+        }
+        tileLayer = ghsTileLayer().addTo(map); wireTileLayer();
+        mapEl.insertAdjacentHTML('beforeend', '<div class="map-loading-note" style="position:absolute;z-index:1200;left:10px;bottom:10px;background:rgba(255,255,255,.92);border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none">Cargando mapa… / Loading map…</div>');
+        tileSoftTimer = setTimeout(function(){
+          if (tileGaveUp || tilesOk > 0 || adminMasterMap !== map) return;
+          if (tilesErr > 0 && !tileRetried) { // genuine errors: ONE fresh-layer retry, then keep waiting
+            tileRetried = true; tilesErr = 0;
+            try { map.removeLayer(tileLayer); } catch(e) {}
+            tileLayer = ghsTileLayer().addTo(map); wireTileLayer();
           }
-        }, 7000);
-        tileLayer.on('load', function(){ if (tilesOk > 0) clearTimeout(tileDeadline); });
+          // no errors + no tiles yet = a slow connection, not a broken map: keep waiting
+        }, 9000);
+        tileHardTimer = setTimeout(function(){
+          if (tileGaveUp || tilesOk > 0 || adminMasterMap !== map) return;
+          tileGiveUp();
+        }, 30000);
         const pts = [];
         liveWorkers.forEach(function(w){ try { const m = L.marker([Number(w.lat), Number(w.lng)], { icon: w.photo ? photoIcon(w.photo) : hammerPinIcon() }).addTo(map); m.bindPopup('<b>' + escHtml(w.name) + '</b><br>📍 ' + escHtml(agoText(w.updatedAt))); pts.push([Number(w.lat), Number(w.lng)]); } catch(e) {} });
         jobPins.forEach(function(j){ try { const m = L.marker([Number(j.destLat), Number(j.destLng)], { icon: pinIcon('🏠') }).addTo(map); m.bindPopup('<b>' + escHtml(j.service || 'Job') + '</b><br>' + escHtml(j.city || '') + ' · ' + escHtml(j.status || '')); pts.push([Number(j.destLat), Number(j.destLng)]); } catch(e) {} });
@@ -4719,17 +4766,16 @@ async function loadAdminAudit(){
   }catch(e){}
 }
 async function toggleReviewPublished(idv, pub){
-  try{ await api('/api/jobs/' + idv, { method: 'PATCH', body: JSON.stringify({ reviewPublished: pub }) }); loadAdmin(); }
+  try{ await api('/api/jobs/' + idv, { method: 'PATCH', body: JSON.stringify({ reviewPublished: pub }) }); loadAdminRatings(); loadAdminJobs(); }
   catch(e){ alert(e.message); }
 }
-async function sendQuote(idv){ return sendEstimate(idv,false); }
 async function postFromRequest(idv, custPrice){
   const pay=document.getElementById('jp-'+idv).value;
   const extra=document.getElementById('jn-'+idv).value;
   const payN=Number(pay);
   if(!payN || payN<=0){ alert('Set the worker pay first.'); return; }
   if(!await appConfirm('Post this job to the workers?\n\nWorker pay: $'+payN+'\nCustomer price: $'+custPrice+'\nExtra info for the worker: '+(extra||'—')+'\n\nActive workers in the area get notified right away.')) return;
-  try{ await api('/api/requests/'+idv+'/create-job',{method:'POST', body:JSON.stringify({payOffer:payN, notes:extra})}); loadAdmin(); }
+  try{ await api('/api/requests/'+idv+'/create-job',{method:'POST', body:JSON.stringify({payOffer:payN, notes:extra})}); loadAdminRequests(); loadAdminJobs(); loadCalendar(); }
   catch(e){ alert(e.message); }
 }
 let adminWorkersCache=[];
@@ -4756,7 +4802,7 @@ async function rankSkill(wid, skill, stars){
   if(stars===(cur[skill]||0)) delete cur[skill]; else cur[skill]=stars;
   try{ await api('/api/workers/'+wid,{method:'PATCH',body:JSON.stringify({skillRanks:cur})}); }
   catch(e){ alert(e.message); }
-  loadAdmin();
+  loadAdminWorkers();
 }
 // ---------- Worker trade boxes in the admin card (v41) ----------
 // The worker's 7 self-rated boxes (level + tools) with the Team's
@@ -4784,10 +4830,10 @@ async function adminSetVerified(wid, key, val){
   body.tradeVerified[key] = parseInt(val, 10) || 0;
   try{ await api('/api/workers/' + wid, { method: 'PATCH', body: JSON.stringify(body) }); }
   catch(e){ alert(e.message); }
-  loadAdmin();
+  loadAdminWorkers();
 }
-async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdmin(); }
-async function removeWorkerPhoto(wid){ if(!await appConfirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdmin(); }catch(e){ alert(e.message); } }
+async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdminWorkers(); loadAdminCaptains(); loadAdminMap(); }
+async function removeWorkerPhoto(wid){ if(!await appConfirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdminWorkers(); loadAdminMap(); }catch(e){ alert(e.message); } }
 function escAttr(v){ return (''+(v||'')).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function editWorkerForm(idv){
   const w = adminWorkersCache.find(function(x){return x.id===idv;});
@@ -4804,7 +4850,7 @@ function editWorkerForm(idv){
     + inp('ew-exp-'+idv,'Experience',pf.experience)
     + inp('ew-veh-'+idv,'Vehicle',pf.vehicleStyle||w.vehicle)
     + inp('ew-notes-'+idv,'Notes (Team only)',pf.notes)
-    + '<button class="black" onclick="saveWorkerEdit(\''+idv+'\')">Save changes</button> <button class="ghost" onclick="loadAdmin()">Cancel</button></div>';
+    + '<button class="black" onclick="saveWorkerEdit(\''+idv+'\')">Save changes</button> <button class="ghost" onclick="loadAdminWorkers()">Cancel</button></div>';
 }
 async function saveWorkerEdit(idv){
   const v = function(i){ const el=document.getElementById(i); return el?el.value:''; };
@@ -4814,12 +4860,12 @@ async function saveWorkerEdit(idv){
       name:v('ew-name-'+idv), phone:v('ew-phone-'+idv), email:v('ew-email-'+idv),
       profile:{city:v('ew-city-'+idv), skills:skills, experience:v('ew-exp-'+idv), vehicleStyle:v('ew-veh-'+idv), notes:v('ew-notes-'+idv)}
     })});
-    loadAdmin();
+    loadAdminWorkers(); loadAdminMap();
   }catch(e){ alert(e.message); }
 }
-async function delRequest(idv){ if(!await appConfirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdmin(); }
-async function delJob(idv){ if(!await appConfirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); loadAdmin(); }
-async function delWorker(idv, name){ if(!await appConfirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdmin(); }
+async function delRequest(idv){ if(!await appConfirm('Delete quote/request '+idv+'? This removes the request and its messages for good.')) return; await api('/api/requests/'+idv,{method:'DELETE'}); loadAdminRequests(); loadCalendar(); }
+async function delJob(idv){ if(!await appConfirm('Cancel job '+idv+'? Workers will no longer see it.')) return; await api('/api/jobs/'+idv,{method:'DELETE'}); const jobsDel = await loadAdminJobs(); loadCalendar(); loadAdminMap(jobsDel); }
+async function delWorker(idv, name){ if(!await appConfirm('Delete worker '+(name||idv)+'? This removes their account for good. Any job they claimed goes back to Open.')) return; await api('/api/workers/'+idv,{method:'DELETE'}); loadAdminWorkers(); const jobsDelW = await loadAdminJobs(); loadAdminCaptains(); loadAdminMap(jobsDelW); }
 // ---------- Dispatch picker (v41) ----------
 // For the service typed in the Create-a-job card, the server ranks the
 // ACTIVE workers by their effective level + tools in that job's trade.
@@ -4855,7 +4901,7 @@ async function createJob(){
     body.assignedWorkerId = wid; body.silent = true; // direct offer: only he is alerted (in-app + email)
   }
   try{ await api('/api/jobs',{method:'POST', body:JSON.stringify(body)});
-    document.getElementById('jMsg').textContent = wid ? 'Job offered directly to the selected worker.' : 'Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; loadAdmin();
+    document.getElementById('jMsg').textContent = wid ? 'Job offered directly to the selected worker.' : 'Job posted. Active workers can claim it now.'; document.getElementById('jSchedDate').value=''; document.getElementById('jSchedTime').value=''; const jobsNew = await loadAdminJobs(); loadCalendar(); loadAdminMap(jobsNew);
   }catch(e){ document.getElementById('jMsg').textContent=e.message; }
 }
 // v63: reopen at the technician door on devices that entered as one.
