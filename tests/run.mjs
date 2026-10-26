@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-6', swSrc.includes("const CACHE = 'ghs-app-v80-6'"));
+t('static: SW cache is ghs-app-v80-7', swSrc.includes("const CACHE = 'ghs-app-v80-7'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1442,7 +1442,10 @@ const stripeMock = http.createServer(async (req, res) => {
   // v54: mark a stored Checkout session as paid — flips its subscription
   // active (subscription mode) or its PaymentIntent succeeded (payment).
   if (u.pathname === '/__session') { const s = stripeState.sessions[form.id]; if (s && form.paid) { s.payment_status = 'paid'; s.status = 'complete'; if (s.subscription && stripeState.subs[s.subscription]) { const sub = stripeState.subs[s.subscription]; sub.status = 'active'; const pi = sub.latest_invoice && sub.latest_invoice.payment_intent; if (pi && stripeState.pis[pi.id]) stripeState.pis[pi.id].status = 'succeeded'; } if (s.payment_intent && stripeState.pis[s.payment_intent]) { stripeState.pis[s.payment_intent].status = 'succeeded'; stripeState.pis[s.payment_intent].amount_received = stripeState.pis[s.payment_intent].amount; } } return send(200, { ok: true }); }
-  if (req.method === 'POST' && u.pathname.replace(/^\/v1/, '') === '/refunds') { const rf = { id: 're_mock_' + (++stripeState.n), payment_intent: form.payment_intent || '', amount: Number(form.amount || 0), status: 'succeeded' }; stripeState.refunds.push(rf); return send(200, rf); }
+  // v80.7: force POST /refunds to fail for ONE payment_intent (the
+  // refund dying midway — the partial-recording pin needs a leg to die).
+  if (u.pathname === '/__failrefund') { stripeState.failRefundPi = form.pi || ''; return send(200, { ok: true }); }
+  if (req.method === 'POST' && u.pathname.replace(/^\/v1/, '') === '/refunds') { if (stripeState.failRefundPi && form.payment_intent === stripeState.failRefundPi) return send(402, { error: { message: 'mock: forced refund failure' } }); const rf = { id: 're_mock_' + (++stripeState.n), payment_intent: form.payment_intent || '', amount: Number(form.amount || 0), status: 'succeeded' }; stripeState.refunds.push(rf); return send(200, rf); }
   const path = u.pathname.replace(/^\/v1/, '');
   if (req.method === 'POST' && path === '/customers') return send(200, { id: 'cus_mock_' + (++stripeState.n) });
   if (req.method === 'GET' && path.startsWith('/customers/')) return send(200, { id: path.split('/')[2] });
@@ -1643,7 +1646,7 @@ const subH = await req2('POST', '/api/stripe/homecare-subscribe', { token: m1.to
 t('v24 A5: homecare-subscribe accepts a join body with source', subH.status === 200 && !!subH.j.subscriptionId);
 await mockActivate(subH.j.subscriptionId);
 const confH = await req2('POST', '/api/stripe/homecare-confirm', { token: m1.token, body: {} });
-t('v24 A5: homecare-confirm activates', confH.status === 200 && confH.j.active === true);
+t('v24 A5 (v80.7 #9 supersedes): homecare-confirm REFUSES — m1\'s only live subscription is the YARD one, so no HomeCare activates off it', confH.status === 400);
 cust = await customersByEmail();
 t('v24 A5: existing source is NEVER overwritten (INSTA1 survives)', !!cust['m1@t.local'] && cust['m1@t.local'].source === 'INSTA1');
 
@@ -4122,7 +4125,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.6: ghs-app-v80-6)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-6'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.7: ghs-app-v80-7)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-7'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4607,6 +4610,142 @@ const hh2 = await req2('GET', '/api/admin/stripe/health', { token: A806 });
 t('v80.6 server: the first stripe-health call is LIVE (ok, cached:false, exactly one upstream /account hit)', hh1.status === 200 && hh1.j.ok === true && hh1.j.cached === false && hitsAfterFirst806 === 1);
 t('v80.6 server: the second call inside the TTL answers from cache (cached:true + numeric ageSec) and Stripe is NOT fetched again', hh2.j.cached === true && typeof hh2.j.ageSec === 'number' && (stripeState.accountHits || 0) === 1);
 
+
+// ---------------- v80.7 SECURITY & MONEY PATCH: crash / refund dedupe + partial record / $0-refund resurrection / yard→HomeCare / ASAP labor-only / comma amounts (AUDITORIA-BUGS #1 #4 #8 #9 #31 #21, Gabriel 2026-10-26) ----------------
+{
+  const A807 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const reqs807 = async () => (await req2('GET', '/api/requests', { token: A807 })).j.requests || [];
+  const ordOf807 = async (cartId) => (await reqs807()).find(x => x.menuOrder && x.menuOrder.cartId === cartId);
+
+  // --- #1: malformed passwords are a clean auth answer, never a crash ---
+  const badLoginNum = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 12345678 } });
+  const badLoginNull = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: null } });
+  const badSignupNum = await req2('POST', '/api/signup', { body: { name: 'Bad Pw', email: 'badpw807@t.local', password: 12345678, role: 'customer' } });
+  const badSignupNull = await req2('POST', '/api/signup', { body: { name: 'Bad Pw', email: 'badpw807@t.local', password: null, role: 'customer' } });
+  const badResetNum = await req2('POST', '/api/auth/reset', { body: { token: 'deadbeef', password: 12345678 } });
+  t('v80.7 #1: login with a NUMERIC password gets the normal invalid-credentials answer (401), no throw', badLoginNum.status === 401);
+  t('v80.7 #1: login with a NULL password gets the normal invalid-credentials answer (401), no throw', badLoginNull.status === 401);
+  t('v80.7 #1: signup with a NUMERIC password is a clean 400', badSignupNum.status === 400);
+  t('v80.7 #1: signup with a NULL password is a clean 400', badSignupNull.status === 400);
+  t('v80.7 #1: reset with a NUMERIC password is a clean 400 (invalid link), no throw', badResetNum.status === 400);
+  const health807 = await fetch(BASE2 + '/api/health');
+  const goodLogin807 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  t('v80.7 #1: the server is STILL ALIVE afterwards and a valid login still works (hash semantics unchanged)', health807.ok && goodLogin807.status === 200 && !!goodLogin807.j.token);
+  t('static v80.7 #1: the last-resort nets exist (unhandledRejection kept alive + handler-level catch)', serverSrc.includes("process.on('unhandledRejection'") && serverSrc.includes('handleRequest(req, res).catch('));
+
+  // --- shared fixture: $250 cart — deposit via the LINK, balance via the APP ---
+  const bookSplit807 = async (email, phone, name) => {
+    const cust = await mkMember(email, phone);
+    const cart = await req2('POST', '/api/admin/carts', { token: A807, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }], customerName: name } });
+    const cid = cart.j.cart.id;
+    await req2('POST', '/api/carts/' + cid + '/checkout', { token: cust.token, body: { name, phone, email, address: '5 Split St', city: 'Fairfield', when: 'Today' } });
+    const sess = sessionForCart(cid, 'payment');
+    await mockSessionPaid(sess.id);
+    await fetch(BASE2 + '/cart/' + cid + '?paid=1&session_id=' + sess.id, { headers: { Authorization: 'Bearer ' + cust.token } });
+    const ord = await ordOf807(cid);
+    const pay = await req2('POST', '/api/orders/pay', { token: cust.token, body: { requestId: ord.id } });
+    await mockPiStatus(pay.j.paymentIntentId, 'succeeded');
+    const conf = await req2('POST', '/api/orders/pay-confirm', { token: cust.token, body: { requestId: ord.id, paymentIntentId: pay.j.paymentIntentId } });
+    const ord2 = (await reqs807()).find(x => x.id === ord.id);
+    return { cust, cid, ord: ord2, depPi: ord.payment.pi, balPi: pay.j.paymentIntentId, confStatus: conf.status };
+  };
+
+  // --- #4: refund dedupe — each PI refunded ONCE, recorded, cart disarmed ---
+  const sR = await bookSplit807('split-r@t.local', '(707) 555-0281', 'Split Rae');
+  t('v80.7 #4 setup: deposit via link + balance via app = PAID IN FULL, both legs stamped', sR.confStatus === 200 && !!sR.ord && sR.ord.payment.status === 'paid' && sR.ord.payment.balancePi === sR.balPi && !!sR.depPi);
+  const rfBefore807 = stripeState.refunds.length;
+  const rfR = await req2('POST', '/api/requests/' + sR.ord.id + '/refund', { token: A807, body: {} });
+  const rfLegsR = stripeState.refunds.slice(rfBefore807);
+  t('v80.7 #4: the refund completes (200) for exactly the $250 paid — not $500 of double-counted legs', rfR.status === 200 && rfR.j.refunded === 250);
+  t('v80.7 #4: Stripe saw exactly TWO refunds — the deposit PI once, the balance PI once', rfLegsR.length === 2 && rfLegsR.filter(x => x.payment_intent === sR.depPi).length === 1 && rfLegsR.filter(x => x.payment_intent === sR.balPi).length === 1 && rfLegsR.reduce((s, x) => s + x.amount, 0) === 25000);
+  const ordR2 = (await reqs807()).find(x => x.id === sR.ord.id);
+  const cartsAdmR = await req2('GET', '/api/admin/carts', { token: A807 });
+  const cartAdmR = (cartsAdmR.j.carts || []).find(x => x.id === sR.cid);
+  const balAfterR = await req2('POST', '/api/carts/' + sR.cid + '/checkout', { body: { balance: true } });
+  t('v80.7 #4: the refund is RECORDED (refundedCents + per-leg record), the order is Cancelled, the cart stays sealed and its link refuses any further balance charge (400)', !!ordR2 && ordR2.status === 'Cancelled' && !!ordR2.refund && ordR2.refund.refundedCents === 25000 && Array.isArray(ordR2.refund.legs) && ordR2.refund.legs.length === 2 && !!cartAdmR && cartAdmR.payState.balancePaid === true && balAfterR.status === 400);
+
+  // --- #4b: a midway Stripe failure is RECORDED as partial; a retry finishes only the outstanding leg ---
+  const sP = await bookSplit807('split-p@t.local', '(707) 555-0282', 'Split Pam');
+  await fetch('http://127.0.0.1:8980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: sP.balPi }) });
+  const rfBeforeP = stripeState.refunds.length;
+  const rfP1 = await req2('POST', '/api/requests/' + sP.ord.id + '/refund', { token: A807, body: {} });
+  const ordP1 = (await reqs807()).find(x => x.id === sP.ord.id);
+  t('v80.7 #4b: a midway refund failure answers 502 and is RECORDED as partial ($50 leg only) — the order is NOT cancelled', rfP1.status === 502 && rfP1.j.partial === true && !!ordP1 && ordP1.status !== 'Cancelled' && !!ordP1.refund && ordP1.refund.partial === true && ordP1.refund.refundedCents === 5000);
+  t('v80.7 #4b: only the deposit PI was refunded before the failure', stripeState.refunds.slice(rfBeforeP).filter(x => x.payment_intent === sP.depPi).length === 1 && stripeState.refunds.slice(rfBeforeP).filter(x => x.payment_intent === sP.balPi).length === 0);
+  await fetch('http://127.0.0.1:8980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: '' }) });
+  const rfP2 = await req2('POST', '/api/requests/' + sP.ord.id + '/refund', { token: A807, body: {} });
+  const ordP2 = (await reqs807()).find(x => x.id === sP.ord.id);
+  const cartsAdmP = await req2('GET', '/api/admin/carts', { token: A807 });
+  const cartAdmP = (cartsAdmP.j.carts || []).find(x => x.id === sP.cid);
+  const balAfterP = await req2('POST', '/api/carts/' + sP.cid + '/checkout', { body: { balance: true } });
+  t('v80.7 #4b: the retry finishes ONLY the outstanding balance leg — $250 total, deposit PI never re-refunded, order Cancelled, cart sealed + link refused (400)', rfP2.status === 200 && rfP2.j.refunded === 250 && !!ordP2 && ordP2.status === 'Cancelled' && ordP2.refund.refundedCents === 25000 && !ordP2.refund.partial && stripeState.refunds.filter(x => x.payment_intent === sP.depPi).length === 1 && stripeState.refunds.filter(x => x.payment_intent === sP.balPi).length === 1 && !!cartAdmP && cartAdmP.payState.balancePaid === true && balAfterP.status === 400);
+
+  // --- #8: a $0-refund cancellation cannot be resurrected by a late balance PI ---
+  const custZ = await mkMember('zero-z@t.local', '(707) 555-0283');
+  const cartZ = await req2('POST', '/api/admin/carts', { token: A807, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }], customerName: 'Zero Zed' } });
+  const cidZ = cartZ.j.cart.id;
+  await req2('POST', '/api/carts/' + cidZ + '/checkout', { token: custZ.token, body: { name: 'Zero Zed', phone: '7075550283', email: 'zero-z@t.local', address: '5 Zero St', city: 'Fairfield', when: 'Today' } });
+  const sessZ = sessionForCart(cidZ, 'payment');
+  await mockSessionPaid(sessZ.id);
+  await fetch(BASE2 + '/cart/' + cidZ + '?paid=1&session_id=' + sessZ.id, { headers: { Authorization: 'Bearer ' + custZ.token } });
+  const ordZ = await ordOf807(cidZ);
+  const jobZ = await req2('POST', '/api/requests/' + ordZ.id + '/create-job', { token: A807, body: { payOffer: 75 } });
+  const wZId = await mkWorker2('wz807@t.local', '(707) 555-0284', 'workpassZ807');
+  await req2('PATCH', '/api/workers/' + wZId, { token: A807, body: { status: 'active' } });
+  const WZ = (await req2('POST', '/api/login', { body: { email: 'wz807@t.local', password: 'workpassZ807' } })).j.token;
+  await req2('POST', '/api/worker/connect/start', { token: WZ, body: {} });
+  await req2('GET', '/api/worker/connect/status', { token: WZ });
+  const claimZ = await req2('POST', '/api/jobs/' + jobZ.j.job.id + '/claim', { token: WZ, body: {} });
+  const payZ = await req2('POST', '/api/orders/pay', { token: custZ.token, body: { requestId: ordZ.id } });
+  const rfZ = await req2('POST', '/api/requests/' + ordZ.id + '/refund', { token: A807, body: {} });
+  t('v80.7 #8 setup: a dispatched $50-deposit order cancels with a $0 refund (the kept fee covers the whole $50)', claimZ.status === 200 && payZ.status === 200 && rfZ.status === 200 && rfZ.j.refunded === 0);
+  const ordZ1 = (await reqs807()).find(x => x.id === ordZ.id);
+  t('v80.7 #8 setup: after the $0 refund the order is Cancelled but its payment still reads DEPOSIT (the resurrection window)', !!ordZ1 && ordZ1.status === 'Cancelled' && ordZ1.payment.status === 'deposit');
+  await wh2('payment_intent.succeeded', { id: payZ.j.paymentIntentId, status: 'succeeded', amount: 20000, amount_received: 20000, metadata: { kind: 'menu-order', requestId: ordZ.id } });
+  const ordZ2 = (await reqs807()).find(x => x.id === ordZ.id);
+  const audZ = await req2('GET', '/api/admin/audit', { token: A807 });
+  const dupsZ = (audZ.j.entries || []).filter(e => e.action === 'balance.duplicate' && e.target === ordZ.id);
+  t('v80.7 #8: the late balance PI does NOT resurrect the cancelled order — stays Cancelled + DEPOSIT, and the duplicate alert fires', !!ordZ2 && ordZ2.status === 'Cancelled' && ordZ2.payment.status === 'deposit' && dupsZ.length === 1);
+
+  // --- #9: a Yard-only member cannot confirm HomeCare off the Yard subscription ---
+  const y807 = await mkMember('yard-only807@t.local', '(707) 555-0285');
+  const ySub = await req2('POST', '/api/stripe/membership-subscribe', { token: y807.token, body: { plan: 'yard1' } });
+  await mockActivate(ySub.j.subscriptionId);
+  const yConf = await req2('POST', '/api/stripe/membership-confirm', { token: y807.token, body: { plan: 'yard1' } });
+  const hcTry = await req2('POST', '/api/stripe/homecare-confirm', { token: y807.token, body: {} });
+  const yMe = await req2('GET', '/api/me', { token: y807.token });
+  t('v80.7 #9: homecare-confirm REJECTS a Yard-only subscription (400) — no free HomeCare off a Yard plan', yConf.status === 200 && yConf.j.active === true && hcTry.status === 400);
+  t('v80.7 #9: the account stays Yard — homeCareStatus none, plan type yard', !!yMe.j.user && yMe.j.user.homeCareStatus === 'none' && yMe.j.user.membershipType === 'yard');
+
+  // --- #31: ASAP rides on labor only (the nodisc haul add-on is excluded) ---
+  const menuPost807 = (tk, menuOrder) => req2('POST', '/api/requests', { token: tk, body: { service: 'Menu order', description: 'v80.7 asap pin', address: '9 Audit Way', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder } });
+  const guest807 = (await req2('POST', '/api/signup', { body: { name: 'Guest 807', email: 'guest807@t.local', password: 'password123', phone: '7075550286', role: 'customer' } })).j.token;
+  const haulExtras807 = [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50 }];
+  const asapG = await menuPost807(guest807, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 225, member: 190, due: 225 } });
+  t('v80.7 #31: guest ASAP fee is 25% of LABOR $175 = $44 (the $50 haul add-on is NOT multiplied) — due $269, not $281', asapG.status === 201 && asapG.j.request.menuOrder.totals.asapFee === 44 && asapG.j.request.menuOrder.totals.due === 269);
+  const m807 = await mkMember('member807@t.local', '(707) 555-0287');
+  const sub807 = await req2('POST', '/api/stripe/homecare-subscribe', { token: m807.token, body: {} });
+  await mockActivate(sub807.j.subscriptionId);
+  const conf807 = await req2('POST', '/api/stripe/homecare-confirm', { token: m807.token, body: {} });
+  const asapM = await menuPost807(m807.token, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 225, member: 190, due: 190 } });
+  t('v80.7 #31: member ASAP fee is 25% of the DISCOUNTED labor $140 = $35 — due $225, not $238', conf807.status === 200 && conf807.j.active === true && asapM.status === 201 && asapM.j.request.menuOrder.totals.asapFee === 35 && asapM.j.request.menuOrder.totals.due === 225);
+
+  // --- #21 (client): typed money parses with comma stripping ---
+  t('static v80.7 #21: parseMoneyInput exists and BOTH hold actions use it (the raw parseFloat form is gone)', htmlSrc.includes('function parseMoneyInput(') && htmlSrc.includes('const cents=parseMoneyInput(v);') && !htmlSrc.includes('Math.round(parseFloat(v)*100)'));
+  t('v80.7 #21: "1,000" parses to $1,000.00 (100000 cents) — not $1.00', run('parseMoneyInput("1,000")') === 100000);
+  t('v80.7 #21: "$1,000.50" parses to 100050 and a plain "250" still parses to 25000', run('parseMoneyInput("$1,000.50")') === 100050 && run('parseMoneyInput("250")') === 25000);
+
+  // --- v80.7 (form fix): POST /api/jobs refuses a missing/empty pay offer (the Create-a-job placeholder trap) ---
+  const jobsBefore807 = (await req2('GET', '/api/jobs', { token: A807 })).j.jobs || [];
+  const noPay807 = await req2('POST', '/api/jobs', { token: A807, body: { service: 'Form fix pin', city: 'Fairfield' } });
+  const emptyPay807 = await req2('POST', '/api/jobs', { token: A807, body: { service: 'Form fix pin', city: 'Fairfield', payOffer: '' } });
+  const jobsAfterBad807 = (await req2('GET', '/api/jobs', { token: A807 })).j.jobs || [];
+  t('v80.7 form: POST /api/jobs with payOffer missing or empty -> 400 and NO job is created', noPay807.status === 400 && emptyPay807.status === 400 && jobsAfterBad807.length === jobsBefore807.length);
+  const goodPay807 = await req2('POST', '/api/jobs', { token: A807, body: { service: 'Form fix pin OK', city: 'Fairfield', payOffer: 75 } });
+  t('v80.7 form: POST /api/jobs with payOffer 75 succeeds and the created job shows payOffer 75', goodPay807.status === 201 && !!goodPay807.j.job && goodPay807.j.job.payOffer === 75);
+  if (goodPay807.j && goodPay807.j.job) await req2('DELETE', '/api/jobs/' + goodPay807.j.job.id, { token: A807 });
+  t('static v80.7 form: Create-a-job money placeholders are marked as examples (Ej:) and the client pay guard exists', htmlSrc.includes('id="jPay" placeholder="Ej: 75"') && htmlSrc.includes('id="jCustPrice" placeholder="Ej: 150"') && htmlSrc.includes('the example is not a value'));
+}
 
 try { child2.kill('SIGTERM'); } catch (e) {}
 try { stripeMock.close(); } catch (e) {}

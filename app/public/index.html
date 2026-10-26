@@ -1047,10 +1047,10 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     </div>
     <h3 id="admSecCreateJob">Create a job — admin only</h3>
     <div class="card">
-      <div class="row"><div><label>Service</label><input id="jService" placeholder="TV Mounting & Installs"></div><div><label>City</label><input id="jCity" placeholder="Fairfield"></div><div><label>When</label><input id="jWhen" placeholder="Today"></div></div>
-      <div class="row"><div><label>Scheduled date (shows on calendar)</label><input id="jSchedDate" type="date"></div><div><label>Scheduled time</label><input id="jSchedTime" placeholder="10:00 AM"></div></div>
+      <div class="row"><div><label>Service</label><input id="jService" placeholder="Ej: TV Mounting & Installs"></div><div><label>City</label><input id="jCity" placeholder="Ej: Fairfield"></div><div><label>When</label><input id="jWhen" placeholder="Ej: Today"></div></div>
+      <div class="row"><div><label>Scheduled date (shows on calendar)</label><input id="jSchedDate" type="date"></div><div><label>Scheduled time</label><input id="jSchedTime" placeholder="Ej: 10:00 AM"></div></div>
       <label>Public job description (no address)</label><textarea id="jDesc"></textarea>
-      <div class="row"><div><label>Pay offer to worker $</label><input id="jPay" placeholder="75"></div><div><label>Customer price $</label><input id="jCustPrice" placeholder="150"></div></div>
+      <div class="row"><div><label>Pay offer to worker $</label><input id="jPay" placeholder="Ej: 75"></div><div><label>Customer price $</label><input id="jCustPrice" placeholder="Ej: 150"></div></div>
       <div class="row"><div><label>Customer name</label><input id="jName"></div><div><label>Customer phone</label><input id="jPhone"></div></div>
       <label>Full address (private)</label><input id="jAddr">
       <label>Private notes</label><input id="jNotes">
@@ -3879,10 +3879,14 @@ async function holdAct(idv, action, body){
   try{ const d=await api('/api/requests/'+idv+'/hold/'+action,{method:'POST', body:JSON.stringify(body||{})}); if(m) m.textContent='Done.'; return d; }
   catch(e){ if(m) m.textContent=e.message; throw e; }
 }
+// v80.7 fix #21 (audit #21): typed amounts are parsed with the same
+// non-numeric stripping adjustCartBalance uses — parseFloat alone
+// reads "1,000" as 1, so capturing a typed $1,000 charged $1.00.
+function parseMoneyInput(v){ const n=parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g,'')); return isFinite(n) ? Math.round(n*100) : NaN; }
 async function holdCapture(idv, defCents){
   const v=await appPrompt('Final amount to charge NOW ($). You decide the amount and the moment — nothing is ever charged automatically.', ((defCents||0)/100).toFixed(2));
   if(v==null) return;
-  const cents=Math.round(parseFloat(v)*100);
+  const cents=parseMoneyInput(v);
   if(!(cents>0)){ alert('Enter an amount over $0.'); return; }
   try{ await holdAct(idv,'capture',{finalCents:cents}); loadAdminRequests(); }catch(e){}
 }
@@ -3893,7 +3897,7 @@ async function holdCaptureVisit(idv, visitCents){
 async function holdIncrement(idv, targetCents){
   const v=await appPrompt('New TOTAL authorization ($):', ((targetCents||0)/100).toFixed(2));
   if(v==null) return;
-  const cents=Math.round(parseFloat(v)*100);
+  const cents=parseMoneyInput(v);
   if(!(cents>0)){ alert('Enter a total over $0.'); return; }
   try{ await holdAct(idv,'increment',{totalCents:cents}); loadAdminRequests(); }catch(e){ alert('Increment failed — send a balance authorization instead. Details are in the panel message.'); }
 }
@@ -4895,6 +4899,10 @@ function queueJobCandidates(){ if (jCandTimer) clearTimeout(jCandTimer); jCandTi
 async function createJob(){
   const wid = (document.getElementById('jWorker') || {}).value || '';
   const body = {service:document.getElementById('jService').value, city:document.getElementById('jCity').value, when:document.getElementById('jWhen').value, schedDate:document.getElementById('jSchedDate').value, schedTime:document.getElementById('jSchedTime').value, description:document.getElementById('jDesc').value, payOffer:document.getElementById('jPay').value, customerPrice:document.getElementById('jCustPrice').value, customerName:document.getElementById('jName').value, customerPhone:document.getElementById('jPhone').value, address:document.getElementById('jAddr').value, notes:document.getElementById('jNotes').value};
+  // v80.7 (form fix): the pay placeholder is an EXAMPLE, not a value — an
+  // empty/invalid pay field must never post; the server also 400s it.
+  const payNum = Number(body.payOffer);
+  if (!body.payOffer || !payNum || payNum <= 0) { document.getElementById('jMsg').textContent = '⚠️ Falta el pago al trabajador (pay offer) — el ejemplo no es un valor. / Worker pay is required — the example is not a value.'; return; }
   if (wid) {
     const cand = jCandCache.find(function(c){ return c.id === wid; });
     if (cand && cand.paused && !await appConfirm('⚠️ ' + cand.name + ' está EN PAUSA (él mismo se puso no disponible).\n\n¿Ofrecerle el trabajo de todos modos? / He is PAUSED — offer anyway?')) return;

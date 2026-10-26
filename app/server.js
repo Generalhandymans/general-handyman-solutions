@@ -52,8 +52,12 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
 const sessions = new Map(); // token -> { uid, exp } — sessions expire server-side too, not just in the browser
 
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
-function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
-function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
+// v80.7 fix #1 (audit #1): scryptSync THROWS on non-string input — a
+// JSON body like {"password":12345678} killed the whole process via
+// login/signup. Coerce at this boundary so the hash functions can
+// never throw on shape; handlers additionally reject non-strings.
+function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
+function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
 function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -2396,6 +2400,12 @@ function recordRequestDeposit(r, info) {
 // payout + captain-accrual chance, exactly like recordRequestPayment.
 // The amount must equal the outstanding balanceCents to the cent.
 function settleRequestBalance(r, piId, cents) {
+  // v80.7 fix #8 (audit #8): a CANCELLED / refunded order's balance is
+  // DEAD on this rail too — the pay-confirm twin already guarded it,
+  // but the payment_intent.succeeded webhook called straight in. A
+  // late balance PI (opened before the cancellation) must NOT settle:
+  // alert the admins (a refund is owed) and leave the books untouched.
+  if (orderBalanceDead(r)) { alertDuplicateBalance('webhook-settle', r, linkedCartForRequest(r), piId, cents); return false; }
   if (!r.payment || r.payment.status !== 'deposit') return false;
   const bal = Math.round(Number(r.payment.balanceCents) || 0);
   if (!(bal > 0) || Math.round(Number(cents) || 0) !== bal) return false;
@@ -4198,7 +4208,16 @@ function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   const member = svc.m + Math.round(discSum * 0.8) + nodiscSum;
   let due = isMember ? member : list;
   let asapFee = 0;
-  if (asap) { asapFee = Math.round(due * 0.25); due += asapFee; }
+  if (asap) {
+    // v80.7 fix #31 (audit #31): the ASAP +25% rides on LABOR only —
+    // the service plus its DISCOUNTABLE add-ons, at the price actually
+    // paid (member-discounted for members). Nodisc haul-away add-ons
+    // are pass-through and are NEVER urgency-multiplied (mirrors the
+    // estimate math in estCoreTotals, where materials stay out too).
+    const laborDue = isMember ? (svc.m + Math.round(discSum * 0.8)) : (svc.p + discSum);
+    asapFee = Math.round(laborDue * 0.25);
+    due += asapFee;
+  }
   return { list, member, due, asapFee, extras };
 }
 // ---------- v78: multi-service cart totals (guest cart / embedded checkout) ----------
@@ -4236,7 +4255,18 @@ function serverCartTotals(items, isMember) {
 }
 
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
-const server = http.createServer(async (req, res) => {
+// v80.7 fix #1: last-resort nets — an unexpected rejection or a throw
+// inside a handler must LOG and answer 500, never terminate the process
+// (Node ≥15 kills the process on unhandled rejections by default).
+process.on('unhandledRejection', e => { console.error('unhandledRejection (process kept alive):', (e && e.message) || e); });
+const server = http.createServer((req, res) => {
+  handleRequest(req, res).catch(e => {
+    console.error('request handler error (500 returned):', (e && e.message) || e);
+    if (!res.headersSent) { try { send(res, 500, { error: 'internal error — please try again in a moment' }); } catch (e2) {} }
+    else { try { res.end(); } catch (e2) {} }
+  });
+});
+async function handleRequest(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
   // Security headers on EVERY response (v33). The CSP names exactly what
@@ -4339,6 +4369,8 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const email = (b.email || '').toLowerCase();
     if (!email || !b.password || !b.name) return send(res, 400, { error: 'name, email and password required' });
+    // v80.7 fix #1: a non-string password is a clean 400, never a scrypt throw
+    if (typeof b.password !== 'string') return send(res, 400, { error: 'password must be at least 8 characters' });
     if (String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
     if (db.users.some(u => u.email === email)) return send(res, 409, { error: 'email already registered' });
     // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
@@ -4385,6 +4417,9 @@ const server = http.createServer(async (req, res) => {
     const email = (b.email || '').toLowerCase();
     const blocked = loginBlockedSecs(req, email);
     if (blocked > 0) return send(res, 429, { error: 'too many failed login attempts — try again in ' + Math.ceil(blocked / 60) + ' minute(s)' }, { 'Retry-After': String(blocked) });
+    // v80.7 fix #1: a non-string/empty password gets the normal
+    // invalid-credentials answer — it never reaches scrypt (throw = crash)
+    if (typeof b.password !== 'string' || !b.password) { noteLoginFailure(req, email); return send(res, 401, { error: 'wrong email or password' }); }
     const u = db.users.find(x => x.email === email);
     if (!u || !checkPw(b.password || '', u.pw)) { noteLoginFailure(req, email); audit(null, 'auth.login_failed', email, 'from ' + clientIp(req)); return send(res, 401, { error: 'wrong email or password' }); }
     loginAttempts.delete(loginKey(req, email));
@@ -5326,6 +5361,11 @@ const server = http.createServer(async (req, res) => {
   if (p === '/api/jobs' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
+    // v80.7 (form fix): the Create-a-job form's placeholder examples are
+    // NOT values — an empty/non-numeric pay field must never silently
+    // post a $0 job. Same guard as create-from-request (above).
+    const payOffer = Number(b.payOffer);
+    if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
     // v24 (E2): a job may be created PRE-ASSIGNED to one active worker.
     // With silent:true the broadcast fan-out is skipped entirely — no
     // notification records for the other workers, no job_posted email
@@ -5339,7 +5379,7 @@ const server = http.createServer(async (req, res) => {
       if (w) assignedWorkerId = w.id;
     }
     const silent = !!(b.silent && assignedWorkerId);
-    const j = { id: id('JOB'), status: assignedWorkerId ? 'Claimed' : 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer: Number(b.payOffer) || 0, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId, messages: [], createdAt: new Date().toISOString() };
+    const j = { id: id('JOB'), status: assignedWorkerId ? 'Claimed' : 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId, messages: [], createdAt: new Date().toISOString() };
     if (assignedWorkerId) j.claimedAt = j.createdAt;
     db.jobs.push(j);
     if (silent) {
@@ -5934,6 +5974,11 @@ const server = http.createServer(async (req, res) => {
     if (!stripeReady() || !user.stripeSubscriptionId) return send(res, 400, { error: 'no pending membership found' });
     try {
       const chk = await inlineSubscriptionPaid(user);
+      // v80.7 fix #9 (audit #9): the confirmed subscription must BE a
+      // HomeCare subscription — a live YARD subscription passed the old
+      // paid-only check and activated HomeCare free. Mirror the plan
+      // check membership-confirm already does.
+      if (!chk.plan || chk.plan.key !== 'homecare') return send(res, 400, { error: 'the paid subscription is not a HomeCare plan' });
       if (!chk.paid) return send(res, 200, { active: false });
       const wasTrial74 = !!(chk.sub && chk.sub.status === 'trialing');
       if (wasTrial74) user.inviteFreeMonthUsed = true; // v74: the trial activation spends the account's one free month
@@ -6397,9 +6442,11 @@ const server = http.createServer(async (req, res) => {
     if (!requireRole(user, ['admin'], res)) return;
     const r = db.requests.find(x => x.id === refundMatch[1]);
     if (!r) return send(res, 404, { error: 'request not found' });
-    if (r.refund && Number(r.refund.refundedCents) > 0) return send(res, 400, { error: 'this order was already refunded' });
+    // v80.7 fix #4b: a PARTIAL refund (recorded when Stripe died midway)
+    // may be retried to finish the job; a completed one may not.
+    if (r.refund && Number(r.refund.refundedCents) > 0 && !r.refund.partial) return send(res, 400, { error: 'this order was already refunded' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
-    const sources = [];
+    let sources = [];
     // v79 PIEZA 8: a self-serve DEPOSIT order that later paid its
     // balance holds TWO PIs on the REQUEST (deposit + balance) —
     // refund per payment, never the combined total against one PI.
@@ -6418,13 +6465,31 @@ const server = http.createServer(async (req, res) => {
       sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.amountCents) || 0), type: 'payment', refundedCents: 0 });
     }
     for (const h of requestHolds(r)) if (h.status === 'captured' && h.pi) sources.push({ pi: h.pi, cents: Math.round(Number(h.capturedCents) || 0), type: 'hold', hold: h, refundedCents: 0 });
-    const paidCents = sources.reduce((s, x) => s + x.cents, 0);
+    // v80.7 fix #4 (audit #4): the REQUEST legs and the CART legs above
+    // can name the SAME payment intents — the deposit landed via the
+    // cart link stamps both records, and the balance via /api/orders/pay
+    // seals the cart with the same PI. Dedupe by PI: each real payment
+    // is refunded at most once and the paid total is never counted
+    // twice (was: 4 sources for 2 PIs; the refund died on the second
+    // pass over an already-refunded PI and NOTHING was recorded).
+    const seenRefundPi = new Set();
+    sources = sources.filter(s => { if (!s.pi) return true; if (seenRefundPi.has(s.pi)) return false; seenRefundPi.add(s.pi); return true; });
+    // v80.7 fix #4b: on a retry after a midway failure, subtract what
+    // the recorded partial refund already returned, per PI.
+    const prevRefundLegs = (r.refund && r.refund.partial && Array.isArray(r.refund.legs)) ? r.refund.legs : [];
+    const refundedByPi = {};
+    let alreadyRefundedCents = 0;
+    for (const l of prevRefundLegs) { refundedByPi[l.pi] = (refundedByPi[l.pi] || 0) + (Number(l.refundedCents) || 0); alreadyRefundedCents += Number(l.refundedCents) || 0; }
+    for (const s of sources) { s.fullCents = s.cents; s.cents -= Math.min(s.cents, refundedByPi[s.pi] || 0); }
+    sources = sources.filter(s => s.cents > 0);
+    const paidCents = sources.reduce((s, x) => s + x.cents, 0) + alreadyRefundedCents;
     if (!(paidCents > 0)) return send(res, 400, { error: 'no captured payment to refund on this request' });
     const jobs = db.jobs.filter(j => j.requestId === r.id);
     const dispatched = jobs.some(j => j.assignedWorkerId || j.infoReleased || ['Claimed', 'On my way', 'Arrived', 'Done — photos sent'].includes(j.status));
     const keptCents = dispatched ? Math.min(7500, paidCents) : 0;
-    let toRefund = paidCents - keptCents;
-    const refundIds = [];
+    let toRefund = paidCents - keptCents - alreadyRefundedCents;
+    const refundIds = (r.refund && Array.isArray(r.refund.refundIds)) ? r.refund.refundIds.slice() : [];
+    let refundError = null;
     try {
       for (const s of sources) {
         if (toRefund <= 0) break;
@@ -6435,13 +6500,29 @@ const server = http.createServer(async (req, res) => {
         s.refundedCents = amt;
         toRefund -= amt;
       }
-    } catch (e) { console.error('refund failed', e.message); return send(res, 502, { error: 'Stripe refund failed: ' + e.message, refundedSoFar: refundIds }); }
-    const refundedCents = paidCents - keptCents - toRefund;
+    } catch (e) { refundError = e; }
+    const refundedCents = alreadyRefundedCents + sources.reduce((s, x) => s + (x.refundedCents || 0), 0);
     for (const s of sources) {
       if (s.type === 'payment' && s.refundedCents > 0) { r.payment.refundedCents = (Number(r.payment.refundedCents) || 0) + s.refundedCents; r.payment.status = r.payment.refundedCents >= (Number(r.payment.amountCents) || 0) ? 'refunded' : 'partially_refunded'; }
       if (s.type === 'hold' && s.refundedCents > 0) { s.hold.status = 'refunded'; s.hold.refundedCents = s.refundedCents; s.hold.updatedAt = new Date().toISOString(); }
     }
-    r.refund = { refundIds, refundedCents, keptFeeCents: keptCents, dispatched, at: new Date().toISOString(), by: user.id };
+    // v80.7 fix #4b: the per-leg record rides r.refund on BOTH outcomes,
+    // so what actually happened is never lost (see the partial path).
+    const legsByPi = {};
+    for (const l of prevRefundLegs) legsByPi[l.pi] = { pi: l.pi, type: l.type || 'payment', cents: Number(l.cents) || 0, refundedCents: Number(l.refundedCents) || 0 };
+    for (const s of sources) { if (!legsByPi[s.pi]) legsByPi[s.pi] = { pi: s.pi, type: s.type, cents: s.fullCents != null ? s.fullCents : s.cents, refundedCents: 0 }; legsByPi[s.pi].refundedCents += s.refundedCents || 0; }
+    if (refundError) {
+      // v80.7 fix #4b: Stripe died MIDWAY — record the partial outcome
+      // (legs refunded so far stay refunded on the books), do NOT cancel
+      // the order, and let a retry finish only what is outstanding.
+      r.refund = { refundIds, refundedCents, keptFeeCents: keptCents, dispatched, partial: true, error: refundError.message, legs: Object.values(legsByPi), at: new Date().toISOString(), by: user.id };
+      audit(user, 'request.refund_partial', r.id, 'refunded ' + usd(refundedCents / 100) + ' so far · Stripe error: ' + refundError.message);
+      notifyAdmins('payment', 'Order ' + r.id + ' refund FAILED midway — ' + usd(refundedCents / 100) + ' refunded so far. Retry the refund from the panel to finish it.');
+      save();
+      console.error('refund failed midway', refundError.message);
+      return send(res, 502, { error: 'Stripe refund failed: ' + refundError.message, refundedSoFar: refundIds, partial: true });
+    }
+    r.refund = { refundIds, refundedCents, keptFeeCents: keptCents, dispatched, legs: Object.values(legsByPi), at: new Date().toISOString(), by: user.id };
     r.status = 'Cancelled';
     // v80.5 GAP-1: DISARM the linked cart in the same operation — its
     // public link must stop offering (and charging) the balance the
@@ -7510,6 +7591,6 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
   }
 
   return send(res, 404, { error: 'not found' });
-});
+}
 
 loadFromSupabase().then(() => server.listen(PORT, () => console.log('GHS app running on port ' + PORT)));
