@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v69', swSrc.includes("const CACHE = 'ghs-app-v69'"));
+t('static: SW cache is ghs-app-v70', swSrc.includes("const CACHE = 'ghs-app-v70'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1256,6 +1256,14 @@ const stripeMock = http.createServer(async (req, res) => {
       stripeState.subs[sub.id] = sub;
       stripeState.pis['pi_mock_' + sn] = { id: 'pi_mock_' + sn, status: 'requires_confirmation', amount: 0, metadata: {} };
       sess.subscription = sub.id;
+      sess.payment_intent = 'pi_mock_' + sn;
+      // Stripe reports amount_total as what is due TODAY: the plan's
+      // first period (0 under a trial) plus any one-time line items
+      // (v70: the cart deposit riding the combined session).
+      const PRICE_AMTS = { price_hc_mock: 2900, price_1UTmMwLu9cCIcixBELdMhHh3: 7500, price_1UTmQtLu9cCIcixBkCpLd2k2: 15000, price_1UTmS6Lu9cCIcixB312eNpYF: 10000, price_1UTmSKLu9cCIcixBmcSF51Cm: 17500 };
+      let amt70 = form['subscription_data[trial_period_days]'] ? 0 : (PRICE_AMTS[form['line_items[0][price]'] || ''] || 0);
+      for (let i = 0; i < 4; i++) { const pd = form['line_items[' + i + '][price_data][unit_amount]']; if (pd) amt70 += Number(pd) || 0; }
+      sess.amount_total = amt70;
     } else {
       const amt = Number(form['line_items[0][price_data][unit_amount]'] || 0) + Number(form['line_items[1][price_data][unit_amount]'] || 0);
       const pn = ++stripeState.n;
@@ -2119,7 +2127,7 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   t('v56 cart: totals block carries BOTH figures — ctSubtotal + cartBigTotal embed data-l $430.00 / data-m $360.00, guest figure rendered first', pageAH.includes('id="ctSubtotal" data-l="$430.00" data-m="$360.00">$430.00<') && pageAH.includes('id="cartBigTotal" data-l="$430.00" data-m="$360.00"'));
   t('v56 cart: mixed-cart line pairs — labor drops ($75.00→$60.00 each, $225.00→$180.00 line), catalog drops ($125.00→$100.00), MATERIALS NEVER drop ($40.00/$40.00 each, $80.00/$80.00 line)', pageAH.includes('data-l="$75.00" data-m="$60.00"') && pageAH.includes('data-l="$225.00" data-m="$180.00"') && pageAH.includes('data-l="$125.00" data-m="$100.00"') && pageAH.includes('data-l="$40.00" data-m="$40.00"') && pageAH.includes('data-l="$80.00" data-m="$80.00"'));
   t('v56 cart: toggle wiring embedded — renderAmounts binds member figures to lines/total/Pay label and shows the savings row, subtotal follows the preview, unchecking restores guest figures (v57: the preview itself is set BY PLAN via syncJoinPreview)', pageAH.includes('function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }') && pageAH.includes('var asM=memberApplied||joinPreview') && pageAH.includes('n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l")') && pageAH.includes('sr.style.display=asM?"flex":"none"') && pageAH.includes('joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l")') && pageAH.includes('−$70.00'));
-  t('v56 cart: join-order note embedded hidden under the Pay button (v57: it NAMES the picked plan + price — EN + ES templates, member-total wording for discount plans, order-total wording for Yard)', pageAH.includes('id="joinOrderNote"') && pageAH.includes('display:none;color:#555') && pageAH.includes('to start your {planName} membership ({price}/mo)') && pageAH.includes('you come right back here to pay this member total') && pageAH.includes('pay this order total.') && pageAH.includes('para activar tu membresía {planName} de {price}/mes') && pageAH.includes('jn.style.display=on?"block":"none"') && pageAH.includes('jn.textContent=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl)'));
+  t('v70 cart: join-order note embedded hidden under the Pay button — ONE-checkout copy naming the picked plan + price + the real deposit/due math (EN + ES templates)', pageAH.includes('id="joinOrderNote"') && pageAH.includes('display:none;color:#555') && pageAH.includes('One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo)') && pageAH.includes('No second step, no paying twice.') && pageAH.includes('this order stays at the regular price.') && pageAH.includes('Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes)') && pageAH.includes('jn.style.display=on?"block":"none"') && pageAH.includes('jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ))'));
   t('v56 cart: member page UNCHANGED — no join checkbox, savings row flex from the server render, subtotal still opens on the regular figure with the savings bridge', pageBH.includes('id="ctSaveRow" style="display:flex') && !pageBH.includes('id="cJoin"') && pageBH.includes('id="ctSubtotal" data-l="$430.00" data-m="$360.00">$430.00<'));
   const estFnSrc56 = serverSrc.slice(serverSrc.indexOf('function estimatePageHtml'), serverSrc.indexOf('function installPageHtml'));
   t('v56 estimate: join stays the server-verified BUTTON pattern (estJoinBtn + join-checkout, full reload reprice) — NO cart-style checkbox/totals toggle on the estimate page', estFnSrc56.includes('estJoinBtn') && estFnSrc56.includes('/join-checkout') && !estFnSrc56.includes('id="cJoin"') && !estFnSrc56.includes('joinPreview'));
@@ -2131,10 +2139,9 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const admReqsB = await req2('GET', '/api/requests', { token: A2 });
   const convB = (admReqsB.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartB.j.cart.id);
   t('v62 path B: member cart converts at the member total (deposit $144 recorded of $360)', retB.status === 200 && !!convB && convB.payment.status === 'deposit' && convB.payment.amountCents === 14400 && convB.payment.totalCents === 36000);
-  // Path C — joins ON THE PAGE through hosted Checkout (v54): signup (the
-  // page's account step) → POST /checkout {join:true} → subscription
-  // session → the membership counts ONLY when Stripe marks the session
-  // paid and the ?joined=1 return verifies it → pay at member prices.
+  // Path C — joins ON THE PAGE (v70: ONE single checkout — the plan
+  // and the 40% deposit ride the same subscription-mode session; the
+  // membership + the booking settle together on the verified return).
   const suC = await req2('POST', '/api/signup', { body: { name: 'Path C', email: 'pathc@test.com', password: 'password123', phone: '7075550203', role: 'customer' } });
   const cartC2 = await req2('POST', '/api/admin/carts', { token: A2, body: { items: mixItems } });
   const pageC2 = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id);
@@ -2144,25 +2151,22 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const coC = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/checkout', { token: suC.j.token, body: Object.assign({}, detC, { join: true }) });
   const joinSessC = sessionForCart(cartC2.j.cart.id, 'subscription');
   const joinSubC = joinSessC && stripeState.subs[joinSessC.subscription];
-  t('v54 path C: the join tap opens a hosted SUBSCRIPTION session at the HomeCare price', coC.status === 200 && coC.j.next === 'join' && !!coC.j.url && !!joinSessC && !!joinSubC && joinSubC.items.data[0].price.id === 'price_hc_mock' && joinSubC.status === 'incomplete');
-  // The ?joined=1 flag WITHOUT Stripe proof activates nothing.
-  const preRetC = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?joined=1&session_id=' + joinSessC.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
+  t('v70 path C: ONE session carries BOTH — HomeCare price + the $144 member deposit as a one-time line (amount $173 = $29 plan + $144 deposit)', coC.status === 200 && coC.j.next === 'pay' && coC.j.plan === 'homecare' && coC.j.amount === 173 && coC.j.deposit === 144 && coC.j.planFirst === 29 && coC.j.total === 360 && coC.j.memberApplied === true && !!joinSessC && joinSessC.metadata.kind === 'cart-join' && joinSessC.amount_total === 17300 && !!joinSubC && joinSubC.items.data[0].price.id === 'price_hc_mock' && joinSubC.status === 'incomplete');
+  // The ?paid=1 flag WITHOUT Stripe proof activates and books NOTHING.
+  const preRetC = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?paid=1&session_id=' + joinSessC.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
   const preRetCH = await preRetC.text();
   const chkPreC = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/member-check', { body: { email: 'pathc@test.com' } });
-  t('v54 path C: an UNPAID join session activates nothing (no member price, join still offered)', chkPreC.status === 200 && chkPreC.j.member === false && preRetCH.includes('id="cJoin"') && !preRetCH.includes('data-i18n="joinedNote"'));
+  const reqsPreC = await req2('GET', '/api/requests', { token: A2 });
+  t('v70 path C: an UNPAID combined session activates nothing and books nothing (no member, no order, join still offered)', chkPreC.status === 200 && chkPreC.j.member === false && preRetCH.includes('id="cJoin"') && !(reqsPreC.j.requests || []).some(x => x.menuOrder && x.menuOrder.cartId === cartC2.j.cart.id));
   await mockSessionPaid(joinSessC.id);
-  const retC = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?joined=1&session_id=' + joinSessC.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
+  const retC = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?paid=1&session_id=' + joinSessC.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
   const retCH = await retC.text();
   const chkPostC = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/member-check', { body: { email: 'pathc@test.com' } });
-  t('v54 path C: the Stripe-verified join return activates the membership + reprices the cart', retC.status === 200 && chkPostC.j.member === true && retCH.includes('HomeCare member price applied') && retCH.includes('data-i18n="joinedNote"') && retCH.includes('$360.00'));
-  const cpC2 = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/checkout', { token: suC.j.token, body: detC });
-  const sessC2 = sessionForCart(cartC2.j.cart.id, 'payment');
-  t('v62 path C (join on the page): the session carries the 40% deposit of the member total ($144 of $360)', cpC2.status === 200 && cpC2.j.amount === 144 && cpC2.j.total === 360 && cpC2.j.memberApplied === true && !!sessC2 && sessC2.amount_total === 14400);
-  await mockSessionPaid(sessC2.id);
-  const retC2 = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?paid=1&session_id=' + sessC2.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
   const admReqsC = await req2('GET', '/api/requests', { token: A2 });
   const convC = (admReqsC.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartC2.j.cart.id);
-  t('v62 path C: the joined member cart converts at the member total (deposit state, $144 of $360)', retC2.status === 200 && !!convC && convC.payment.status === 'deposit' && convC.payment.amountCents === 14400 && convC.payment.totalCents === 36000 && convC.membership === 'member');
+  t('v70 path C: the ONE verified return does BOTH — membership active AND the job BOOKED at the member total (deposit $144 of $360, balance $216 on the same link)', retC.status === 200 && chkPostC.j.member === true && retCH.includes('Deposit received') && retCH.includes('Pay balance $216.00') && !!convC && convC.payment.status === 'deposit' && convC.payment.amountCents === 14400 && convC.payment.totalCents === 36000 && convC.membership === 'member');
+  const cpC2 = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/checkout', { token: suC.j.token, body: detC });
+  t('v70 path C: there is NO second payment step — a fresh checkout attempt on the booked cart is refused (400)', cpC2.status === 400);
   // Join reprice isolation: labor+materials only — the drop is EXACTLY the labor savings ($45)
   const cartLM = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ custom: true, kind: 'labor', name: 'Labor', price: 75, qty: 3 }, { custom: true, kind: 'other', name: 'Materials', price: 40, qty: 2 }] } });
   t('v52 cart: labor+materials cart totals — member drop is EXACTLY the labor savings ($305 → $260)', cartLM.status === 201 && cartLM.j.cart.listTotal === 305 && cartLM.j.cart.memberTotal === 260 && (cartLM.j.cart.listTotal - cartLM.j.cart.memberTotal) === 45);
@@ -2256,17 +2260,17 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const admReqsF = await req2('GET', '/api/requests', { token: A2 });
   const convF = (admReqsF.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartFId);
   t('v62 v55 session safety: the fresh session converts the edited cart (deposit $100 recorded, $250 total)', retF2.status === 200 && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 10000 && convF.payment.totalCents === 25000 && convF.menuOrder.totals.list === 250);
-  // Same protection for a pending HomeCare JOIN session on the cart.
+  // Same protection for a pending combined JOIN session on the cart (v70).
   const suG = await req2('POST', '/api/signup', { body: { name: 'Edit Join', email: 'editjoin@test.com', password: 'password123', phone: '7075550210', role: 'customer' } });
   const cartG = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Swap', qty: 1, unitPrice: 125 }] } });
   const cartGId = cartG.j.cart.id;
   const coG = await req2('POST', '/api/carts/' + cartGId + '/checkout', { token: suG.j.token, body: { name: 'Edit Join', phone: '7075550210', email: 'editjoin@test.com', address: '40 Join St', city: 'Fairfield', when: 'Today', join: true } });
   const joinSessG = sessionForCart(cartGId, 'subscription');
-  t('v55 setup: join session opened from the cart page', coG.status === 200 && coG.j.next === 'join' && !!joinSessG && joinSessG.status === 'open');
+  t('v55 setup: combined join session opened from the cart page', coG.status === 200 && coG.j.next === 'pay' && !!joinSessG && joinSessG.status === 'open');
   const editG = await req2('PUT', '/api/admin/carts/' + cartGId, { token: A2, body: { items: [{ serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }] } });
   t('v55 session safety: the edit EXPIRES the pending join session too', editG.status === 200 && stripeState.sessions[joinSessG.id].status === 'expired');
   await mockSessionPaid(joinSessG.id); // the race: Stripe completed it anyway
-  await fetch(BASE2 + '/cart/' + cartGId + '?joined=1&session_id=' + joinSessG.id, { headers: { Authorization: 'Bearer ' + suG.j.token } });
+  await fetch(BASE2 + '/cart/' + cartGId + '?paid=1&session_id=' + joinSessG.id, { headers: { Authorization: 'Bearer ' + suG.j.token } });
   const chkG = await req2('POST', '/api/carts/' + cartGId + '/member-check', { body: { email: 'editjoin@test.com' } });
   t('v55 session safety: the stale join return activates NO membership', chkG.status === 200 && chkG.j.member === false);
 
@@ -2285,54 +2289,47 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const pageV = await fetch(BASE2 + '/cart/' + cartV.j.cart.id);
   const pageVH = await pageV.text();
   t('v57 cart: the join box carries a plan picker — 5 plan radios (HomeCare pre-picked) + plan copy, and the Yard honesty note waits hidden in the picker', pageV.status === 200 && pageVH.includes('id="planPicker" style="display:none') && pageVH.includes('name="cPlan" value="homecare" checked') && pageVH.includes('name="cPlan" value="plus1"') && pageVH.includes('name="cPlan" value="plus2"') && pageVH.includes('name="cPlan" value="yard1"') && pageVH.includes('name="cPlan" value="yard2"') && pageVH.includes('HomeCare Plus — $100/mo') && pageVH.includes('HomeCare Plus — $175/mo') && pageVH.includes('Yard Care — $75/mo') && pageVH.includes('Yard Care — $150/mo') && pageVH.includes('id="yardNote" style="display:none') && pageVH.includes('the 20% discount on orders comes with HomeCare / HomeCare Plus'));
-  t('v57 cart: preview is BY PLAN — PLANS map embedded with disc flags (Yard disc:0), and the checkout POST sends the picked plan key', pageVH.includes('"homecare":{"name":"HomeCare","price":"$29","disc":1}') && pageVH.includes('"plus1":{"name":"HomeCare Plus","price":"$100","disc":1}') && pageVH.includes('"yard1":{"name":"Yard Care","price":"$75","disc":0}') && pageVH.includes('"yard2":{"name":"Yard Care","price":"$150","disc":0}') && pageVH.includes('yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"') && pageVH.includes('plan:wantJoin?selPlan():""'));
+  t('v57 cart: preview is BY PLAN — PLANS map embedded with disc flags (Yard disc:0), and the checkout POST sends the picked plan key', pageVH.includes('"homecare":{"name":"HomeCare","price":"$29","cents":2900,"disc":1}') && pageVH.includes('"plus1":{"name":"HomeCare Plus","price":"$100","cents":10000,"disc":1}') && pageVH.includes('"yard1":{"name":"Yard Care","price":"$75","cents":7500,"disc":0}') && pageVH.includes('"yard2":{"name":"Yard Care","price":"$150","cents":15000,"disc":0}') && pageVH.includes('yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"') && pageVH.includes('plan:wantJoin?selPlan():""'));
   const suT = await req2('POST', '/api/signup', { body: { name: 'Tamper', email: 'tamper@test.com', password: 'password123', phone: '7075550211', role: 'customer' } });
   const detT = { name: 'Tamper', phone: '7075550211', email: 'tamper@test.com', address: '41 Tamper St', city: 'Fairfield', when: 'Today' };
   const badPlan = await req2('POST', '/api/carts/' + cartV.j.cart.id + '/checkout', { token: suT.j.token, body: Object.assign({}, detT, { join: true, plan: 'gold' }) });
   const badPlan2 = await req2('POST', '/api/carts/' + cartV.j.cart.id + '/checkout', { token: suT.j.token, body: Object.assign({}, detT, { join: true, plan: 'price_1UTmMwLu9cCIcixBELdMhHh3' }) });
   t('v57 cart: a tampered/unknown plan key is a hard 400 (a smuggled Stripe price id is not a plan key)', badPlan.status === 400 && badPlan2.status === 400);
-  // Path P — picks HomeCare Plus on the cart page.
+  // Path P — picks HomeCare Plus on the cart page (v70: single checkout).
   const suP = await req2('POST', '/api/signup', { body: { name: 'Path P', email: 'pathp@test.com', password: 'password123', phone: '7075550212', role: 'customer' } });
   const cartP = await req2('POST', '/api/admin/carts', { token: A2, body: { items: mixItems } });
   const detP = { name: 'Path P', phone: '7075550212', email: 'pathp@test.com', address: '42 Plus St', city: 'Fairfield', when: 'Today' };
   const coP = await req2('POST', '/api/carts/' + cartP.j.cart.id + '/checkout', { token: suP.j.token, body: Object.assign({}, detP, { join: true, plan: 'plus1' }) });
   const joinSessP = sessionForCart(cartP.j.cart.id, 'subscription');
   const joinSubP = joinSessP && stripeState.subs[joinSessP.subscription];
-  t('v57 path P: picking HomeCare Plus opens a subscription session at the PLUS price (server-side plan map); the subscription metadata names plus1', coP.status === 200 && coP.j.next === 'join' && coP.j.plan === 'plus1' && !!joinSubP && joinSubP.items.data[0].price.id === 'price_1UTmS6Lu9cCIcixB312eNpYF' && joinSubP.metadata.plan === 'plus1');
+  t('v70 path P: ONE session at the PLUS price + the member deposit (amount $244 = $100 plan + $144 deposit); the subscription metadata names plus1', coP.status === 200 && coP.j.next === 'pay' && coP.j.plan === 'plus1' && coP.j.amount === 244 && coP.j.deposit === 144 && coP.j.planFirst === 100 && !!joinSubP && joinSubP.items.data[0].price.id === 'price_1UTmS6Lu9cCIcixB312eNpYF' && joinSubP.metadata.plan === 'plus1');
   await mockSessionPaid(joinSessP.id);
-  const retP = await fetch(BASE2 + '/cart/' + cartP.j.cart.id + '?joined=1&session_id=' + joinSessP.id, { headers: { Authorization: 'Bearer ' + suP.j.token } });
+  const retP = await fetch(BASE2 + '/cart/' + cartP.j.cart.id + '?paid=1&session_id=' + joinSessP.id, { headers: { Authorization: 'Bearer ' + suP.j.token } });
   const retPH = await retP.text();
   cust = await customersByEmail();
-  t('v57 path P: the verified Plus return records HomeCare Plus ACTIVE in the shared membership model (+ the HomeCare benefit flag every discount check reads)', retP.status === 200 && !!cust['pathp@test.com'] && cust['pathp@test.com'].membershipPlan.planKey === 'plus1' && cust['pathp@test.com'].membershipPlan.status === 'active' && cust['pathp@test.com'].homeCareStatus === 'active');
+  t('v70 path P: the ONE verified return records HomeCare Plus ACTIVE (+ the HomeCare benefit flag every discount check reads) AND books the job', retP.status === 200 && !!cust['pathp@test.com'] && cust['pathp@test.com'].membershipPlan.planKey === 'plus1' && cust['pathp@test.com'].membershipPlan.status === 'active' && cust['pathp@test.com'].homeCareStatus === 'active' && retPH.includes('Deposit received'));
   const chkP = await req2('POST', '/api/carts/' + cartP.j.cart.id + '/member-check', { body: { email: 'pathp@test.com' } });
-  t('v57 path P: a Plus member IS a discount member — member-check true and the return page renders member pricing', chkP.status === 200 && chkP.j.member === true && retPH.includes('data-i18n="joinedNote"') && retPH.includes('data-i18n="memberAppliedH"') && retPH.includes('$360.00'));
-  const cpP = await req2('POST', '/api/carts/' + cartP.j.cart.id + '/checkout', { token: suP.j.token, body: detP });
-  const sessP = sessionForCart(cartP.j.cart.id, 'payment');
-  t('v62 path P: after a Plus join the order books at the MEMBER total — 40% deposit session ($144 of $360)', cpP.status === 200 && cpP.j.amount === 144 && cpP.j.total === 360 && cpP.j.memberApplied === true && !!sessP && sessP.amount_total === 14400);
-  // Path Y — picks Yard Care on the cart page.
+  const admReqsP = await req2('GET', '/api/requests', { token: A2 });
+  const convP = (admReqsP.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartP.j.cart.id);
+  t('v70 path P: a Plus member IS a discount member — and the order already converted at the member total in the same step (deposit $144 of $360)', chkP.status === 200 && chkP.j.member === true && !!convP && convP.payment.status === 'deposit' && convP.payment.amountCents === 14400 && convP.payment.totalCents === 36000 && convP.membership === 'member');
+  // Path Y — picks Yard Care on the cart page (v70: single checkout).
   const suY = await req2('POST', '/api/signup', { body: { name: 'Path Y', email: 'pathy@test.com', password: 'password123', phone: '7075550213', role: 'customer' } });
   const cartY = await req2('POST', '/api/admin/carts', { token: A2, body: { items: mixItems } });
   const detY = { name: 'Path Y', phone: '7075550213', email: 'pathy@test.com', address: '43 Yard St', city: 'Fairfield', when: 'Today' };
   const coY = await req2('POST', '/api/carts/' + cartY.j.cart.id + '/checkout', { token: suY.j.token, body: Object.assign({}, detY, { join: true, plan: 'yard1' }) });
   const joinSessY = sessionForCart(cartY.j.cart.id, 'subscription');
   const joinSubY = joinSessY && stripeState.subs[joinSessY.subscription];
-  t('v57 path Y: picking Yard Care opens a subscription session at the YARD price; the subscription metadata names yard1', coY.status === 200 && coY.j.next === 'join' && coY.j.plan === 'yard1' && !!joinSubY && joinSubY.items.data[0].price.id === 'price_1UTmMwLu9cCIcixBELdMhHh3' && joinSubY.metadata.plan === 'yard1');
+  t('v70 path Y: ONE session at the YARD price + the GUEST-total deposit (amount $247 = $75 plan + $172 deposit); the subscription metadata names yard1', coY.status === 200 && coY.j.next === 'pay' && coY.j.plan === 'yard1' && coY.j.amount === 247 && coY.j.deposit === 172 && coY.j.planFirst === 75 && coY.j.memberApplied === false && !!joinSubY && joinSubY.items.data[0].price.id === 'price_1UTmMwLu9cCIcixBELdMhHh3' && joinSubY.metadata.plan === 'yard1');
   await mockSessionPaid(joinSessY.id);
-  const retY = await fetch(BASE2 + '/cart/' + cartY.j.cart.id + '?joined=1&session_id=' + joinSessY.id, { headers: { Authorization: 'Bearer ' + suY.j.token } });
+  const retY = await fetch(BASE2 + '/cart/' + cartY.j.cart.id + '?paid=1&session_id=' + joinSessY.id, { headers: { Authorization: 'Bearer ' + suY.j.token } });
   const retYH = await retY.text();
   cust = await customersByEmail();
-  t('v57 path Y: the verified Yard return records a YARD membership (yard1 active) and NO HomeCare benefit flag', retY.status === 200 && !!cust['pathy@test.com'] && cust['pathy@test.com'].membershipPlan.planKey === 'yard1' && cust['pathy@test.com'].membershipPlan.status === 'active' && cust['pathy@test.com'].homeCareStatus !== 'active');
-  t('v57 path Y: the page says membership active WITHOUT claiming a discount (joined-yard + yard-active banners; no member-price banner, no discount joined note, savings row stays hidden)', retYH.includes('data-i18n="joinedYardNote"') && retYH.includes('data-i18n="yardActiveH"') && !retYH.includes('data-i18n="joinedNote"') && !retYH.includes('data-i18n="memberAppliedH"') && retYH.includes('id="ctSaveRow" style="display:none'));
+  t('v70 path Y: the ONE verified return records a YARD membership (yard1 active), NO HomeCare benefit flag, and the job BOOKED at the guest total', retY.status === 200 && !!cust['pathy@test.com'] && cust['pathy@test.com'].membershipPlan.planKey === 'yard1' && cust['pathy@test.com'].membershipPlan.status === 'active' && cust['pathy@test.com'].homeCareStatus !== 'active' && retYH.includes('Deposit received') && retYH.includes('Pay balance $258.00') && !retYH.includes('data-i18n="memberAppliedH"'));
   const chkY = await req2('POST', '/api/carts/' + cartY.j.cart.id + '/member-check', { body: { email: 'pathy@test.com' } });
   t('v57 path Y: member-check (the DISCOUNT check) stays FALSE for a Yard member', chkY.status === 200 && chkY.j.member === false);
-  const cpY = await req2('POST', '/api/carts/' + cartY.j.cart.id + '/checkout', { token: suY.j.token, body: detY });
-  const sessY = sessionForCart(cartY.j.cart.id, 'payment');
-  t('v62 path Y: after a Yard join the order books at the GUEST total — 40% deposit session ($172 of $430, memberApplied false)', cpY.status === 200 && cpY.j.amount === 172 && cpY.j.total === 430 && cpY.j.memberApplied === false && !!sessY && sessY.amount_total === 17200);
-  await mockSessionPaid(sessY.id);
-  const retY2 = await fetch(BASE2 + '/cart/' + cartY.j.cart.id + '?paid=1&session_id=' + sessY.id, { headers: { Authorization: 'Bearer ' + suY.j.token } });
   const admReqsY = await req2('GET', '/api/requests', { token: A2 });
   const convY = (admReqsY.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartY.j.cart.id);
-  t('v62 path Y: the Yard member order converts at the guest total with membership=none (deposit $172 of $430)', retY2.status === 200 && !!convY && convY.payment.status === 'deposit' && convY.payment.amountCents === 17200 && convY.payment.totalCents === 43000 && convY.membership === 'none');
+  t('v70 path Y: the Yard order converted in the same step at the guest total with membership=none (deposit $172 of $430)', !!convY && convY.payment.status === 'deposit' && convY.payment.amountCents === 17200 && convY.payment.totalCents === 43000 && convY.membership === 'none');
   // The OTHER member question: Yard members ARE members for the app's
   // estimate-fee rules (POST /api/requests) — the shared once-per-account
   // free first in-person estimate, then the $50 member price; a guest
@@ -2341,22 +2338,24 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const yReq2 = await req2('POST', '/api/requests', { token: suY.j.token, body: { service: 'Fence repair', description: 'leaning', city: 'Fairfield', estimateType: 'inperson' } });
   t('v57 yard member: member-ESTIMATE rules recognize the Yard plan (first in-person estimate free, then $50 — never the $75 guest price)', yReq1.status === 201 && yReq1.j.request.estimateDue === 0 && yReq2.status === 201 && yReq2.j.request.estimateDue === 50);
   // Path W — the checkout.session.completed webhook (not the return)
-  // finishes a cart plan join: yard2 activates on the account from the
-  // yardcare branch, exactly like the HomeCare branch finishes carts.
+  // finishes a combined cart join: yard2 activates on the account AND
+  // the cart converts, both from the cart-join branch.
   const suW = await req2('POST', '/api/signup', { body: { name: 'Path W', email: 'pathw@test.com', password: 'password123', phone: '7075550214', role: 'customer' } });
   const cartW = await req2('POST', '/api/admin/carts', { token: A2, body: { items: mixItems } });
   const detW = { name: 'Path W', phone: '7075550214', email: 'pathw@test.com', address: '44 Webhook Way', city: 'Fairfield', when: 'Today' };
   const coW = await req2('POST', '/api/carts/' + cartW.j.cart.id + '/checkout', { token: suW.j.token, body: Object.assign({}, detW, { join: true, plan: 'yard2' }) });
   const joinSessW = sessionForCart(cartW.j.cart.id, 'subscription');
   const joinSubW = joinSessW && stripeState.subs[joinSessW.subscription];
-  t('v57 path W setup: yard2 join session opened at the yard2 price', coW.status === 200 && coW.j.plan === 'yard2' && !!joinSubW && joinSubW.items.data[0].price.id === 'price_1UTmQtLu9cCIcixBkCpLd2k2');
+  t('v70 path W setup: yard2 combined session opened (yard2 price + guest deposit)', coW.status === 200 && coW.j.plan === 'yard2' && coW.j.amount === 322 && !!joinSubW && joinSubW.items.data[0].price.id === 'price_1UTmQtLu9cCIcixBkCpLd2k2');
   await mockSessionPaid(joinSessW.id);
-  const whW = await wh2('checkout.session.completed', { id: joinSessW.id, mode: 'subscription', payment_status: 'paid', customer: joinSessW.customer, subscription: joinSessW.subscription, metadata: joinSessW.metadata });
+  const whW = await wh2('checkout.session.completed', { id: joinSessW.id, mode: 'subscription', payment_status: 'paid', amount_total: 32200, payment_intent: joinSessW.payment_intent, customer: joinSessW.customer, subscription: joinSessW.subscription, metadata: joinSessW.metadata });
   cust = await customersByEmail();
-  t('v57 webhook: a yardcare checkout.session.completed carrying cartId activates yard2 on the account (cart page work finished by the webhook path)', whW.status === 200 && !!cust['pathw@test.com'] && cust['pathw@test.com'].membershipPlan.planKey === 'yard2' && cust['pathw@test.com'].membershipPlan.status === 'active' && cust['pathw@test.com'].homeCareStatus !== 'active');
-  const retW = await fetch(BASE2 + '/cart/' + cartW.j.cart.id + '?joined=1&session_id=' + joinSessW.id, { headers: { Authorization: 'Bearer ' + suW.j.token } });
+  const admReqsW = await req2('GET', '/api/requests', { token: A2 });
+  const convW = (admReqsW.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartW.j.cart.id);
+  t('v70 webhook: a cart-join checkout.session.completed activates yard2 AND converts the cart (deposit $172 of $430, membership=none)', whW.status === 200 && !!cust['pathw@test.com'] && cust['pathw@test.com'].membershipPlan.planKey === 'yard2' && cust['pathw@test.com'].membershipPlan.status === 'active' && cust['pathw@test.com'].homeCareStatus !== 'active' && !!convW && convW.payment.status === 'deposit' && convW.payment.amountCents === 17200 && convW.payment.totalCents === 43000);
+  const retW = await fetch(BASE2 + '/cart/' + cartW.j.cart.id + '?paid=1&session_id=' + joinSessW.id, { headers: { Authorization: 'Bearer ' + suW.j.token } });
   const retWH = await retW.text();
-  t('v57 webhook: the later ?joined=1 return is a clean idempotent no-op (still yard2, yard banner, no error)', retW.status === 200 && retWH.includes('data-i18n="joinedYardNote"'));
+  t('v70 webhook: the later ?paid=1 return is a clean idempotent no-op (booked page, still yard2, no error, no duplicate order)', retW.status === 200 && retWH.includes('Deposit received') && (admReqsW.j.requests || []).filter(x => x.menuOrder && x.menuOrder.cartId === cartW.j.cart.id).length === 1);
   // Estimate page: the join stays HomeCare-only (verdict pinned — its
   // block is a savings pitch gated on the member discount improving
   // THIS estimate; there is no picker/totals slot to extend).
@@ -3078,24 +3077,28 @@ t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('
   const detF = { name: 'In Cart Fran', phone: '7075550171', email: 'fran61@t.local', address: '9 Fran St', city: 'Fairfield', when: 'Today' };
   const coF = await req2('POST', '/api/carts/' + cartF.j.cart.id + '/checkout', { token: fran.token, body: Object.assign({}, detF, { join: true }) });
   const sessF = sessionForCart(cartF.j.cart.id, 'subscription');
-  t('v61: the cart join opens a subscription session carrying the invitation', coF.status === 200 && coF.j.next === 'join' && !!sessF && !!sessF.metadata && sessF.metadata.inviteId === invF.j.invite.id && sessF.metadata.src === 'cart-invite');
+  t('v70 v61: the invited cart join is ONE session carrying the invitation — and the ONLY charge today is the $40 deposit (the free month makes the plan $0, never a $0 total)', coF.status === 200 && coF.j.next === 'pay' && coF.j.amount === 40 && coF.j.deposit === 40 && coF.j.planFirst === 0 && coF.j.total === 100 && !!sessF && !!sessF.metadata && sessF.metadata.kind === 'cart-join' && sessF.metadata.inviteId === invF.j.invite.id && sessF.metadata.src === 'cart-invite');
   await mockSessionPaid(sessF.id);
-  const retF = await fetch(BASE2 + '/cart/' + cartF.j.cart.id + '?joined=1&session_id=' + sessF.id, { headers: { Authorization: 'Bearer ' + fran.token } });
+  const retF = await fetch(BASE2 + '/cart/' + cartF.j.cart.id + '?paid=1&session_id=' + sessF.id, { headers: { Authorization: 'Bearer ' + fran.token } });
   const invListF = await req2('GET', '/api/admin/invites', { token: A61 });
   const invFNow = (invListF.j.invites || []).find(x => x.id === invF.j.invite.id);
   const meF = await req2('GET', '/api/me', { token: fran.token });
-  t('v61: the verified return activates HomeCare AND marks the invitation claimed', retF.status === 200 && meF.j.user.homeCareStatus === 'active' && !!invFNow && invFNow.status === 'accepted');
+  const reqsF = await req2('GET', '/api/requests', { token: A61 });
+  const convF = (reqsF.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartF.j.cart.id);
+  t('v70 v61: the ONE verified return activates HomeCare, marks the invitation claimed AND books the job (deposit $40 of the $100 member total)', retF.status === 200 && meF.j.user.homeCareStatus === 'active' && !!invFNow && invFNow.status === 'accepted' && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 4000 && convF.payment.totalCents === 10000 && convF.membership === 'member');
   const pgF2 = await (await fetch(BASE2 + '/cart/' + cartF.j.cart.id)).text();
   t('v61: once claimed, the free-month offer no longer renders on the cart', !pgF2.includes('FREE_MONTH=true'));
+  const balF = await req2('POST', '/api/carts/' + cartF.j.cart.id + '/checkout', { body: { balance: true } });
+  t('v70 v61: the booked cart collects its $60 balance from the same link', balF.status === 200 && balF.j.amount === 60 && balF.j.balance === true);
   const cartG = await req2('POST', '/api/admin/carts', { token: A61, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }] } });
   const invG = await req2('POST', '/api/admin/invites', { token: A61, body: { name: 'Plus Pete', cartId: cartG.j.cart.id } });
   const pete = await mkMember('pete61@t.local', '(707) 555-0172');
   const detG = { name: 'Plus Pete', phone: '7075550172', email: 'pete61@t.local', address: '9 Pete St', city: 'Fairfield', when: 'Today' };
   const coG = await req2('POST', '/api/carts/' + cartG.j.cart.id + '/checkout', { token: pete.token, body: Object.assign({}, detG, { join: true, plan: 'plus1' }) });
   const sessG = sessionForCart(cartG.j.cart.id, 'subscription');
-  t('v61: a Plus join on an invited cart carries NO invitation (full price, as Gabriel ordered)', coG.status === 200 && !!sessG && !(sessG.metadata && sessG.metadata.inviteId));
+  t('v61: a Plus join on an invited cart carries NO invitation (full price, as Gabriel ordered)', coG.status === 200 && coG.j.amount === 140 && !!sessG && !(sessG.metadata && sessG.metadata.inviteId));
   await mockSessionPaid(sessG.id);
-  await fetch(BASE2 + '/cart/' + cartG.j.cart.id + '?joined=1&session_id=' + sessG.id, { headers: { Authorization: 'Bearer ' + pete.token } });
+  await fetch(BASE2 + '/cart/' + cartG.j.cart.id + '?paid=1&session_id=' + sessG.id, { headers: { Authorization: 'Bearer ' + pete.token } });
   const invListG = await req2('GET', '/api/admin/invites', { token: A61 });
   const invGNow = (invListG.j.invites || []).find(x => x.id === invG.j.invite.id);
   t('v61: the Plus join leaves the invitation pending (not consumed)', !!invGNow && invGNow.status === 'pending');
@@ -3189,6 +3192,12 @@ t('static v69: balance adjustment rails exist — admin endpoint, append-only ad
   const adjOpen = await req2('POST', '/api/admin/carts/' + cartOpen69.j.cart.id + '/adjust-balance', { token: A69, body: { delta: 10, note: 'not booked' } });
   t('v69: an OPEN cart (no deposit yet) cannot be balance-adjusted — its lines are edited instead', adjOpen.status === 400);
 }
+
+
+// ---------- v70: ONE single checkout — plan + 40% deposit together (Gabriel, 2026-10-25) ----------
+t('static v70: combined-session rails exist — cart-join kind, pendingJoin settle branch, webhook + return combined branches, materials-variation clause on cart + estimate pages',
+  serverSrc.includes("kind === 'cart-join'") && serverSrc.includes('c.pendingJoin') && serverSrc.includes("metadata[plan]") && serverSrc.includes('One single checkout') && serverSrc.includes('Un solo cobro') &&
+  serverSrc.includes("matVarNote: 'Materials are estimated at today\\'s prices.") && serverSrc.includes('matVarNote: \'Los materiales se estiman a precios de hoy.'));
 
 
 // ---------------- v66: Web Push — VAPID + RFC 8291 encryption, proven by decrypting ----------------

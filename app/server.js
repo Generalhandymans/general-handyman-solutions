@@ -1272,7 +1272,7 @@ async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
   // page EXCEPT the HomeCare membership. Added as a second line item.
-  const tipCents = (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
+  const tipCents = (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus' || kind === 'cart-join' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
@@ -1298,9 +1298,8 @@ async function createCheckoutSession(kind, user, opts) {
     params['subscription_data[metadata][kind]'] = 'homecare';
     // v60: invite-only free first month — the subscription starts as a
     // Stripe trial (card collected today, $0 charged, first $29 charge
-    // when the trial ends). Only the invite flow passes trialDays; every
-    // other HomeCare checkout is untouched.
-    if (opts.trialDays) params['subscription_data[trial_period_days]'] = String(Math.max(1, Math.round(Number(opts.trialDays) || 0)));
+    // when the trial ends). The trial write itself lives at the ONE
+    // shared site below createCheckoutSession's kind chain.
   } else if (kind === 'yardcare' || kind === 'homecare-plus') {
     // Membership plans (added 2026-10-21): the price ALWAYS comes from the
     // fixed server-side plan map keyed by opts.plan (yard1/yard2/plus1/
@@ -1346,6 +1345,31 @@ async function createCheckoutSession(kind, user, opts) {
     params['payment_method_options[card][request_incremental_authorization]'] = 'if_available';
     params['custom_text[submit][message]'] = 'This places an authorization HOLD for an estimated amount — it is NOT a final charge. The hold may increase if you approve a larger written quote, and you are only charged the final amount when the work is done.';
     params['custom_text[after_submit][message]'] = 'Your card was authorized (hold only, not charged). You can follow your payment live from your estimate page.';
+  } else if (kind === 'cart-join') {
+    // v70 (Gabriel, 2026-10-25): ONE single checkout for join + book.
+    // The plan's recurring price and the job's 40% DEPOSIT ride the
+    // SAME subscription-mode session: the deposit is a one-time line
+    // item, charged TODAY on the first invoice — it is the FIRST real
+    // charge, never a $0 step. A free-month trial (invite) defers only
+    // the plan's recurring price; the deposit still charges today. The
+    // session metadata carries kind 'cart-join' + cartId + plan so the
+    // webhook and the page return can settle BOTH halves together.
+    const plan = MEMBERSHIP_PLANS[opts.plan];
+    if (!plan) throw new Error('unknown membership plan');
+    params.mode = 'subscription';
+    params['line_items[0][price]'] = await membershipPriceIdFor(plan);
+    params['line_items[0][quantity]'] = '1';
+    params['line_items[1][price_data][currency]'] = 'usd';
+    params['line_items[1][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[1][price_data][product_data][name]'] = opts.label || '40% deposit to book — General Handyman Solutions';
+    params['line_items[1][quantity]'] = '1';
+    params['metadata[cartId]'] = opts.cartId || '';
+    params['metadata[plan]'] = plan.key;
+    params['metadata[payStep]'] = 'deposit';
+    params['subscription_data[metadata][userId]'] = user.id;
+    params['subscription_data[metadata][kind]'] = plan.kind;
+    params['subscription_data[metadata][plan]'] = plan.key;
+    params['subscription_data[metadata][cartId]'] = opts.cartId || '';
   } else if (kind === 'cart-order') {
     // v54: public cart page payment — ONE line item at the server-computed
     // cart total (member or guest, decided server-side at checkout time).
@@ -1374,6 +1398,11 @@ async function createCheckoutSession(kind, user, opts) {
   } else {
     throw new Error('unknown checkout kind');
   }
+  // v60/v70: the free-month trial — exactly ONE write site in the
+  // server. Only the invite-gated flows pass trialDays (the /join
+  // invite checkout and the combined cart-join); Yard/Plus and every
+  // regular join keep charging fully from day one.
+  if (opts.trialDays) params['subscription_data[trial_period_days]'] = String(Math.max(1, Math.round(Number(opts.trialDays) || 0)));
   if (tipCents > 0) {
     params['line_items[1][price_data][currency]'] = 'usd';
     params['line_items[1][price_data][unit_amount]'] = String(tipCents);
@@ -1902,6 +1931,15 @@ function settleCartPayment(c, payInfo) {
   payInfo = payInfo || {};
   const cents = Math.round(Number(payInfo.amountCents) || 0);
   if (!c || !(cents > 0)) return false;
+  if (c.status === 'open' && c.pendingJoin && cents === Math.round(Number(c.pendingJoin.depositCents) || 0) + Math.round(Number(c.pendingJoin.planCents) || 0)) {
+    // v70: the combined join+deposit session — its amount_total is the
+    // DEPOSIT plus the plan's first charge ($0 under a free-month
+    // trial). Convert with the stamped split, exactly as a deposit.
+    c.memberApplied = !!c.pendingJoin.memberApplied;
+    const conv = convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: Math.round(Number(c.pendingJoin.depositCents) || 0), totalCents: Math.round(Number(c.pendingJoin.totalCents) || 0), depositCents: Math.round(Number(c.pendingJoin.depositCents) || 0), balanceCents: Math.round(Number(c.pendingJoin.totalCents) || 0) - Math.round(Number(c.pendingJoin.depositCents) || 0) });
+    if (conv) { delete c.pendingJoin; delete c.pendingDeposit; return true; }
+    return false;
+  }
   if (c.status === 'open' && c.pendingDeposit && cents === Math.round(Number(c.pendingDeposit.depositCents) || 0)) {
     c.memberApplied = !!c.pendingDeposit.memberApplied;
     const conv = convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: cents, totalCents: c.pendingDeposit.totalCents, depositCents: c.pendingDeposit.depositCents, balanceCents: c.pendingDeposit.balanceCents });
@@ -2046,6 +2084,27 @@ async function handleStripeEvent(event) {
     if (kind === 'cart-order') {
       const c = cartsOf().find(x => x.id === (obj.metadata && obj.metadata.cartId));
       if (c && obj.payment_status === 'paid') { settleCartPayment(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) }); save(); }
+      return;
+    }
+    // v70: the combined join+deposit session settles BOTH halves here:
+    // activate the membership the customer picked (shared activator,
+    // idempotent with the page return) and convert the cart on its
+    // stamped deposit split. Invite acceptance rides along exactly as
+    // in the homecare branch below.
+    if (kind === 'cart-join') {
+      const c = cartsOf().find(x => x.id === (obj.metadata && obj.metadata.cartId));
+      const uj = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
+      if (obj.payment_status === 'paid') {
+        if (uj) {
+          activateMembershipFromCheckout(uj, obj);
+          if (obj.metadata && obj.metadata.inviteId) {
+            const inv = invitesOf().find(x => x.id === obj.metadata.inviteId);
+            if (inv && markInviteAccepted(inv, uj, obj)) notifyAdmins('membership', '🎟️ Invitation claimed by ' + uj.name + ' (' + uj.email + ') — first month FREE, then $29/mo.');
+          }
+        }
+        if (c) { if (c.joinPending) c.joinPending = false; settleCartPayment(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) }); }
+        save();
+      }
       return;
     }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
@@ -2663,7 +2722,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       titleEst: 'Estimate', forWord: 'for', thWork: 'Work', thQty: 'Qty', thEach: 'Each', thLine: 'Line',
       laborSubtotal: 'Labor subtotal', materials: 'Materials', subtotal: 'Subtotal', total: 'Total',
       asap: 'ASAP / Emergency (+25%)', memberDisc: 'HomeCare member discount', discount: 'Discount', credit: 'Appointment credit',
-      dueToBook: 'Due to book:', balanceAt: 'Balance at completion:', teamNote: 'Team note:',
+      dueToBook: 'Due to book:', balanceAt: 'Balance at completion:', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.', teamNote: 'Team note:',
       validUntil: 'Valid until', expiredH: 'This estimate has expired', expiredBody: 'The price window on this estimate closed. Text or call (707) 862-3773 and the Team will send you a fresh one — usually the same day.',
       laborNote: 'Labor only — you buy materials/parts unless the Team says otherwise in writing.', materialsNote: 'Materials are included in this estimate.',
       photosH: 'Photos from the Team', optionsH: 'Choose your option', regularWord: 'Regular', memberWord: 'HomeCare member',
@@ -2691,7 +2750,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       titleEst: 'Estimado', forWord: 'para', thWork: 'Trabajo', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe',
       laborSubtotal: 'Subtotal de mano de obra', materials: 'Materiales', subtotal: 'Subtotal', total: 'Total',
       asap: 'ASAP / Emergencia (+25%)', memberDisc: 'Descuento de miembro HomeCare', discount: 'Descuento', credit: 'Crédito de la cita',
-      dueToBook: 'Para apartar:', balanceAt: 'Saldo al terminar:', teamNote: 'Nota del Equipo:',
+      dueToBook: 'Para apartar:', balanceAt: 'Saldo al terminar:', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.', teamNote: 'Nota del Equipo:',
       validUntil: 'Válido hasta el', expiredH: 'Este estimado ya venció', expiredBody: 'La ventana de precio de este estimado cerró. Manda un texto o llama al (707) 862-3773 y el Equipo te envía uno nuevo — normalmente el mismo día.',
       laborNote: 'Solo mano de obra — tú compras los materiales y piezas, a menos que el Equipo diga lo contrario por escrito.', materialsNote: 'Los materiales están incluidos en este estimado.',
       photosH: 'Fotos del Equipo', optionsH: 'Elige tu opción', regularWord: 'Normal', memberWord: 'Miembro HomeCare',
@@ -2754,7 +2813,8 @@ function estimatePageHtml(r, user, langOverride, notice) {
   const sums = (estimateHasMaterials(disp) ? '<p><span data-i18n="laborSubtotal">' + S.laborSubtotal + '</span>: <b>' + usd(disp.laborSubtotal) + '</b> • <span data-i18n="materials">' + S.materials + '</span>: <b>' + usd(disp.materialSubtotal) + '</b></p>' : '')
     + '<p><span data-i18n="subtotal">' + S.subtotal + '</span>: <b>' + usd(disp.subtotal) + '</b></p>' + adj
     + '<p style="font-size:22px"><span data-i18n="total">' + S.total + '</span>: <b>' + usd(disp.total) + '</b></p>'
-    + '<p><b data-i18n="dueToBook">' + S.dueToBook + '</b> ' + usd(disp.bookingDue) + ' • <b data-i18n="balanceAt">' + S.balanceAt + '</b> ' + usd(disp.balanceDue) + '</p>';
+    + '<p><b data-i18n="dueToBook">' + S.dueToBook + '</b> ' + usd(disp.bookingDue) + ' • <b data-i18n="balanceAt">' + S.balanceAt + '</b> ' + usd(disp.balanceDue) + '</p>'
+    + '<p style="color:#666;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>';
   // --- two-option picker ---
   let optionsBlock = '';
   if (Array.isArray(e.options) && e.options.length >= 2 && r.status === 'Quoted' && !expired) {
@@ -2976,12 +3036,12 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
       depositDueLabel: 'Due today — 40% deposit to book', balanceDueLabel: 'Balance at completion',
-      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment',
+      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
-      joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this member total for your order.',
-      joinOrderNoteYard: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this order total.',
-      joinOrderNoteFree: 'How it works: tapping Pay starts your HomeCare membership FREE — $0 today (your card is saved safely with Stripe and the first $29 charge is in 30 days) — then you come right back here to pay for your order at the member price.',
+      joinOrderNote: 'One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
+      joinOrderNoteYard: 'One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked. Yard Care covers your visits; this order stays at the regular price.',
+      joinOrderNoteFree: 'One single checkout: your HomeCare month is FREE today (your card is saved safely with Stripe and the first $29 charge is in 30 days) and only your 40% deposit is charged — {dep} today, and you are booked as a member. No $0 step, no second payment.',
       inviteBanner: '🎟️ Personal invitation: your first month of HomeCare is FREE.',
       freeMonthTag: 'FIRST MONTH FREE',
       joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
@@ -3023,12 +3083,12 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
       depositDueLabel: 'Hoy — anticipo del 40% para agendar', balanceDueLabel: 'Resto al terminar',
-      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales',
+      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
-      joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
-      joinOrderNoteYard: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar el total de esta orden.',
-      joinOrderNoteFree: 'Así funciona: al tocar Pagar activas tu membresía HomeCare GRATIS — hoy pagas $0 (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) — y luego regresas aquí mismo para pagar tu orden al precio de miembro.',
+      joinOrderNote: 'Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
+      joinOrderNoteYard: 'Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado. Yard Care cubre tus visitas; esta orden queda al precio normal.',
+      joinOrderNoteFree: 'Un solo cobro: tu mes de HomeCare es GRATIS hoy (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) y solo se cobra tu anticipo del 40% — {dep} hoy, y quedas agendado como miembro. Sin paso de $0, sin segundo pago.',
       inviteBanner: '🎟️ Invitación personal: tu primer mes de HomeCare es GRATIS.',
       freeMonthTag: 'PRIMER MES GRATIS',
       joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
@@ -3226,6 +3286,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<p id="payMsg" style="color:#666"></p>'
     + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#555;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
     + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
+    + '<p style="color:#666;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
@@ -3233,13 +3294,13 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (freeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
-    + 'var PLANS={"homecare":{"name":"HomeCare","price":"$29","disc":1},"plus1":{"name":"HomeCare Plus","price":"$100","disc":1},"plus2":{"name":"HomeCare Plus","price":"$175","disc":1},"yard1":{"name":"Yard Care","price":"$75","disc":0},"yard2":{"name":"Yard Care","price":"$150","disc":0}};'
+    + 'var PLANS={"homecare":{"name":"HomeCare","price":"$29","cents":2900,"disc":1},"plus1":{"name":"HomeCare Plus","price":"$100","cents":10000,"disc":1},"plus2":{"name":"HomeCare Plus","price":"$175","cents":17500,"disc":1},"yard1":{"name":"Yard Care","price":"$75","cents":7500,"disc":0},"yard2":{"name":"Yard Care","price":"$150","cents":15000,"disc":0}};'
     + 'function selPlan(){ var r=document.querySelector("input[name=cPlan]:checked"); return (r && PLANS[r.value]) ? r.value : "homecare"; }'
     + 'function joinOn(){ return !!($("cJoin") && $("cJoin").checked && !memberApplied); }'
     + 'function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }'
     + 'function fillPlan(s, pl){ return String(s||"").replace("{planName}", pl.name).replace("{price}", pl.price); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled) pb.textContent=T("payBtn").replace("{amt}",fmt(asM?DEP_M:DEP_L)); var dp=$("ctDeposit"); if(dp) dp.textContent=asM?dp.getAttribute("data-m"):dp.getAttribute("data-l"); var bl=$("ctBalance"); if(bl) bl.textContent=asM?bl.getAttribute("data-m"):bl.getAttribute("data-l"); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; jn.textContent=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):fillPlan(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"), pl); } } }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled){ var dueC=(asM?DEP_M:DEP_L); if(joinOn()){ dueC+=((FREE_MONTH && selPlan()==="homecare")?0:PLANS[selPlan()].cents); } pb.textContent=T("payBtn").replace("{amt}",fmt(dueC)); } var dp=$("ctDeposit"); if(dp) dp.textContent=asM?dp.getAttribute("data-m"):dp.getAttribute("data-l"); var bl=$("ctBalance"); if(bl) bl.textContent=asM?bl.getAttribute("data-m"):bl.getAttribute("data-l"); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; var depC=(asM?DEP_M:DEP_L); var dueJ=depC+((FREE_MONTH && selPlan()==="homecare")?0:pl.cents); var raw=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard")); jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ)); } } }'
     + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
     + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ syncJoinPreview(); var pp=$("planPicker"); if(pp) pp.style.display=this.checked?"block":"none"; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
     + 'document.querySelectorAll("input[name=cPlan]").forEach(function(r){ r.addEventListener("change",function(){ syncJoinPreview(); renderAmounts(); }); });'
@@ -5598,29 +5659,47 @@ const server = http.createServer(async (req, res) => {
         if (membershipPlanOf(user).status === 'active') joinPlan = null;
       }
       if (joinPlan) {
-        // v61: an invitation attached to THIS cart makes the HomeCare
-        // join start with the free month — claimed right here, inside
-        // the customer's own cart link (Gabriel). HomeCare ONLY, and
-        // only while this account has never used a free month.
+        // v70 (Gabriel, 2026-10-25): the join and the booking are ONE
+        // single checkout now — "lo primero que se le cobre es el
+        // depósito". The old two-step (a $0/membership-only session
+        // first, then come back and pay the deposit) stranded Brijesh:
+        // he claimed his free month, thought he had paid, and the job
+        // was never booked. Here the plan's price AND the 40% deposit
+        // ride one subscription-mode session; the deposit is charged
+        // today as a one-time line, the card stays on file with
+        // Stripe, and the membership starts in the same step.
+        // Member totals apply when the chosen plan carries the order
+        // discount (HomeCare / Plus); Yard joins book at list totals.
         let fmInvite = null;
         if (joinPlan.key === 'homecare' && c.freeMonthInviteId && !user.inviteFreeMonthUsed) {
           const iv = invitesOf().find(i => i.id === c.freeMonthInviteId);
           if (iv && inviteStatusOf(iv) === 'pending') fmInvite = iv;
         }
-        const s = await createCheckoutSession(joinPlan.kind, user, {
+        const discPlan = joinPlan.type === 'homecare' || joinPlan.type === 'plus';
+        const totalCentsJ = Math.round((discPlan ? c.memberTotal : c.listTotal) * 100);
+        if (!(totalCentsJ > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
+        const splitJ = depositSplit(totalCentsJ);
+        const planFirstCents = fmInvite ? 0 : joinPlan.monthlyCents;
+        const s = await createCheckoutSession('cart-join', user, {
           plan: joinPlan.key,
+          amountCents: splitJ.depositCents,
+          cartId: c.id,
           trialDays: fmInvite ? INVITE_TRIAL_DAYS : 0,
-          successUrl: cartLink(c) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
+          label: 'Cart ' + c.id + ' — 40% deposit to book — General Handyman Solutions',
+          successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
           metadata: { cartId: c.id, src: fmInvite ? 'cart-invite' : 'cart', ...(fmInvite ? { inviteId: fmInvite.id } : {}) },
           subMetadata: { cartId: c.id, ...(fmInvite ? { inviteId: fmInvite.id } : {}) }
         });
         if (fmInvite) fmInvite.joinSessionId = s.id;
         c.joinSessionId = s.id;
+        c.paySessionId = s.id;
         c.joinPending = true;
         c.joinPlan = joinPlan.key;
+        c.pendingDeposit = { totalCents: totalCentsJ, depositCents: splitJ.depositCents, balanceCents: splitJ.balanceCents, memberApplied: discPlan };
+        c.pendingJoin = { plan: joinPlan.key, planCents: planFirstCents, depositCents: splitJ.depositCents, totalCents: totalCentsJ, memberApplied: discPlan, inviteId: fmInvite ? fmInvite.id : '' };
         save();
-        return send(res, 200, { next: 'join', url: s.url, plan: joinPlan.key });
+        return send(res, 200, { next: 'pay', url: s.url, plan: joinPlan.key, amount: (splitJ.depositCents + planFirstCents) / 100, deposit: splitJ.depositCents / 100, planFirst: planFirstCents / 100, balance: splitJ.balanceCents / 100, total: totalCentsJ / 100, memberApplied: discPlan });
       }
       c.memberApplied = !!memberUser;
       const totalCents = Math.round((c.memberApplied ? c.memberTotal : c.listTotal) * 100);
@@ -5757,7 +5836,30 @@ const server = http.createServer(async (req, res) => {
     if (url.searchParams.get('cancelled') === '1' && c.status === 'open') notice = 'cancelled';
     if ((c.status === 'open' || (c.status === 'paid' && url.searchParams.get('paid') === '1')) && retSessionId && stripeReady()) { // v62: a BALANCE return arrives on an already-'paid' (deposit-state) cart — it must verify too; the joined branch stays guarded by its own session checks
       try {
-        if (url.searchParams.get('joined') === '1' && c.joinSessionId && retSessionId === c.joinSessionId) {
+        if (url.searchParams.get('paid') === '1' && c.pendingJoin && c.paySessionId && retSessionId === c.paySessionId) {
+          // v70: the combined join+deposit session returns ONCE, with
+          // ?paid=1. Verify it the strict way (the recorded session,
+          // subscription mode, payment_status paid, subscription paid/
+          // trialing), then activate the membership AND settle the
+          // deposit in the same landing — the customer is booked and a
+          // member in a single step, nothing left to tap.
+          const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+          if (sess && sess.id === retSessionId && sess.mode === 'subscription' && sess.payment_status === 'paid') {
+            const chk = await checkoutSessionSubscriptionPaid(sess);
+            if (chk.paid) {
+              const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
+              if (mu) {
+                activateMembershipFromCheckout(mu, sess);
+                if (sess.metadata && sess.metadata.inviteId) {
+                  const iv7 = invitesOf().find(i => i.id === sess.metadata.inviteId);
+                  if (iv7 && markInviteAccepted(iv7, mu, sess)) notifyAdmins('🎟️ Invitation claimed by ' + (mu.name || mu.email) + ' (' + iv7.name + ') — first month FREE, then $29/mo.');
+                }
+              }
+              c.joinPending = false;
+              if (settleCartPayment(c, { pi: sess.payment_intent || '', amountCents: Math.round(Number(sess.amount_total) || 0) })) save();
+            }
+          }
+        } else if (url.searchParams.get('joined') === '1' && c.joinSessionId && retSessionId === c.joinSessionId) {
           const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
           if (sess && sess.id === retSessionId && sess.mode === 'subscription') {
             const chk = await checkoutSessionSubscriptionPaid(sess);
