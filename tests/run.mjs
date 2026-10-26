@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v78', swSrc.includes("const CACHE = 'ghs-app-v78'"));
+t('static: SW cache is ghs-app-v79', swSrc.includes("const CACHE = 'ghs-app-v79'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -42,7 +42,7 @@ t('static v67: drain unclog + alternator are $175 / member $140 in BOTH catalogs
   htmlSrc.includes("'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 175, member: 140") &&
   serverSrc.includes('"drain-unclog":{p:175,m:140') && serverSrc.includes('"alternator-replacement":{p:175,m:140'));
 t('static v32: app has the green WhatsApp photo-estimate FAB on customer views', htmlSrc.includes('id="photoFab"') && htmlSrc.includes('wa.me/17078623773') && htmlSrc.includes('📸 Free estimate'));
-t('static v32: checkout 20% gate is HomeCare/Plus only (homeCareStatus), never any-plan', htmlSrc.includes("orderState.memberActive = me.homeCareStatus === 'active'") && !htmlSrc.includes("(d.plan && d.plan.status === 'active') || me.homeCareStatus"));
+t('static v32: checkout 20% gate is HomeCare/Plus only (homeCareStatus), never any-plan', htmlSrc.includes('function cartIsMember()') && htmlSrc.includes("me.homeCareStatus === 'active'") && !htmlSrc.includes("(d.plan && d.plan.status === 'active') || me.homeCareStatus"));
 t('static v33: server sets CSP + anti-clickjacking headers tuned for Stripe/Leaflet', serverSrc.includes('Content-Security-Policy') && serverSrc.includes("'X-Frame-Options', 'DENY'") && serverSrc.includes('js.stripe.com'));
 t('static v33: login throttle + expiring sessions + admin audit log present', serverSrc.includes('loginBlockedSecs') && serverSrc.includes('SESSION_TTL_MS') && serverSrc.includes("p === '/api/admin/audit'") && serverSrc.includes('function audit('));
 t('static v33: admin UI has the security & activity log', htmlSrc.includes('id="adminAudit"') && htmlSrc.includes('loadAdminAudit'));
@@ -83,7 +83,7 @@ t('static v42: wizard reuses the legacy request fields (exactly one of each in t
 t('static v42: access notes ride inside the description + confirmation shows the request id', htmlSrc.includes('Access notes: ') && htmlSrc.includes('wzShowDone(rd.request)') && htmlSrc.includes('What happens next'));
 t('static v42: wizard step 3 has the Nominatim address autocomplete (CSP already allows it)', htmlSrc.includes('nominatim.openstreetmap.org/search') && htmlSrc.includes('id="wzAddrSugg"'));
 t('static v42: category cards carry the 5 trades + Otro with created images', ['data-cat="carpentry"', 'data-cat="electrical"', 'data-cat="plumbing"', 'data-cat="gardening"', 'data-cat="mechanic"', 'data-cat="otro"'].every(x => htmlSrc.includes(x)) && htmlSrc.includes('const CAT_IMGS = {') && htmlSrc.includes('data:image/jpeg;base64,'));
-const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSrc.indexOf('let orderState'));
+const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSrc.indexOf('/* ================= v79: LEGACY'));
 const catalogIds42 = [...catBlock.matchAll(/'([a-z0-9-]+)': \{ name:/g)].map(m => m[1]);
 const grpBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_GROUPS = ['), htmlSrc.indexOf('const wzState'));
 const groupIds42 = [...grpBlock.matchAll(/services: \[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z0-9-]+)'/g)].map(x => x[1]));
@@ -94,13 +94,13 @@ t('static v42: stale "50% deposit" copy is gone from the request flow', !htmlSrc
 
 // ---- v44 statics: pay in full + admin cart ----
 t('static v44: pay endpoints + cart endpoints exist; the menu hold endpoints are gone', serverSrc.includes("p === '/api/orders/pay'") && serverSrc.includes("p === '/api/orders/pay-confirm'") && serverSrc.includes("p === '/api/admin/carts'") && serverSrc.includes("/pay-confirm'") && !serverSrc.includes("p === '/api/orders/hold'") && !serverSrc.includes("p === '/api/orders/hold-confirm'"));
-t('static v62: bookingDue AUTO defaults to the 40% deposit (Gabriel policy 2026-10-24 — was full total in v44)', serverSrc.includes("bookingAuto: raw.bookingDue == null || raw.bookingDue === ''") && serverSrc.includes('est.bookingAuto ? money(est.total * DEPOSIT_RATE)') && serverSrc.includes('const DEPOSIT_RATE = 0.4'));
+t('static v62→v79: bookingDue AUTO defaults to the DEPOSIT LAW via the ONE shared depositSplit helper ($50 flat <= $300, 40% above)', serverSrc.includes("bookingAuto: raw.bookingDue == null || raw.bookingDue === ''") && serverSrc.includes('est.bookingAuto ? money(depositSplit(Math.round(est.total * 100)).depositCents / 100)') && serverSrc.includes('const DEPOSIT_RATE = 0.4') && serverSrc.includes('const DEPOSIT_FLAT_CENTS = 5000'));
 t('static v44: payout gate speaks paid — awaiting_payment stamped, legacy awaiting_capture still swept', serverSrc.includes("j.payoutStatus = 'awaiting_payment'") && serverSrc.includes("'awaiting_capture', 'awaiting_payment'") && serverSrc.includes('function requestIsPaid('));
 t('static v44: refund rule is server-side — $75 kept only when dispatched', serverSrc.includes('keptCents = dispatched ? Math.min(7500, paidCents) : 0') && serverSrc.includes("/refund$/"));
 t('static v44: cart page + conversion helpers exist server-side', serverSrc.includes('function cartPageHtml(') && serverSrc.includes('function convertCartToRequest(') && serverSrc.includes("p.match(/^\\/cart\\/"));
 t('static v49: install page + routes exist', serverSrc.includes('function installPageHtml(') && serverSrc.includes("p === '/instalar'") && serverSrc.includes('beforeinstallprompt'));
 t('static v44 i18n: cart page is one-language-at-a-time (EN|ES toggle, both dictionaries, persisted choice)', serverSrc.includes('data-lang-btn') && serverSrc.includes('ghsCartLang') && serverSrc.includes("titleCart: 'Tu carrito'") && serverSrc.includes("titleCart: 'Your cart'"));
-t('static v44: app checkout copy is pay-in-full (the $75 hold pitch is gone)', htmlSrc.includes('Total — pay in full today') && !htmlSrc.includes('$75 authorization hold') && !htmlSrc.includes('Total — pay when the job is done') && !htmlSrc.includes('/api/orders/hold'));
+t('static v44→v79: app checkout copy is the DEPOSIT law (the $75 hold pitch is gone)', htmlSrc.includes('Deposit due today') && htmlSrc.includes('Balance at completion') && !htmlSrc.includes('$75 authorization hold') && !htmlSrc.includes('Total — pay when the job is done') && !htmlSrc.includes('/api/orders/hold'));
 t('static v44: admin cart builder lives in the panel', htmlSrc.includes('id="adminCarts"') && htmlSrc.includes('id="cartPicker"') && htmlSrc.includes('function createCartLink()') && htmlSrc.includes('function refundRequest('));
 t('static v52: cart custom lines — strict server validation, builder custom/materials/labor-$75 actions, promo totals block', serverSrc.includes('it.custom === true') && serverSrc.includes("kind === 'labor' ? money(unitPrice * 0.8) : unitPrice") && htmlSrc.includes('id="cartCustomName"') && htmlSrc.includes('function cartAddCustomLine(') && htmlSrc.includes('function cartAddLabor75(') && serverSrc.includes('memberSavingsLabel') && serverSrc.includes('ctSaveRow'));
 t('static v54: public cart + estimate pages carry NO Stripe.js / Elements / card element (hosted Checkout only)', (() => { const cartFn = serverSrc.slice(serverSrc.indexOf('function cartPageHtml('), serverSrc.indexOf('function invoiceFromEstimate(')); const estFn = serverSrc.slice(serverSrc.indexOf('function estimatePageHtml('), serverSrc.indexOf('function installPageHtml(')); const bad = s => s.includes('js.stripe.com') || s.includes('cardEl') || s.includes('confirmCardPayment') || s.includes('mountCard'); return cartFn.length > 1000 && estFn.length > 1000 && !bad(cartFn) && !bad(estFn); })());
@@ -108,7 +108,7 @@ t('static v54: the dead errLoading copy is gone from the server dictionaries', !
 t('static v54: checkout-session rails exist — cart checkout endpoint, estimate join-checkout, cart-order kind, return verification, webhook branch', serverSrc.includes('cartCheckoutMatch') && serverSrc.includes('estJoinCheckoutMatch') && serverSrc.includes("kind === 'cart-order'") && serverSrc.includes('function checkoutSessionSubscriptionPaid(') && serverSrc.includes('function activateHomeCareFromCheckout(') && serverSrc.includes('function applyEstimateMemberDiscount(') && serverSrc.includes("url.searchParams.get('joined')") && serverSrc.includes("url.searchParams.get('paid')"));
 t('static v55: cart edit rails — PUT endpoint, session-expiry helper, builder edit mode (banner, Edit button, save/cancel)', serverSrc.includes('cartEditMatch') && serverSrc.includes("req.method === 'PUT'") && serverSrc.includes('function expireCartSessions(') && serverSrc.includes("/expire'") && htmlSrc.includes('id="cartEditBanner"') && htmlSrc.includes('function editCart(') && htmlSrc.includes('function saveCartEdit(') && htmlSrc.includes('function cancelCartEdit(') && htmlSrc.includes('function submitCart()'));
 t('static v44: HOLD-PAYMENT-MODEL carries the superseded banner pointing at the new design', fs.readFileSync(path.join(APP_DIR, '..', 'HOLD-PAYMENT-MODEL.md'), 'utf8').includes('SUPERSEDED') && fs.readFileSync(path.join(APP_DIR, '..', 'HOLD-PAYMENT-MODEL.md'), 'utf8').includes('DISENO-PAGO-COMPLETO.md'));
-t('static v44 web: no customer surface sells the menu-order hold anymore', (() => { const R = path.join(APP_DIR, '..'); const rd = (f) => fs.readFileSync(path.join(R, f), 'utf8'); return !rd('index.html').includes('$75 hold') && !rd('service.html').includes('$75 hold') && !rd('checkout.html').includes('$75 hold') && !rd('tracking.html').includes('$75 hold') && ['handyman-fairfield', 'handyman-vacaville', 'handyman-vallejo', 'tv-mounting-vacaville', 'mobile-mechanic-vallejo', 'plumber-fairfield'].every(d => !rd(d + '/index.html').includes('authorization hold secures')) && rd('checkout.html').includes('Paid in full today'); })());
+t('static v44 web: no customer surface sells the menu-order hold anymore', (() => { const R = path.join(APP_DIR, '..'); const rd = (f) => fs.readFileSync(path.join(R, f), 'utf8'); return !rd('index.html').includes('$75 hold') && !rd('service.html').includes('$75 hold') && !rd('checkout.html').includes('$75 hold') && !rd('tracking.html').includes('$75 hold') && ['handyman-fairfield', 'handyman-vacaville', 'handyman-vallejo', 'tv-mounting-vacaville', 'mobile-mechanic-vallejo', 'plumber-fairfield'].every(d => !rd(d + '/index.html').includes('authorization hold secures')) && rd('checkout.html').includes('http-equiv="refresh"'); })());
 
 // ---------------- mock Nominatim ----------------
 const geoServer = http.createServer((req, res) => {
@@ -534,15 +534,16 @@ t('client VM: app script loads under fake DOM', vmLoaded);
 await sleep(80); // let loadMe() settle (401 -> logged-out render)
 t('client VM: no event stream while logged out', run('esStream') === null);
 
-// --- v34: website handoff params prefill the #order checkout form (.value only) ---
+// --- v34 → v79: website handoff params land in the CART + the checkout prefill ---
 run("location.hash = '#order/tv-mounting?x=raceway&n=Gate%2042&nm=Ana%20Test&ph=7075550199&ad=5%20Oak%20St&cy=Vallejo&wt=Tomorrow%20after%203pm';");
-run('renderOrder();');
-t('v34 prefill: notes param n lands in the notes field (Gate 42)', elById.get('oNotes').value === 'Gate 42');
-t('v34 prefill: name param nm lands in the name field', elById.get('oName').value === 'Ana Test');
-t('v34 prefill: address param ad lands in the address field', elById.get('oAddress').value === '5 Oak St');
-t('v34 prefill: city / phone / when-text params land in their fields', elById.get('oCity').value === 'Vallejo' && elById.get('oPhone').value === '7075550199' && elById.get('oWhenText').value === 'Tomorrow after 3pm');
-t('v34 prefill: extras param x still pre-selects raceway', run("!!(orderState && orderState.extras.has('raceway'))") === true);
-run("location.hash = '';");
+run('render();');
+t('v79 handoff: the legacy #order link converts to #cart', run("location.hash") === '#cart');
+t('v79 handoff: the service lands in the cart with its validated raceway add-on', run("cartLoad().length === 1 && cartLoad()[0].id === 'tv-mounting' && (cartLoad()[0].x || []).includes('raceway')") === true);
+t('v79 handoff: the contact params are stashed for the checkout prefill', run("(JSON.parse(sessionStorage.getItem('ghsCcPrefill') || '{}').nm || '')") === 'Ana Test');
+run('cartShowCheckout();');
+t('v79 prefill: name / phone land in the checkout fields', elById.get('ccName').value === 'Ana Test' && elById.get('ccPhone').value === '7075550199');
+t('v79 prefill: address / city / notes land in the checkout fields', elById.get('ccAddr').value === '5 Oak St' && elById.get('ccCity').value === 'Vallejo' && elById.get('ccNotes').value === 'Gate 42');
+run("cartSave([]); location.hash = '';");
 
 // --- throttle math (pure) ---
 const dist1 = run('trackDistM(38, -122, 38.001, -122)');
@@ -1088,7 +1089,7 @@ t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', e
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
 t('v42 menu: renders all 98 catalog services as cards (full master list since v43)', (menuHtml42.match(/class="menu-card"/g) || []).length === 98);
-t('v42 menu: cards order through the existing #order checkout', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("#order/" + id)));
+t('v42 menu: cards order into the CART (v79: orderNow → #cart; the #order page is retired)', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("orderNow('" + id + "')")));
 t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the v43 cut, water heater $700 / $560)', menuHtml42.includes('$125') && menuHtml42.includes('Members $100') && menuHtml42.includes('$700') && menuHtml42.includes('Members $560'));
 t('v42 menu: EVERY card shows a member price — the discount is universal (98 of 98)', (menuHtml42.match(/Members \$/g) || []).length === 98);
 // wizard navigation + progress
@@ -1098,7 +1099,7 @@ run('wzGo(1);');
 // category pick: fixed-price panel + guided hints
 run("wzPickCat('plumbing');");
 const panelHtml42 = elById.get('wzMenuPanel').innerHTML;
-t('v42 wizard: picking a trade lists its fixed-price services with order links + member prices', panelHtml42.includes('Faucet Replacement') && panelHtml42.includes('#order/faucet-replacement') && panelHtml42.includes('Members $100'));
+t('v42 wizard: picking a trade lists its fixed-price services with cart order buttons + member prices', panelHtml42.includes('Faucet Replacement') && panelHtml42.includes("orderNow('faucet-replacement')") && panelHtml42.includes('Members $100'));
 t('v42 wizard: the category drives the guided description hint + photo guide', elById.get('wzDescHint').textContent.includes('leaks') && elById.get('wzPhotoGuide').innerHTML.includes('What to photograph'));
 run("wzPickCat('otro');");
 t('v42 wizard: Otro has no fixed-price panel — it routes to the custom estimate', elById.get('wzMenuPanel').innerHTML.includes('Team will price it'));
@@ -1132,9 +1133,10 @@ run("me = { id: 'USR-C1', role: 'customer', name: 'Cust One' }; location.hash = 
 t('v42 rule: a logged-in customer still gets the wizard + menu home', elById.get('customerBox').style.display === 'block');
 t('v42 nav: Menú entry visible to a logged-in customer', elById.get('menuNavLink').style.display !== 'none');
 run("location.hash = '#order/faucet-replacement';"); run('render();');
-t('v42 rule: a logged-in customer reaches the #order checkout with catalog totals', elById.get('orderBox').style.display === 'block' && elById.get('orderSvc').innerHTML.includes('Faucet Replacement') && elById.get('orderSvc').innerHTML.includes('$125'));
+t('v42 rule (v79): a logged-in customer hitting a legacy #order link lands on #cart with the service in the cart', run("location.hash") === '#cart' && run("cartLoad().some(function(i){ return i.id === 'faucet-replacement'; })") === true);
 run("me = null; location.hash = '#order/faucet-replacement';"); run('render();');
-t('v42 rule: a visitor reaches the same checkout the same way', elById.get('orderBox').style.display === 'block' && elById.get('orderSvc').innerHTML.includes('Faucet Replacement'));
+t('v42 rule (v79): a visitor gets the same conversion', run("location.hash") === '#cart' && run("cartLoad().some(function(i){ return i.id === 'faucet-replacement'; })") === true);
+run("cartSave([]);");
 run("location.hash = '';"); run('render();');
 t('v42 nav: Menú entry visible to guests', elById.get('menuNavLink').style.display !== 'none');
 run("me = { id: 'USR-W1', role: 'worker', status: 'active', name: 'Worker One' };"); run('render();');
@@ -2125,7 +2127,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
 {
   const ROOT43 = path.join(APP_DIR, '..');
   const masterSrc43 = fs.readFileSync(path.join(ROOT43, 'MASTER-SERVICE-LIST.md'), 'utf8');
-  const catBlock43 = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSrc.indexOf('let orderState'));
+  const catBlock43 = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSrc.indexOf('/* ================= v79: LEGACY'));
   const cat43 = {};
   for (const m of catBlock43.matchAll(/'([a-z0-9-]+)': \{ name: '([^']*)', meta: '([^']*)', price: (\d+), member: (\d+|null)/g)) {
     cat43[m[1]] = { name: m[2], price: +m[4], member: m[5] === 'null' ? null : +m[5] };
@@ -2180,28 +2182,27 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 web: homepage cards repriced — no $135/$108 left, seven $125/$100 cards incl. Save $25', !webIndex43.includes('$135') && !webIndex43.includes('$108') && (webIndex43.match(/Members: \$100/g) || []).length === 7 && webIndex43.includes('Members: $100 · Save $25'));
   t('v43 web: oil / junk / green cards show their new member prices ($60 / $180 / $260 / $340 / $520)', ['Members: $60', 'Members: $180', 'Members: $260', 'Members: $340', 'Members: $520'].every(x => webIndex43.includes(x)));
   t('v43 web (superseded by v72 W-1): the homepage demo sample-order bar is REMOVED — no Sample order / View · $250 / cartbar anywhere', !webIndex43.includes('Sample order') && !webIndex43.includes('View · $250') && !webIndex43.includes('cartbar'));
-  t('v43 web: service.html TV page repriced in markup AND script (base 125 / member 100)', webService43.includes('let base = 125') && webService43.includes('data-price="125" data-mem="100"') && webService43.includes('id="bigPrice">$125<'));
-    t('v43 web: service.html pairs-well-with cards also cut ($135 -> $125 x3)', (webService43.match(/class="pp">\$125/g) || []).length === 3 && !webService43.includes('$135'));
+  t('v79 web: service.html is RETIRED (P0-5) — a themed redirect to the app; the fake demo page is gone', webService43.includes('http-equiv="refresh"') && webService43.includes('https://app.generalhandymans.app/') && !webService43.includes('bigPrice') && !webService43.includes('let base = 125'));
+  t('v79 web: service.html carries no prices or demo checkout at all (redirect stub)', !webService43.includes('$135') && !webService43.includes('data-price='));
   t('v43 zero-$135 proof: no $135 service price survives on any customer surface (app, server, homepage, checkout, tracking)', !htmlSrc.includes('$135') && !serverSrc.includes('$135') && !webIndex43.includes('$135') && !webCheckout43.includes('$135') && !fs.readFileSync(path.join(ROOT43, 'tracking.html'), 'utf8').includes('$135'));
   t('v43 zero-$135 proof: the 6 city pages carry no $135 either', ['handyman-fairfield', 'handyman-vacaville', 'handyman-vallejo', 'tv-mounting-vacaville', 'mobile-mechanic-vallejo', 'plumber-fairfield'].every(d => !fs.readFileSync(path.join(ROOT43, d, 'index.html'), 'utf8').includes('$135')));
-  t('v43 web: checkout.html sample math recomputed ($125 + $125 = $250; HomeCare sample $200)', webCheckout43.includes('drops from $250 to $200') && webCheckout43.includes('Continue to secure checkout · $250') && !webCheckout43.includes('$260') && !webCheckout43.includes('$208') && !webCheckout43.includes('$135'));
-  // Client totals in the VM: the discount now lands where it never did.
+  t('v79 web: checkout.html is RETIRED (P0-5) — a themed redirect to the app; the fake demo checkout is gone', webCheckout43.includes('http-equiv="refresh"') && webCheckout43.includes('https://app.generalhandymans.app/') && !webCheckout43.includes('Continue to secure checkout'));
+  // Client totals in the VM (v79: through the CART — the #order page and
+  // orderTotalsCalc are retired; cartCalc carries the same catalog math).
   run("location.hash = ''; me = null;"); run('render();');
-  run("location.hash = '#order/oil-change';"); run('render();');
-  const oilList43 = run('orderTotalsCalc().list');
-  run('orderState.memberActive = true;');
-  t('v43 totals: oil change — member pays $60 (the $75 flats are discounted now)', oilList43 === 75 && run('orderTotalsCalc().due') === 60);
-  run("location.hash = '#order/junk-minimum';"); run('render();'); run('orderState.memberActive = true;');
-  t('v43 totals: junk minimum load — member pays $180 (was excluded)', run('orderTotalsCalc().due') === 180);
-  run("location.hash = '#order/junk-full';"); run('render();'); run('orderState.memberActive = true;');
-  t('v43 totals: junk full load — member pays $520', run('orderTotalsCalc().due') === 520);
-  run("location.hash = '#order/green-waste';"); run('render();'); run('orderState.memberActive = true;');
-  t('v43 totals: green waste — member pays $180 (was excluded)', run('orderTotalsCalc().due') === 180);
-  run("location.hash = '#order/tv-mounting';"); run('render();'); run("orderState.extras.add('raceway');"); run('orderState.memberActive = true;');
-  t('v43 totals: TV after the cut + raceway — member pays $100 + $40 = $140', run('orderTotalsCalc().due') === 140);
-  run("location.hash = '#order/toilet-replacement';"); run('render();'); run("orderState.extras.add('haul-toilet');"); run('orderState.memberActive = true;');
-  t('v43 totals: haul-toilet ADD-ON keeps its nodisc — member pays $140 + $50 = $190', run('orderTotalsCalc().due') === 190);
-  run("location.hash = ''; me = null;"); run('render();');
+  run("cartSave([]); cartAdd('oil-change');");
+  t('v43 totals (v79 cart): oil change — list $75 / member $60 (the $75 flats are discounted)', run('cartCalc().list') === 75 && run('cartCalc().member') === 60);
+  run("cartSave([]); cartAdd('junk-minimum');");
+  t('v43 totals (v79 cart): junk minimum load — member pays $180 (was excluded)', run('cartCalc().list') === 225 && run('cartCalc().member') === 180);
+  run("cartSave([]); cartAdd('junk-full');");
+  t('v43 totals (v79 cart): junk full load — member pays $520', run('cartCalc().member') === 520);
+  run("cartSave([]); cartAdd('green-waste');");
+  t('v43 totals (v79 cart): green waste — member pays $180 (was excluded)', run('cartCalc().member') === 180);
+  run("cartSave([]); cartAddWithAddons('tv-mounting', ['raceway']);");
+  t('v43 totals (v79 cart): TV + raceway — list $175, member $100 + $40 (raceway discounted) = $140', run('cartCalc().list') === 175 && run('cartCalc().member') === 140);
+  run("cartSave([]); cartAddWithAddons('toilet-replacement', ['haul-toilet']);");
+  t('v43 totals (v79 cart): haul-toilet ADD-ON keeps its nodisc — member pays $140 + $50 = $190', run('cartCalc().member') === 190);
+  run("cartSave([]); location.hash = ''; me = null;"); run('render();');
 }
 
 // ---------------- v44: bookingDue + refunds + payout gate + admin cart ----------------
@@ -2214,7 +2215,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   // The in-person request carries the $75 estimate-fee credit (standing rule:
   // credited toward the repair), so total = 125 - 75 = 50 — and bookingDue
   // must default to that FULL total, not half of it like the old model.
-  t('v62 estimates: bookingDue AUTO defaults to the 40% deposit (total $50 → $20 due to book, $30 balance)', bkEst.status === 200 && bkEst.j.request.estimate.credit === 75 && bkEst.j.request.estimate.total === 50 && bkEst.j.request.estimate.bookingDue === 20 && bkEst.j.request.estimate.balanceDue === 30);
+  t('v62→v79 estimates: bookingDue AUTO defaults to the DEPOSIT LAW (total $50 → $50 flat due to book, $0 balance)', bkEst.status === 200 && bkEst.j.request.estimate.credit === 75 && bkEst.j.request.estimate.total === 50 && bkEst.j.request.estimate.bookingDue === 50 && bkEst.j.request.estimate.balanceDue === 0);
   const bkEst2 = await req2('PATCH', '/api/requests/' + bkId, { token: A2, body: { estimate: { items: [{ description: 'Faucet swap — labor', qty: 1, unitPrice: 125 }], bookingDue: 40 } } });
   t('v44 estimates: Gabriel can still override the amount due to book by hand', bkEst2.status === 200 && bkEst2.j.request.estimate.bookingDue === 40 && bkEst2.j.request.estimate.balanceDue === 10);
 
@@ -2296,7 +2297,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const cp1 = await req2('POST', '/api/carts/' + cartId + '/checkout', { body: det });
   const sess1 = sessionForCart(cartId, 'payment');
   const sess1Pi = sess1 && stripeState.pis[sess1.payment_intent];
-  t('v62 cart: a guest is sent to hosted Checkout at the 40% DEPOSIT of the list total ($250 → $100)', cp1.status === 200 && cp1.j.next === 'pay' && !!cp1.j.url && cp1.j.amount === 100 && cp1.j.deposit === 100 && cp1.j.balance === 150 && cp1.j.total === 250 && cp1.j.memberApplied === false && !!sess1 && sess1.amount_total === 10000 && !!sess1Pi && sess1Pi.metadata.kind === 'cart-order' && sess1Pi.metadata.cartId === cartId && sess1Pi.metadata.payStep === 'deposit');
+  t('v62→v79 cart: a guest is sent to hosted Checkout at the DEPOSIT of the list total ($250 → $50 flat tier)', cp1.status === 200 && cp1.j.next === 'pay' && !!cp1.j.url && cp1.j.amount === 50 && cp1.j.deposit === 50 && cp1.j.balance === 200 && cp1.j.total === 250 && cp1.j.memberApplied === false && !!sess1 && sess1.amount_total === 5000 && !!sess1Pi && sess1Pi.metadata.kind === 'cart-order' && sess1Pi.metadata.cartId === cartId && sess1Pi.metadata.payStep === 'deposit');
   const reqsBefore1 = await req2('GET', '/api/requests', { token: A2 });
   const reqCountBefore = (reqsBefore1.j.requests || []).length;
   // Tampered + unpaid returns change NOTHING — the flag is never trusted.
@@ -2312,7 +2313,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const admReqs = await req2('GET', '/api/requests', { token: A2 });
   const conv = (admReqs.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartId);
   t('v54 cart: the Stripe-verified paid return converts the cart into an order', ret1.status === 200 && !!conv && ret1Html.includes('Paid in full') && ret1Html.includes(conv.id));
-  t('v62 cart: the deposit converts the order as BOOKED (status deposit, $100 of $250, balance $150 — not paid in full)', !!conv && conv.customerEmail === 'cartguest@test.com' && conv.address === '11 Cart Way' && conv.city === 'Fairfield' && !!conv.payment && conv.payment.status === 'deposit' && conv.payment.amountCents === 10000 && conv.payment.totalCents === 25000 && conv.payment.balanceCents === 15000 && !!conv.menuOrder && conv.menuOrder.cartId === cartId);
+  t('v62→v79 cart: the deposit converts the order as BOOKED (status deposit, $50 of $250, balance $200 — not paid in full)', !!conv && conv.customerEmail === 'cartguest@test.com' && conv.address === '11 Cart Way' && conv.city === 'Fairfield' && !!conv.payment && conv.payment.status === 'deposit' && conv.payment.amountCents === 5000 && conv.payment.totalCents === 25000 && conv.payment.balanceCents === 20000 && !!conv.menuOrder && conv.menuOrder.cartId === cartId);
   // Return-path + webhook idempotency: replaying either is a no-op.
   await fetch(BASE2 + '/cart/' + cartId + '?paid=1&session_id=' + sess1.id);
   const whRet = await wh2('checkout.session.completed', { id: sess1.id, mode: 'payment', payment_status: 'paid', payment_intent: sess1.payment_intent, amount_total: 25000, metadata: { userId: '', kind: 'cart-order', cartId: cartId } });
@@ -2337,16 +2338,16 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v44 cart: a logged-in member sees member prices from the start (join block skipped)', page2.status === 200 && page2Html.includes('HomeCare member price applied') && !page2Html.includes('id="cJoin"'));
   const cp2 = await req2('POST', '/api/carts/' + cart2.j.cart.id + '/checkout', { token: hm.token, body: { name: 'Member C', phone: '7075550180', email: 'cartmember@test.com', address: '12 Member Ln', city: 'Fairfield', when: 'Today' } });
   const sess2 = sessionForCart(cart2.j.cart.id, 'payment');
-  t('v62 cart: member session is charged the 40% deposit of the MEMBER total ($200 → $80)', cp2.status === 200 && cp2.j.amount === 80 && cp2.j.memberApplied === true && !!sess2 && sess2.amount_total === 8000);
+  t('v62→v79 cart: member session is charged the deposit of the MEMBER total ($200 → $50 flat tier)', cp2.status === 200 && cp2.j.amount === 50 && cp2.j.memberApplied === true && !!sess2 && sess2.amount_total === 5000);
   await mockSessionPaid(sess2.id);
   const ret2 = await fetch(BASE2 + '/cart/' + cart2.j.cart.id + '?paid=1&session_id=' + sess2.id, { headers: { Authorization: 'Bearer ' + hm.token } });
   const admReqsM = await req2('GET', '/api/requests', { token: A2 });
   const conv2 = (admReqsM.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cart2.j.cart.id);
-  t('v62 cart: the member cart converts at the member total — deposit $80 recorded, $200 total on the order', ret2.status === 200 && !!conv2 && conv2.payment.status === 'deposit' && conv2.payment.amountCents === 8000 && conv2.payment.totalCents === 20000 && conv2.membership === 'member');
+  t('v62→v79 cart: the member cart converts at the member total — deposit $50 recorded, $200 total on the order', ret2.status === 200 && !!conv2 && conv2.payment.status === 'deposit' && conv2.payment.amountCents === 5000 && conv2.payment.totalCents === 20000 && conv2.membership === 'member');
   const cart3 = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'oil-change', name: 'Oil Change & Fluid Service', qty: 1, unitPrice: 75 }] } });
   const cp3 = await req2('POST', '/api/carts/' + cart3.j.cart.id + '/checkout', { body: { name: 'Member By Email', phone: '7075550180', email: 'cartmember@test.com', address: '12 Member Ln', city: 'Fairfield', when: 'Today' } });
   const sess3 = sessionForCart(cart3.j.cart.id, 'payment');
-  t('v62 cart: a guest with a member email gets member prices too ($75 -> $60 total, $24 deposit)', cp3.status === 200 && cp3.j.amount === 24 && cp3.j.total === 60 && cp3.j.memberApplied === true && !!sess3 && sess3.amount_total === 2400);
+  t('v62→v79 cart: a guest with a member email gets member prices too ($75 -> $60 total, $50 deposit — flat tier, never above the total)', cp3.status === 200 && cp3.j.amount === 50 && cp3.j.total === 60 && cp3.j.memberApplied === true && !!sess3 && sess3.amount_total === 5000);
   const chk = await req2('POST', '/api/carts/' + cart3.j.cart.id + '/member-check', { body: { email: 'cartmember@test.com' } });
   const chkNo = await req2('POST', '/api/carts/' + cart3.j.cart.id + '/member-check', { body: { email: 'cartguest@test.com' } });
   t('v44 cart: member-check answers by email (member yes / guest no)', chk.status === 200 && chk.j.member === true && chkNo.j.member === false);
@@ -2417,7 +2418,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v56 cart: totals block carries BOTH figures — ctSubtotal + cartBigTotal embed data-l $430.00 / data-m $360.00, guest figure rendered first', pageAH.includes('id="ctSubtotal" data-l="$430.00" data-m="$360.00">$430.00<') && pageAH.includes('id="cartBigTotal" data-l="$430.00" data-m="$360.00"'));
   t('v56 cart: mixed-cart line pairs — labor drops ($75.00→$60.00 each, $225.00→$180.00 line), catalog drops ($125.00→$100.00), MATERIALS NEVER drop ($40.00/$40.00 each, $80.00/$80.00 line)', pageAH.includes('data-l="$75.00" data-m="$60.00"') && pageAH.includes('data-l="$225.00" data-m="$180.00"') && pageAH.includes('data-l="$125.00" data-m="$100.00"') && pageAH.includes('data-l="$40.00" data-m="$40.00"') && pageAH.includes('data-l="$80.00" data-m="$80.00"'));
   t('v56 cart: toggle wiring embedded — renderAmounts binds member figures to lines/total/Pay label and shows the savings row, subtotal follows the preview, unchecking restores guest figures (v57: the preview itself is set BY PLAN via syncJoinPreview)', pageAH.includes('function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }') && pageAH.includes('var asM=memberApplied||joinPreview') && pageAH.includes('n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l")') && pageAH.includes('sr.style.display=asM?"flex":"none"') && pageAH.includes('joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l")') && pageAH.includes('−$70.00'));
-  t('v70 cart: join-order note embedded hidden under the Pay button — ONE-checkout copy naming the picked plan + price + the real deposit/due math (EN + ES templates)', pageAH.includes('id="joinOrderNote"') && pageAH.includes('display:none;color:#555') && pageAH.includes('One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo)') && pageAH.includes('No second step, no paying twice.') && pageAH.includes('this order stays at the regular price.') && pageAH.includes('Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes)') && pageAH.includes('jn.style.display=on?"block":"none"') && pageAH.includes('jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ))'));
+  t('v70 cart: join-order note embedded hidden under the Pay button — ONE-checkout copy naming the picked plan + price + the real deposit/due math (EN + ES templates)', pageAH.includes('id="joinOrderNote"') && pageAH.includes('display:none;color:#555') && pageAH.includes('One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo)') && pageAH.includes('No second step, no paying twice.') && pageAH.includes('this order stays at the regular price.') && pageAH.includes('Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes)') && pageAH.includes('jn.style.display=on?"block":"none"') && pageAH.includes('jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ))'));
   t('v56 cart: member page UNCHANGED — no join checkbox, savings row flex from the server render, subtotal still opens on the regular figure with the savings bridge', pageBH.includes('id="ctSaveRow" style="display:flex') && !pageBH.includes('id="cJoin"') && pageBH.includes('id="ctSubtotal" data-l="$430.00" data-m="$360.00">$430.00<'));
   const estFnSrc56 = serverSrc.slice(serverSrc.indexOf('function estimatePageHtml'), serverSrc.indexOf('function installPageHtml'));
   t('v56 estimate: join stays the server-verified BUTTON pattern (estJoinBtn + join-checkout, full reload reprice) — NO cart-style checkbox/totals toggle on the estimate page', estFnSrc56.includes('estJoinBtn') && estFnSrc56.includes('/join-checkout') && !estFnSrc56.includes('id="cJoin"') && !estFnSrc56.includes('joinPreview'));
@@ -2462,7 +2463,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v52 cart: labor+materials cart totals — member drop is EXACTLY the labor savings ($305 → $260)', cartLM.status === 201 && cartLM.j.cart.listTotal === 305 && cartLM.j.cart.memberTotal === 260 && (cartLM.j.cart.listTotal - cartLM.j.cart.memberTotal) === 45);
   const cpLM = await req2('POST', '/api/carts/' + cartLM.j.cart.id + '/checkout', { body: { name: 'Path C', phone: '7075550203', email: 'pathc@test.com', address: '33 Path C St', city: 'Fairfield', when: 'Today' } });
   const sessLM = sessionForCart(cartLM.j.cart.id, 'payment');
-  t('v62 cart: the joined member books the labor+materials cart with the 40% deposit ($104 of the $260 member total — materials untouched in the total)', cpLM.status === 200 && cpLM.j.amount === 104 && cpLM.j.total === 260 && cpLM.j.memberApplied === true && !!sessLM && sessLM.amount_total === 10400);
+  t('v62→v79 cart: the joined member books the labor+materials cart with the deposit ($50 flat tier of the $260 member total — materials untouched in the total)', cpLM.status === 200 && cpLM.j.amount === 50 && cpLM.j.total === 260 && cpLM.j.memberApplied === true && !!sessLM && sessLM.amount_total === 5000);
   // Path D — member re-entry (addendum 3): joins first, later reopens the
   // SAME link in a fresh session and identifies by email — or by session.
   const md = await mkMember('pathd@test.com', '(707) 555-0204');
@@ -2544,12 +2545,12 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   // A fresh checkout on the edited cart charges the NEW total and converts.
   const cpF2 = await req2('POST', '/api/carts/' + cartFId + '/checkout', { body: det });
   const sessF2 = sessionForCart(cartFId, 'payment');
-  t('v62 v55 session safety: fresh checkout after the edit is a NEW session at the NEW deposit ($100 of the new $250 total)', cpF2.status === 200 && cpF2.j.amount === 100 && cpF2.j.total === 250 && !!sessF2 && sessF2.id !== sessF.id && sessF2.amount_total === 10000);
+  t('v62→v79 v55 session safety: fresh checkout after the edit is a NEW session at the NEW deposit ($50 of the new $250 total)', cpF2.status === 200 && cpF2.j.amount === 50 && cpF2.j.total === 250 && !!sessF2 && sessF2.id !== sessF.id && sessF2.amount_total === 5000);
   await mockSessionPaid(sessF2.id);
   const retF2 = await fetch(BASE2 + '/cart/' + cartFId + '?paid=1&session_id=' + sessF2.id);
   const admReqsF = await req2('GET', '/api/requests', { token: A2 });
   const convF = (admReqsF.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartFId);
-  t('v62 v55 session safety: the fresh session converts the edited cart (deposit $100 recorded, $250 total)', retF2.status === 200 && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 10000 && convF.payment.totalCents === 25000 && convF.menuOrder.totals.list === 250);
+  t('v62→v79 v55 session safety: the fresh session converts the edited cart (deposit $50 recorded, $250 total)', retF2.status === 200 && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 5000 && convF.payment.totalCents === 25000 && convF.menuOrder.totals.list === 250);
   // Same protection for a pending combined JOIN session on the cart (v70).
   const suG = await req2('POST', '/api/signup', { body: { name: 'Edit Join', email: 'editjoin@test.com', password: 'password123', phone: '7075550210', role: 'customer' } });
   const cartG = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Swap', qty: 1, unitPrice: 125 }] } });
@@ -2656,8 +2657,8 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   // Scripts are stripped before asserting: the translation dictionary rides
   // in a script tag (data), while the RENDERED page must be single-language.
   const stripScripts = (h) => h.replace(/<script[\s\S]*?<\/script>/g, '');
-  const EN_UI = ['Your cart', 'Your info', 'Become a HomeCare member', 'You pay a 40% deposit today', 'Questions? Text or call'];
-  const ES_UI = ['Tu carrito', 'Tus datos', 'Hazte miembro de HomeCare', 'Hoy pagas un anticipo del 40%', '¿Preguntas?'];
+  const EN_UI = ['Your cart', 'Your info', 'Become a HomeCare member', 'You pay a booking deposit today', 'Questions? Text or call'];
+  const ES_UI = ['Tu carrito', 'Tus datos', 'Hazte miembro de HomeCare', 'Hoy pagas un anticipo para agendar tu trabajo', '¿Preguntas?'];
   const pgEn = stripScripts(page1Html);
   t('v44 i18n: the default cart page renders ENGLISH only (zero ES UI strings)', EN_UI.every(s => pgEn.includes(s)) && !ES_UI.some(s => pgEn.includes(s)));
   t('v44 i18n: EN|ES toggle ships on the page and the choice persists (localStorage, pay button speaks T())', page1Html.includes('data-lang-btn="en"') && page1Html.includes('data-lang-btn="es"') && page1Html.includes('ghsCartLang') && page1Html.includes('localStorage') && page1Html.includes('T("payBtn")'));
@@ -2727,19 +2728,19 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     return { list, member: mem, due: due + fee, asapFee: fee };
   };
   let matrixBad = [];
-  run("orderWhenSel = function(){ return window.__asapFlag ? 'ASAP' : 'Today'; };");
+  run('cartSave([]);');
   for (const id of catIds) {
     const addonIds = Object.keys(catEntries[id].addons);
-    const combos = [[false, false, false], [true, false, false], [true, true, false], [false, false, true], [true, false, true], [true, true, true]];
-    for (const [mem, asap, extras] of combos) {
-      run("location.hash = '#order/" + id + "'; render();");
-      run('window.__asapFlag = ' + asap + '; orderState.memberActive = ' + mem + '; orderState.join = false; orderState.extras = new Set(' + JSON.stringify(extras ? addonIds : []) + ');');
-      const got = JSON.parse(run('JSON.stringify(orderTotalsCalc())'));
-      const exp = expect(id, mem, asap, extras);
-      if (got.list !== exp.list || got.member !== exp.member || got.due !== exp.due || got.asapFee !== exp.asapFee) matrixBad.push(id + '/' + mem + '/' + asap + '/' + extras + ' got ' + got.due + ' want ' + exp.due);
+    const combos = [[false, false], [true, false], [false, true], [true, true]];
+    for (const [mem, extras] of combos) {
+      run('cartSave([' + JSON.stringify({ id: id, q: 1, x: extras ? addonIds : [] }) + ']);');
+      const got = JSON.parse(run('JSON.stringify(cartCalc())'));
+      const exp = expect(id, mem, false, extras);
+      if (got.list !== exp.list || got.member !== exp.member) matrixBad.push(id + '/' + mem + '/' + extras + ' got ' + got.list + '/' + got.member + ' want ' + exp.list + '/' + exp.member);
     }
   }
-  t('v46 matrix: client orderTotalsCalc matches the catalog formula for all 98 services x 6 combos', matrixBad.length === 0);
+  run('cartSave([]);');
+  t('v46 matrix (v79): client cartCalc matches the catalog formula for all 98 services x member x add-ons (ASAP combos retired with the #order page — the cart has no ASAP)', matrixBad.length === 0);
   if (matrixBad.length) console.log('  matrix mismatches:', matrixBad.slice(0, 6).join(' | '));
 
   // --- server recompute: tampered totals can no longer set the price ---
@@ -3035,7 +3036,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   const chk4 = await req2('POST', '/estimate/' + r4 + '/member-check', { body: { email: 'v45-member@t.local' } });
   t('v45 member: member-check finds the active HomeCare member by email', chk4.status === 200 && chk4.j.member === true);
   const g4pre = await adminGet45(r4);
-  t('v62 member: sending an estimate to a known member auto-applies the discount — 20% of LABOR only ($40 of $200; the $50 material is untouched) → total $210, booking = 40% deposit ($84)', g4pre.estimate.discountAmount === 40 && g4pre.estimate.total === 210 && g4pre.estimate.bookingDue === 84 && g4pre.estimate.balanceDue === 126 && g4pre.estimate.memberDiscount === true);
+  t('v62 member: sending an estimate to a known member auto-applies the discount — 20% of LABOR only ($40 of $200; the $50 material is untouched) → total $210, booking = the deposit law ($50 flat tier)', g4pre.estimate.discountAmount === 40 && g4pre.estimate.total === 210 && g4pre.estimate.bookingDue === 50 && g4pre.estimate.balanceDue === 160 && g4pre.estimate.memberDiscount === true);
   const app4 = await req2('POST', '/estimate/' + r4 + '/member-apply', { body: { email: 'v45-member@t.local' } });
   const g4 = await adminGet45(r4);
   t('v45 member: member-apply confirms the member total (idempotent — never discounts twice)', app4.status === 200 && app4.j.member === true && app4.j.total === 210 && g4.estimate.discountAmount === 40 && g4.estimate.total === 210);
@@ -3180,7 +3181,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   const upM = await patch58(rM, { items: mixed58, asap: true, discountPct: 0, credit: 0, bookingDue: null });
   const eM = upM.j.request.estimate;
   t('v58 member ASAP: the member estimate carries ASAP on the DISCOUNTED labor ($40, not $50)', upM.status === 200 && eM.memberDiscount === true && eM.discountAmount === 40 && eM.asapAmount === 40);
-  t('v62 member ASAP: total == discounted labor x1.25 + materials ($250); booking = 40% deposit ($100), balance $150', eM.total === 250 && eM.bookingDue === 100 && eM.balanceDue === 150);
+  t('v62→v79 member ASAP: total == discounted labor x1.25 + materials ($250); booking = deposit law ($50 flat), balance $200', eM.total === 250 && eM.bookingDue === 50 && eM.balanceDue === 200);
   const pgM = await estPage58(rM);
   t('v58 member ASAP: the public page renders the conformed ASAP line ($40.00)', pgM.html.includes('ASAP / Emergency (+25%)</span>: <b>$40.00</b>'));
 
@@ -3221,7 +3222,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   const invM = (dataM.invoices || []).find(x => x.id === (apMj.invoiceId || ''));
   const asapLine = invM && (invM.items || []).find(it => (it.description || '').includes('ASAP'));
   t('v58 invoice: approval creates the invoice from the member ASAP estimate', apM.status === 200 && !!invM);
-  t('v62 invoice: approval invoices the 40% DEPOSIT first (invoiceFromEstimate deposit mode) — total $100, deposit line, balance $150 noted for completion', !!invM && invM.total === 100 && (invM.items || []).some(it => /Deposit to book/.test(it.description || '') && it.unitPrice === 100) && /Balance at completion: \$150/.test(invM.notes || ''));
+  t('v62→v79 invoice: approval invoices the DEPOSIT first (invoiceFromEstimate deposit mode) — total $50, deposit line, balance $200 noted for completion', !!invM && invM.total === 50 && (invM.items || []).some(it => /Deposit to book/.test(it.description || '') && it.unitPrice === 50) && /Balance at completion: \$200/.test(invM.notes || ''));
 
   // (6) statics: builder preview + server variant plumbing
   t('static v58: builder bundle math takes the member flag and the seeded flag is plumbed', htmlSrc.includes('function estBundleMath(items, asap, discountPct, credit, memberDiscount)') && htmlSrc.includes('estMemberDisc-'));
@@ -3371,7 +3372,7 @@ t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('
   const detF = { name: 'In Cart Fran', phone: '7075550171', email: 'fran61@t.local', address: '9 Fran St', city: 'Fairfield', when: 'Today' };
   const coF = await req2('POST', '/api/carts/' + cartF.j.cart.id + '/checkout', { token: fran.token, body: Object.assign({}, detF, { join: true }) });
   const sessF = sessionForCart(cartF.j.cart.id, 'subscription');
-  t('v70 v61: the invited cart join is ONE session carrying the invitation — and the ONLY charge today is the $40 deposit (the free month makes the plan $0, never a $0 total)', coF.status === 200 && coF.j.next === 'pay' && coF.j.amount === 40 && coF.j.deposit === 40 && coF.j.planFirst === 0 && coF.j.total === 100 && !!sessF && !!sessF.metadata && sessF.metadata.kind === 'cart-join' && sessF.metadata.inviteId === invF.j.invite.id && sessF.metadata.src === 'cart-invite');
+  t('v70 v61: the invited cart join is ONE session carrying the invitation — and the ONLY charge today is the $50 deposit (the free month makes the plan $0, never a $0 total)', coF.status === 200 && coF.j.next === 'pay' && coF.j.amount === 50 && coF.j.deposit === 50 && coF.j.planFirst === 0 && coF.j.total === 100 && !!sessF && !!sessF.metadata && sessF.metadata.kind === 'cart-join' && sessF.metadata.inviteId === invF.j.invite.id && sessF.metadata.src === 'cart-invite');
   await mockSessionPaid(sessF.id);
   const retF = await fetch(BASE2 + '/cart/' + cartF.j.cart.id + '?paid=1&session_id=' + sessF.id, { headers: { Authorization: 'Bearer ' + fran.token } });
   const invListF = await req2('GET', '/api/admin/invites', { token: A61 });
@@ -3379,18 +3380,18 @@ t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('
   const meF = await req2('GET', '/api/me', { token: fran.token });
   const reqsF = await req2('GET', '/api/requests', { token: A61 });
   const convF = (reqsF.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartF.j.cart.id);
-  t('v70 v61: the ONE verified return activates HomeCare, marks the invitation claimed AND books the job (deposit $40 of the $100 member total)', retF.status === 200 && meF.j.user.homeCareStatus === 'active' && !!invFNow && invFNow.status === 'accepted' && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 4000 && convF.payment.totalCents === 10000 && convF.membership === 'member');
+  t('v70 v61 (v79 law): the ONE verified return activates HomeCare, marks the invitation claimed AND books the job (deposit $50 of the $100 member total)', retF.status === 200 && meF.j.user.homeCareStatus === 'active' && !!invFNow && invFNow.status === 'accepted' && !!convF && convF.payment.status === 'deposit' && convF.payment.amountCents === 5000 && convF.payment.totalCents === 10000 && convF.membership === 'member');
   const pgF2 = await (await fetch(BASE2 + '/cart/' + cartF.j.cart.id)).text();
   t('v61: once claimed, the free-month offer no longer renders on the cart', !pgF2.includes('FREE_MONTH=true'));
   const balF = await req2('POST', '/api/carts/' + cartF.j.cart.id + '/checkout', { body: { balance: true } });
-  t('v70 v61: the booked cart collects its $60 balance from the same link', balF.status === 200 && balF.j.amount === 60 && balF.j.balance === true);
+  t('v70 v61 (v79 law): the booked cart collects its $50 balance from the same link', balF.status === 200 && balF.j.amount === 50 && balF.j.balance === true);
   const cartG = await req2('POST', '/api/admin/carts', { token: A61, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }] } });
   const invG = await req2('POST', '/api/admin/invites', { token: A61, body: { name: 'Plus Pete', cartId: cartG.j.cart.id } });
   const pete = await mkMember('pete61@t.local', '(707) 555-0172');
   const detG = { name: 'Plus Pete', phone: '7075550172', email: 'pete61@t.local', address: '9 Pete St', city: 'Fairfield', when: 'Today' };
   const coG = await req2('POST', '/api/carts/' + cartG.j.cart.id + '/checkout', { token: pete.token, body: Object.assign({}, detG, { join: true, plan: 'plus1' }) });
   const sessG = sessionForCart(cartG.j.cart.id, 'subscription');
-  t('v61: a Plus join on an invited cart carries NO invitation (full price, as Gabriel ordered)', coG.status === 200 && coG.j.amount === 140 && !!sessG && !(sessG.metadata && sessG.metadata.inviteId));
+  t('v61: a Plus join on an invited cart carries NO invitation (full price, as Gabriel ordered)', coG.status === 200 && coG.j.amount === 150 && !!sessG && !(sessG.metadata && sessG.metadata.inviteId));
   await mockSessionPaid(sessG.id);
   await fetch(BASE2 + '/cart/' + cartG.j.cart.id + '?paid=1&session_id=' + sessG.id, { headers: { Authorization: 'Bearer ' + pete.token } });
   const invListG = await req2('GET', '/api/admin/invites', { token: A61 });
@@ -3460,7 +3461,7 @@ t('static v74: every hosted HomeCare join passes the eligibility-gated trial (SP
   const det74 = { name: 'Cal Cart', phone: '7075550177', email: 'cal74@t.local', address: '9 Cal St', city: 'Fairfield', when: 'Today', join: true };
   const coCal = await req2('POST', '/api/carts/' + cart74.j.cart.id + '/checkout', { token: cal.token, body: det74 });
   const sessCal = sessionForCart(cart74.j.cart.id, 'subscription');
-  t('v74: a cart-join WITHOUT an invite trials the plan and charges ONLY the deposit today ($40 of the $100 member total)', coCal.status === 200 && coCal.j.next === 'pay' && coCal.j.plan === 'homecare' && coCal.j.planFirst === 0 && coCal.j.deposit === 40 && coCal.j.amount === 40 && coCal.j.total === 100 && !!sessCal && sessCal.metadata.kind === 'cart-join' && sessCal.metadata.freeMonth === '1' && sessCal.amount_total === 4000);
+  t('v74: a cart-join WITHOUT an invite trials the plan and charges ONLY the deposit today ($50 of the $100 member total)', coCal.status === 200 && coCal.j.next === 'pay' && coCal.j.plan === 'homecare' && coCal.j.planFirst === 0 && coCal.j.deposit === 50 && coCal.j.amount === 50 && coCal.j.total === 100 && !!sessCal && sessCal.metadata.kind === 'cart-join' && sessCal.metadata.freeMonth === '1' && sessCal.amount_total === 5000);
   await mockSessionPaid(sessCal.id);
   const retCal = await fetch(BASE2 + '/cart/' + cart74.j.cart.id + '?paid=1&session_id=' + sessCal.id, { headers: { Authorization: 'Bearer ' + cal.token } });
   const chkCal = await req2('POST', '/api/carts/' + cart74.j.cart.id + '/member-check', { body: { email: 'cal74@t.local' } });
@@ -3478,19 +3479,19 @@ t('static v62: the policy rails exist — DEPOSIT_RATE, deposit recorder, ONE se
   const detZ = { name: 'Dep Dan', phone: '7075550180', email: 'dan62@t.local', address: '5 Dan St', city: 'Fairfield', when: 'Today' };
   const coZ = await req2('POST', '/api/carts/' + cartZ.j.cart.id + '/checkout', { token: dan.token, body: detZ });
   const sessZ = sessionForCart(cartZ.j.cart.id, 'payment');
-  t('v62: checkout opens the DEPOSIT session — 40% of $250 = $100, payStep deposit, split in the response', coZ.status === 200 && coZ.j.amount === 100 && coZ.j.deposit === 100 && coZ.j.balance === 150 && coZ.j.total === 250 && !!sessZ && sessZ.amount_total === 10000 && sessZ.metadata.payStep === 'deposit');
+  t('v62→v79: checkout opens the DEPOSIT session — $250 → $50 flat tier, payStep deposit, split in the response', coZ.status === 200 && coZ.j.amount === 50 && coZ.j.deposit === 50 && coZ.j.balance === 200 && coZ.j.total === 250 && !!sessZ && sessZ.amount_total === 5000 && sessZ.metadata.payStep === 'deposit');
   const pgZ = await (await fetch(BASE2 + '/cart/' + cartZ.j.cart.id)).text();
-  t('v62: the open page shows the split — due today $100.00, balance $150.00, deposit pay button', pgZ.includes('id="ctDeposit"') && pgZ.includes('$100.00') && pgZ.includes('id="ctBalance"') && pgZ.includes('$150.00') && pgZ.includes('Pay deposit'));
+  t('v62→v79: the open page shows the split — due today $50.00, balance $200.00, deposit pay button', pgZ.includes('id="ctDeposit"') && pgZ.includes('$50.00') && pgZ.includes('id="ctBalance"') && pgZ.includes('$200.00') && pgZ.includes('Pay deposit'));
   await mockSessionPaid(sessZ.id);
   const retZ = await fetch(BASE2 + '/cart/' + cartZ.j.cart.id + '?paid=1&session_id=' + sessZ.id, { headers: { Authorization: 'Bearer ' + dan.token } });
   const retZh = await retZ.text();
   const reqsZ = await req2('GET', '/api/requests', { token: A62 });
   const convZ = (reqsZ.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cartZ.j.cart.id);
-  t('v62: the paid deposit BOOKS the job — order exists in DEPOSIT state ($100 of $250, balance $150), NOT paid in full', retZ.status === 200 && !!convZ && convZ.payment.status === 'deposit' && convZ.payment.amountCents === 10000 && convZ.payment.totalCents === 25000 && convZ.payment.balanceCents === 15000);
-  t('v62: the cart page now shows the booked state — deposit received, balance $150.00 due, Pay balance button on the same link', retZh.includes('Deposit received') && retZh.includes('Pay balance $150.00') && retZh.includes('id="balBtn"'));
+  t('v62→v79: the paid deposit BOOKS the job — order exists in DEPOSIT state ($50 of $250, balance $200), NOT paid in full', retZ.status === 200 && !!convZ && convZ.payment.status === 'deposit' && convZ.payment.amountCents === 5000 && convZ.payment.totalCents === 25000 && convZ.payment.balanceCents === 20000);
+  t('v62: the cart page now shows the booked state — deposit received, balance $150.00 due, Pay balance button on the same link', retZh.includes('Deposit received') && retZh.includes('Pay balance $200.00') && retZh.includes('id="balBtn"'));
   const balZ = await req2('POST', '/api/carts/' + cartZ.j.cart.id + '/checkout', { token: dan.token, body: { balance: true } });
   const sessZB = sessionForCart(cartZ.j.cart.id, 'payment');
-  t('v62: the balance step opens a session for exactly the outstanding $150 (payStep balance)', balZ.status === 200 && balZ.j.amount === 150 && balZ.j.balance === true && !!sessZB && sessZB.id !== sessZ.id && sessZB.amount_total === 15000 && sessZB.metadata.payStep === 'balance');
+  t('v62→v79: the balance step opens a session for exactly the outstanding $200 (payStep balance)', balZ.status === 200 && balZ.j.amount === 200 && balZ.j.balance === true && !!sessZB && sessZB.id !== sessZ.id && sessZB.amount_total === 20000 && sessZB.metadata.payStep === 'balance');
   await mockSessionPaid(sessZB.id);
   const retZB = await fetch(BASE2 + '/cart/' + cartZ.j.cart.id + '?paid=1&session_id=' + sessZB.id, { headers: { Authorization: 'Bearer ' + dan.token } });
   const reqsZB = await req2('GET', '/api/requests', { token: A62 });
@@ -3521,7 +3522,7 @@ t('static v69: balance adjustment rails exist — admin endpoint, append-only ad
   await fetch(BASE2 + '/cart/' + cid69 + '?paid=1&session_id=' + sess69.id);
   const reqs69a = await req2('GET', '/api/requests', { token: A69 });
   const conv69a = (reqs69a.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid69);
-  t('v69 setup: the guest deposit books the order ($120 of $300, balance $180)', co69.status === 200 && !!conv69a && conv69a.payment.status === 'deposit' && conv69a.payment.amountCents === 12000 && conv69a.payment.totalCents === 30000 && conv69a.payment.balanceCents === 18000);
+  t('v69 setup (v79 law): the guest deposit books the order ($50 of $300 — the $300 tier is FLAT, balance $250)', co69.status === 200 && !!conv69a && conv69a.payment.status === 'deposit' && conv69a.payment.amountCents === 5000 && conv69a.payment.totalCents === 30000 && conv69a.payment.balanceCents === 25000);
   const adjForbidden = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: cust69.token, body: { delta: 35, note: 'hack' } });
   t('v69: only the admin can adjust a balance', adjForbidden.status === 403);
   const adjZero = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: 0, note: 'zero' } });
@@ -3529,23 +3530,23 @@ t('static v69: balance adjustment rails exist — admin endpoint, append-only ad
   const adjBig = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: 5000, note: 'typo' } });
   t('v69: an adjustment over $2,000 is refused (typo guard)', adjBig.status === 400);
   const adj1 = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: 35, note: 'Updated materials: cable roll + valves, at cost' } });
-  t('v69: +$35 materials adjustment lands — total $335, balance $215, deposit untouched, adjustment recorded', adj1.status === 200 && adj1.j.cart.payState.total === 335 && adj1.j.cart.payState.balance === 215 && adj1.j.cart.payState.deposit === 120 && adj1.j.cart.payState.adjustments.length === 1 && adj1.j.cart.payState.adjustments[0].delta === 35);
+  t('v69: +$35 materials adjustment lands — total $335, balance $285, deposit untouched, adjustment recorded', adj1.status === 200 && adj1.j.cart.payState.total === 335 && adj1.j.cart.payState.balance === 285 && adj1.j.cart.payState.deposit === 50 && adj1.j.cart.payState.adjustments.length === 1 && adj1.j.cart.payState.adjustments[0].delta === 35);
   const pg69 = await (await fetch(BASE2 + '/cart/' + cid69)).text();
-  t('v69: the customer page shows the adjustment line, its note and the NEW balance on the same link', pg69.includes('Materials adjustment') && pg69.includes('+$35.00') && pg69.includes('Updated materials: cable roll + valves, at cost') && pg69.includes('Pay balance $215.00'));
+  t('v69: the customer page shows the adjustment line, its note and the NEW balance on the same link', pg69.includes('Materials adjustment') && pg69.includes('+$35.00') && pg69.includes('Updated materials: cable roll + valves, at cost') && pg69.includes('Pay balance $285.00'));
   const reqs69 = await req2('GET', '/api/requests', { token: A69 });
   const conv69 = (reqs69.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid69);
-  t('v69: the order record syncs — total $335, balance $215, still deposit state, due updated', !!conv69 && conv69.payment.status === 'deposit' && conv69.payment.totalCents === 33500 && conv69.payment.balanceCents === 21500 && conv69.menuOrder.totals.due === 335);
+  t('v69: the order record syncs — total $335, balance $285, still deposit state, due updated', !!conv69 && conv69.payment.status === 'deposit' && conv69.payment.totalCents === 33500 && conv69.payment.balanceCents === 28500 && conv69.menuOrder.totals.due === 335);
   const bal69 = await req2('POST', '/api/carts/' + cid69 + '/checkout', { body: { balance: true } });
   const sess69B = sessionForCart(cid69, 'payment');
-  t('v69: the balance checkout charges the ADJUSTED $215', bal69.status === 200 && bal69.j.amount === 215 && !!sess69B && sess69B.id !== sess69.id && sess69B.amount_total === 21500 && sess69B.metadata.payStep === 'balance');
+  t('v69: the balance checkout charges the ADJUSTED $285', bal69.status === 200 && bal69.j.amount === 285 && !!sess69B && sess69B.id !== sess69.id && sess69B.amount_total === 28500 && sess69B.metadata.payStep === 'balance');
   const adjFloor = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: -500, note: 'too far' } });
   t('v69: the balance cannot be adjusted below $0', adjFloor.status === 400);
-  const adjZeroBal = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: -215, note: 'Materials credit — deposit covers the rest' } });
+  const adjZeroBal = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: -285, note: 'Materials credit — deposit covers the rest' } });
   const reqs69b = await req2('GET', '/api/requests', { token: A69 });
   const conv69b = (reqs69b.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid69);
-  t('v69: adjusting the balance to $0 settles the order PAID IN FULL at the adjusted total ($120)', adjZeroBal.status === 200 && adjZeroBal.j.cart.payState.balance === 0 && adjZeroBal.j.cart.payState.balancePaid === true && !!conv69b && conv69b.payment.status === 'paid' && conv69b.payment.amountCents === 12000);
+  t('v69: adjusting the balance to $0 settles the order PAID IN FULL at the adjusted total ($50 — the deposit that landed)', adjZeroBal.status === 200 && adjZeroBal.j.cart.payState.balance === 0 && adjZeroBal.j.cart.payState.balancePaid === true && !!conv69b && conv69b.payment.status === 'paid' && conv69b.payment.amountCents === 5000);
   const pg69b = await (await fetch(BASE2 + '/cart/' + cid69)).text();
-  t('v69: the settled page renders paid-in-full ($120.00) with BOTH adjustment lines on the record', pg69b.includes('data-i18n="paidH"') && !pg69b.includes('id="balBtn"') && pg69b.includes('Materials adjustment') && pg69b.includes('-$215.00') && pg69b.includes('Total paid:') && pg69b.includes('$120.00'));
+  t('v69: the settled page renders paid-in-full ($50.00) with BOTH adjustment lines on the record', pg69b.includes('data-i18n="paidH"') && !pg69b.includes('id="balBtn"') && pg69b.includes('Materials adjustment') && pg69b.includes('-$285.00') && pg69b.includes('Total paid:') && pg69b.includes('$50.00'));
   const adjClosed = await req2('POST', '/api/admin/carts/' + cid69 + '/adjust-balance', { token: A69, body: { delta: 10, note: 'too late' } });
   t('v69: a settled order refuses further adjustments', adjClosed.status === 400);
   const cartOpen69 = await req2('POST', '/api/admin/carts', { token: A69, body: { items: [{ serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }] } });
@@ -3708,7 +3709,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coGuest.j.paymentIntentId, 'succeeded');
   const confOk = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
   const orderGuest = (await adminReqs78()).find(r => r.id === (confOk.j && confOk.j.requestId));
-  t('v78 checkout: verified payment creates the order — PAID IN FULL at the server total, cart lines attached', confOk.status === 200 && !!orderGuest && orderGuest.payment && orderGuest.payment.status === 'paid' && orderGuest.menuOrder.cart === true && orderGuest.menuOrder.totals.due === 250 && orderGuest.menuOrder.items.length === 2);
+  t('v78 checkout (v79 deposit law): the verified DEPOSIT creates the order — DEPOSIT state ($50 of $250 in, $200 balance), cart lines attached', confOk.status === 200 && !!orderGuest && orderGuest.payment && orderGuest.payment.status === 'deposit' && orderGuest.payment.amountCents === 5000 && orderGuest.payment.balanceCents === 20000 && orderGuest.menuOrder.cart === true && orderGuest.menuOrder.totals.due === 250 && orderGuest.menuOrder.items.length === 2);
   const confAgain = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
   t('v78 checkout: re-confirm is idempotent (same order id, no duplicate)', confAgain.status === 200 && confAgain.j.requestId === confOk.j.requestId && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 1);
   // existing email: wrong password refused (inline login), right one continues
@@ -3736,17 +3737,17 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coJoinPay.j.paymentIntentId, 'succeeded');
   const jDone = await req2('POST', '/api/cart/checkout-confirm', { token: jTok, body: { checkoutId: coJoinPay.j.checkoutId, paymentIntentId: coJoinPay.j.paymentIntentId } });
   const jOrder = (await adminReqs78()).find(r => r.id === (jDone.j && jDone.j.requestId));
-  t('v78 join: after activation the order charges the MEMBER total and records joinedMembership', jConf.j.active === true && coJoinPay.status === 200 && coJoinPay.j.totals.due === 200 && jDone.status === 200 && !!jOrder && jOrder.menuOrder.joinedMembership === true && jOrder.payment.status === 'paid');
+  t('v78 join: after activation the order charges the MEMBER total and records joinedMembership', jConf.j.active === true && coJoinPay.status === 200 && coJoinPay.j.totals.due === 200 && jDone.status === 200 && !!jOrder && jOrder.menuOrder.joinedMembership === true && jOrder.payment.status === 'deposit');
   // webhook parity: the tab dies after paying — the order is born from
   // payment_intent.succeeded with kind 'cart-checkout', exactly once.
   const coHook = await req2('POST', '/api/cart/checkout', { body: { name: 'Hook Hank', email: 'hook@t.local', phone: '7075550181', password: 'hookpass12', address: '8 Cedar St', city: 'Napa', items: items78 } });
   await mockPiStatus(coHook.j.paymentIntentId, 'succeeded');
-  const whPayload78 = JSON.stringify({ id: 'evt_wh_cart78', type: 'payment_intent.succeeded', data: { object: { id: coHook.j.paymentIntentId, amount: 25000, amount_received: 25000, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coHook.j.checkoutId, userId: coHook.j.user.id } } } });
+  const whPayload78 = JSON.stringify({ id: 'evt_wh_cart78', type: 'payment_intent.succeeded', data: { object: { id: coHook.j.paymentIntentId, amount: 5000, amount_received: 5000, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coHook.j.checkoutId, userId: coHook.j.user.id } } } });
   const whTs78 = Math.floor(Date.now() / 1000);
   const whSig78 = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(whTs78 + '.' + whPayload78, 'utf8').digest('hex');
   const whRes78 = await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + whTs78 + ',v1=' + whSig78 }, body: whPayload78 });
   const hookOrder = (await adminReqs78()).find(r => r.menuOrder && r.menuOrder.checkoutId === coHook.j.checkoutId);
-  t('v78 webhook parity: payment_intent.succeeded creates the paid order when the in-app confirm never lands', whRes78.status === 200 && !!hookOrder && hookOrder.payment.status === 'paid');
+  t('v78 webhook parity (v79): payment_intent.succeeded creates the DEPOSIT-booked order when the in-app confirm never lands', whRes78.status === 200 && !!hookOrder && hookOrder.payment.status === 'deposit');
   // --- v78 refine (Gabriel 21:57): editing the cart AT checkout
   // supersedes the stale intent — it can never settle — and an empty
   // cart is refused BEFORE any account is created.
@@ -3768,7 +3769,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coEd2.j.paymentIntentId, 'succeeded');
   const confEd = await req2('POST', '/api/cart/checkout-confirm', { token: edTok, body: { checkoutId: coEd2.j.checkoutId, paymentIntentId: coEd2.j.paymentIntentId } });
   const edOrder = (await adminReqs78()).find(r => r.id === (confEd.j && confEd.j.requestId));
-  t('v78 refine: the EDITED checkout settles at the EDITED total — order paid, both lines, $250', confEd.status === 200 && !!edOrder && edOrder.payment.status === 'paid' && edOrder.menuOrder.totals.due === 250 && edOrder.menuOrder.items.length === 2);
+  t('v78 refine (v79): the EDITED checkout settles at the EDITED total — order booked on its deposit, both lines, $250', confEd.status === 200 && !!edOrder && edOrder.payment.status === 'deposit' && edOrder.menuOrder.totals.due === 250 && edOrder.menuOrder.items.length === 2);
   const cbBeforeE = await customersByEmail();
   const coEmpty = await req2('POST', '/api/cart/checkout', { body: { name: 'Empty Eve', email: 'empty@t.local', password: 'emptypass1', address: '1 Void St', items: [] } });
   const cbAfterE = await customersByEmail();
@@ -3785,6 +3786,130 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const aStart78 = htmlSrc.indexOf('id="adminBox"');
   const aSlice78 = htmlSrc.slice(aStart78, htmlSrc.indexOf('<script>', aStart78));
   t('static v78 ROLE PIN: worker + admin markup carry NO guest-cart UI (technicians never see the cart or customer totals)', !/ghsCart|cartBtn|id="cartBox"|cartAdd\('/.test(wSlice78) && !/ghsCart|cartBtn|id="cartBox"|cartAdd\('/.test(aSlice78));
+}
+
+// ---------------- v79 BLINDAJE: P0-1, P0-2, P0-5, P0-6, P0-7, propuestas, #order, LEY DE APARTADO ----------------
+{
+  const A79 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const admReqs79 = async () => (await req2('GET', '/api/requests', { token: A79 })).j.requests || [];
+
+  // --- PIEZA 8: the deposit law, pinned at Gabriel's totals (admin-cart rails) ---
+  const depProbe = async (total, email) => {
+    const c = await req2('POST', '/api/admin/carts', { token: A79, body: { items: [{ custom: true, kind: 'labor', name: 'Law probe', qty: 1, unitPrice: total }] } });
+    const co = await req2('POST', '/api/carts/' + c.j.cart.id + '/checkout', { body: { name: 'Law Probe', phone: '7075550100', email, address: '1 Law St', city: 'Fairfield', when: 'Today' } });
+    return co.j;
+  };
+  const d75 = await depProbe(75, 'law75@t.local');
+  t('v79 deposit law: $75 total -> $50 deposit / $25 balance', d75.amount === 50 && d75.deposit === 50 && d75.balance === 25 && d75.total === 75);
+  const d125 = await depProbe(125, 'law125@t.local');
+  t('v79 deposit law: $125 total -> $50 deposit / $75 balance', d125.amount === 50 && d125.balance === 75);
+  const d250 = await depProbe(250, 'law250@t.local');
+  t('v79 deposit law: $250 total -> $50 deposit / $200 balance', d250.amount === 50 && d250.balance === 200);
+  const d300 = await depProbe(300, 'law300@t.local');
+  t('v79 deposit law: $300 total -> $50 deposit / $250 balance (the tier is FLAT at $300)', d300.amount === 50 && d300.balance === 250);
+  const d540 = await depProbe(540, 'law540@t.local');
+  t('v79 deposit law: $540 total -> $216 deposit (40%) / $324 balance', d540.amount === 216 && d540.balance === 324);
+  // Gabriel's worked example (2026-10-25 22:15): the tier is judged on the
+  // FINAL total AFTER the member discount — 3 x $125 member = $300 -> $50.
+  const m300 = await mkMember('member300@t.local', '(707) 555-0130');
+  const sub300 = await req2('POST', '/api/stripe/homecare-subscribe', { token: m300.token, body: {} });
+  await mockActivate(sub300.j.subscriptionId);
+  await req2('POST', '/api/stripe/homecare-confirm', { token: m300.token, body: {} });
+  const cart300 = await req2('POST', '/api/admin/carts', { token: A79, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 3, unitPrice: 125 }] } });
+  const co300 = await req2('POST', '/api/carts/' + cart300.j.cart.id + '/checkout', { body: { name: 'Member 300', phone: '7075550130', email: 'member300@t.local', address: '3 Tier St', city: 'Fairfield', when: 'Today' } });
+  t("v79 deposit law: Gabriel's example — 3 x $125 as MEMBER = $300 final total -> $50 flat deposit (not 40% of $375)", co300.status === 200 && co300.j.memberApplied === true && co300.j.total === 300 && co300.j.amount === 50 && co300.j.balance === 250);
+  // estimate rails use the same helper: a $250 estimate books at $50
+  const bk79 = await req2('POST', '/api/signup', { body: { name: 'Est Law', email: 'estlaw@t.local', password: 'password123', phone: '7075550131', role: 'customer' } });
+  const rq79 = await req2('POST', '/api/requests', { token: bk79.j.token, body: { service: 'Faucet Replacement', description: 'drips', address: '5 Law St', city: 'Fairfield', when: 'Tomorrow', estimateType: 'inperson' } });
+  const pe79 = await req2('PATCH', '/api/requests/' + rq79.j.request.id, { token: A79, body: { estimate: { items: [{ description: 'Big labor', qty: 1, unitPrice: 250, type: 'labor' }], asap: false, discountPct: 0, credit: 0, bookingDue: null } } });
+  t('v79 deposit law: a $250 estimate books at $50 (same shared helper)', pe79.status === 200 && pe79.j.request.estimate.bookingDue === 50 && pe79.j.request.estimate.balanceDue === 200);
+
+  // --- PIEZA 8: the self-serve cart books at the deposit + collects its balance ---
+  const tvOnly = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }];
+  const coB = await req2('POST', '/api/cart/checkout', { body: { name: 'Balance Bea', email: 'balance@t.local', phone: '7075550132', password: 'balance12', address: '9 Bal St', city: 'Fairfield', when: 'Today', items: tvOnly } });
+  t('v79 cart checkout: the pay step prices the DEPOSIT ($125 -> $50 today, $75 balance)', coB.status === 200 && coB.j.totals.due === 125 && coB.j.totals.deposit === 50 && coB.j.totals.balance === 75);
+  const balTok = (await req2('POST', '/api/login', { body: { email: 'balance@t.local', password: 'balance12' } })).j.token;
+  await mockPiStatus(coB.j.paymentIntentId, 'succeeded');
+  const confB = await req2('POST', '/api/cart/checkout-confirm', { token: balTok, body: { checkoutId: coB.j.checkoutId, paymentIntentId: coB.j.paymentIntentId } });
+  const ordB = (await admReqs79()).find(r => r.id === (confB.j && confB.j.requestId));
+  t('v79 cart checkout: the order is born in DEPOSIT state ($50 of $125, balance $75) — NOT paid in full', confB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 7500 && ordB.payment.totalCents === 12500);
+  const payB = await req2('POST', '/api/orders/pay', { token: balTok, body: { requestId: ordB.id } });
+  t('v79 balance path: /api/orders/pay on a DEPOSIT order charges ONLY the balance ($75)', payB.status === 200 && payB.j.amount === 75 && !!payB.j.clientSecret);
+  await mockPiStatus(payB.j.paymentIntentId, 'succeeded');
+  const confBal = await req2('POST', '/api/orders/pay-confirm', { token: balTok, body: { requestId: ordB.id, paymentIntentId: payB.j.paymentIntentId } });
+  const ordB2 = (await admReqs79()).find(r => r.id === ordB.id);
+  t('v79 balance path: pay-confirm flips DEPOSIT -> PAID IN FULL keeping both legs ($50 deposit + $75 balance = $125)', confBal.status === 200 && !!ordB2 && ordB2.payment.status === 'paid' && ordB2.payment.amountCents === 12500 && ordB2.payment.depositCents === 5000 && ordB2.payment.balancePi === payB.j.paymentIntentId);
+
+  // --- P0-1: the captain never sees the customer's charged total ---
+  const capSlice = serverSrc.slice(serverSrc.indexOf("p === '/api/me/captain'"), serverSrc.indexOf("p === '/api/me/captain'") + 1600);
+  t('v79 P0-1 static: captain notification names only the override; /api/me/captain entries carry NO charged total', serverSrc.includes('Captain override accrued:') && !serverSrc.includes('of the job total charged') && !capSlice.includes('charged:'));
+  // --- P0-2: role enforcement, server side ---
+  const w79 = await req2('POST', '/api/signup', { body: { name: 'Worker 79', email: 'w79@t.local', phone: '(707) 555-0133', password: 'workpass79', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const wTok79 = w79.j.token;
+  const openCart79 = await req2('POST', '/api/admin/carts', { token: A79, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, unitPrice: 125 }] } });
+  const cid79 = openCart79.j.cart.id;
+  const wCartPage = await fetch(BASE2 + '/cart/' + cid79, { headers: { Authorization: 'Bearer ' + wTok79 } });
+  const wCartHtml = await wCartPage.text();
+  t('v79 P0-2: a WORKER session opening a cart link gets the themed refusal (403), never the customer prices', wCartPage.status === 403 && wCartHtml.includes('technician door'));
+  const wPay = await req2('POST', '/api/carts/' + cid79 + '/checkout', { token: wTok79, body: { name: 'W', phone: '1', email: 'w79@t.local', address: 'x', city: 'Fairfield', when: 'Today' } });
+  t('v79 P0-2: a WORKER session cannot run a cart payment endpoint (403 WORKER_BLOCKED)', wPay.status === 403 && wPay.j.code === 'WORKER_BLOCKED');
+  const gCartPage = await fetch(BASE2 + '/cart/' + cid79);
+  t('v79 P0-2: a GUEST with the link still walks through the customer door (200)', gCartPage.status === 200);
+  const wEstPage = await fetch(BASE2 + '/estimate/' + rq79.j.request.id, { headers: { Authorization: 'Bearer ' + wTok79 } });
+  t('v79 P0-2: a WORKER session opening an estimate link is refused too (403)', wEstPage.status === 403);
+  const gEstPage = await fetch(BASE2 + '/estimate/' + rq79.j.request.id);
+  t('v79 P0-2: a GUEST with the estimate link still passes (200)', gEstPage.status === 200);
+  t('v79 P0-2 static: the SPA route guard exists (worker on #order/#memberships/#cart -> #worker + note)', htmlSrc.includes("me.role === 'worker' && (isOrderRoute() || isMembershipRoute() || isCartRoute())") && htmlSrc.includes('id="roleNote"'));
+
+  // --- P0-5 / P0-6 statics ---
+  const rd79 = (f) => fs.readFileSync(path.join(APP_DIR, '..', f), 'utf8');
+  t('v79 P0-5: service/checkout/tracking are themed redirects to the app (no demo checkout, no pay-when-done)', ['service.html', 'checkout.html', 'tracking.html'].every(f => { const c = rd79(f); return c.includes('http-equiv="refresh"') && c.includes('https://app.generalhandymans.app/') && !c.includes('Pay when') && !c.includes('bigPrice'); }));
+  t('v79 P0-6: the in-app Terms state the deposit law; the old paid-in-full-to-book model is gone; clause 10 untouched', htmlSrc.includes('$50 flat on jobs up to $300') && htmlSrc.includes('40% of the total on jobs over $300') && !htmlSrc.includes('paid in full to book') && !htmlSrc.includes('Pay in full when you book') && htmlSrc.includes('We never share your phone number with a technician'));
+
+  // --- P0-7: acquisition source persists (signup -> first order -> summary) ---
+  const su79 = await req2('POST', '/api/signup', { body: { name: 'Source Sue', email: 'source@t.local', password: 'password123', phone: '7075550134', role: 'customer', source: 'meta_ads_oct' } });
+  const rqS = await req2('POST', '/api/requests', { token: su79.j.token, body: { service: 'Carpentry', description: 'door', address: '1 Src St', city: 'Fairfield', when: 'Today', estimateType: 'inperson', source: 'should_not_win' } });
+  const sum79 = await req2('GET', '/api/admin/source-summary', { token: A79 });
+  const row79 = (sum79.j.rows || []).find(r => r.source === 'meta_ads_oct');
+  t('v79 P0-7: source stamps at signup, the FIRST touch wins over a later request source, and the order counts under it', su79.status === 201 && rqS.status === 201 && sum79.status === 200 && !!row79 && row79.customers >= 1 && row79.orders >= 1);
+  const suUtm = await req2('POST', '/api/signup', { body: { name: 'Utm Uli', email: 'utm@t.local', password: 'password123', phone: '7075550135', role: 'customer', utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'fall' } });
+  const sum79b = await req2('GET', '/api/admin/source-summary', { token: A79 });
+  t('v79 P0-7: utm params fold into the source (google_cpc_fall)', suUtm.status === 201 && (sum79b.j.rows || []).some(r => r.source === 'google_cpc_fall'));
+  const sumCust = await req2('GET', '/api/admin/source-summary', { token: su79.j.token });
+  t('v79 P0-7: the source summary is admin-only', sumCust.status === 403);
+
+  // --- PROPUESTAS EN LA CUENTA ---
+  const propSu = await req2('POST', '/api/signup', { body: { name: 'Prop Paula', email: 'prop@t.local', password: 'password123', phone: '7075550136', role: 'customer' } });
+  const propTok = propSu.j.token;
+  const propCart = await req2('POST', '/api/admin/carts', { token: A79, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, unitPrice: 125 }], customerName: 'Prop Paula', customerEmail: 'prop@t.local' } });
+  const propCid = propCart.j.cart.id;
+  const props1 = await req2('GET', '/api/me/proposals', { token: propTok });
+  const pc1 = (props1.j.proposals || []).find(x => x.id === propCid);
+  t('v79 proposals: a Gabriel cart addressed to the account email appears INSIDE the account (same object, deposit $50 / balance $75)', props1.status === 200 && !!pc1 && pc1.kind === 'cart' && pc1.state === 'open' && pc1.total === 125 && pc1.depositDue === 50 && pc1.balanceDue === 75 && pc1.url === '/cart/' + propCid);
+  const sv1 = await req2('POST', '/api/me/proposals/cart/' + propCid + '/save-later', { token: propTok, body: { saved: true } });
+  const props2 = await req2('GET', '/api/me/proposals', { token: propTok });
+  const pc2 = (props2.j.proposals || []).find(x => x.id === propCid);
+  t('v79 proposals: Save for later parks the proposal in the account (still visible, saved state)', sv1.status === 200 && !!pc2 && pc2.saved === true && pc2.state === 'open');
+  const otherSu = await req2('POST', '/api/signup', { body: { name: 'Other Otto', email: 'other@t.local', password: 'password123', phone: '7075550137', role: 'customer' } });
+  const propsOther = await req2('GET', '/api/me/proposals', { token: otherSu.j.token });
+  const svOther = await req2('POST', '/api/me/proposals/cart/' + propCid + '/save-later', { token: otherSu.j.token, body: { saved: true } });
+  t("v79 proposals: another customer's account sees NONE of Paula's proposals and cannot park them (404)", (propsOther.j.proposals || []).length === 0 && svOther.status === 404);
+  const coP = await req2('POST', '/api/carts/' + propCid + '/checkout', { body: { name: 'Prop Paula', phone: '7075550136', email: 'prop@t.local', address: '7 Prop St', city: 'Fairfield', when: 'Today' } });
+  const sessP = sessionForCart(propCid, 'payment');
+  await mockSessionPaid(sessP.id);
+  await fetch(BASE2 + '/cart/' + propCid + '?paid=1&session_id=' + sessP.id);
+  const props3 = await req2('GET', '/api/me/proposals', { token: propTok });
+  const pc3 = (props3.j.proposals || []).find(x => x.id === propCid);
+  t('v79 proposals: paying through the LINK flips the in-account proposal to BOOKED with the same balance (one object, two views)', !!pc3 && pc3.state === 'booked' && pc3.balanceDue === 75);
+  const rqP = await req2('POST', '/api/requests', { token: propTok, body: { service: 'Plumbing', description: 'leak', address: '7 Prop St', city: 'Fairfield', when: 'Today', estimateType: 'inperson' } });
+  await req2('PATCH', '/api/requests/' + rqP.j.request.id, { token: A79, body: { estimate: { items: [{ description: 'Pipe labor', qty: 1, unitPrice: 200, type: 'labor' }], asap: false, discountPct: 0, credit: 0, bookingDue: null }, sendEmail: true } });
+  const props4 = await req2('GET', '/api/me/proposals', { token: propTok });
+  const pe4 = (props4.j.proposals || []).find(x => x.kind === 'estimate' && x.id === rqP.j.request.id);
+  t('v79 proposals: a sent estimate appears in the account too (deposit = its bookingDue, $50 under the law)', !!pe4 && pe4.depositDue === 50 && pe4.balanceDue === 150 && pe4.url === '/estimate/' + rqP.j.request.id);
+
+  // --- Legacy #order retirement statics ---
+  t('v79 #order: the legacy page is GONE (no orderBox, no submitOrder, no orderState) and the route converts to the cart', !htmlSrc.includes('id="orderBox"') && !htmlSrc.includes('function submitOrder') && !htmlSrc.includes('orderState') && htmlSrc.includes('function retireOrderRoute()') && htmlSrc.includes('function orderNow(id)') && htmlSrc.includes('function orderNow(id)'));
+  t('v79 #order: the server payment rails for in-app balances survive (/api/orders/pay + pay-confirm)', serverSrc.includes("p === '/api/orders/pay'") && serverSrc.includes("p === '/api/orders/pay-confirm'") && serverSrc.includes('function settleRequestBalance('));
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}

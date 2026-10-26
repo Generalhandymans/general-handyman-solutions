@@ -460,7 +460,10 @@ function accrueCaptainOverride(j) {
     const entry = { id: id('CAP'), captainId: area.captainId, areaId: area.id, areaName: area.name, jobId: j.id, requestId: j.requestId || null, charged, amount, paidAmount: 0, status: 'accrued', at: new Date().toISOString() };
     db.captainLedger.push(entry);
     j.captainOverride = { entryId: entry.id, captainId: entry.captainId, areaId: area.id, amount, charged, at: entry.at };
-    notify(entry.captainId, 'captain', 'Captain override accrued: ' + usd(amount) + ' — 5% of the ' + usd(charged) + ' charged on job ' + j.id + ' (' + area.name + '). The Team pays overrides out by hand.');
+    // v79 P0-1: the captain's own notification names ONLY his money — the
+    // customer's charged total never leaves admin surfaces (it used to read
+    // "5% of the $X charged", leaking the customer price to the captain).
+    notify(entry.captainId, 'captain', 'Captain override accrued: ' + usd(amount) + ' on job ' + j.id + ' (' + area.name + '). The Team pays overrides out by hand.');
     notifyAdmins('captain', 'Captain override accrued in ' + area.name + ': ' + usd(amount) + ' on job ' + j.id + ' (5% of ' + usd(charged) + ').');
     save();
     return true;
@@ -910,6 +913,24 @@ function applySourceAtActivation(u) {
   if (!u) return;
   if (!u.source) { const s = sanitizeSource(u.pendingSource); if (s) u.source = s; }
   if (u.pendingSource) delete u.pendingSource;
+}
+// ---------- v79 P0-7: sprint measurement (first-party, no external analytics) ----------
+// The acquisition source now lands on the CUSTOMER RECORD at signup
+// (first touch wins, never overwritten), is stamped on the FIRST order,
+// and keeps promoting at membership activation (the v24 path above).
+// `source`/`src` ride along exactly as before; utm_source/medium/campaign
+// are accepted too and folded into the same sanitized code.
+function acquisitionSource(b) {
+  if (!b || typeof b !== 'object') return null;
+  const direct = sanitizeSource(b.source) || sanitizeSource(b.src);
+  if (direct) return direct;
+  const parts = [sanitizeSource(b.utm_source), sanitizeSource(b.utm_medium), sanitizeSource(b.utm_campaign)].filter(Boolean);
+  return parts.length ? parts.join('_').slice(0, 24) : null;
+}
+function stampUserSource(u, raw) {
+  if (!u || u.role !== 'customer' || u.source) return;
+  const s = raw && typeof raw === 'object' ? acquisitionSource(raw) : sanitizeSource(raw);
+  if (s) u.source = s;
 }
 function activateMembershipPlan(u, planKey, opts) {
   opts = opts || {};
@@ -1373,7 +1394,7 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][quantity]'] = '1';
     params['line_items[1][price_data][currency]'] = 'usd';
     params['line_items[1][price_data][unit_amount]'] = String(opts.amountCents);
-    params['line_items[1][price_data][product_data][name]'] = opts.label || '40% deposit to book — General Handyman Solutions';
+    params['line_items[1][price_data][product_data][name]'] = opts.label || 'booking deposit — General Handyman Solutions';
     params['line_items[1][quantity]'] = '1';
     params['metadata[cartId]'] = opts.cartId || '';
     params['metadata[plan]'] = plan.key;
@@ -1655,11 +1676,13 @@ function settleCartCheckout(pc, pi) {
   if (pc.superseded) return null; // v78 refine: a replaced checkout NEVER settles
   if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
   const itemsTxt = pc.items.map(it => it.name + ' ×' + it.qty).join(', ');
-  const r = { id: id('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: id('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, source: pc.source || null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   pc.requestId = r.id;
   pc.settledAt = new Date().toISOString();
-  recordRequestPayment(r, { pi: pi.id, amountCents: Math.round(Number(pi.amount_received || pi.amount) || 0), kind: 'menu-order' });
+  const ccSplit = depositSplit(Math.round(Number(pc.totals.due) * 100));
+  if (ccSplit.balanceCents > 0) recordRequestDeposit(r, { pi: pi.id, depositCents: ccSplit.depositCents, totalCents: ccSplit.depositCents + ccSplit.balanceCents, kind: 'cart-checkout' });
+  else recordRequestPayment(r, { pi: pi.id, amountCents: Math.round(Number(pi.amount_received || pi.amount) || 0), kind: 'menu-order' });
   notifyAdmins('request', 'New cart order ' + r.id + ': ' + r.service + ' in ' + (r.city || '') + ' from ' + r.customerName + '.');
   emitRequestNew(r);
   fireAutomation('new_request', requestAutomationPayload(r));
@@ -1678,9 +1701,69 @@ function settleCartCheckout(pc, pi) {
 // memberApplied, payPi, payment:{pi,amountCents}, requestId, paidAt,
 // createdBy, createdAt }
 function cartsOf() { if (!Array.isArray(db.carts)) db.carts = []; return db.carts; }
+// ---------- v79 P0-2: role frontier on customer money pages ----------
+// Cart and estimate LINKS are the customer's door: a guest with the link
+// (no session) and the customer herself pass freely, and so does the
+// admin. A WORKER session never does — technicians see their own pay,
+// never customer totals, so their session is refused on these pages and
+// their POST endpoints, with a themed page that sends them to their door.
+function workerSessionBlocked(user) { return !!user && user.role === 'worker'; }
+// ---------- v79: matching de propuestas (pieza 6) ----------
+function cartProposalEmail(c) {
+  if (c.customerEmail) return String(c.customerEmail).toLowerCase();
+  if (c.customer && c.customer.email) return String(c.customer.email).toLowerCase();
+  if (c.freeMonthInviteId) { const inv = invitesOf().find(i => i.id === c.freeMonthInviteId); if (inv && inv.email) return String(inv.email).toLowerCase(); }
+  return '';
+}
+function proposalBelongsTo(obj, kind, u) {
+  if (!obj || !u) return false;
+  if (kind === 'cart') return cartProposalEmail(obj) !== '' && cartProposalEmail(obj) === (u.email || '').toLowerCase();
+  return obj.customerId === u.id || ((obj.customerEmail || '').toLowerCase() !== '' && (obj.customerEmail || '').toLowerCase() === (u.email || '').toLowerCase());
+}
+function proposalsForUser(u) {
+  const out = [];
+  for (const c of cartsOf()) {
+    const balDue = c.status === 'paid' && c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt;
+    if (c.status !== 'open' && !balDue) continue;
+    if (!proposalBelongsTo(c, 'cart', u)) continue;
+    const saved = Array.isArray(c.savedForLaterBy) && c.savedForLaterBy.includes(u.id);
+    const first = (c.items || [])[0];
+    const asMember = u.homeCareStatus === 'active' || c.memberApplied;
+    const effTotal = asMember ? c.memberTotal : c.listTotal;
+    out.push({
+      kind: 'cart', id: c.id,
+      title: first ? (first.name + ((c.items || []).length > 1 ? ' +' + ((c.items || []).length - 1) + ' more' : '')) : 'Team proposal',
+      total: effTotal || 0, memberTotal: c.memberTotal || 0,
+      depositDue: c.status === 'open' ? depositSplit(Math.round(effTotal * 100)).depositCents / 100 : 0,
+      balanceDue: balDue ? Number(c.payment.balanceCents) / 100 : Math.round((effTotal - depositSplit(Math.round(effTotal * 100)).depositCents / 100) * 100) / 100,
+      state: balDue ? 'booked' : 'open',
+      saved: saved,
+      url: '/cart/' + c.id, createdAt: c.createdAt || ''
+    });
+  }
+  for (const r of db.requests) {
+    if (!r.estimate || r.status !== 'Quoted') continue;
+    if (estimateIsExpired(r.estimate)) continue;
+    if (!proposalBelongsTo(r, 'estimate', u)) continue;
+    const saved = Array.isArray(r.savedForLaterBy) && r.savedForLaterBy.includes(u.id);
+    out.push({
+      kind: 'estimate', id: r.id,
+      title: r.service || 'Estimate',
+      total: r.estimate.total || 0, memberTotal: r.estimate.total || 0,
+      depositDue: r.estimate.bookingDue || 0, balanceDue: r.estimate.balanceDue || 0,
+      state: 'open',
+      saved: saved,
+      url: '/estimate/' + r.id, createdAt: r.createdAt || ''
+    });
+  }
+  return out.sort((a, b) => ((a.saved ? 1 : 0) - (b.saved ? 1 : 0)) || (a.createdAt < b.createdAt ? 1 : -1));
+}
+function workerBlockedPage(res, what) {
+  return send(res, 403, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:system-ui;background:#0b0b0f;color:#f4f4f5;padding:32px;max-width:520px;margin:0 auto"><h2 style="color:#ff4655">This ' + what + ' is for customers</h2><p>Estás en tu sesión de técnico — los totales del cliente no viven aquí. / You are signed in as a technician — customer totals do not live here.</p><p><a href="' + appBase() + '/tecnico" style="background:#e42535;color:#fff;padding:12px 18px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block">Go to the technician door →</a></p><p style="color:#a1a1aa;font-size:13px">General Handyman Solutions · (707) 862-3773</p></body>');
+}
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -1933,15 +2016,23 @@ function cartMemberUserFor(user, email) {
 // A paid cart becomes a normal menu request with every customer field the
 // customer typed on the cart page. Idempotent: converting twice returns
 // the same request and never duplicates the order.
-// ---------- v62: THE 40/60 POLICY (Gabriel, 2026-10-24) ----------
-// "Todo el mundo así funciona — es la nueva política": on OUR estimates
-// and proposals (admin cart links + estimate links) the customer pays
-// 40% down to book the job and the remaining 60% when the work is done.
-// In-app MENU orders stay pay-in-full ("en la app como tal no").
+// ---------- THE DEPOSIT LAW (v62 40/60 → v79 PIEZA 8 FINAL) ----------
+// Gabriel's final law (2026-10-25 22:12): EVERY job books with a
+// deposit and pays its balance at completion — self-serve cart orders
+// included (the v78 pay-in-full cart is superseded). The deposit is
+// $50 FLAT when the job total is $300 or less; above $300 it is 40% of
+// the total (balance 60%). A deposit never exceeds the total itself.
+// ONE helper — depositSplit — is the only place this is computed:
+// admin carts, estimates and the self-serve cart checkout all use it.
+// Memberships/subscriptions are NOT deposits (untouched), and the
+// in-person estimate fee ($75 / member $50, credited same-day) is a
+// separate charge (untouched).
 const DEPOSIT_RATE = 0.4;
+const DEPOSIT_FLAT_MAX_CENTS = 30000; // totals up to $300 …
+const DEPOSIT_FLAT_CENTS = 5000;      // … book with a flat $50
 function depositSplit(totalCents) {
   const t = Math.max(0, Math.round(Number(totalCents) || 0));
-  const d = Math.round(t * DEPOSIT_RATE);
+  const d = t <= DEPOSIT_FLAT_MAX_CENTS ? Math.min(DEPOSIT_FLAT_CENTS, t) : Math.round(t * DEPOSIT_RATE);
   return { depositCents: d, balanceCents: t - d };
 }
 // Recorder for a landed DEPOSIT on a request: status 'deposit' — NOT
@@ -1956,8 +2047,27 @@ function recordRequestDeposit(r, info) {
   r.messages = r.messages || [];
   r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Deposit received: ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' — your job ' + r.id + ' is booked. The balance of ' + usd(r.payment.balanceCents / 100) + ' is due when the work is done. The Team confirms your time right here.', at: new Date().toISOString() });
   if (r.customerId) notify(r.customerId, 'payment', 'Deposit received (' + usd(dep / 100) + ') on job ' + r.id + ' — booked. Balance ' + usd(r.payment.balanceCents / 100) + ' due at completion.');
-  notifyAdmins('payment', 'DEPOSIT (40%): ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — balance ' + usd(r.payment.balanceCents / 100) + ' at completion.');
+  notifyAdmins('payment', 'DEPOSIT: ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — balance ' + usd(r.payment.balanceCents / 100) + ' at completion.');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: dep / 100 }));
+  return true;
+}
+// v79 PIEZA 8: the BALANCE of a DEPOSIT-state request lands — flips the
+// request to paid IN FULL while keeping BOTH payment legs on record
+// (deposit pi + balance pi), then gives any already-finished job its
+// payout + captain-accrual chance, exactly like recordRequestPayment.
+// The amount must equal the outstanding balanceCents to the cent.
+function settleRequestBalance(r, piId, cents) {
+  if (!r.payment || r.payment.status !== 'deposit') return false;
+  const bal = Math.round(Number(r.payment.balanceCents) || 0);
+  if (!(bal > 0) || Math.round(Number(cents) || 0) !== bal) return false;
+  const old = r.payment, tot = Math.round(Number(old.totalCents) || 0), dep = Math.round(Number(old.amountCents) || 0);
+  r.payment = { status: 'paid', kind: old.kind || 'menu-order', pi: old.pi || '', balancePi: piId || '', depositCents: dep, amountCents: tot, totalCents: tot, balanceCents: 0, at: old.at || new Date().toISOString(), balanceAt: new Date().toISOString() };
+  r.messages = r.messages || [];
+  r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Balance received: ' + usd(bal / 100) + ' — your job ' + r.id + ' is now paid in full (' + usd(tot / 100) + '). Thank you!', at: new Date().toISOString() });
+  if (r.customerId) notify(r.customerId, 'payment', 'Balance received (' + usd(bal / 100) + ') on job ' + r.id + ' — paid in full.');
+  notifyAdmins('payment', 'PAID IN FULL (balance landed): ' + usd(tot / 100) + ' total on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
+  fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: bal / 100 }));
+  db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
 function convertCartToRequest(c, payInfo) {
@@ -1971,13 +2081,13 @@ function convertCartToRequest(c, payInfo) {
   const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
   const isDeposit = Number(payInfo.depositCents) > 0 && Number(payInfo.balanceCents) > 0 && Number(payInfo.totalCents) > 0;
   const totalCents = isDeposit ? Math.round(Number(payInfo.totalCents)) : Math.round(Number(payInfo.amountCents) || 0);
-  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — 40% deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — booking deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString();
   if (isDeposit) {
     c.payment = { pi: payInfo.pi || '', amountCents: totalCents, depositCents: Math.round(Number(payInfo.depositCents)), balanceCents: Math.round(Number(payInfo.balanceCents)), depositPi: payInfo.pi || '', depositAt: new Date().toISOString(), balancePi: '', balanceAt: null };
     recordRequestDeposit(r, { pi: payInfo.pi, depositCents: payInfo.depositCents, totalCents, kind: 'cart-order' });
-    notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — 40% deposit ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + ' (balance ' + usd(Number(payInfo.balanceCents) / 100) + ' at completion).');
+    notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — deposit ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + ' (balance ' + usd(Number(payInfo.balanceCents) / 100) + ' at completion).');
   } else {
     c.payment = { pi: payInfo.pi || '', amountCents: totalCents };
     recordRequestPayment(r, { pi: payInfo.pi, amountCents: totalCents, kind: 'cart-order' });
@@ -2344,7 +2454,7 @@ async function handleStripeEvent(event) {
     if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order' || obj.metadata.kind === 'cart-checkout')) {
       if (obj.metadata.kind === 'menu-order' && obj.metadata.requestId) {
         const r = db.requests.find(x => x.id === obj.metadata.requestId);
-        if (r) recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' });
+        if (r) { if (r.payment && r.payment.status === 'deposit') settleRequestBalance(r, obj.id, Number(obj.amount_received || obj.amount) || 0); else recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' }); }
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
         if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
@@ -2476,7 +2586,7 @@ function settleEstimateTotals(est) {
   const credit = Math.min(clampMoney(est.credit == null ? 0 : est.credit), money(est.subtotal + est.asapAmount - est.discountAmount));
   est.credit = credit;
   est.total = Math.max(0, money(est.subtotal + est.asapAmount - est.discountAmount - credit));
-  est.bookingDue = est.bookingAuto ? money(est.total * DEPOSIT_RATE) : Math.min(clampMoney(est.bookingDue || 0), est.total); // v62 policy: the AUTO booking amount is the 40% deposit (was the full total in v44); a hand-set bookingDue still wins
+  est.bookingDue = est.bookingAuto ? money(depositSplit(Math.round(est.total * 100)).depositCents / 100) : Math.min(clampMoney(est.bookingDue || 0), est.total); // v62 policy: the AUTO booking amount is the 40% deposit (was the full total in v44); a hand-set bookingDue still wins
   est.balanceDue = money(est.total - est.bookingDue);
   (est.options || []).forEach(o => {
     const ot = estCoreTotals(o.items || [], est);
@@ -2788,7 +2898,7 @@ function memberVariantOfEstimate(est) {
   if (est.asap) v.asapAmount = money(((Number(est.laborSubtotal) || 0) - d) * 0.25);
   const credit = Number(est.credit) || 0;
   v.total = Math.max(0, money((Number(est.subtotal) || 0) + (Number(v.asapAmount) || 0) - d - credit));
-  v.bookingDue = est.bookingAuto ? money(v.total * DEPOSIT_RATE) : Math.min(Number(est.bookingDue) || 0, v.total); // v62: member variant of the same 40% auto deposit
+  v.bookingDue = est.bookingAuto ? money(depositSplit(Math.round(v.total * 100)).depositCents / 100) : Math.min(Number(est.bookingDue) || 0, v.total); // v62: member variant of the same 40% auto deposit
   v.balanceDue = money(v.total - v.bookingDue);
   return v;
 }
@@ -3180,17 +3290,17 @@ function cartPageHtml(c, user, langOverride, notice) {
       yardActiveH: '✓ Yard Care membership active', yardActiveBody: 'Your plan covers your yard visits. Orders are at the regular price — the 20% order discount comes with HomeCare / HomeCare Plus.',
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
-      depositDueLabel: 'Due today — 40% deposit to book', balanceDueLabel: 'Balance at completion',
+      depositDueLabel: 'Due today — booking deposit to book', balanceDueLabel: 'Balance at completion',
       depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
-      joinOrderNote: 'One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
-      joinOrderNoteYard: 'One single checkout: your 40% deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked. Yard Care covers your visits; this order stays at the regular price.',
+      joinOrderNote: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
+      joinOrderNoteYard: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked. Yard Care covers your visits; this order stays at the regular price.',
       joinOrderNoteFree: 'One single checkout: your HomeCare month is FREE today (your card is saved safely with Stripe and the first $29 charge is in 30 days) and only your 40% deposit is charged — {dep} today, and you are booked as a member. No $0 step, no second payment.',
       inviteBanner: '🎟️ Personal invitation: your first month of HomeCare is FREE.',
       freeMonthTag: 'FIRST MONTH FREE',
       joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
-      refundLine: 'You pay a 40% deposit today to book your job; the rest is due when the work is done — right here on this same link. If you cancel before a technician is dispatched, everything you paid comes back; after dispatch, $75 is non-refundable and the rest comes back to you.',
+      refundLine: 'You pay a booking deposit today to book your job ($50 on jobs up to $300; 40% on jobs over $300); the rest is due when the work is done — right here on this same link. If you cancel before a technician is dispatched, everything you paid comes back; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Starting your membership…', processing: 'Processing payment…',
       errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
       errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
@@ -3227,17 +3337,17 @@ function cartPageHtml(c, user, langOverride, notice) {
       yardActiveH: '✓ Membresía Yard Care activa', yardActiveBody: 'Tu plan cubre tus visitas de yarda. Las órdenes quedan al precio normal — el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus.',
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
-      depositDueLabel: 'Hoy — anticipo del 40% para agendar', balanceDueLabel: 'Resto al terminar',
+      depositDueLabel: 'Hoy — anticipo para agendar', balanceDueLabel: 'Resto al terminar',
       depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
-      joinOrderNote: 'Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
-      joinOrderNoteYard: 'Un solo cobro: tu anticipo del 40% ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado. Yard Care cubre tus visitas; esta orden queda al precio normal.',
+      joinOrderNote: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
+      joinOrderNoteYard: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado. Yard Care cubre tus visitas; esta orden queda al precio normal.',
       joinOrderNoteFree: 'Un solo cobro: tu mes de HomeCare es GRATIS hoy (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) y solo se cobra tu anticipo del 40% — {dep} hoy, y quedas agendado como miembro. Sin paso de $0, sin segundo pago.',
       inviteBanner: '🎟️ Invitación personal: tu primer mes de HomeCare es GRATIS.',
       freeMonthTag: 'PRIMER MES GRATIS',
       joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
-      refundLine: 'Hoy pagas un anticipo del 40% para agendar tu trabajo; el resto se paga al terminar — aquí mismo, en este mismo link. Si cancelas antes de que salga un técnico, te devolvemos todo lo pagado; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
+      refundLine: 'Hoy pagas un anticipo para agendar tu trabajo ($50 en trabajos de hasta $300; 40% si pasan de $300); el resto se paga al terminar — aquí mismo, en este mismo link. Si cancelas antes de que salga un técnico, te devolvemos todo lo pagado; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Activando tu membresía…', processing: 'Procesando el pago…',
       errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
@@ -3875,6 +3985,7 @@ const server = http.createServer(async (req, res) => {
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    stampUserSource(u, b); // v79 P0-7: acquisition source on the record from day one
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -4279,6 +4390,10 @@ const server = http.createServer(async (req, res) => {
       };
     }
     const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    // v79 P0-7: the order carries its acquisition source; a first order
+    // also promotes the source onto the customer account (first touch).
+    r.source = (user && user.source) || acquisitionSource(b) || null;
+    if (r.source) { const owner79 = user || (customerId ? db.users.find(x => x.id === customerId) : null); if (owner79) stampUserSource(owner79, r.source); }
     // Member free estimate (ONE per customer account, shared across plans):
     // first in-person request from an active member of any kind with the
     // freebie unused consumes it automatically. Stored exactly like the
@@ -5185,10 +5300,41 @@ const server = http.createServer(async (req, res) => {
       // v41: captains plan routes by trade + tools + zone, so each tech
       // carries his 7-box view (effective levels + tools) and availability.
       .map(u => ({ name: u.name, photo: workerPhotoOf(u), city: (u.profile || {}).city || '', skills: (u.profile || {}).skills || [], trades: tradeSkillsOf(u), availability: publicAvailability(u) }));
+    // v79 P0-1: captain-facing entries carry ONLY the captain's own money
+    // (amount accrued / paid out) — never the customer's charged total.
     const entries = db.captainLedger.filter(e => e.captainId === user.id).slice(-50).reverse()
-      .map(e => ({ id: e.id, jobId: e.jobId, areaName: e.areaName || area.name, charged: e.charged, amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status, at: e.at }));
+      .map(e => ({ id: e.id, jobId: e.jobId, areaName: e.areaName || area.name, amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status, at: e.at }));
     const payouts = db.captainPayouts.filter(x => x.captainId === user.id).slice(-20).reverse();
     return send(res, 200, { captain: true, area: { id: area.id, name: area.name, cities: area.cities || [] }, jobs, team, override: { rate: CAPTAIN_OVERRIDE_RATE, accrued: captainOutstanding(user.id), paidOut: captainPaidOut(user.id), entries, payouts } });
+  }
+  // ---------- v79: PROPUESTAS EN LA CUENTA (Gabriel, 2026-10-25 21:59) ----------
+  // A cart or estimate the Team sent a customer (the emailed link) is the
+  // SAME object inside that customer's account: when the email on the
+  // proposal matches the account email, it shows up in their account with
+  // its live state, and whatever happens on one side (deposit paid,
+  // balance due, approved) is what the other side shows — one record.
+  if (p === '/api/me/proposals' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    if (user.role !== 'customer') return send(res, 403, { error: 'proposals live on customer accounts' });
+    return send(res, 200, { proposals: proposalsForUser(user) });
+  }
+  const propSaveMatch = p.match(/^\/api\/me\/proposals\/(cart|estimate)\/([\w-]+)\/save-later$/);
+  if (propSaveMatch && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    if (user.role !== 'customer') return send(res, 403, { error: 'proposals live on customer accounts' });
+    const b = await readBody(req);
+    const obj = propSaveMatch[1] === 'cart'
+      ? cartsOf().find(x => x.id === propSaveMatch[2])
+      : db.requests.find(x => x.id === propSaveMatch[2]);
+    if (!obj || !proposalBelongsTo(obj, propSaveMatch[1], user)) return send(res, 404, { error: 'proposal not found on this account' });
+    if (!Array.isArray(obj.savedForLaterBy)) obj.savedForLaterBy = [];
+    const want = !(b && b.saved === false);
+    const i = obj.savedForLaterBy.indexOf(user.id);
+    if (want && i < 0) obj.savedForLaterBy.push(user.id);
+    if (!want && i >= 0) obj.savedForLaterBy.splice(i, 1);
+    audit(user, 'proposal.save_later', obj.id, (want ? 'saved' : 'unsaved') + ' · ' + propSaveMatch[1]);
+    save();
+    return send(res, 200, { ok: true, saved: want });
   }
   if (p === '/api/admin/ratings' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -5491,6 +5637,7 @@ const server = http.createServer(async (req, res) => {
       }
       setCookie = sessionCookie(newSession(u), req);
     }
+    stampUserSource(u, b); // v79 P0-7
     if (!['customer', 'admin'].includes(u.role)) return send(res, 400, { error: 'this account cannot check out as a customer' });
     const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
     // The cart is priced BEFORE anything is created — a line the
@@ -5502,7 +5649,7 @@ const server = http.createServer(async (req, res) => {
       try {
         const sub = await createInlineSubscription(u, MEMBERSHIP_PLANS.homecare);
         const mt = serverCartTotals(b.items, true);
-        return send(res, 200, { step: 'join', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member } }, cookieHdr);
+        return send(res, 200, { step: 'join', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member, deposit: depositSplit(Math.round(mt.member * 100)).depositCents / 100, balance: depositSplit(Math.round(mt.member * 100)).balanceCents / 100 } }, cookieHdr);
       } catch (e) { console.error('cart checkout join failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
     }
     // --- step 'pay': pending checkout + PaymentIntent (NO order yet) ---
@@ -5515,9 +5662,9 @@ const server = http.createServer(async (req, res) => {
       id: id('CCK'), userId: u.id, pi: '', requestId: '',
       customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
       address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
-      isMember: isMem, joinedMembership: !!b.joinedMembership && isMem,
+      isMember: isMem, joinedMembership: !!b.joinedMembership && isMem, source: u.source || null,
       items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
-      totals: { list: t.list, member: t.member, due: t.due },
+      totals: { list: t.list, member: t.member, due: t.due, deposit: depositSplit(Math.round(t.due * 100)).depositCents / 100, balance: depositSplit(Math.round(t.due * 100)).balanceCents / 100 },
       createdAt: new Date().toISOString()
     };
     // v78 refine (Gabriel 21:57 — the cart is editable AT the checkout):
@@ -5536,9 +5683,9 @@ const server = http.createServer(async (req, res) => {
     save();
     try {
       const params = {
-        amount: String(Math.round(t.due * 100)),
+        amount: String(depositSplit(Math.round(t.due * 100)).depositCents),
         currency: 'usd',
-        description: 'Cart order — General Handyman Solutions',
+        description: 'Cart order — booking deposit — General Handyman Solutions',
         'metadata[checkoutId]': pc.id, 'metadata[kind]': 'cart-checkout', 'metadata[userId]': u.id
       };
       if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
@@ -5564,7 +5711,7 @@ const server = http.createServer(async (req, res) => {
       if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
       if (!pi.metadata || pi.metadata.checkoutId !== pc.id || pi.metadata.kind !== 'cart-checkout') return send(res, 400, { error: 'payment does not match this checkout' });
       const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
-      if (cents !== Math.round(pc.totals.due * 100)) return send(res, 400, { error: 'payment amount does not match the order total' });
+      if (cents !== depositSplit(Math.round(pc.totals.due * 100)).depositCents) return send(res, 400, { error: 'payment amount does not match the booking deposit' });
       const r = settleCartCheckout(pc, pi);
       save();
       return send(res, 200, { ok: true, requestId: r.id });
@@ -5588,7 +5735,8 @@ const server = http.createServer(async (req, res) => {
     if (r.payment && r.payment.status === 'paid') return send(res, 400, { error: 'this order is already paid in full' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     const dueTotal = r.menuOrder && r.menuOrder.totals ? Number(r.menuOrder.totals.due) : 0;
-    const amount = Math.round((dueTotal > 0 ? dueTotal : (Number(r.estimateDue) || 0)) * 100);
+    // v79 PIEZA 8: a DEPOSIT-state order collects ONLY its balance here.
+    const amount = (r.payment && r.payment.status === 'deposit') ? Math.round(Number(r.payment.balanceCents) || 0) : Math.round((dueTotal > 0 ? dueTotal : (Number(r.estimateDue) || 0)) * 100);
     if (!(amount > 0)) return send(res, 400, { error: 'nothing to pay on this order' });
     try {
       const params = {
@@ -5617,6 +5765,11 @@ const server = http.createServer(async (req, res) => {
       if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
       if (!pi.metadata || pi.metadata.requestId !== r.id || pi.metadata.kind !== 'menu-order') return send(res, 400, { error: 'payment does not match this order' });
       const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
+      if (r.payment && r.payment.status === 'deposit') {
+        if (!settleRequestBalance(r, piId, cents)) return send(res, 400, { error: 'payment amount does not match the balance due' });
+        save();
+        return send(res, 200, { ok: true, balance: true });
+      }
       const dueTotal = r.menuOrder && r.menuOrder.totals ? Math.round(Number(r.menuOrder.totals.due) * 100) : 0;
       if (dueTotal > 0 && cents !== dueTotal) return send(res, 400, { error: 'payment amount does not match the order total' });
       recordRequestPayment(r, { pi: piId, amountCents: cents, kind: 'menu-order' });
@@ -5640,6 +5793,13 @@ const server = http.createServer(async (req, res) => {
     if (r.refund && Number(r.refund.refundedCents) > 0) return send(res, 400, { error: 'this order was already refunded' });
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
     const sources = [];
+    // v79 PIEZA 8: a self-serve DEPOSIT order that later paid its
+    // balance holds TWO PIs on the REQUEST (deposit + balance) —
+    // refund per payment, never the combined total against one PI.
+    if (r.payment && r.payment.balancePi && Number(r.payment.depositCents) > 0) {
+      sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.depositCents) || 0), type: 'payment', refundedCents: 0 });
+      sources.push({ pi: r.payment.balancePi, cents: Math.round(Number(r.payment.amountCents) || 0) - Math.round(Number(r.payment.depositCents) || 0), type: 'payment', refundedCents: 0 });
+    }
     // v62: a cart order's money can sit in TWO payments (40% deposit +
     // 60% balance). Refund over what actually landed, per payment —
     // never the combined total against a single PI.
@@ -5647,7 +5807,7 @@ const server = http.createServer(async (req, res) => {
     if (cart62 && cart62.payment && cart62.payment.depositPi) {
       sources.push({ pi: cart62.payment.depositPi, cents: Math.round(Number(cart62.payment.depositCents) || 0), type: 'payment', refundedCents: 0 });
       if (cart62.payment.balancePi) sources.push({ pi: cart62.payment.balancePi, cents: Math.round(Number(cart62.payment.balanceCents) || 0), type: 'payment', refundedCents: 0 });
-    } else if (r.payment && (r.payment.status === 'paid' || r.payment.status === 'deposit') && r.payment.pi) {
+    } else if (r.payment && (r.payment.status === 'paid' || r.payment.status === 'deposit') && r.payment.pi && !r.payment.balancePi) {
       sources.push({ pi: r.payment.pi, cents: Math.round(Number(r.payment.amountCents) || 0), type: 'payment', refundedCents: 0 });
     }
     for (const h of requestHolds(r)) if (h.status === 'captured' && h.pi) sources.push({ pi: h.pi, cents: Math.round(Number(h.capturedCents) || 0), type: 'hold', hold: h, refundedCents: 0 });
@@ -5729,7 +5889,7 @@ const server = http.createServer(async (req, res) => {
     if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
     const totals = cartTotals(items);
     if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
-    const c = { id: id('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
+    const c = { id: id('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
     cartsOf().push(c);
     audit(user, 'cart.create', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
     save();
@@ -5777,6 +5937,7 @@ const server = http.createServer(async (req, res) => {
     // Builder metadata rides along when present (same fields as create).
     if (b.customerName !== undefined) c.customerName = cleanText(b.customerName, 80);
     if (b.customerPhone !== undefined) c.customerPhone = cleanText(b.customerPhone, 40);
+    if (b.customerEmail !== undefined) c.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
     if (b.note !== undefined) c.note = cleanText(b.note, 500);
     if (b.lang !== undefined) c.lang = b.lang === 'es' ? 'es' : 'en';
     audit(user, 'cart.edit', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
@@ -5839,6 +6000,7 @@ const server = http.createServer(async (req, res) => {
   const cartCheckMatch = p.match(/^\/api\/carts\/([\w-]+)\/member-check$/);
   if (cartCheckMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartCheckMatch[1]);
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
     const b = await readBody(req);
     return send(res, 200, { member: !!cartMemberUserFor(user, cleanText(b.email, 160)) });
@@ -5846,6 +6008,7 @@ const server = http.createServer(async (req, res) => {
   const cartPayMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay$/);
   if (cartPayMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartPayMatch[1]);
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
     if (c.status === 'paid') return send(res, 400, { error: 'this cart is already paid' });
     if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
@@ -5872,6 +6035,7 @@ const server = http.createServer(async (req, res) => {
   const cartConfirmMatch = p.match(/^\/api\/carts\/([\w-]+)\/pay-confirm$/);
   if (cartConfirmMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartConfirmMatch[1]);
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
     if (c.status === 'paid') return send(res, 200, { ok: true, already: true, requestId: c.requestId });
     if (c.status === 'cancelled') return send(res, 400, { error: 'this cart was cancelled — contact the Team' });
@@ -5997,6 +6161,7 @@ const server = http.createServer(async (req, res) => {
   const cartCheckoutMatch = p.match(/^\/api\/carts\/([\w-]+)\/checkout$/);
   if (cartCheckoutMatch && req.method === 'POST') {
     const c = cartsOf().find(x => x.id === cartCheckoutMatch[1]);
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
     const b = await readBody(req);
     if (c.status === 'paid') {
@@ -6086,7 +6251,7 @@ const server = http.createServer(async (req, res) => {
           amountCents: splitJ.depositCents,
           cartId: c.id,
           trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0,
-          label: 'Cart ' + c.id + ' — 40% deposit to book — General Handyman Solutions',
+          label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
           successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
           metadata: { cartId: c.id, src: fmInvite ? 'cart-invite' : 'cart', ...(fmInvite ? { inviteId: fmInvite.id } : {}) },
@@ -6112,7 +6277,7 @@ const server = http.createServer(async (req, res) => {
         amountCents: split.depositCents,
         cartId: c.id,
         payStep: 'deposit',
-        label: 'Cart ' + c.id + ' — 40% deposit to book — General Handyman Solutions',
+        label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
         successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: cartLink(c) + '?cancelled=1'
       });
@@ -6222,6 +6387,7 @@ const server = http.createServer(async (req, res) => {
   }
   const cartPageMatch = p.match(/^\/cart\/([\w-]+)$/);
   if (cartPageMatch && req.method === 'GET') {
+    if (workerSessionBlocked(user)) return workerBlockedPage(res, 'cart'); // v79 P0-2
     const c = cartsOf().find(x => x.id === cartPageMatch[1]);
     if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
     // v54 return verification: Stripe sends the customer back with
@@ -6303,6 +6469,7 @@ const server = http.createServer(async (req, res) => {
   // ---------- public estimate approval (added 2026-10-12) ----------
   const estPageMatch = p.match(/^\/estimate\/([\w-]+)$/);
   if (estPageMatch && req.method === 'GET') {
+    if (workerSessionBlocked(user)) return workerBlockedPage(res, 'estimate'); // v79 P0-2
     const r = db.requests.find(x => x.id === estPageMatch[1]);
     if (!r || !r.estimate) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Estimate not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
     // v54 join return verification — same rule as the cart page: the
@@ -6340,6 +6507,7 @@ const server = http.createServer(async (req, res) => {
   }
   const estActMatch = p.match(/^\/estimate\/([\w-]+)\/(approve|decline)$/);
   if (estActMatch && req.method === 'POST') {
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot decide a customer estimate' }); // v79 P0-2
     // Public: anyone with the estimate link can approve or decline it. No
     // login required — the estimate id in the emailed link is the credential,
     // same as invoice links.
@@ -6385,6 +6553,7 @@ const server = http.createServer(async (req, res) => {
   // so the join was the only Elements left on this page.
   const estJoinCheckoutMatch = p.match(/^\/estimate\/([\w-]+)\/join-checkout$/);
   if (estJoinCheckoutMatch && req.method === 'POST') {
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estJoinCheckoutMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
     if (!user) return send(res, 401, { error: 'create your account above first, then tap Join' });
@@ -6414,6 +6583,7 @@ const server = http.createServer(async (req, res) => {
   // email matches and whose HomeCare/Plus plan is ACTIVE.
   const estMemberCheckMatch = p.match(/^\/estimate\/([\w-]+)\/member-check$/);
   if (estMemberCheckMatch && req.method === 'POST') {
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estMemberCheckMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
     const b = await readBody(req);
@@ -6421,6 +6591,7 @@ const server = http.createServer(async (req, res) => {
   }
   const estMemberApplyMatch = p.match(/^\/estimate\/([\w-]+)\/member-apply$/);
   if (estMemberApplyMatch && req.method === 'POST') {
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estMemberApplyMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
     const b = await readBody(req);
@@ -6433,6 +6604,7 @@ const server = http.createServer(async (req, res) => {
   }
   const estOptionMatch = p.match(/^\/estimate\/([\w-]+)\/option$/);
   if (estOptionMatch && req.method === 'POST') {
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estOptionMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
     if (r.status !== 'Quoted') return send(res, 400, { error: 'this estimate is no longer awaiting approval (status: ' + r.status + ')' });
@@ -6477,6 +6649,26 @@ const server = http.createServer(async (req, res) => {
       return { id: u.id, name: u.name, email: u.email, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan: membershipPlanOf(u), freeEstimateUsed: !!u.freeEstimateUsed, source: u.source || null, requests: reqs, createdAt: u.createdAt };
     });
     return send(res, 200, { customers });
+  }
+  // v79 P0-7: customers / orders / active members by acquisition source —
+  // the table that makes cost-per-client computable next to ad spend.
+  if (p === '/api/admin/source-summary' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const by = {};
+    const keyOf = (v) => (v && String(v).trim()) ? String(v) : '(direct / unknown)';
+    const rowOf = (k) => by[k] || (by[k] = { source: k, customers: 0, orders: 0, members: 0 });
+    for (const cu of db.users) {
+      if (cu.role !== 'customer') continue;
+      const row = rowOf(keyOf(cu.source));
+      row.customers++;
+      if (membershipPlanOf(cu).status === 'active') row.members++;
+    }
+    for (const r of db.requests) {
+      const owner = r.customerId ? db.users.find(x => x.id === r.customerId) : null;
+      rowOf(keyOf(r.source || (owner && owner.source))).orders++;
+    }
+    const rows = Object.values(by).sort((a, b) => (b.customers - a.customers) || (b.orders - a.orders));
+    return send(res, 200, { rows });
   }
   const custMatch = p.match(/^\/api\/customers\/([\w-]+)$/);
   if (custMatch && req.method === 'PATCH') {
