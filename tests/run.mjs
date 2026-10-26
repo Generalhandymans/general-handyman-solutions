@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-2', swSrc.includes("const CACHE = 'ghs-app-v80-2'"));
+t('static: SW cache is ghs-app-v80-4', swSrc.includes("const CACHE = 'ghs-app-v80-4'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4120,7 +4120,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.2: ghs-app-v80-2)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-2'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.4: ghs-app-v80-4)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-4'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4341,6 +4341,125 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   sandbox.fetch = fetchOrig802;
   sandbox.Stripe = stripeOrig802;
   el('ccJoin').checked = false;
+  run('cartResetCheckout();');
+  run("me = null; localStorage.removeItem('ghsCart'); cartJoinedOnce = false;");
+}
+
+// ---------------- v80.3 PRESENTATION: the member price teases in GREEN in the cart view (Gabriel 2026-10-25) ----------------
+{
+  t('static v80.3 SPA: the green member-tease classes exist (WhatsApp family green darkened for the light card: #16a34a)', htmlSrc.includes('.cart-members-pay{color:#16a34a') && htmlSrc.includes('.cart-members-total{color:#16a34a'));
+  t('static v80.3 SPA: the hook box headline is the join invitation only — the old price-carrying headline is gone', htmlSrc.includes('⭐ HomeCare — first month FREE') && !htmlSrc.includes('⭐ HomeCare members pay $'));
+  // guest — Gabriel's screenshot case: TV Mounting (over 65") $175 + Furniture Assembly $125 = $300 -> members $240, save $60
+  run("me = null; location.hash = '#cart';");
+  run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);");
+  run('renderCart();');
+  const lines803 = el('cartLines').innerHTML, totals803 = el('cartTotals').innerHTML;
+  t('v80.3 guest cart: each discountable line teases its member price in green under the regular price ($175->$140, $125->$100)', lines803.includes('Members pay $140') && lines803.includes('Members pay $100') && (lines803.match(/cart-members-pay/g) || []).length === 2);
+  t('v80.3 guest cart: BELOW the regular Total the green bold line reads Members pay $240 — save $60; the hook box invites the join without repeating prices', totals803.indexOf('<b>Total</b>') >= 0 && totals803.indexOf('Members pay $240 — save $60') > totals803.indexOf('<b>Total</b>') && totals803.includes('cart-members-total') && totals803.includes('⭐ HomeCare — first month FREE') && !totals803.includes('HomeCare members pay'));
+  // quantity > 1: the green per-line price is the member LINE total
+  run("cartSave([{ id: 'tv-mounting', q: 2 }]);"); run('renderCart();');
+  const linesQty803 = el('cartLines').innerHTML;
+  t('v80.3 guest cart: quantity > 1 teases the member LINE total (2 x $125 service -> Members pay $200, not the $100 unit)', linesQty803.includes('Members pay $200') && !linesQty803.includes('Members pay $100'));
+  // a line with NO member discount (materials-style: member == list) teases NOTHING
+  run("MENU_CATALOG['zz-materials-803'] = { name: 'Materials (test)', meta: '', price: 100, member: 100 };");
+  run("cartSave([{ id: 'zz-materials-803', q: 1 }, { id: 'tv-mounting', q: 1 }]);"); run('renderCart();');
+  const linesMat803 = el('cartLines').innerHTML, totalsMat803 = el('cartTotals').innerHTML;
+  t('v80.3 guest cart: a no-discount (materials/nodisc) line renders NO green line — only the discountable line teases; the totals save counts only the real discount ($225 -> $200, save $25)', (linesMat803.match(/cart-members-pay/g) || []).length === 1 && linesMat803.includes('Members pay $100') && totalsMat803.includes('Members pay $200 — save $25'));
+  run("delete MENU_CATALOG['zz-materials-803']; cartSave([]);");
+  // verified member: NO teasers anywhere — they already pay the member price
+  run("me = { id:'USR-V803M', role:'customer', name:'Mem Ber', email:'mem803@t.local', homeCareStatus:'active' };");
+  run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);"); run('renderCart();');
+  const memHtml803 = el('cartLines').innerHTML + el('cartTotals').innerHTML;
+  t('v80.4 amendment (Gabriel 23:54): member cart headlines the FULL list price ($175/$125, each at list) — the member figure is never dressed as THE price, and there is NO tease', memHtml803.includes('<b>$175</b>') && memHtml803.includes('<b>$125</b>') && memHtml803.includes('$175 each') && !memHtml803.includes('Members pay'));
+  t('v80.4 amendment: the member saving rides as its own small green badge per discountable line (Members −$35 / −$25); the totals keep the savings row + the member total ($240 + the applied note)', memHtml803.includes('cart-member-save') && memHtml803.includes('Members −$35') && memHtml803.includes('Members −$25') && memHtml803.includes('member price is applied') && memHtml803.includes('$240'));
+  // --- extension (Gabriel 23:49, "igual aquí"): the CHECKOUT services list ---
+  run("me = null;");
+  run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);");
+  el('ccJoin').checked = false; run('renderCcLines();');
+  const ccOff803 = el('ccLines').innerHTML;
+  t('v80.3 checkout (join OFF): each discountable line teases Members pay $X in green under the regular price — figures themselves stay plain', ccOff803.includes('Members pay $140') && ccOff803.includes('Members pay $100') && (ccOff803.match(/cart-members-pay/g) || []).length === 2 && ccOff803.includes('<b>$175</b>') && ccOff803.includes('<b>$125</b>'));
+  el('ccJoin').checked = true; run('renderCcLines();');
+  const ccOn803 = el('ccLines').innerHTML;
+  t('v80.4 amendment (Gabriel 23:54): checkout with join ON headlines the FULL list price too — figures AND each captions at list ($175/$125), NO green member figures, NO tease (supersedes the v80.3 green-figures pin)', ccOn803.includes('<b>$175</b>') && ccOn803.includes('<b>$125</b>') && ccOn803.includes('$175 each') && !ccOn803.includes('cart-members-pay') && !ccOn803.includes('Members pay') && !ccOn803.includes('$140'));
+  t('v80.4 amendment: join ON carries the green saving badge per discountable line (Members −$35 / −$25)', ccOn803.includes('cart-member-save') && ccOn803.includes('Members −$35') && ccOn803.includes('Members −$25'));
+  // verified member AT CHECKOUT (no join involved): the rule is uniform
+  run("me = { id:'USR-V804M', role:'customer', name:'Mem Ber', email:'mem804@t.local', homeCareStatus:'active' };");
+  el('ccJoin').checked = false; run('renderCcLines();');
+  const ccMem804 = el('ccLines').innerHTML;
+  t('v80.4 amendment: a VERIFIED MEMBER at checkout gets the same treatment — list headlines + green saving badges, no tease', ccMem804.includes('<b>$175</b>') && ccMem804.includes('Members −$35') && ccMem804.includes('cart-member-save') && !ccMem804.includes('Members pay'));
+  el('ccJoin').checked = false;
+  run("me = null; cartSave([]); location.hash = '';");
+}
+
+// ---------------- v80.4: the payment form loads WITH the page (eager deferred mount) + the Pay gate ----------------
+{
+  t('static v80.4 SPA: eager deferred mount + the gate exist; the classic secret-born mount is retired', htmlSrc.includes('function cartEagerMount(') && htmlSrc.includes('function cartGatePaint(') && htmlSrc.includes('function cartMountDeferred(') && htmlSrc.includes("mode: 'payment'") && htmlSrc.includes("mode: 'setup'") && htmlSrc.includes('cartElements.submit') && htmlSrc.includes('clientSecret: cartPayCtx.clientSecret') && !htmlSrc.includes('function cartMountPayment('));
+  t('static v80.4 SPA: the member-applied badge class rides the same member green (#16a34a)', htmlSrc.includes('.cart-member-save{color:#16a34a'));
+  // VM: a recording Stripe factory (deferred options + submit) over
+  // the v78 scripted backend.
+  const stripeOrig804 = sandbox.Stripe;
+  const fetchOrig804 = sandbox.fetch;
+  const elsOpts804 = [], confirmArgs804 = [];
+  let submitCalls804 = 0;
+  sandbox.Stripe = function (pk) {
+    return {
+      elements(opts) { elsOpts804.push(opts || {}); return { submit: async () => { submitCalls804++; return {}; }, create() { return makeFakeCardEl(); } }; },
+      confirmCardPayment: async () => ({}),
+      confirmSetup: async (args) => { confirmArgs804.push(['setup', args]); return { setupIntent: { id: 'seti_804', status: 'succeeded' } }; },
+      confirmPayment: async (args) => { confirmArgs804.push(['payment', args]); return { paymentIntent: { id: 'pi_v78_vm', status: 'succeeded' } }; }
+    };
+  };
+  sandbox.fetch = v78Fetch;
+  resetStripeState();
+  stripeCfgMode = 'ok';
+  v78ConfirmMode = 'ok'; v78JoinArmed = false; v78Calls.length = 0;
+  run("me = null; location.hash = ''; localStorage.removeItem('ghsCart'); cartJoinedOnce = false; cartPayCtx = null; cartQuote = null;");
+  run("cartAdd('tv-mounting');");
+  el('ccName').value = ''; el('ccEmail').value = ''; el('ccPhone').value = ''; el('ccPass').value = '';
+  el('ccAddress').value = ''; el('ccCity').value = ''; el('ccWhenText').value = ''; el('ccNotes').value = '';
+  el('ccJoin').checked = false;
+  el('cartDone').style.display = 'none';
+  // (a) ENTRY: the mount fires WITH the page — a deferred payment
+  // element at the deposit amount — BEFORE any field is filled, and
+  // with NO server arm (no account, no pending checkout, no intent).
+  await run('cartShowCheckout()');
+  t('v80.4 VM (a): entering checkout mounts the Payment Element AT ENTRY (deferred payment mode, deposit amount $50 for the $125 service) before any field is filled', elsOpts804.length >= 1 && elsOpts804[0].mode === 'payment' && elsOpts804[0].amount === 5000 && run('!!cartElements') === true);
+  t('v80.4 VM (a): the eager mount arms NOTHING server-side and the Pay button is born gated OFF with empty fields', !v78Calls.some(c => c.step === 'pay' || c.step === 'join') && run('cartPayCtx === null') === true && el('cartPayBtn').disabled === true);
+  el('ccName').value = 'Eager Eve'; el('ccEmail').value = 'eager@t.local'; el('ccPhone').value = '7075550199'; el('ccPass').value = 'eagerpass1';
+  el('ccAddress').value = '7 Eager St'; el('ccCity').value = 'Fairfield';
+  run('cartGatePaint();'); // exactly what every keystroke runs (the input listener)
+  t('v80.4 VM (a): the moment the last required field validates, the button enables with the deposit label', el('cartPayBtn').disabled === false && (el('cartPayBtn').textContent || '') === 'Pay $50 deposit');
+  // (b) the join toggle is the mode switch — typed data survives.
+  el('ccJoin').checked = true;
+  await run('cartJoinToggled()');
+  t('v80.4 VM (b): toggling HomeCare remounts the element in SETUP mode (the trial join) with no armed context', elsOpts804[elsOpts804.length - 1].mode === 'setup' && run('cartPayCtx === null') === true);
+  t('v80.4 VM (b): the typed checkout data SURVIVES the mode swap and the button names the one-process join', el('ccName').value === 'Eager Eve' && el('ccEmail').value === 'eager@t.local' && el('ccAddress').value === '7 Eager St' && (el('cartPayBtn').textContent || '').includes('Join HomeCare — then pay $50 deposit'));
+  el('ccJoin').checked = false;
+  await run('cartJoinToggled()');
+  t('v80.4 VM (b): toggling back remounts the PAYMENT element at the deposit amount', elsOpts804[elsOpts804.length - 1].mode === 'payment' && elsOpts804[elsOpts804.length - 1].amount === 5000);
+  // (c) qty edits with NO armed context: re-quote + remount at the
+  // new amount — the server arm still waits for the submit tap.
+  v78Calls.length = 0;
+  await run('ccQty(0, 1)'); await run('ccQty(0, 1)'); // 3 x $125 = $375 -> deposit 40% = $150
+  t('v80.4 VM (c): qty edits re-quote with the server and REMOUNT at the NEW deposit amount ($375 -> $150) — no checkout arm, typed data intact, button names the new deposit', v78Calls.some(c => c.step === 'quote') && !v78Calls.some(c => c.step === 'pay') && elsOpts804[elsOpts804.length - 1].amount === 15000 && el('ccAddress').value === '7 Eager St' && (el('cartPayBtn').textContent || '') === 'Pay $150 deposit');
+  // submit: elements.submit() validates first, THEN the server arms,
+  // then the confirm rides the mounted element with the fresh secret.
+  await run('cartPayNow()');
+  t('v80.4 VM: submit validates the element BEFORE arming, then confirms the mounted element WITH the armed secret — order completes, cart clears', submitCalls804 >= 1 && v78Calls.map(c => c.step).filter(s => s === 'pay' || s === 'checkout-confirm').join(',') === 'pay,checkout-confirm' && confirmArgs804.length >= 1 && confirmArgs804[0][0] === 'payment' && confirmArgs804[0][1].clientSecret === 'pi_secret_v78' && el('cartDone').style.display === 'block' && run("localStorage.getItem('ghsCart')") === '[]');
+  // (d) a Stripe load failure surfaces AT ENTRY — hosted door + ref,
+  // before the customer has filled anything in.
+  run("localStorage.removeItem('ghsCart'); cartAdd('tv-mounting');");
+  run('cartResetCheckout();');
+  resetStripeState();
+  sandbox.Stripe = undefined;
+  const origCreate804 = sandbox.document.createElement;
+  sandbox.document.createElement = function (tag) { const e = origCreate804(tag); if (tag === 'script') setTimeout(function () { if (e.onerror) e.onerror(); }, 5); return e; };
+  await run('cartShowCheckout()');
+  const box804 = el('cartPayElement').innerHTML || '';
+  t('v80.4 VM (d): a dead Stripe.js load fails AT ENTRY — ref: JS + the hosted door in the box, Pay gated off, no field ever touched', run('cartStripeState') === 'failed' && run('cartStripeFailStage') === 'JS' && box804.includes('ref: JS') && box804.includes("Stripe's secure page") && el('cartPayBtn').disabled === true);
+  sandbox.document.createElement = origCreate804;
+  sandbox.Stripe = stripeOrig804;
+  sandbox.fetch = fetchOrig804;
   run('cartResetCheckout();');
   run("me = null; localStorage.removeItem('ghsCart'); cartJoinedOnce = false;");
 }

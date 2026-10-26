@@ -277,6 +277,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .cart-qty button{background:none;border:0;color:var(--ink);font-size:17px;font-weight:800;padding:2px 8px;box-shadow:none;cursor:pointer}
 .cart-remove{background:none;border:0;color:#b91c1c;font-weight:700;box-shadow:none;padding:4px;cursor:pointer}
 .cart-total-row{display:flex;justify-content:space-between;padding:3px 0}
+.cart-members-pay{color:#16a34a;font-weight:700;white-space:nowrap}
+.cart-members-total{color:#16a34a;font-weight:800}
+.cart-member-save{color:#16a34a;font-weight:700;font-size:13px;white-space:nowrap}
 #cartPayElement{border:1px solid #d4d4d8;border-radius:12px;padding:12px;background:#fff;min-height:52px}
 .wz-mi .cart-add-mini{flex:none;padding:8px 10px}
 .menu-price{font-size:19px;font-weight:800;color:#fff}
@@ -728,7 +731,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
       <p class="mut">You pay only the <b>booking deposit</b> today — <b>$50 flat</b> on totals up to $300, <b>40%</b> on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="cartPayElement"></div>
       <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
-      <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%">Pay</button>
+      <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%" disabled>Pay</button>
       <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · Deposit today, balance at completion</p>
     </div>
     <div class="card" id="cartDone" style="display:none"></div>
@@ -5048,7 +5051,7 @@ function applyCcPrefill(){
 // admin sessions and inside the technician entry, and nothing in this
 // module is referenced from the worker or admin boxes.
 const CART_LS_KEY = 'ghsCart';
-let cartBusy = false, cartPayCtx = null, cartElements = null, cartWhenVal = 'Today', cartJoinedOnce = false, cartQuote = null;
+let cartBusy = false, cartPayCtx = null, cartElements = null, cartElementsMode = null, cartElementsAmount = 0, cartElementReady = false, cartWhenVal = 'Today', cartJoinedOnce = false, cartQuote = null;
 function cartLoad(){ try { const v = JSON.parse(localStorage.getItem(CART_LS_KEY) || '[]'); return Array.isArray(v) ? v.filter(function(it){ return it && typeof it.id === 'string' && typeof MENU_CATALOG !== 'undefined' && MENU_CATALOG[it.id]; }) : []; } catch (e) { return []; } }
 function cartSave(items){ try { localStorage.setItem(CART_LS_KEY, JSON.stringify(items)); } catch (e) {} paintCartBtn(); }
 function cartCount(){ return cartLoad().reduce(function(s, it){ return s + Math.max(1, Math.round(Number(it.q) || 1)); }, 0); }
@@ -5125,12 +5128,24 @@ function renderCart(){
   const coBtn = document.getElementById('cartCheckoutBtn'); if (coBtn) coBtn.style.display = items.length ? '' : 'none';
   const clBtn = document.getElementById('cartClearBtn'); if (clBtn) clBtn.style.display = items.length ? '' : 'none';
   host.innerHTML = t.lines.map(function(l, i){
-    const unit = member ? l.unitMember : l.unitList;
-    const line = member ? l.lineMember : l.lineList;
+    // v80.4 (Gabriel 2026-10-25 23:54): the headline is ALWAYS the full
+    // list price — a VERIFIED MEMBER never sees the discounted figure
+    // dressed as THE price. The member saving rides as its own small
+    // green badge under the price; the totals block below carries the
+    // savings row + the member total.
+    const unit = l.unitList;
+    const line = l.lineList;
     let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
     s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
-    s += '<div style="text-align:right"><b>$' + line + '</b><br><button type="button" class="cart-remove" onclick="cartRemove(' + i + ')">Remove</button></div></div>';
+    s += '<div style="text-align:right"><b>$' + line + '</b>';
+    if (member && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">Members −$' + (l.lineList - l.lineMember) + '</span>';
+    // v80.3 (Gabriel 2026-10-25): the member price TEASES in green under
+    // each line's regular price — only for non-members, and only when
+    // the line actually carries a member discount (lineMember < lineList;
+    // materials / nodisc lines never advertise a discount they don't get).
+    else if (!member && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">Members pay $' + l.lineMember + '</span>';
+    s += '<br><button type="button" class="cart-remove" onclick="cartRemove(' + i + ')">Remove</button></div></div>';
     return s;
   }).join('');
   const th = document.getElementById('cartTotals'); if (!th) return;
@@ -5141,7 +5156,13 @@ function renderCart(){
     s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.member + '</b></div><p class="mut">✓ Your HomeCare member price is applied.</p>';
   } else {
     s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.list + '</b></div>';
-    if (t.savings > 0) s += '<div class="auth-offer" style="margin-top:10px"><b>⭐ HomeCare members pay $' + t.member + ' — save $' + t.savings + '</b><p class="mut" style="margin:4px 0 0">Join at checkout (first month FREE) and the member price applies to this order right away.</p></div>';
+    if (t.savings > 0) {
+      // v80.3 (Gabriel 2026-10-25): the lower member total lives HERE, in
+      // green, directly below the regular Total — the pink box below is
+      // now only the join invitation (it no longer repeats the prices).
+      s += '<div class="cart-total-row cart-members-total"><span>Members pay $' + t.member + ' — save $' + t.savings + '</span></div>';
+      s += '<div class="auth-offer" style="margin-top:10px"><b>⭐ HomeCare — first month FREE</b><p class="mut" style="margin:4px 0 0">Join at checkout (first month FREE) and the member price applies to this order right away.</p></div>';
+    }
   }
   th.innerHTML = s + '</div>';
   // keep the checkout card (when open) in sync with cart-view edits
@@ -5151,6 +5172,7 @@ function renderCart(){
 function cartWhenPick(btn){
   cartWhenVal = btn.getAttribute('data-w') || 'Today';
   document.querySelectorAll('#ccWhenPick button').forEach(function(x){ x.classList.toggle('sel', x === btn); });
+  cartGatePaint();
 }
 function cartPaintOffer(){ const o = document.getElementById('ccOffer'); if (o) o.style.display = cartIsMember() ? 'none' : 'block'; }
 function renderCartTotalsDue(){
@@ -5199,6 +5221,9 @@ async function cartQuoteRefresh(){
     if (r && r.totals) cartQuote = r.totals;
   } catch (e) { /* display-only: the charge is re-derived server-side at prepare */ }
   renderCartTotalsDue();
+  // v80.4: a fresh server quote can move the deposit — keep the
+  // mounted element's amount (and the button label) honest.
+  if (cartElements) { cartMountDeferred(); cartGatePaint(); }
 }
 function renderCcLines(){
   const host = document.getElementById('ccLines'); if (!host) return;
@@ -5209,12 +5234,21 @@ function renderCcLines(){
   const mem = member || joinOn;
   if (!t.lines.length) { host.innerHTML = ''; return; }
   host.innerHTML = '<h4 style="margin-bottom:6px">Your services — tap to fix anything</h4>' + t.lines.map(function(l, i){
-    const unit = mem ? l.unitMember : l.unitList;
-    const line = mem ? l.lineMember : l.lineList;
+    // v80.4 AMENDS the v80.3 extension (Gabriel 2026-10-25 23:54):
+    // wherever member pricing is APPLIED (verified member, or the
+    // join box checked), the headline stays the FULL list price and
+    // the discount is its own element — the small green saving badge
+    // per discountable line (the green summary savings row below is
+    // unchanged). The v80.3 tease for guests / join-unchecked stands.
+    const unit = l.unitList;
+    const line = l.lineList;
     let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
     s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
-    s += '<div style="text-align:right"><b>$' + line + '</b><br><button type="button" class="cart-remove" onclick="ccRemove(' + i + ')">Remove</button></div></div>';
+    s += '<div style="text-align:right"><b>$' + line + '</b>';
+    if (mem && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">Members −$' + (l.lineList - l.lineMember) + '</span>';
+    else if (!mem && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">Members pay $' + l.lineMember + '</span>';
+    s += '<br><button type="button" class="cart-remove" onclick="ccRemove(' + i + ')">Remove</button></div></div>';
     return s;
   }).join('');
 }
@@ -5266,8 +5300,11 @@ async function cartCheckoutEdited(){
   await cartQuoteRefresh();
   // The form already validated once (an intent existed), so re-arm the
   // payment at the NEW total right away — the customer never taps Pay
-  // against a stale amount.
+  // against a stale amount. (v80.4: with NO armed context there is
+  // nothing to re-arm — the deferred element simply remounts at the
+  // new amount; the server supersedes inside the next submit's arm.)
   if (hadCtx && !cartBusy) await cartPrepare();
+  else if (!cartBusy) await cartEagerMount();
 }
 function cartCheckoutEmptied(){
   // Removing the last service AT checkout: no dead end and no charge
@@ -5286,10 +5323,113 @@ function cartCheckoutEmptied(){
   const box = document.getElementById('cartBox'); if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth' });
 }
 function cartResetCheckout(){
-  cartPayCtx = null; cartElements = null; cartStripeState = 'idle';
+  cartPayCtx = null; cartElements = null; cartElementsMode = null; cartElementsAmount = 0; cartElementReady = false; cartEagerSeq++;
+  cartStripeState = 'idle';
   const pe = document.getElementById('cartPayElement'); if (pe) pe.innerHTML = '';
   const e = document.getElementById('cartPayErr'); if (e) { e.textContent = ''; e.style.display = 'none'; }
-  const b = document.getElementById('cartPayBtn'); if (b) { b.disabled = false; b.textContent = 'Pay'; }
+  cartGatePaint();
+}
+// ---------- v80.4: the payment form loads WITH the page ----------
+// Gabriel (2026-10-25 23:50, watching the checkout on his tablet):
+// the form must be VISIBLE from the moment the customer enters
+// checkout — showing what will be charged — while the Pay button
+// stays locked until every required field is filled. Today the
+// element only mounted after the data validated / on the Pay tap,
+// so the box sat empty and LOOKED broken (the 22:39 wound).
+// Design: the Payment Element mounts EAGERLY in Stripe's DEFERRED
+// intent mode (no secret, no server arm, no account) the moment the
+// checkout step renders, in parallel with the customer typing. The
+// server arm (account resolution + pending checkout + PI/subscription
+// secret, the exact /api/cart/checkout rails of v78–v80.2) still
+// happens — at SUBMIT time — and the confirm runs against the
+// already-mounted element with the fresh secret. P0-4 untouched:
+// the order is still born only in the verified settle.
+let cartEagerSeq = 0;
+function cartJoinIntent(){
+  if (cartIsMember()) return false;
+  const j = document.getElementById('ccJoin');
+  return !!(j && j.checked);
+}
+function cartDepositEstimate(){
+  // Same math renderCartTotalsDue paints: an armed context wins,
+  // otherwise the deposit rule (v79 law: $50 flat to $300, 40% over)
+  // over the server quote when one exists, else the local calc.
+  const t = cartQuote || cartCalc();
+  const member = cartIsMember();
+  const due = cartPayCtx ? cartPayCtx.due : ((member || cartJoinIntent()) ? t.member : t.list);
+  if (cartPayCtx && cartPayCtx.phase !== 'join') return cartPayCtx.deposit;
+  const tot = Number(due) || 0;
+  return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100;
+}
+function cartPayLabel(){
+  const dep = cartDepositEstimate();
+  if (cartPayCtx && cartPayCtx.phase === 'join') return 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order';
+  if (!cartPayCtx && cartJoinIntent()) return 'Join HomeCare — then pay $' + dep + ' deposit for your order';
+  return 'Pay $' + dep + ' deposit';
+}
+function cartFormValid(){
+  if (!cartLoad().length) return false;
+  return cartValidatePayload(cartBuildPayload(cartLoad())) === '';
+}
+// THE gate (v80.4): one function owns the Pay button. It is enabled
+// only when the element is mounted AND the checkout data validates —
+// the same validations that gate the flow today. While a prepare or
+// a payment is in flight it shows the busy label, disabled.
+function cartGatePaint(busyLabel){
+  const b = document.getElementById('cartPayBtn'); if (!b) return;
+  if (cartBusy) { b.disabled = true; if (busyLabel) b.textContent = busyLabel; return; }
+  b.disabled = !(!!cartElements && cartElementReady && cartFormValid());
+  b.textContent = cartPayLabel();
+}
+// Mount (or re-create) the DEFERRED Payment Element for the CURRENT
+// intent: join intent -> setup mode (the trial's card is collected
+// as a setup, v80.2); otherwise payment mode carrying the deposit
+// estimate as its amount. Re-created ONLY when the mode or the
+// amount actually changed — Stripe.js is already loaded by then, so
+// the swap is fast, and the typed checkout data (DOM inputs this
+// code never rebuilds) survives every remount.
+function cartMountDeferred(forceMode){
+  if (!stripeObj) return false;
+  const host = document.getElementById('cartPayElement'); if (!host) return false;
+  const mode = forceMode || (cartJoinIntent() ? 'setup' : 'payment');
+  const amount = mode === 'payment' ? Math.round(cartDepositEstimate() * 100) : 0;
+  if (cartElements && cartElementsMode === mode && (mode === 'setup' || cartElementsAmount === amount)) return true;
+  try {
+    host.innerHTML = '';
+    const appearance = { theme: 'stripe', variables: { colorPrimary: '#e42535', borderRadius: '12px' } };
+    cartElements = mode === 'payment'
+      ? stripeObj.elements({ mode: 'payment', amount: amount, currency: 'usd', appearance: appearance })
+      : stripeObj.elements({ mode: 'setup', currency: 'usd', appearance: appearance });
+    cartElementsMode = mode; cartElementsAmount = amount; cartElementReady = false;
+    const pe = cartElements.create('payment');
+    if (pe && typeof pe.on === 'function') pe.on('ready', function(){ cartElementReady = true; cartGatePaint(); });
+    pe.mount(host);
+    // mount() returned: the element owns the box now. (Stripe queues
+    // the confirm until the element is internally live, and the
+    // submit path runs elements.submit() first — the hard check.)
+    cartElementReady = true;
+    return true;
+  } catch (e) {
+    cartElements = null; cartElementsMode = null; cartElementReady = false;
+    cartStripeFailStage = 'INIT'; cartStripeState = 'failed'; paintCartPayState();
+    return false;
+  }
+}
+// Entry point of the eager mount: fired the moment the checkout
+// step renders (and on every intent change). A Stripe load failure
+// paints HERE — at entry, with the hosted door + stage ref — never
+// after the customer has filled everything in.
+async function cartEagerMount(force){
+  const seq = ++cartEagerSeq;
+  if (!cartLoad().length) return;
+  const card = document.getElementById('cartCheckoutCard');
+  if (!force && (!card || card.style.display === 'none')) return;
+  const st = await cartEnsureStripe();
+  if (seq !== cartEagerSeq) return; // a reset / newer mount superseded this run
+  if (st === 'unconfigured') { cartShowErr('Online payment is still being connected — text or call (707) 862-3773 and the Team will take your order.'); cartGatePaint(); return; }
+  if (st !== 'ready') { cartGatePaint(); return; } // 'failed' already painted: hosted door + ref code
+  cartMountDeferred();
+  cartGatePaint();
 }
 function cartShowCheckout(){
   applyCcPrefill();
@@ -5304,14 +5444,21 @@ function cartShowCheckout(){
   renderCartTotalsDue();
   cartQuoteRefresh();
   if (card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth' });
-  cartPrepare();
+  // v80.4: the payment form loads WITH the page — mount it NOW, in
+  // parallel with the customer filling the form; the Pay button
+  // stays gated until the data validates (cartGatePaint). The
+  // server arm waits for the submit tap, exactly as designed.
+  cartGatePaint();
+  return cartEagerMount();
 }
 function cartJoinToggled(){
-  const had = !!cartPayCtx;
+  // v80.4: the toggle is the MODE switch (deposit <-> join setup).
+  // The armed context drops, the element remounts in the new mode,
+  // typed data survives (the inputs are never rebuilt).
   cartResetCheckout();
   renderCcLines();
   renderCartTotalsDue();
-  if (had) cartPrepare();
+  return cartEagerMount();
 }
 // ---------- v80 piece 7: resilient Stripe.js loading for the cart ----------
 // ROOT CAUSE (Gabriel's live screenshot, 2026-10-25 22:39): the pay box
@@ -5370,7 +5517,7 @@ function paintCartPayState(){
   // stage failed (CFG config fetch / JS script load / INIT construct).
   else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">⚠️ The secure payment form could not load — check your connection. · El formulario de pago seguro no cargó — revisa tu conexión.<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">Pay on Stripe\'s secure page · Pagar en la página segura de Stripe</button><button type="button" onclick="cartRetryStripe()">↻ Try again · Reintentar</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#991b1b">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
 }
-function cartRetryStripe(){ cartStripeState = 'idle'; cartPrepare(); }
+function cartRetryStripe(){ cartStripeState = 'idle'; paintCartPayState(); cartEagerMount(true); }
 // v80.1: the config fetch gets a HARD timeout. api() has none — the
 // Render-origin bisect HUNG in "Loading secure payment…" past 30 s
 // on a stalled config fetch (the retry loop below never advanced:
@@ -5409,13 +5556,10 @@ async function cartEnsureStripe(){
   }
   cartStripeFailStage = 'CFG'; cartStripeState = 'failed'; paintCartPayState(); return 'failed';
 }
-function cartMountPayment(clientSecret){
-  const host = document.getElementById('cartPayElement'); if (!host) return;
-  host.innerHTML = '';
-  cartElements = stripeObj.elements({ clientSecret: clientSecret, appearance: { theme: 'stripe', variables: { colorPrimary: '#e42535', borderRadius: '12px' } } });
-  const pe = cartElements.create('payment');
-  pe.mount(host);
-}
+// v80.4: the classic mount (elements born from a clientSecret) is
+// RETIRED — the element is always born deferred at checkout entry
+// (cartMountDeferred, above) and the secret arrives at submit time,
+// in cartPrepare's context, for the confirm call.
 let cartErrValidation = false; // v80.2: the visible note came from form validation
 function cartShowErr(t){
   const e = document.getElementById('cartPayErr');
@@ -5447,7 +5591,10 @@ function cartShowErrWithHosted(t){
 try {
   ['ccAddress', 'ccCity', 'ccName', 'ccEmail', 'ccPhone', 'ccPass', 'ccWhenText', 'ccNotes'].forEach(function(fid){
     const f = document.getElementById(fid);
-    if (f && f.addEventListener) f.addEventListener('input', function(){ if (cartErrValidation) cartShowErr(''); });
+    // v80.4: every keystroke re-runs the Pay gate — the button wakes
+    // the moment the last required field validates (and sleeps again
+    // if a field is cleared).
+    if (f && f.addEventListener) f.addEventListener('input', function(){ if (cartErrValidation) cartShowErr(''); cartGatePaint(); });
   });
 } catch (e) {}
 // v80 A-7 (plumbing only): normalize a server snapshot into the local
@@ -5547,8 +5694,7 @@ async function cartPayHosted(){
   } catch (e) {
     if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap the button again to continue.'; }
     cartShowErr(e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'Pay'; }
-  } finally { cartBusy = false; }
+  } finally { cartBusy = false; cartGatePaint(); }
 }
 async function cartPrepare(){
   if (cartBusy) return;
@@ -5564,7 +5710,7 @@ async function cartPrepare(){
   const perr = cartValidatePayload(payload);
   if (perr) { cartShowValidationErr(perr); return; }
   cartBusy = true;
-  if (btn) { btn.disabled = true; btn.textContent = 'Preparing secure payment…'; }
+  cartGatePaint('Preparing secure payment…');
   try {
     // v80 piece 7: three distinct outcomes — 'unconfigured' is the ONLY
     // one that earns the "still being connected" house message; a load
@@ -5572,7 +5718,7 @@ async function cartPrepare(){
     // and simply stops (no false permanent banner).
     const cst80 = await cartEnsureStripe();
     if (cst80 === 'unconfigured') throw new Error('Online payment is still being connected — text or call (707) 862-3773 and the Team will take your order.');
-    if (cst80 !== 'ready') { cartShowErr(''); if (btn) { btn.disabled = false; btn.textContent = 'Pay'; } return; }
+    if (cst80 !== 'ready') { cartShowErr(''); return; }
     const joinEl = document.getElementById('ccJoin');
     const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
     const resp = await api('/api/cart/checkout', { method: 'POST', body: JSON.stringify(Object.assign({ step: joinOn ? 'join' : 'pay', joinedMembership: cartJoinedOnce, source: campaignSource() }, payload)) });
@@ -5592,9 +5738,17 @@ async function cartPrepare(){
     // cart. Fire-and-forget; it never affects the payment flow, and
     // NOTHING is sent anywhere by it (STOP TOTAL).
     try { api('/api/cart/save-recovery', { method: 'POST', body: JSON.stringify({ email: payload.email || '', items: payload.items }) }).catch(function(){}); } catch (e) {}
-    cartMountPayment(resp.clientSecret);
     renderCartTotalsDue();
-    if (btn) { btn.disabled = false; btn.textContent = resp.step === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order' : 'Pay $' + cartPayCtx.deposit + ' deposit'; }
+    // v80.4: the element was mounted at ENTRY (deferred) — the arm
+    // only guarantees it stands in the mode THIS context needs (a
+    // join arm answers a SetupIntent secret -> setup element; any
+    // payment secret -> payment element). A mode flip here is the
+    // rare non-trial join; amount drift alone NEVER remounts at arm
+    // time — the fresh server secret is the charge truth, and the
+    // confirm below runs against the mounted element with it.
+    const wantMode = cartPayCtx.phase === 'join' ? cartPayCtx.mode : 'payment';
+    if (cartElements && cartElementsMode !== wantMode) { cartElements = null; cartElementReady = false; }
+    if (!cartElements) cartMountDeferred(wantMode);
   } catch (e) {
     if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap Pay again to continue.'; cartShowErr(e.message); }
     else if (e.status && e.status >= 500) {
@@ -5608,21 +5762,38 @@ async function cartPrepare(){
       cartShowErrWithHosted(e.message);
     }
     else cartShowErr(e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'Pay'; }
-  } finally { cartBusy = false; }
+  } finally { cartBusy = false; cartGatePaint(); }
 }
 async function cartPayNow(){
   if (cartBusy) return;
-  if (!cartPayCtx) { cartPrepare(); return; }
-  const btn = document.getElementById('cartPayBtn');
+  // v80.4: nothing mounted yet (the tap raced the eager mount, or a
+  // reset landed first) — mount, don't charge.
+  if (!cartElements) { cartEagerMount(); return; }
   cartShowErr('');
   cartBusy = true;
-  if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
+  cartGatePaint('Processing…');
   try {
+    // v80.4 deferred discipline: validate the payment element FIRST
+    // (its own fields — Stripe reports inline), and only then arm
+    // the server side. An invalid card never creates an account, a
+    // pending checkout or an intent.
+    if (cartElements && typeof cartElements.submit === 'function') {
+      let sr = null;
+      try { sr = await cartElements.submit(); } catch (e) { sr = { error: e }; }
+      if (sr && sr.error) { const ce = new Error(sr.error.message || 'Check the payment details and try again.'); ce.cardError = true; throw ce; }
+    }
+    if (!cartPayCtx) {
+      cartBusy = false; // cartPrepare runs its own busy cycle
+      await cartPrepare();
+      if (!cartPayCtx) return; // prepare painted its own error/state
+      cartBusy = true; cartGatePaint('Processing…');
+    }
     // v80.2: a trial join's secret is a SetupIntent (the $0 trial
     // invoice has no PaymentIntent) — it confirms as a SETUP; a
     // normal secret confirms as a payment. Same Elements instance.
-    const confirmArgs = { elements: cartElements, redirect: 'if_required', confirmParams: { return_url: location.origin + location.pathname + '#cart' } };
+    // v80.4: the instance is DEFERRED, so the fresh secret from the
+    // arm rides in the confirm call itself.
+    const confirmArgs = { elements: cartElements, clientSecret: cartPayCtx.clientSecret, redirect: 'if_required', confirmParams: { return_url: location.origin + location.pathname + '#cart' } };
     const res = cartPayCtx.mode === 'setup' ? await stripeObj.confirmSetup(confirmArgs) : await stripeObj.confirmPayment(confirmArgs);
     if (res.error) { const ce = new Error(res.error.message); ce.cardError = true; throw ce; }
     if (cartPayCtx.phase === 'join') {
@@ -5648,8 +5819,9 @@ async function cartPayNow(){
     // right retry path); a SERVER error also offers the hosted door.
     if (e && !e.cardError && e.status && e.status >= 500) cartShowErrWithHosted(e.message);
     else cartShowErr(e.message);
-    if (btn && cartPayCtx) { btn.disabled = false; btn.textContent = cartPayCtx.phase === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order' : 'Pay $' + cartPayCtx.deposit + ' deposit'; }
-  } finally { cartBusy = false; }
+    // v80.4: the gate restores the button (label from the armed
+    // context, enabled while the form + element stand).
+  } finally { cartBusy = false; cartGatePaint(); }
 }
 function cartOnPaid(requestId){
   const ccDep = cartPayCtx ? cartPayCtx.deposit : null, ccBal = cartPayCtx ? cartPayCtx.balance : 0;
