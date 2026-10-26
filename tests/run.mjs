@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80', swSrc.includes("const CACHE = 'ghs-app-v80'"));
+t('static: SW cache is ghs-app-v80-1', swSrc.includes("const CACHE = 'ghs-app-v80-1'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4084,6 +4084,111 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   run('cartRetryStripe()');
   for (let i = 0; i < 40 && run('cartStripeState') !== 'ready'; i++) await sleep(100);
   t('v80 7B: a hard Stripe.js failure paints the honest error + Try again (never the house message), and Try again recovers', failedPainted80 && run('cartStripeState') === 'ready');
+  run('cartResetCheckout();');
+}
+
+// ---------------- v80.1 HOTFIX: SW cross-origin hardening, hosted escape hatch, stage codes ----------------
+{
+  const A801 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const admReqs801 = async () => (await req2('GET', '/api/requests', { token: A801 })).j.requests || [];
+  const items801 = [
+    { serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] },
+    { serviceId: 'ceiling-fan', name: 'Ceiling Fan Install', qty: 1, addons: [] }
+  ]; // list $250 / member $200 — deposit law: $50 flat at either total
+  const whPost801 = async (evt) => {
+    const raw = JSON.stringify(evt);
+    const ts = Math.floor(Date.now() / 1000);
+    const sig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(ts + '.' + raw, 'utf8').digest('hex');
+    return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
+  };
+  // --- statics ---
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped to v80-1', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-1'"));
+  t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
+  t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
+  // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
+  const hGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { name: 'Hosted Hanna', email: 'hosted@t.local', phone: '7075550140', password: 'hostpass12', address: '7 Host St', city: 'Fairfield', when: 'Today', items: items801 } });
+  t('v80.1 hosted pay: a guest gets the hosted session URL + pending checkout (deposit $50 of $250)', hGuest.status === 200 && hGuest.j.hosted === true && !!hGuest.j.url && !!hGuest.j.checkoutId && hGuest.j.totals.deposit === 50 && hGuest.j.totals.due === 250);
+  const hSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === hGuest.j.checkoutId);
+  t('v80.1 hosted pay: the session is payment-mode for the DEPOSIT amount with kind + checkoutId metadata', !!hSess && hSess.mode === 'payment' && hSess.amount_total === 5000 && hSess.metadata.kind === 'cart-checkout-hosted');
+  t('v80.1 P0-4: NO order exists before the hosted payment verifies', (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 0);
+  const hTok = (await req2('POST', '/api/login', { body: { email: 'hosted@t.local', password: 'hostpass12' } })).j.token;
+  const hEarly = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
+  t('v80.1 hosted pay: confirm before Stripe reports paid is refused (400) and still no order', hEarly.status === 400 && (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 0);
+  await mockSessionPaid(hSess.id);
+  const hConf = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
+  const hOrder = (await admReqs801()).find(r => r.id === (hConf.j && hConf.j.requestId));
+  t('v80.1 hosted pay: the verified settle births the DEPOSIT order ($50 of $250, $200 balance) — identical to an embedded payment', hConf.status === 200 && !!hOrder && hOrder.payment.status === 'deposit' && hOrder.payment.amountCents === 5000 && hOrder.payment.balanceCents === 20000 && hOrder.menuOrder.totals.due === 250);
+  const hConf2 = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
+  t('v80.1 hosted pay: re-confirm is idempotent (same order, no duplicate)', hConf2.status === 200 && hConf2.j.requestId === hConf.j.requestId && (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 1);
+  await whPost801({ id: 'evt_wh_hosted801', type: 'payment_intent.succeeded', data: { object: { id: hSess.payment_intent, amount: 5000, amount_received: 5000, status: 'succeeded', metadata: { kind: 'cart-checkout-hosted', checkoutId: hGuest.j.checkoutId, userId: hGuest.j.user.id } } } });
+  t('v80.1 hosted pay: the payment_intent webhook after settle creates NO duplicate order', (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 1);
+  // --- hosted settle via the SESSION webhook (the return never lands) ---
+  const h2 = await req2('POST', '/api/cart/checkout-hosted', { token: hTok, body: { address: '7 Host St', city: 'Fairfield', items: items801 } });
+  const h2Sess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === h2.j.checkoutId);
+  await mockSessionPaid(h2Sess.id);
+  const whSRes = await whPost801({ id: 'evt_wh_hsess801', type: 'checkout.session.completed', data: { object: { id: h2Sess.id, mode: 'payment', payment_status: 'paid', amount_total: 5000, payment_intent: h2Sess.payment_intent, customer: 'cus_mock_x', metadata: { kind: 'cart-checkout-hosted', checkoutId: h2.j.checkoutId, userId: hGuest.j.user.id } } } });
+  const h2Order = (await admReqs801()).find(r => r.menuOrder && r.menuOrder.checkoutId === h2.j.checkoutId);
+  t('v80.1 hosted webhook: checkout.session.completed settles the DEPOSIT order when the hosted return never lands', whSRes.status === 200 && !!h2Order && h2Order.payment.status === 'deposit' && h2Order.payment.amountCents === 5000);
+  // --- worker refusal (v79 P0-2 guard family) ---
+  const w801 = await req2('POST', '/api/signup', { body: { name: 'Worker 801', email: 'w801@t.local', phone: '(707) 555-0141', password: 'workpass801', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const wHosted = await req2('POST', '/api/cart/checkout-hosted', { token: w801.j.token, body: { address: '1 W St', items: items801 } });
+  t('v80.1 hosted: a WORKER session is refused (403 WORKER_BLOCKED)', wHosted.status === 403 && wHosted.j.code === 'WORKER_BLOCKED');
+  // --- JOIN, FIRST-CLASS (Gabriel 23:12): ONE session = trial subscription + deposit; settle = membership active + DEPOSIT order at MEMBER totals ---
+  const jGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { step: 'join', name: 'Join Joana', email: 'hjoin@t.local', phone: '7075550142', password: 'joinpass801', address: '11 Join St', city: 'Vacaville', items: items801 } });
+  t('v80.1 hosted join: step join returns ONE hosted session URL priced at MEMBER totals ($200, deposit $50)', jGuest.status === 200 && jGuest.j.step === 'join' && !!jGuest.j.url && jGuest.j.totals.due === 200 && jGuest.j.totals.deposit === 50);
+  const jSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === jGuest.j.checkoutId);
+  t('v80.1 hosted join: the session is subscription-mode (plan + deposit in one), trial-aware — freeMonth flagged and amount = deposit only under the v74 trial', !!jSess && jSess.mode === 'subscription' && jSess.metadata.kind === 'cart-checkout-join' && jSess.metadata.plan === 'homecare' && jSess.metadata.freeMonth === '1' && jSess.amount_total === 5000);
+  const jTok = (await req2('POST', '/api/login', { body: { email: 'hjoin@t.local', password: 'joinpass801' } })).j.token;
+  const jMeBefore = await req2('GET', '/api/me', { token: jTok });
+  t('v80.1 hosted join (v74 invariant): BEFORE settle the membership is NOT active and the free month is NOT spent', jMeBefore.j.user.homeCareStatus !== 'active' && jMeBefore.j.user.freeMonthAvailable === true);
+  await mockSessionPaid(jSess.id);
+  const jConf = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: jTok, body: { sessionId: jSess.id } });
+  const jOrder = (await admReqs801()).find(r => r.id === (jConf.j && jConf.j.requestId));
+  const jMeAfter = await req2('GET', '/api/me', { token: jTok });
+  t('v80.1 hosted join: settle activates HomeCare (free month spent AT activation) AND births the DEPOSIT order at MEMBER totals ($200 — $50 in, $150 balance, joinedMembership)', jConf.status === 200 && jMeAfter.j.user.homeCareStatus === 'active' && jMeAfter.j.user.freeMonthAvailable === false && !!jOrder && jOrder.payment.status === 'deposit' && jOrder.payment.amountCents === 5000 && jOrder.payment.balanceCents === 15000 && jOrder.menuOrder.totals.due === 200 && jOrder.menuOrder.joinedMembership === true);
+  // --- supersede across rails: hosted first, then an embedded checkout replaces it ---
+  const sGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { name: 'Sup Sue', email: 'sup@t.local', phone: '7075550143', password: 'suppass801', address: '3 Sup St', city: 'Fairfield', items: items801 } });
+  const sSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === sGuest.j.checkoutId);
+  const sTok = (await req2('POST', '/api/login', { body: { email: 'sup@t.local', password: 'suppass801' } })).j.token;
+  const sEmb = await req2('POST', '/api/cart/checkout', { token: sTok, body: { address: '3 Sup St', city: 'Fairfield', items: items801 } });
+  t('v80.1 supersede: a newer EMBEDDED checkout expires the earlier hosted session', sEmb.status === 200 && stripeState.sessions[sSess.id].status === 'expired');
+  await mockSessionPaid(sSess.id);
+  const sConf = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: sTok, body: { sessionId: sSess.id } });
+  t('v80.1 supersede: the replaced hosted checkout can never settle (400, no order born)', sConf.status === 400 && (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === sGuest.j.checkoutId).length === 0);
+}
+{
+  // VM: the v80.1 failure instrumentation — every dead stage names
+  // itself in the error box (CFG config fetch / JS script load / INIT
+  // constructor), and the failure box always carries the hosted door.
+  const stripeFactoryRef801 = sandbox.Stripe;
+  stripeCfgMode = 'ok';
+  run("me=null; location.hash=''; localStorage.setItem('ghsCart','[]'); cartAdd('tv-mounting');");
+  el('ccName').value = 'Stage Sara'; el('ccEmail').value = 'stage@t.local'; el('ccPhone').value = '7075550144'; el('ccPass').value = 'stagepass1';
+  el('ccAddress').value = '9 Stage St'; el('ccCity').value = 'Fairfield'; el('ccWhenText').value = ''; el('ccNotes').value = '';
+  // JS stage: config answers, Stripe.js never loads.
+  resetStripeState(); sandbox.Stripe = undefined;
+  const origCreate801 = sandbox.document.createElement;
+  sandbox.document.createElement = function (tag) { const e = origCreate801(tag); if (tag === 'script') setTimeout(function () { if (e.onerror) e.onerror(); }, 5); return e; };
+  await run('cartPrepare()');
+  const jsBox = el('cartPayElement').innerHTML || '';
+  t('v80.1 VM stages: a dead Stripe.js load paints ref: JS + the hosted door + Try again', run('cartStripeState') === 'failed' && run('cartStripeFailStage') === 'JS' && jsBox.includes('ref: JS') && jsBox.includes("Stripe's secure page") && jsBox.includes('Try again'));
+  sandbox.document.createElement = origCreate801;
+  // CFG stage: the config endpoint never answers — the hard timeout
+  // turns the hang into a CFG failure (this run takes ~20 s of
+  // retries; the bisect hang would have been forever).
+  resetStripeState(); sandbox.Stripe = stripeFactoryRef801;
+  const realFetch801 = sandbox.fetch;
+  sandbox.fetch = function (url, opts) { if (url === '/api/stripe/config') return new Promise(function () {}); return realFetch801(url, opts); };
+  await run('cartPrepare()');
+  const cfgBox = el('cartPayElement').innerHTML || '';
+  t('v80.1 VM stages: a STALLED config fetch fails as ref: CFG (timeout, never a hang) with the hosted door', run('cartStripeState') === 'failed' && run('cartStripeFailStage') === 'CFG' && cfgBox.includes('ref: CFG') && cfgBox.includes("Stripe's secure page"));
+  sandbox.fetch = realFetch801;
+  // INIT stage: script loads, the constructor throws.
+  resetStripeState(); sandbox.Stripe = function () { throw new Error('bad key'); };
+  await run('cartPrepare()');
+  const initBox = el('cartPayElement').innerHTML || '';
+  t('v80.1 VM stages: a throwing Stripe() constructor paints ref: INIT', run('cartStripeState') === 'failed' && run('cartStripeFailStage') === 'INIT' && initBox.includes('ref: INIT'));
+  sandbox.Stripe = stripeFactoryRef801;
   run('cartResetCheckout();');
 }
 

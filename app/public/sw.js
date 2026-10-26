@@ -1,6 +1,6 @@
 // GHS app service worker — caches the app shell so it opens fast and installs,
 // while keeping every visitor on the CURRENT version of the page.
-const CACHE = 'ghs-app-v80';
+const CACHE = 'ghs-app-v80-1';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -30,6 +30,15 @@ self.addEventListener('notificationclick', e => {
 });
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
+  // v80.1: cross-origin requests are NEVER intercepted. The generic
+  // static-assets branch below used to respondWith() them through
+  // caches.match + fetch(e.request), which can corrupt or stall
+  // third-party script loads (Stripe.js, Leaflet) on controlled
+  // pages. The browser's default fetch is the only safe rail for
+  // anything that is not ours. (Bisect note: the Render-origin test
+  // exonerated the SW as the ROOT cause of the Stripe.js failure —
+  // this hardening stays because it is correct, not as the cure.)
+  if (url.origin !== location.origin) return;
   // Never cache API calls — quotes and jobs must always be live.
   if (url.pathname.startsWith('/api/') || e.request.method !== 'GET') return;
   // v27: documents / navigations are NETWORK-FIRST. A returning visitor (or a

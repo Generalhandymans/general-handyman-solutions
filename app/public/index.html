@@ -5324,6 +5324,7 @@ function cartJoinToggled(){
 // loading / load-failed with Try again — reserving "still being
 // connected" for a server that genuinely reports no key.
 let cartStripeState = 'idle'; // idle | loading | ready | unconfigured | failed
+let cartStripeFailStage = ''; // v80.1: CFG | JS | INIT — WHICH stage died (painted as a small ref: code in the error box)
 let stripeJsPromise = null;
 function loadStripeJsOnce(timeoutMs){
   return new Promise(function(resolve){
@@ -5357,29 +5358,50 @@ function paintCartPayState(){
   const host = document.getElementById('cartPayElement'); if (!host) return;
   if (cartElements) return; // a mounted Payment Element owns the box
   if (cartStripeState === 'loading') host.innerHTML = '<p class="mut" style="padding:10px 2px">⏳ Loading secure payment… · Cargando pago seguro…</p>';
-  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">⚠️ The secure payment form could not load — check your connection. · El formulario de pago seguro no cargó — revisa tu conexión.<div style="margin-top:8px"><button type="button" onclick="cartRetryStripe()">↻ Try again · Reintentar</button></div></div>';
+  // v80.1: the failure box carries the guaranteed door — the HOSTED
+  // Stripe page (no Stripe.js needed in this browser) — plus the
+  // retry, plus the stage ref so a real-device test reports WHICH
+  // stage failed (CFG config fetch / JS script load / INIT construct).
+  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">⚠️ The secure payment form could not load — check your connection. · El formulario de pago seguro no cargó — revisa tu conexión.<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">Pay on Stripe\'s secure page · Pagar en la página segura de Stripe</button><button type="button" onclick="cartRetryStripe()">↻ Try again · Reintentar</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#991b1b">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
 }
 function cartRetryStripe(){ cartStripeState = 'idle'; cartPrepare(); }
+// v80.1: the config fetch gets a HARD timeout. api() has none — the
+// Render-origin bisect HUNG in "Loading secure payment…" past 30 s
+// on a stalled config fetch (the retry loop below never advanced:
+// hypothesis — connection starvation, the app's long-lived SSE
+// streams against the browser's per-host connection cap on
+// HTTP/1.1; curl, on a fresh connection, always succeeded). Racing
+// the fetch against a timeout turns a stall into a retryable CFG
+// failure, never a hang.
+async function cartConfigFetch(){
+  const timeout = new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('config timeout')); }, 6000); });
+  const work = (async function(){
+    const r = await fetch('/api/stripe/config', { headers: { 'Content-Type': 'application/json' } });
+    const d = await r.json().catch(function(){ return {}; });
+    if (!r.ok) throw new Error(d.error || 'config failed');
+    return d;
+  })();
+  return Promise.race([work, timeout]);
+}
 async function cartEnsureStripe(){
   if (stripeObj) { cartStripeState = 'ready'; return 'ready'; }
-  cartStripeState = 'loading'; paintCartPayState();
+  cartStripeState = 'loading'; cartStripeFailStage = ''; paintCartPayState();
   for (let attempt = 0; attempt < 3; attempt++) {
     let cfg = null;
-    try { cfg = await api('/api/stripe/config'); } catch (e) { cfg = null; }
+    try { cfg = await cartConfigFetch(); } catch (e) { cfg = null; }
     if (cfg) {
       // The server ANSWERED: an empty key is a genuine "not connected"
       // (no retry — it is a fact, not a hiccup); a real key moves on to
       // the script load, which retries on its own loop.
       if (!cfg.publishableKey) { cartStripeState = 'unconfigured'; return 'unconfigured'; }
-      if (await loadStripeJs()) {
-        try { stripeObj = Stripe(cfg.publishableKey); } catch (e) { stripeObj = null; }
-        if (stripeObj) { cartStripeState = 'ready'; return 'ready'; }
-      }
-      cartStripeState = 'failed'; paintCartPayState(); return 'failed';
+      if (!(await loadStripeJs())) { cartStripeFailStage = 'JS'; cartStripeState = 'failed'; paintCartPayState(); return 'failed'; }
+      try { stripeObj = Stripe(cfg.publishableKey); } catch (e) { stripeObj = null; }
+      if (stripeObj) { cartStripeState = 'ready'; return 'ready'; }
+      cartStripeFailStage = 'INIT'; cartStripeState = 'failed'; paintCartPayState(); return 'failed';
     }
     if (attempt < 2) await new Promise(function(r){ setTimeout(r, 700 * (attempt + 1)); });
   }
-  cartStripeState = 'failed'; paintCartPayState(); return 'failed';
+  cartStripeFailStage = 'CFG'; cartStripeState = 'failed'; paintCartPayState(); return 'failed';
 }
 function cartMountPayment(clientSecret){
   const host = document.getElementById('cartPayElement'); if (!host) return;
@@ -5436,6 +5458,62 @@ function applyRecoveredCart(){
   host.innerHTML = '';
   openCart();
 }
+// v80.1: ONE payload builder + validator for both cart money rails —
+// the embedded Payment Element (cartPrepare) and the hosted escape
+// hatch (cartPayHosted) send the server the very same shape, so the
+// two doors can never drift apart.
+function cartBuildPayload(items){
+  const payload = {
+    items: (items || []).map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; }),
+    address: document.getElementById('ccAddress').value.trim(),
+    city: document.getElementById('ccCity').value.trim(),
+    when: cartWhenVal + (document.getElementById('ccWhenText').value.trim() ? ' · ' + document.getElementById('ccWhenText').value.trim() : ''),
+    notes: document.getElementById('ccNotes').value.trim()
+  };
+  if (!me) {
+    payload.name = document.getElementById('ccName').value.trim();
+    payload.email = document.getElementById('ccEmail').value.trim();
+    payload.phone = document.getElementById('ccPhone').value.trim();
+    payload.password = document.getElementById('ccPass').value;
+  }
+  return payload;
+}
+function cartValidatePayload(payload){
+  if (!payload.address) return 'Enter the service address — where the technician will do the work.';
+  if (!me) {
+    if (!payload.name || !/.+@.+\..+/.test(payload.email)) return 'Add your name and a valid email — your account is created with this step.';
+    if (!payload.password || payload.password.length < 8) return 'Create a password of 8+ characters (or enter your account password).';
+  }
+  return '';
+}
+// v80.1: the hosted escape hatch, one tap from the failure box (and
+// safe to call any time): the server builds the SAME pending checkout
+// and returns a Stripe-hosted session URL — the browser simply goes
+// there. No Stripe.js is involved on this device at all.
+async function cartPayHosted(){
+  if (cartBusy) return;
+  cartShowErr('');
+  const items = cartLoad();
+  if (!items.length) return;
+  const payload = cartBuildPayload(items);
+  const perr = cartValidatePayload(payload);
+  if (perr) { cartShowErr(perr); return; }
+  const joinEl = document.getElementById('ccJoin');
+  const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
+  const btn = document.getElementById('cartPayBtn');
+  cartBusy = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Opening secure checkout…'; }
+  try {
+    const resp = await api('/api/cart/checkout-hosted', { method: 'POST', body: JSON.stringify(Object.assign({ step: joinOn ? 'join' : 'pay', joinedMembership: cartJoinedOnce, source: campaignSource(), lang: (function(){ try { return localStorage.getItem('ghsMenuLang') || 'en'; } catch (e) { return 'en'; } })() }, payload)) });
+    if (resp.user) { me = resp.user; const acct = document.getElementById('ccAcct'); if (acct) acct.style.display = 'none'; cartPaintOffer(); }
+    if (!resp.url) throw new Error('payment service error — try again in a minute');
+    location.href = resp.url;
+  } catch (e) {
+    if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap the button again to continue.'; }
+    cartShowErr(e.message);
+    if (btn) { btn.disabled = false; btn.textContent = 'Pay'; }
+  } finally { cartBusy = false; }
+}
 async function cartPrepare(){
   if (cartBusy) return;
   cartShowErr('');
@@ -5454,22 +5532,9 @@ async function cartPrepare(){
     if (cst80 !== 'ready') { cartShowErr(''); if (btn) { btn.disabled = false; btn.textContent = 'Pay'; } return; }
     const joinEl = document.getElementById('ccJoin');
     const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
-    const payload = {
-      items: items.map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; }),
-      address: document.getElementById('ccAddress').value.trim(),
-      city: document.getElementById('ccCity').value.trim(),
-      when: cartWhenVal + (document.getElementById('ccWhenText').value.trim() ? ' · ' + document.getElementById('ccWhenText').value.trim() : ''),
-      notes: document.getElementById('ccNotes').value.trim()
-    };
-    if (!payload.address) throw new Error('Enter the service address — where the technician will do the work.');
-    if (!me) {
-      payload.name = document.getElementById('ccName').value.trim();
-      payload.email = document.getElementById('ccEmail').value.trim();
-      payload.phone = document.getElementById('ccPhone').value.trim();
-      payload.password = document.getElementById('ccPass').value;
-      if (!payload.name || !/.+@.+\..+/.test(payload.email)) throw new Error('Add your name and a valid email — your account is created with this step.');
-      if (!payload.password || payload.password.length < 8) throw new Error('Create a password of 8+ characters (or enter your account password).');
-    }
+    const payload = cartBuildPayload(items);
+    const perr = cartValidatePayload(payload);
+    if (perr) throw new Error(perr);
     const resp = await api('/api/cart/checkout', { method: 'POST', body: JSON.stringify(Object.assign({ step: joinOn ? 'join' : 'pay', joinedMembership: cartJoinedOnce, source: campaignSource() }, payload)) });
     if (resp.user) {
       me = resp.user;
@@ -5543,6 +5608,36 @@ function cartOnPaid(requestId){
   }
 }
 try { paintCartBtn(); } catch (e) {}
+// ---------- v80.1: hosted checkout return ----------
+// Stripe sends the customer back to /?cartPaid=1&session_id=…#cart
+// (or ?cartCancelled=1#cart). The flags alone book NOTHING: the
+// session id goes to the confirm endpoint, which verifies it against
+// Stripe server-side before any order exists (the webhooks settle
+// identically if this call never lands). On success the SAME
+// cartOnPaid panel the embedded flow uses closes the loop.
+async function cartHostedReturn(){
+  let qs = null;
+  try { qs = new URLSearchParams(location.search || ''); } catch (e) { return; }
+  const sid = qs.get('session_id') || '';
+  const cancelled = qs.get('cartCancelled') === '1';
+  if (!sid && !cancelled) return;
+  try { history.replaceState(null, '', location.pathname + '#cart'); } catch (e) { try { location.hash = '#cart'; } catch (e2) {} }
+  if (cancelled) { cartToast('Checkout cancelled — your cart is intact · Pago cancelado — tu carrito sigue intacto'); return; }
+  try { renderCart(); } catch (e) {}
+  try {
+    const done = await api('/api/cart/checkout-hosted-confirm', { method: 'POST', body: JSON.stringify({ sessionId: sid }) });
+    if (done && done.requestId) {
+      if (done.joined) cartJoinedOnce = true;
+      cartPayCtx = { phase: 'pay', deposit: done.deposit, balance: done.balance, checkoutId: '' };
+      cartOnPaid(done.requestId);
+      return;
+    }
+    throw new Error('unverified');
+  } catch (e) {
+    cartToast('If your payment went through, your booking is confirmed — sign in to see it in your orders. · Si tu pago pasó, tu reserva está confirmada — entra a tu cuenta para verla en tus órdenes.');
+  }
+}
+try { cartHostedReturn(); } catch (e) {}
 
 // ---------- Solicitud Profesional + in-app Menu (added 2026-10-23, v42) ----------
 // The plain one-long-form request is now a 4-step wizard (progress bar,

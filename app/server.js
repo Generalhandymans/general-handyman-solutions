@@ -1377,7 +1377,7 @@ async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
   // page EXCEPT the HomeCare membership. Added as a second line item.
-  const tipCents = (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus' || kind === 'cart-join' || kind === 'estimate-hold') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
+  const tipCents = (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus' || kind === 'cart-join' || kind === 'estimate-hold' || kind === 'cart-checkout-hosted' || kind === 'cart-checkout-join') ? 0 : Math.max(0, Math.round(Number(opts.tipCents) || 0));
   const params = {
     success_url: appBase() + '/payment/success?session_id={CHECKOUT_SESSION_ID}',
     cancel_url: appBase() + '/payment/cancelled',
@@ -1494,6 +1494,53 @@ async function createCheckoutSession(kind, user, opts) {
     params['payment_intent_data[metadata][kind]'] = 'cart-order';
     params['payment_intent_data[metadata][cartId]'] = opts.cartId || '';
     params['payment_intent_data[metadata][payStep]'] = opts.payStep || '';
+  } else if (kind === 'cart-checkout-hosted') {
+    // v80.1: the self-serve cart's HOSTED escape hatch — the SAME
+    // booking deposit the embedded Payment Element would charge, on a
+    // Stripe-hosted page (no Stripe.js needed in the customer's
+    // browser — the door that already works for Gabriel's cart links,
+    // Brijesh paid through it). Session metadata names the pending
+    // checkout (db.cartCheckouts); the PI carries the same metadata so
+    // the payment_intent.succeeded webhook reconciles too. The order
+    // is born ONLY at verified settle (settleHostedCartSession) —
+    // P0-4 discipline is untouched.
+    params.mode = 'payment';
+    params['line_items[0][price_data][currency]'] = 'usd';
+    params['line_items[0][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[0][price_data][product_data][name]'] = opts.label || 'Cart order — booking deposit — General Handyman Solutions';
+    params['line_items[0][quantity]'] = '1';
+    params['metadata[checkoutId]'] = opts.checkoutId || '';
+    params['payment_intent_data[metadata][kind]'] = 'cart-checkout-hosted';
+    params['payment_intent_data[metadata][checkoutId]'] = opts.checkoutId || '';
+    params['payment_intent_data[metadata][userId]'] = user.id;
+  } else if (kind === 'cart-checkout-join') {
+    // v80.1: the self-serve JOIN case, FIRST-CLASS (Gabriel
+    // 2026-10-25 23:12) — the v70 single-session design applied to
+    // the in-app cart: the HomeCare plan (recurring price) and the
+    // order's booking DEPOSIT (one-time line, charged TODAY) ride ONE
+    // subscription-mode session, so the customer becomes a member AND
+    // books the job in a single hosted pass, at member totals. The
+    // v74 free month defers ONLY the plan — the caller passes
+    // trialDays ONLY for a trial-eligible account and the shared
+    // trial write site below applies it; the deposit charges today.
+    // Session + subscription metadata name the pending checkout so
+    // the settle path can activate the membership and birth the
+    // DEPOSIT-state order together.
+    const plan = MEMBERSHIP_PLANS[opts.plan];
+    if (!plan) throw new Error('unknown membership plan');
+    params.mode = 'subscription';
+    params['line_items[0][price]'] = await membershipPriceIdFor(plan);
+    params['line_items[0][quantity]'] = '1';
+    params['line_items[1][price_data][currency]'] = 'usd';
+    params['line_items[1][price_data][unit_amount]'] = String(opts.amountCents);
+    params['line_items[1][price_data][product_data][name]'] = opts.label || 'booking deposit — General Handyman Solutions';
+    params['line_items[1][quantity]'] = '1';
+    params['metadata[checkoutId]'] = opts.checkoutId || '';
+    params['metadata[plan]'] = plan.key;
+    params['subscription_data[metadata][userId]'] = user.id;
+    params['subscription_data[metadata][kind]'] = plan.kind;
+    params['subscription_data[metadata][plan]'] = plan.key;
+    params['subscription_data[metadata][checkoutId]'] = opts.checkoutId || '';
   } else if (kind === 'invoice') {
     // One-time invoice payment: the payer may not have an app account (the
     // invoice carries customerEmail directly), so user fields are optional.
@@ -1772,6 +1819,51 @@ function settleCartCheckout(pc, pi) {
   emitRequestNew(r);
   fireAutomation('new_request', requestAutomationPayload(r));
   return r;
+}
+// ---------- v80.1: hosted settle for the self-serve cart ----------
+// ONE settlement path for a landed HOSTED cart session — the return
+// confirm endpoint, the checkout.session.completed webhook and (for
+// the pay-only kind) the payment_intent.succeeded webhook all
+// reconcile through here and through settleCartCheckout's own
+// idempotence, so the order is born exactly once, only from money
+// Stripe verified. Verification discipline mirrors the embedded
+// confirm endpoint: the session must be the very one stamped on the
+// pending checkout at creation, Stripe must report it paid, and the
+// amount Stripe actually collected must equal the expectation
+// stamped on the snapshot (the deposit for a pay session; deposit +
+// first plan charge for a join session — $0 plan charge under the
+// v74 free-month trial).
+//
+// THE JOIN CASE, step by step (Gabriel 2026-10-25 23:12 — one clean
+// pass: join HomeCare + pay the deposit in the same flow):
+//   1. At creation the order was priced at MEMBER totals (the
+//      membership activates inside this same session) and the
+//      snapshot was stamped hostedKind 'join' + hostedExpectCents.
+//   2. Here — and only here, at verified settle — the membership
+//      activates FIRST through the shared activator
+//      (activateMembershipFromCheckout, the same one Gabriel's
+//      cart-join sessions use). The v74 free month is marked spent
+//      THERE, at activation, from the session's freeMonth metadata
+//      flag — never at session creation: an abandoned hosted join
+//      spends nothing.
+//   3. The order is then born through settleCartCheckout with the
+//      DEPOSIT leg recorded (depositSplit of the member totals), in
+//      DEPOSIT state, its balance collectible by the existing
+//      /api/orders/pay rails — identical to an embedded payment.
+function settleHostedCartSession(pc, sess) {
+  if (!pc || !sess) return null;
+  if (pc.superseded) return null; // a replaced checkout NEVER settles
+  if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
+  if (!pc.hostedSessionId || sess.id !== pc.hostedSessionId) return null;
+  if (sess.payment_status !== 'paid') return null;
+  const got = Math.round(Number(sess.amount_total) || 0);
+  if (got !== Math.round(Number(pc.hostedExpectCents) || 0)) return null;
+  if (pc.hostedKind === 'join') {
+    const u = db.users.find(x => x.id === pc.userId);
+    if (u) activateMembershipFromCheckout(u, sess);
+  }
+  const depC = depositSplit(Math.round(Number(pc.totals.due) * 100)).depositCents;
+  return settleCartCheckout(pc, { id: sess.payment_intent || '', amount_received: depC, amount: depC });
 }
 // ---------- Admin carts (v44, DISENO-PAGO-COMPLETO) ----------
 // Gabriel builds a cart from the menu in the admin ("meter las 2 cosas al
@@ -2413,6 +2505,16 @@ async function handleStripeEvent(event) {
       }
       return;
     }
+    // v80.1: the self-serve cart's HOSTED sessions (escape hatch +
+    // hosted join) settle here too — filed before the user lookup
+    // because the shared settle helper resolves the account itself
+    // for the join activation. Idempotent with the return-confirm
+    // endpoint and (pay kind) the payment_intent.succeeded branch.
+    if (kind === 'cart-checkout-hosted' || kind === 'cart-checkout-join') {
+      const pc = cartCheckoutsOf().find(x => x.id === (obj.metadata && obj.metadata.checkoutId));
+      if (pc && obj.payment_status === 'paid') { if (settleHostedCartSession(pc, obj)) save(); }
+      return;
+    }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
     if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
     if (kind === 'homecare') {
@@ -2568,17 +2670,20 @@ async function handleStripeEvent(event) {
     // v44 pay-in-full PIs (menu orders + admin carts): the confirm
     // endpoints record these synchronously; this webhook is the backup
     // and reconciles idempotently if a confirm call never landed.
-    if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order' || obj.metadata.kind === 'cart-checkout')) {
+    if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order' || obj.metadata.kind === 'cart-checkout' || obj.metadata.kind === 'cart-checkout-hosted')) {
       if (obj.metadata.kind === 'menu-order' && obj.metadata.requestId) {
         const r = db.requests.find(x => x.id === obj.metadata.requestId);
         if (r) { if (r.payment && r.payment.status === 'deposit') settleRequestBalance(r, obj.id, Number(obj.amount_received || obj.amount) || 0); else recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' }); }
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
         if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
-      } else if (obj.metadata.kind === 'cart-checkout' && obj.metadata.checkoutId) {
+      } else if ((obj.metadata.kind === 'cart-checkout' || obj.metadata.kind === 'cart-checkout-hosted') && obj.metadata.checkoutId) {
         // v78: the guest-cart order is born here when the in-app
         // confirm never landed (tab closed after paying) — the same
         // settleCartCheckout the confirm endpoint uses; idempotent.
+        // v80.1: a hosted pay session's PI carries kind
+        // 'cart-checkout-hosted' and reconciles through the very same
+        // door (its session-webhook + confirm twins are no-ops after).
         const pc = cartCheckoutsOf().find(x => x.id === obj.metadata.checkoutId);
         if (pc && !pc.superseded) { settleCartCheckout(pc, obj); save(); }
       }
@@ -5833,6 +5938,9 @@ const server = http.createServer(async (req, res) => {
     // its order. Settled snapshots (requestId set) are never touched.
     for (const old of cartCheckoutsOf()) {
       if (old.userId !== u.id || old.requestId || old.superseded) continue;
+      if (old.hostedSessionId) { // v80.1: a hosted snapshot is superseded by EXPIRING its session (a completed one stays settleable, same doctrine)
+        try { const ex = await stripeApi('/checkout/sessions/' + encodeURIComponent(old.hostedSessionId) + '/expire', {}); if (ex && ex.status === 'expired') { old.superseded = true; continue; } } catch (e) { /* already complete: stays settleable */ }
+      }
       if (!old.pi) { old.superseded = true; continue; }
       try { const cxl = await stripeApi('/payment_intents/' + old.pi + '/cancel', {}); if (cxl && cxl.status === 'canceled') old.superseded = true; } catch (e) { /* un-cancelable (already succeeded): stays settleable */ }
     }
@@ -5873,6 +5981,129 @@ const server = http.createServer(async (req, res) => {
       save();
       return send(res, 200, { ok: true, requestId: r.id });
     } catch (e) { console.error('cart checkout confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
+  }
+  // ---------- v80.1: HOSTED escape hatch for the self-serve cart ----------
+  // The embedded Payment Element never mounted in real browsers (the
+  // v80 phone failure — see V80.1-PARCHE): this door moves the SAME
+  // checkout onto a Stripe-hosted page, the rails that already carry
+  // real money for Gabriel's cart links. Account resolution, pricing
+  // and the pending-checkout snapshot mirror /api/cart/checkout
+  // exactly; the only difference is the money rail (a hosted session
+  // instead of a PaymentIntent) and the settle entry point
+  // (settleHostedCartSession). P0-4 is untouched: NO order exists
+  // until a verified settle.
+  if (p === '/api/cart/checkout-hosted' && req.method === 'POST') {
+    const b = await readBody(req);
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
+    if (!Array.isArray(b.items) || !b.items.length) return send(res, 400, { error: 'your cart is empty — add a service first' });
+    if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot check out' }); // v79 P0-2 family
+    // --- account resolution — identical to /api/cart/checkout ---
+    let u = user;
+    let setCookie = '';
+    if (!u) {
+      const email = cleanText(b.email, 160).toLowerCase();
+      if (!/.+@.+\..+/.test(email)) return send(res, 400, { error: 'valid email required' });
+      const existing = db.users.find(x => (x.email || '').toLowerCase() === email);
+      if (existing) {
+        const blocked = loginBlockedSecs(req, email);
+        if (blocked > 0) return send(res, 429, { error: 'too many failed attempts — try again in ' + Math.ceil(blocked / 60) + ' minute(s)' });
+        let pwOk = false;
+        try { pwOk = !!existing.pw && checkPw(String(b.password || ''), existing.pw); } catch (e) { pwOk = false; }
+        if (!pwOk) { noteLoginFailure(req, email); return send(res, 409, { error: 'That email already has an account — enter your account password to continue.', code: 'ACCOUNT_EXISTS' }); }
+        u = existing;
+      } else {
+        const name = cleanText(b.name, 80);
+        if (!name) return send(res, 400, { error: 'name required' });
+        if (!b.password || String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
+        const hf = homeFieldsFrom(Object.assign({}, b, { homeNotes: b.notes || b.homeNotes || '' }));
+        u = { id: id('USR'), name, email, phone: cleanText(b.phone, 40), serviceAddress: cleanText(b.address, 300), zipCode: hf.zipCode, homeType: hf.homeType, yardSize: hf.yardSize, homeNotes: hf.homeNotes, startPreference: cleanStartPreference(b.startPreference), role: 'customer', status: 'active', skills: [], vehicle: '', profile: {}, tradeSkills: {}, availability: null, pw: hashPw(String(b.password)), createdAt: new Date().toISOString() };
+        db.users.push(u);
+        claimOrphanRecords(u); // v80 P1-1 parity: an account born at checkout claims the guest history under its email
+        save();
+      }
+      setCookie = sessionCookie(newSession(u), req);
+    }
+    stampUserSource(u, b); // v79 P0-7
+    if (!['customer', 'admin'].includes(u.role)) return send(res, 400, { error: 'this account cannot check out as a customer' });
+    const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
+    if (!serverCartTotals(b.items, u.homeCareStatus === 'active')) return send(res, 400, { error: 'cart has an item we could not price' });
+    { const snap80 = recoverySnapshot(b.items); if (snap80) upsertRecoverableCart(u.email, snap80); } // v80 A-7 parity
+    const joinOn = b.step === 'join';
+    if (joinOn && u.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
+    // Pricing parity with the embedded path: a JOIN prices the order
+    // at MEMBER totals because the membership activates inside the
+    // same session (v70 design); a plain pay uses the account's
+    // verified member state. Amounts are always server-derived.
+    const isMem = joinOn ? true : u.homeCareStatus === 'active';
+    const t = serverCartTotals(b.items, isMem);
+    if (!t) return send(res, 400, { error: 'cart has an item we could not price' });
+    const names = {};
+    for (const raw of (Array.isArray(b.items) ? b.items : [])) { const sid = cleanText(raw && raw.serviceId, 60); if (sid) names[sid] = cleanText(raw && raw.name, 80); }
+    const splitH = depositSplit(Math.round(t.due * 100));
+    const pc = {
+      id: id('CCK'), userId: u.id, pi: '', requestId: '',
+      customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
+      address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
+      isMember: isMem, joinedMembership: joinOn ? true : (!!b.joinedMembership && isMem), source: u.source || null,
+      items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
+      totals: { list: t.list, member: t.member, due: t.due, deposit: splitH.depositCents / 100, balance: splitH.balanceCents / 100 },
+      hostedKind: joinOn ? 'join' : 'pay', hostedSessionId: '', hostedExpectCents: 0,
+      createdAt: new Date().toISOString()
+    };
+    // Supersede the user's earlier unsettled checkouts — the v78
+    // doctrine extended to hosted snapshots: cancel their PIs AND
+    // expire their hosted sessions. A payment that already landed
+    // cannot be canceled/expired, so its snapshot stays settleable
+    // ON PURPOSE (the customer did pay it).
+    for (const old of cartCheckoutsOf()) {
+      if (old.userId !== u.id || old.requestId || old.superseded) continue;
+      if (old.hostedSessionId) {
+        try { const ex = await stripeApi('/checkout/sessions/' + encodeURIComponent(old.hostedSessionId) + '/expire', {}); if (ex && ex.status === 'expired') { old.superseded = true; continue; } } catch (e) { /* already complete: stays settleable */ }
+      }
+      if (!old.pi) { old.superseded = true; continue; }
+      try { const cxl = await stripeApi('/payment_intents/' + old.pi + '/cancel', {}); if (cxl && cxl.status === 'canceled') old.superseded = true; } catch (e) { /* un-cancelable (already succeeded): stays settleable */ }
+    }
+    cartCheckoutsOf().push(pc);
+    save();
+    try {
+      const retOk = appBase() + '/?cartPaid=1&session_id={CHECKOUT_SESSION_ID}#cart';
+      const retCancel = appBase() + '/?cartCancelled=1#cart';
+      let s;
+      if (joinOn) {
+        const plan = MEMBERSHIP_PLANS.homecare;
+        const trial = homeCareTrialEligible(u); // v74: same eligibility gate as every other join rail
+        pc.hostedExpectCents = splitH.depositCents + (trial ? 0 : plan.monthlyCents);
+        s = await createCheckoutSession('cart-checkout-join', u, { plan: plan.key, amountCents: splitH.depositCents, checkoutId: pc.id, trialDays: trial ? INVITE_TRIAL_DAYS : 0, lang: b.lang, label: 'Cart order — booking deposit — General Handyman Solutions', successUrl: retOk, cancelUrl: retCancel });
+      } else {
+        pc.hostedExpectCents = splitH.depositCents;
+        s = await createCheckoutSession('cart-checkout-hosted', u, { amountCents: splitH.depositCents, checkoutId: pc.id, lang: b.lang, label: 'Cart order — booking deposit — General Handyman Solutions', successUrl: retOk, cancelUrl: retCancel });
+      }
+      pc.hostedSessionId = s.id;
+      save();
+      return send(res, 200, { step: joinOn ? 'join' : 'pay', hosted: true, url: s.url, checkoutId: pc.id, totals: pc.totals, user: pubUser(u) }, cookieHdr);
+    } catch (e) { console.error('cart hosted checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+  }
+  if (p === '/api/cart/checkout-hosted-confirm' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const sid = cleanText(b.sessionId, 200);
+    if (!sid) return send(res, 400, { error: 'sessionId required' });
+    if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet' });
+    try {
+      const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(sid));
+      const skind = sess && sess.metadata && sess.metadata.kind;
+      if (!sess || (skind !== 'cart-checkout-hosted' && skind !== 'cart-checkout-join')) return send(res, 400, { error: 'session is not a cart checkout' });
+      const pc = cartCheckoutsOf().find(x => x.id === (sess.metadata && sess.metadata.checkoutId));
+      if (!pc) return send(res, 404, { error: 'checkout not found' });
+      if (!(user.role === 'admin' || pc.userId === user.id)) return send(res, 403, { error: 'not allowed' });
+      if (pc.requestId) return send(res, 200, { ok: true, requestId: pc.requestId, already: true, deposit: pc.totals.deposit, balance: pc.totals.balance, joined: !!pc.joinedMembership });
+      if (pc.superseded) return send(res, 400, { error: 'this checkout was replaced by a newer one — use the latest payment form' });
+      if (sess.payment_status !== 'paid') return send(res, 400, { error: 'the payment has not completed yet' });
+      const r = settleHostedCartSession(pc, sess);
+      if (!r) return send(res, 400, { error: 'payment does not match this checkout' });
+      save();
+      return send(res, 200, { ok: true, requestId: r.id, deposit: pc.totals.deposit, balance: pc.totals.balance, joined: !!pc.joinedMembership });
+    } catch (e) { console.error('cart hosted confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if your card was charged, the Team will link it to your order shortly' }); }
   }
   // ---------- Menu-order payment (inline, v44 — pay in full) ----------
   // The checkout's payment step: the customer enters their card ONCE in
