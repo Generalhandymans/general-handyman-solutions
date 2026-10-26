@@ -21,9 +21,9 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#a49d93;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8}
+:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#b5aea2;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
-header{background:#0b0b0b;color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+header{background:#0b0b0b;color:#fff;padding:10px 18px;display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
 header b{font-size:20px;letter-spacing:.02em;text-transform:uppercase} header b em{color:var(--red);font-style:normal}
 .wrap{max-width:880px;margin:0 auto;padding:18px}
 .card{border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
@@ -260,12 +260,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 <body>
 <div style="background:#000;text-align:center;padding:16px 16px 6px"><img src="/logo-header.png" alt="General Handyman Solutions" style="width:min(580px,94%);height:auto"></div>
 <header>
-  <b>General <em>Handyman</em> Solutions</b>
   <span style="display:flex;align-items:center;gap:10px">
     <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app">Inicio</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menú</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e42535;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
-    <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔔</button>
+    <button id="soundBtn" onclick="toggleSoundMute()" title="Notification sound on/off" style="background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px">🔊</button>
     <span id="who" class="mut" style="color:#ccc"></span>
   </span>
 </header>
@@ -337,8 +336,6 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="pick multi" id="wSkills">
         <button type="button" data-v="General handyman" data-w="skGeneral">General handyman</button><button type="button" data-v="Carpentry" data-w="skCarpentry">Carpentry</button><button type="button" data-v="Paint & drywall" data-w="skPaint">Paint &amp; drywall</button><button type="button" data-v="Electrical swaps" data-w="skElectrical">Electrical swaps</button><button type="button" data-v="Plumbing help" data-w="skPlumbing">Plumbing help</button><button type="button" data-v="Mobile mechanic" data-w="skMechanic">Mobile mechanic</button><button type="button" data-v="Installs & assembly" data-w="skInstalls">Installs &amp; assembly</button><button type="button" data-v="Landscaping / yard" data-w="skYard">Landscaping / yard</button>
       </div>
-      <label data-w="selfRateLabel">Rate yourself 1&ndash;10 in each skill <span class="mut">(10 = pro level, 1 = beginner)</span></label>
-      <div id="wSelfRate"></div>
       <label data-w="tradesAppLabel">Tus oficios — tu nivel en cada uno / Your trades — your level in each <span class="mut">(1 = no sabe nada / knows nothing · 3 = bueno, trabaja solo / good, works solo · 5 = master) — y marca si tienes la herramienta / and check if you have the tools</span></label>
       <div id="wTrades">
         <div class="trade-row"><span class="trade-name" data-wt="handyman">Handyman (general)</span><select id="ts-level-handyman"><option value="">—</option><option value="1" data-w="lvl1">1 — Nada / Nothing</option><option value="2" data-w="lvl2">2 — Ayudante / Helper</option><option value="3" data-w="lvl3">3 — Bueno / Good</option><option value="4" data-w="lvl4">4 — Avanzado / Advanced</option><option value="5" data-w="lvl5">5 — Master</option></select><label class="trade-tools"><input type="checkbox" id="ts-tools-handyman"> <span data-w="toolsFlag">🔧 Herramienta / Tools</span></label></div>
@@ -355,14 +352,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       </div>
       <div class="row">
         <div><label data-w="expLabel">Experience</label><select id="wExp"><option value="Less than 1 year" data-w="expLt1">Less than 1 year</option><option value="1–2 years" data-w="exp12">1–2 years</option><option value="3–5 years" data-w="exp35">3–5 years</option><option value="5+ years" data-w="exp5p">5+ years</option></select></div>
-        <div><label data-w="toolsLevelLabel">Tools level</label><select id="wTools"><option value="Full tools" data-w="toolsFull">Full tools</option><option value="Some tools" data-w="toolsSome">Some tools</option><option value="No tools yet" data-w="toolsNone">No tools yet</option></select></div>
       </div>
       <div class="row">
         <div><label data-w="vehicleLabel">Vehicle style</label><select id="wVehicle"><option value="Pickup truck" data-w="vehPickup">Pickup truck</option><option value="Work van" data-w="vehVan">Work van</option><option value="SUV" data-w="vehSuv">SUV</option><option value="Sedan/hatchback" data-w="vehSedan">Sedan/hatchback</option><option value="E-bike" data-w="vehEbike">E-bike</option><option value="No vehicle / need a ride" data-w="vehNone">No vehicle / need a ride</option><option value="Other" data-w="vehOther">Other</option></select></div>
         <div><label data-w="haulLabel">Can your vehicle haul materials?</label><select id="wHaul"><option value="Yes — truck/van/trailer loads" data-w="haulYes">Yes — truck/van/trailer loads</option><option value="Small materials only" data-w="haulSmall">Small materials only</option><option value="No hauling" data-w="haulNo">No hauling</option><option value="Not applicable" data-w="haulNa">Not applicable</option></select></div>
       </div>
       <div class="row">
-        <div><label data-w="transportLabel">Transportation</label><select id="wTransport"><option value="Own truck/car" data-w="trOwn">Own truck/car</option><option value="E-bike / rideshare" data-w="trEbike">E-bike / rideshare</option><option value="Need a ride" data-w="trRide">Need a ride</option></select></div>
         <div><label data-w="licenseLabel">License / ID</label><select id="wLicense"><option value="Driver license" data-w="licDriver">Driver license</option><option value="State ID only" data-w="licId">State ID only</option><option value="Working on it" data-w="licWorking">Working on it</option></select></div>
       </div>
       <div class="row">
@@ -391,16 +386,16 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div id="workerRescueRow" style="display:none;margin-top:10px">
       <button type="button" class="ghost" data-w="rescueBtn" onclick="forgotPassword();return false;" style="width:100%;padding:13px;font-weight:800;font-size:15px">¿Primera vez o no recuerdas tu contraseña? Toca aquí</button>
       <p class="mut" data-w="rescueNote" style="text-align:center;margin-top:6px">First time or forgot your password? Tap the button — we email you a link to set it. Type your email above first.</p>
+      <p class="mut" data-w="rescueNoEmail" style="text-align:center;margin-top:2px">No access to that email anymore? Call or text the Team: (707) 862-3773</p>
     </div>
-    <p class="mut">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
-    <p class="mut" id="authHint">Customers: no account needed to request a quote — just send it and we reply by email. Create an account if you want to track jobs, pay invoices online, or join HomeCare. Workers: your account is created automatically at signup — just pick a password. Jobs unlock only after the Team reviews and activates you.</p>
+    <p class="mut" id="loginOnlyNote">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
+    <p class="mut" id="authHint">No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.</p>
     <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e42535;border-radius:12px;background:#fff5f5">
       <b>Join HomeCare — $29/mo</b><br>
       <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
       <button onclick="joinHomeCare()" style="margin-top:10px;background:#e42535;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%">Join now — $29/mo</button>
       <button class="ghost" onclick="location.hash='#memberships'" style="margin-top:8px;width:100%">Compare all memberships — Yard Care &amp; HomeCare Plus</button>
     </div>
-    <p class="mut" id="workerLinkRow" style="text-align:center;margin-top:12px"><span data-w="workerLinkQ">Are you a General Handyman Solutions technician?</span> <a href="#worker" data-w="loginHere">Log in here →</a></p>
     <p class="mut" id="custLinkRow" style="text-align:center;margin-top:12px;display:none"><span data-w="custLinkQ">Are you a customer?</span> <a href="#" data-w="loginHere" onclick="try{localStorage.removeItem('ghs_entry')}catch(e){};location.hash='';applyWorkerEntry();return false;">Log in here →</a></p>
   </div>
 
@@ -851,12 +846,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 data-w="openJobs" style="margin:0">Open job offers</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="workerLangEnW" onclick="setWorkerLang('en')">EN</button><button type="button" id="workerLangEsW" onclick="setWorkerLang('es')">ES</button></span></div>
     <p class="mut" id="workerStatus"></p>
     <div id="workerLocLine" style="margin:6px 0"></div>
+    <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
+    <div id="jobList"></div>
     <div id="workerSkillBanner"></div>
     <div id="workerProfile"></div>
     <div id="workerPayouts"></div>
     <div id="workerCaptain" style="display:none"></div>
-    <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
-    <div id="jobList"></div>
     <h2 data-w="yardVisitsTitle">My yard visits</h2>
     <p class="mut" data-w="yardIntro">Yard visits the Team assigns to you — the address appears here once you are assigned. To finish a visit you need a BEFORE photo and an AFTER photo.</p>
     <div id="workerYardVisits"></div>
@@ -866,17 +861,18 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
     <h2>Team — control center</h2>
+    <p id="admNav" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px"><button type="button" class="ghost" onclick="admGo('admSecRequests')">Requests</button><button type="button" class="ghost" onclick="admGo('admSecCart')">Cart</button><button type="button" class="ghost" onclick="admGo('admSecWorkers')">Workers</button><button type="button" class="ghost" onclick="admGo('admSecCaptains')">Captains</button><button type="button" class="ghost" onclick="admGo('admSecCreateJob')">Create job</button><button type="button" class="ghost" onclick="admGo('admSecJobs')">Jobs</button><button type="button" class="ghost" onclick="admGo('admSecRatings')">Ratings</button><button type="button" class="ghost" onclick="admGo('admSecInvoices')">Invoices</button><button type="button" class="ghost" onclick="admGo('admSecCalendar')">Calendar</button></p>
     <p><button class="ghost" onclick="location.hash='#yard-calendar'">Yard Calendar — schedule member yard visits</button> <span class="mut">separate from the master calendar below</span></p>
-    <h3>Master calendar</h3>
+    <h3 id="admSecCalendar">Master calendar</h3>
     <div class="card">
       <div class="cal-head"><button class="ghost" onclick="calMove(-1)">&#8249;</button><b id="calTitle"></b><button class="ghost" onclick="calMove(1)">&#8250;</button><button class="ghost" onclick="calToday()">Today</button></div>
       <div class="cal-grid" id="calGrid"></div>
       <div id="calDay"></div>
     </div>
-    <h3>Customer requests (send quotes)</h3>
+    <h3 id="admSecRequests">Customer requests (send quotes)</h3>
     <div class="card" style="margin-bottom:10px"><b>+ Nuevo estimado</b> <span class="mut">— for a customer with no request yet: create it here, then add lines from the menu / materials in its builder, preview it as the customer, and send.</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input id="neName" placeholder="Customer name" style="flex:1;min-width:140px"><input id="neEmail" placeholder="Email" style="flex:1;min-width:170px"><input id="nePhone" placeholder="Phone" style="flex:1;min-width:120px"><input id="neService" placeholder="Service / job" style="flex:2;min-width:180px"><input id="neCity" placeholder="City" style="flex:1;min-width:110px"><button type="button" class="black" onclick="newEstimate()">Create &amp; open builder</button></div><p class="mut" id="neMsg"></p></div>
     <div id="adminRequests"></div>
-    <h3>Cart — build it, send ONE link</h3>
+    <h3 id="admSecCart">Cart — build it, send ONE link</h3>
     <div class="card" id="cartBuilderCard">
       <div id="cartEditBanner" style="display:none;background:#fff4d6;border:1px solid #e3c878;border-radius:10px;padding:10px;margin-bottom:10px">✏️ <b>Editing cart <span id="cartEditWhich"></span></b> — the link does NOT change; the customer sees the updated lines and totals. <button type="button" class="ghost" onclick="cancelCartEdit()">Cancel edit</button></div>
       <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays in full.</p>
@@ -914,9 +910,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div id="inviteLinkOut" style="margin-top:8px"></div>
     </div>
     <div id="adminInvites"></div>
-    <h3>Workers (activate after review)</h3>
+    <h3 id="admSecWorkers">Workers (activate after review)</h3>
     <div id="adminWorkers"></div>
-    <h3>Capitanes — Area Captains</h3>
+    <h3 id="admSecCaptains">Capitanes — Area Captains</h3>
     <p class="mut">Un capitán por área (solo técnicos ACTIVE). El override del capitán es 5% fijo del labor cobrado, lo paga la casa — nunca sale del pago del técnico — y solo se acumula cuando el trabajo termina (Done — photos sent) con el pago capturado. Servicios de $75, junk removal y hauling/green waste no acumulan. Fairfield lo comanda El General — no se asigna.</p>
     <div id="adminCaptains"></div>
     <div id="adminMapBox"></div>
@@ -925,7 +921,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <div class="row"><div><label>Area name</label><input id="capAreaName" placeholder="e.g. Richmond"></div><div><label>Cities it covers (comma-separated)</label><input id="capAreaCities" placeholder="Richmond, El Cerrito"></div></div>
       <button class="btn alt" onclick="capCreateArea()">Create area</button>
     </div>
-    <h3>Create a job — admin only</h3>
+    <h3 id="admSecCreateJob">Create a job — admin only</h3>
     <div class="card">
       <div class="row"><div><label>Service</label><input id="jService" placeholder="TV Mounting & Installs"></div><div><label>City</label><input id="jCity" placeholder="Fairfield"></div><div><label>When</label><input id="jWhen" placeholder="Today"></div></div>
       <div class="row"><div><label>Scheduled date (shows on calendar)</label><input id="jSchedDate" type="date"></div><div><label>Scheduled time</label><input id="jSchedTime" placeholder="10:00 AM"></div></div>
@@ -936,15 +932,15 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       <label>Private notes</label><input id="jNotes">
       <label>Offer directly to one worker (optional) — si lo dejas en el board, lo ven todos los activos de la zona</label>
       <select id="jWorker"><option value="">— Open board (todos) —</option></select>
-      <div id="jCand" class="mut" style="margin:6px 0">Escribe el servicio arriba y aquí salen los mejores para ese oficio (nivel verificado o el que él dice, 🔧 = tiene herramienta, ⏸ = en pausa). / Type the service above — best matches for that trade show here.</div>
+      <div id="jCand" class="mut" style="margin:6px 0">Escribe el servicio — aquí salen los mejores para ese oficio.</div>
       <button onclick="createJob()">Post job to board</button>
       <div id="jMsg" class="mut"></div>
     </div>
-    <h3>My job offers</h3>
+    <h3 id="admSecJobs">My job offers</h3>
     <div id="adminJobs"></div>
-    <h3>Customer ratings</h3>
+    <h3 id="admSecRatings">Customer ratings</h3>
     <div id="adminRatings"></div>
-    <h3>Invoices — bill customers for finished jobs</h3>
+    <h3 id="admSecInvoices">Invoices — bill customers for finished jobs</h3>
     <div id="stripeHealth" class="mut" style="margin-bottom:8px">Checking payment connection…</div>
     <div class="card">
       <div class="row"><div><label>Customer name</label><input id="iName" placeholder="Customer full name"></div><div><label>Customer email</label><input id="iEmail" placeholder="customer@email.com"></div></div>
@@ -1051,7 +1047,7 @@ function mode(m){ curMode=m;
   const planSelRow = document.getElementById('planSelRow');
   if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare' || fbInfo) ? 'block':'none';
   const forgotRow = document.getElementById('forgotRow');
-  if (forgotRow) forgotRow.style.display = m==='login' ? 'block':'none';
+  if (forgotRow) forgotRow.style.display = (m==='login' && !isWorkerEntry()) ? 'block':'none';
   const joinAgreeRow = document.getElementById('joinAgreeRow');
   if (joinAgreeRow) joinAgreeRow.style.display = (m==='join' || m==='homecare' || fbInfo) ? 'block':'none';
   const workerAgreeRow = document.getElementById('workerAgreeRow');
@@ -1065,7 +1061,7 @@ function mode(m){ curMode=m;
   if (homeGroupEl) homeGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
   const startGroupEl = document.getElementById('startGroup');
   if (startGroupEl) startGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
-  document.getElementById('hcChargeNote').style.display = (m==='homecare' || m==='join') ? 'block':'none';
+  document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('joinChargeNote').style.display = (m==='join' || fbInfo) ? 'block':'none';
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
   syncAuthPriceTexts(m);
@@ -1086,21 +1082,18 @@ const W_I18N = {
   en: {
     workerTitle: 'Technician login', tabWorker: 'New technician application', techSignIn: '🔨 Technician sign in', workerEnter: '🔨 Log in', createAccount: 'Create account',
     authHintWorker: '<b>1.</b> Type your email &nbsp;<b>2.</b> Your password &nbsp;<b>3.</b> Tap <b>LOG IN</b> — and see the open jobs.<br><span class="mut">Use the email + password from your application. New here? Tap <b>New technician application</b> to apply — the Team reviews every application before jobs unlock.</span>',
-    rescueBtn: 'First time or forgot your password? Tap here', rescueNote: 'First time or forgot your password? Tap the button — we email you a link to set it. Type your email above first.',
-    agreeApplyPre: 'By applying you agree to the', termsLink: 'Terms & Conditions', workerLinkQ: 'Are you a General Handyman Solutions technician?', custLinkQ: 'Are you a customer?', loginHere: 'Log in here →', forgotPw: 'Forgot my password',
+    rescueBtn: 'First time or forgot your password? Tap here', rescueNote: 'First time or forgot your password? Tap the button — we email you a link to set it. Type your email above first.', rescueNoEmail: 'No access to that email anymore? Call or text the Team: (707) 862-3773',
+    agreeApplyPre: 'By applying you agree to the', termsLink: 'Terms & Conditions', custLinkQ: 'Are you a customer?', loginHere: 'Log in here →', forgotPw: 'Forgot my password',
     forgotNeedEmail: 'Type your email above first, then tap "Forgot my password".',
     applyingAs: 'Applying as', roleSkilled: 'Skilled subcontractor', roleHelper: 'Helper', cityLive: 'City you live in', areasWork: 'Areas you can work',
     skillsTap: 'Skills — tap all that apply', skGeneral: 'General handyman', skCarpentry: 'Carpentry', skPaint: 'Paint & drywall', skElectrical: 'Electrical swaps', skPlumbing: 'Plumbing help', skMechanic: 'Mobile mechanic', skInstalls: 'Installs & assembly', skYard: 'Landscaping / yard',
-    selfRateLabel: 'Rate yourself 1–10 in each skill (10 = pro level, 1 = beginner)',
     tradesAppLabel: 'Your trades — your level in each (1 = knows nothing · 3 = good, works solo · 5 = master) — and check if you have the tools',
     lvl1: '1 — Nothing', lvl2: '2 — Helper', lvl3: '3 — Good', lvl4: '4 — Advanced', lvl5: '5 — Master', toolsFlag: '🔧 Tools',
     trade_handyman: 'Handyman (general)', trade_carpentry: 'Carpentry', trade_electrical: 'Electrical', trade_plumbing: 'Plumbing', trade_gardening: 'Gardening', trade_hvac: 'HVAC', trade_mechanic: 'Mechanic',
     gearLabel: 'What do you have? — tap all that apply', gearBasic: 'Basic hand tools', gearPower: 'Power tools', gearDrill: 'Drill/driver', gearSaws: 'Saws', gearLadder: 'Ladder', gearTruckbed: 'Truck bed/toolbox', gearTrailer: 'Trailer', gearPpe: 'PPE/safety gear', gearNone: 'No tools yet',
     expLabel: 'Experience', expLt1: 'Less than 1 year', exp12: '1–2 years', exp35: '3–5 years', exp5p: '5+ years',
-    toolsLevelLabel: 'Tools level', toolsFull: 'Full tools', toolsSome: 'Some tools', toolsNone: 'No tools yet',
     vehicleLabel: 'Vehicle style', vehPickup: 'Pickup truck', vehVan: 'Work van', vehSuv: 'SUV', vehSedan: 'Sedan/hatchback', vehEbike: 'E-bike', vehNone: 'No vehicle / need a ride', vehOther: 'Other',
     haulLabel: 'Can your vehicle haul materials?', haulYes: 'Yes — truck/van/trailer loads', haulSmall: 'Small materials only', haulNo: 'No hauling', haulNa: 'Not applicable',
-    transportLabel: 'Transportation', trOwn: 'Own truck/car', trEbike: 'E-bike / rideshare', trRide: 'Need a ride',
     licenseLabel: 'License / ID', licDriver: 'Driver license', licId: 'State ID only', licWorking: 'Working on it',
     insuranceLabel: 'Insurance', insHas: 'Has general liability', insNo: 'No insurance yet', insUnsure: 'Not sure',
     availLabel: 'Availability', availPh: 'Weekdays / weekends / anytime', notesLabel: 'Anything the Team should know?', notesPh: 'Your experience, specialties, anything important',
@@ -1141,21 +1134,18 @@ const W_I18N = {
   es: {
     workerTitle: 'Inicio de técnico', tabWorker: 'Solicitud de técnico nuevo', techSignIn: '🔨 Entrar como técnico', workerEnter: '🔨 ENTRAR', createAccount: 'Crear cuenta',
     authHintWorker: '<b>1.</b> Escribe tu correo &nbsp;<b>2.</b> Tu contraseña &nbsp;<b>3.</b> Toca <b>ENTRAR</b> — y ves los jales abiertos.<br><span class="mut">Usa el correo y la contraseña de tu aplicación. ¿Nuevo aquí? Toca <b>Solicitud de técnico nuevo</b> para aplicar — el Team revisa cada aplicación antes de desbloquear los trabajos.</span>',
-    rescueBtn: '¿Primera vez o no recuerdas tu contraseña? Toca aquí', rescueNote: '¿Primera vez o no recuerdas tu contraseña? Toca el botón — te mandamos un correo con un link para crearla. Escribe tu correo arriba primero.',
-    agreeApplyPre: 'Al aplicar aceptas los', termsLink: 'Términos y Condiciones', workerLinkQ: '¿Eres técnico de General Handyman Solutions?', custLinkQ: '¿Eres cliente?', loginHere: 'Entra aquí →', forgotPw: 'Olvidé mi contraseña',
+    rescueBtn: '¿Primera vez o no recuerdas tu contraseña? Toca aquí', rescueNote: '¿Primera vez o no recuerdas tu contraseña? Toca el botón — te mandamos un correo con un link para crearla. Escribe tu correo arriba primero.', rescueNoEmail: '¿Ya no tienes acceso a ese correo? Llama o textea al Team: (707) 862-3773',
+    agreeApplyPre: 'Al aplicar aceptas los', termsLink: 'Términos y Condiciones', custLinkQ: '¿Eres cliente?', loginHere: 'Entra aquí →', forgotPw: 'Olvidé mi contraseña',
     forgotNeedEmail: 'Escribe tu correo arriba primero, luego toca "Olvidé mi contraseña".',
     applyingAs: 'Aplicando como', roleSkilled: 'Subcontratista calificado', roleHelper: 'Ayudante', cityLive: 'Ciudad donde vives', areasWork: 'Áreas donde puedes trabajar',
     skillsTap: 'Habilidades — toca todas las que apliquen', skGeneral: 'Handyman general', skCarpentry: 'Carpintería', skPaint: 'Pintura y drywall', skElectrical: 'Cambios eléctricos', skPlumbing: 'Ayuda de plomería', skMechanic: 'Mecánico móvil', skInstalls: 'Instalaciones y armado', skYard: 'Jardinería / yarda',
-    selfRateLabel: 'Califícate del 1 al 10 en cada habilidad (10 = nivel pro, 1 = principiante)',
     tradesAppLabel: 'Tus oficios — tu nivel en cada uno (1 = no sabe nada · 3 = bueno, trabaja solo · 5 = master) — y marca si tienes la herramienta',
     lvl1: '1 — Nada', lvl2: '2 — Ayudante', lvl3: '3 — Bueno', lvl4: '4 — Avanzado', lvl5: '5 — Master', toolsFlag: '🔧 Herramienta',
     trade_handyman: 'Handyman (general)', trade_carpentry: 'Carpintería', trade_electrical: 'Electricidad', trade_plumbing: 'Plomería', trade_gardening: 'Jardinería', trade_hvac: 'HVAC', trade_mechanic: 'Mecánica',
     gearLabel: '¿Qué tienes? — toca todo lo que aplique', gearBasic: 'Herramienta básica de mano', gearPower: 'Herramienta eléctrica', gearDrill: 'Taladro/atornillador', gearSaws: 'Sierras', gearLadder: 'Escalera', gearTruckbed: 'Caja de troca/caja de herramientas', gearTrailer: 'Tráiler', gearPpe: 'Equipo de seguridad (PPE)', gearNone: 'Sin herramienta todavía',
     expLabel: 'Experiencia', expLt1: 'Menos de 1 año', exp12: '1–2 años', exp35: '3–5 años', exp5p: '5+ años',
-    toolsLevelLabel: 'Nivel de herramienta', toolsFull: 'Herramienta completa', toolsSome: 'Algo de herramienta', toolsNone: 'Sin herramienta todavía',
     vehicleLabel: 'Tipo de vehículo', vehPickup: 'Troca pickup', vehVan: 'Van de trabajo', vehSuv: 'SUV', vehSedan: 'Sedán/hatchback', vehEbike: 'Bici eléctrica', vehNone: 'Sin vehículo / necesito ride', vehOther: 'Otro',
     haulLabel: '¿Tu vehículo puede cargar materiales?', haulYes: 'Sí — cargas de troca/van/tráiler', haulSmall: 'Solo materiales pequeños', haulNo: 'No cargo', haulNa: 'No aplica',
-    transportLabel: 'Transporte', trOwn: 'Troca/carro propio', trEbike: 'Bici eléctrica / rideshare', trRide: 'Necesito ride',
     licenseLabel: 'Licencia / ID', licDriver: 'Licencia de manejar', licId: 'Solo ID estatal', licWorking: 'En trámite',
     insuranceLabel: 'Seguro', insHas: 'Tiene seguro general', insNo: 'Sin seguro todavía', insUnsure: 'No estoy seguro',
     availLabel: 'Disponibilidad', availPh: 'Entre semana / fines de semana / cuando sea', notesLabel: '¿Algo que el Team debe saber?', notesPh: 'Tu experiencia, especialidades, lo importante',
@@ -1259,8 +1249,6 @@ function applyWorkerEntry(){
     : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
   const hc = document.getElementById('hcPromo');
   if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
-  const wl = document.getElementById('workerLinkRow');
-  if (wl) wl.style.display = w ? 'none' : 'block';
   const tsb = document.getElementById('techSignInBtn');
   if (tsb) tsb.style.display = w ? 'none' : 'block';
   const cl = document.getElementById('custLinkRow');
@@ -1274,6 +1262,14 @@ function applyWorkerEntry(){
   try{ if (w) localStorage.setItem('ghs_entry','worker'); }catch(e){}
   const rr = document.getElementById('workerRescueRow');
   if (rr) rr.style.display = w ? 'block' : 'none';
+  // v72 (L-6 + L-9): in the technician face there is ONE password path —
+  // the big v63 rescue button — so the small "Forgot my password" row
+  // hides here (it stays on the customer face), and the "login is email
+  // + password only" note hides too (the steps above already say it).
+  const fr2 = document.getElementById('forgotRow');
+  if (fr2 && w) fr2.style.display = 'none';
+  const lon = document.getElementById('loginOnlyNote');
+  if (lon) lon.style.display = w ? 'none' : 'block';
   if (!w && curMode === 'worker') mode('login');
   applyWorkerLang();
 }
@@ -1980,23 +1976,10 @@ document.querySelectorAll('.pick').forEach(function(g){
 });
 function pickVals(idv){ return [...document.querySelectorAll('#'+idv+' button.sel')].map(b=>b.dataset.v); }
 function pickOne(idv){ const b=document.querySelector('#'+idv+' button.sel'); return b?b.dataset.v:''; }
-function renderSelfRate(){
-  const box=document.getElementById('wSelfRate'); if(!box) return;
-  const skills=[...document.querySelectorAll('#wSkills button')].map(b=>b.dataset.v);
-  box.innerHTML=skills.map(function(s){
-    let opts='<option value="">—</option>';
-    for(let i=1;i<=10;i++) opts+='<option value="'+i+'">'+i+'</option>';
-    return '<div style="display:flex;align-items:center;gap:8px;margin:4px 0"><span style="flex:1">'+(''+s).replace(/</g,'&lt;')+'</span><select data-skill="'+(''+s).replace(/"/g,'&quot;')+'" style="width:90px">'+opts+'</select></div>';
-  }).join('');
-}
-function pickSelfRatings(){
-  const r={};
-  document.querySelectorAll('#wSelfRate select').forEach(function(sel){
-    const v=parseInt(sel.value,10), sk=sel.getAttribute('data-skill');
-    if(sk && v>=1 && v<=10) r[sk]=v;
-  });
-  return r;
-}
+// v72 (L-1): the 1–10 self-rating block was removed from the application
+// form — skills are captured ONCE, in the trades boxes (1–5 + tools).
+// Old profiles keep their stored selfRatings; the admin card still shows
+// them ("self X/10" in skillRankHtml). Nothing reads them from the form.
 // v41: the 7 trade boxes (level 1-5 + has-tools) from the application form.
 const TRADE_KEYS_CLIENT = ['handyman','carpentry','electrical','plumbing','gardening','hvac','mechanic'];
 const TRADE_NAMES_CLIENT = { handyman:'Handyman (general)', carpentry:'Carpintería / Carpentry', electrical:'Electricidad / Electrical', plumbing:'Plomería / Plumbing', gardening:'Jardinería / Gardening', hvac:'HVAC', mechanic:'Mecánica / Mechanic' };
@@ -2010,7 +1993,6 @@ function pickTradeSkills(){
   });
   return r;
 }
-renderSelfRate();
 // ---------- Home details + start preference (added 2026-10-21) ----------
 // Optional facts about the home (ZIP is never required) and a start-date
 // PREFERENCE — the Team confirms the exact day; picking a date books
@@ -2083,7 +2065,7 @@ async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
-    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, toolsLevel:document.getElementById('wTools').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, transport:document.getElementById('wTransport').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), selfRatings:pickSelfRatings(), tradeSkills:pickTradeSkills() } : {};
+    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
@@ -2132,8 +2114,7 @@ function render(){
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
   paintSoundBtn();
   if (me) esStart(); else esClose(); // v23: live event stream follows the session
-  const mlb = document.getElementById('memberLoginBtn');
-  if (mlb) mlb.style.display = me ? 'none' : 'inline-block';
+  paintMemberLoginBtn();
   // v42: the in-app Menu is one tap away on every CUSTOMER view (guest,
   // logged-in panel, memberships/yard browsing). Worker/admin views are
   // exempt — their isolation stands.
@@ -2951,7 +2932,21 @@ function toggleSoundMute(){
   if (soundOn) armSound();
   paintSoundBtn();
 }
-function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔔' : '🔕'; }
+function paintSoundBtn(){ const b = document.getElementById('soundBtn'); if (b) b.textContent = soundOn ? '🔊' : '🔇'; }
+// v72 (C-4): the header "Member log in" button duplicates the login card
+// when the card itself is already on screen — it only earns its place
+// after the visitor scrolls past the card. Hide it while #authBox is
+// visible (and always while signed in).
+let authBoxInView = false;
+function paintMemberLoginBtn(){
+  const mlb = document.getElementById('memberLoginBtn');
+  if (!mlb) return;
+  mlb.style.display = (me || authBoxInView) ? 'none' : 'inline-block';
+}
+try {
+  const abObs = document.getElementById('authBox');
+  if (abObs && 'IntersectionObserver' in window) new IntersectionObserver(function(es){ es.forEach(function(e){ authBoxInView = e.isIntersecting; }); paintMemberLoginBtn(); }, { threshold: 0.12 }).observe(abObs);
+} catch(e) {}
 // ---------- In-app dialog (v65) ----------
 let appDlgResolve = null;
 function appDlgShow(msg, opts){
@@ -3882,6 +3877,13 @@ async function yardPhotoChange(idv, key, input){
   }catch(e){ alert(e.message||WT('photoFailed')); }
 }
 let _adminLoading = false, _adminReloadQueued = false;
+function admGo(idv){ const el=document.getElementById(idv); if(el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
+function toggleWorkerDetail(wid, btn){
+  const d = document.getElementById('wdetail-'+wid); if(!d) return;
+  const open = d.style.display !== 'none';
+  d.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? 'Ver detalle ▾' : 'Ocultar detalle ▴';
+}
 async function loadAdmin(){
   // v46 ADMIN PERF: loadAdmin used to stack — every render()/action fired
   // a full reload (3 API fetches + full re-render + every Leaflet map torn
@@ -3899,13 +3901,21 @@ async function loadAdmin(){
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
+    // v72 (A-1): compact card by default — photo, name, status, payouts
+    // and the top trades; the full profile rows + Team ranks + trade
+    // verification + the edit form live inside a "Ver detalle" fold, so
+    // the panel reads at a glance instead of one endless scroll.
+    const topTrades = TRADE_KEYS_CLIENT.map(function(k){ const e=(w.tradeSkills||{})[k]; return e ? { k:k, lv:(e.effective!=null?e.effective:e.level)||0 } : null; }).filter(Boolean).sort(function(a,b){ return b.lv-a.lv; }).slice(0,3).map(function(t){ return wTradeName(t.k)+' ★'+t.lv; }).join(' · ');
     return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>'
+    + (pf.city ? '<br><span class="mut">City:</span> '+(''+pf.city).replace(/</g,'&lt;') : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '')
+    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="toggleWorkerDetail(\''+w.id+'\',this)">Ver detalle ▾</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')
+    + '<div id="wdetail-'+w.id+'" style="display:none">'
     + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
     + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w) + workerTradesHtml(w)
-    + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')+'<div id="editWorker-'+w.id+'"></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
+    + '<br><button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button><div id="editWorker-'+w.id+'"></div></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
   document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);

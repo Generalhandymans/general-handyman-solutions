@@ -2935,7 +2935,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
 // app.generalhandymans.app/instalar (alias /install) — one shareable
 // link whose whole job is installing the PWA: native prompt when the
 // browser offers it, platform steps otherwise. One language at a time.
-function installPageHtml(langOverride) {
+function installPageHtml(langOverride, ua) {
   const lang = langOverride === 'es' ? 'es' : 'en';
   const T = lang === 'es' ? {
     title: 'Instala la app', sub: 'General Handyman Solutions en tu pantalla — pide servicios, sigue tu orden y paga, como una app de verdad.',
@@ -2980,9 +2980,7 @@ function installPageHtml(langOverride) {
     + '<div id="alreadyBox"><b>' + T.already + '</b><p style="color:#c9c9cf;margin:6px 0 0">' + T.alreadyBody + '</p><a class="openBtn" href="/">' + T.open + '</a></div>'
     + '<div id="doneBox"><b>' + T.done + '</b><p style="color:#c9c9cf;margin:6px 0 0">' + T.doneBody + '</p></div>'
     + '<button id="instBtn">' + T.btn + '</button>'
-    + '<div class="card"><h3>' + T.androidH + '</h3><p>' + T.androidSteps + '</p></div>'
-    + '<div class="card"><h3>' + T.iosH + '</h3><p>' + T.iosSteps + '</p></div>'
-    + '<div class="card"><h3>' + T.otherH + '</h3><p>' + T.otherSteps + '</p></div>'
+    + platformCards(T, ua)
     + '<div class="lang"><a href="?lang=' + other + '">' + (lang === 'es' ? 'View in English' : 'Ver en español') + '</a></div>'
     + '<p class="foot">' + T.foot + '</p>'
     + '</div><script>(function(){try{'
@@ -2995,6 +2993,67 @@ function installPageHtml(langOverride) {
     + 'btn.addEventListener("click",function(){if(deferred){deferred.prompt();deferred.userChoice.then(function(){deferred=null;});}else{window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});}});'
     + 'window.addEventListener("appinstalled",function(){btn.style.display="none";done.style.display="block";});'
     + '}catch(e){}})();</script></body></html>';
+}
+
+// v72 (P-2): the visitor's own platform card goes FIRST on the install
+// page — nobody should have to read the half that is not theirs.
+function platformCards(T, ua) {
+  const card = (h, s) => '<div class="card"><h3>' + h + '</h3><p>' + s + '</p></div>';
+  const android = card(T.androidH, T.androidSteps), ios = card(T.iosH, T.iosSteps), other = card(T.otherH, T.otherSteps);
+  const u = String(ua || '');
+  if (/iphone|ipad|ipod/i.test(u)) return ios + android + other;
+  return android + ios + other;
+}
+
+// v72 (P-1): the post-payment landing pages wear the brand — dark
+// template + hammer + EN|ES, like the cart/estimate pages — and the copy
+// names what the customer actually just did (deposit / membership /
+// order) instead of one generic line from another era.
+function payResultPageHtml(kind, langOverride) {
+  const lang = langOverride === 'es' ? 'es' : 'en';
+  const ok = kind === 'success';
+  const T = lang === 'es' ? (ok ? {
+    title: 'Pago recibido', h: 'Pago <span style="color:#e42535">recibido</span> ✅',
+    body: 'Gracias — tu pago se procesó. Qué sigue depende de lo que pagaste:',
+    steps: ['<b>¿Apartaste con un depósito?</b> Tu trabajo quedó agendado — el Team te confirma el día y la hora exactos, y el resto se paga al terminar el trabajo.', '<b>¿Te uniste a una membresía?</b> Ya está activa — tus precios de miembro aplican desde ya, y tu primer estimado en persona es GRATIS.', '<b>¿Pagaste una orden del menú o un estimado?</b> Ya quedó apartado — el Team te confirma tu horario.'],
+    cta: 'Abrir la app', foot: '¿Preguntas? Texto o llamada al (707) 862-3773.', otherL: 'View in English'
+  } : {
+    title: 'Pago cancelado', h: 'Pago <span style="color:#e42535">cancelado</span>',
+    body: 'No se hizo ningún cobro. Nada quedó agendado ni cobrado — puedes volver y terminar cuando quieras; tu carrito o solicitud sigue guardado.',
+    steps: [], cta: 'Volver a la app', foot: '¿Preguntas? Texto o llamada al (707) 862-3773.', otherL: 'View in English'
+  }) : (ok ? {
+    title: 'Payment received', h: 'Payment <span style="color:#e42535">received</span> ✅',
+    body: 'Thank you — your payment went through. What happens next depends on what you paid:',
+    steps: ['<b>Booked with a deposit?</b> Your job is on the calendar — the Team confirms your exact day and time, and the balance is due when the work is done.', '<b>Joined a membership?</b> It is active now — member prices apply right away, and your first in-person estimate is FREE.', '<b>Paid a menu order or an estimate?</b> You are all set — the Team confirms your time with you.'],
+    cta: 'Open the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
+  } : {
+    title: 'Payment cancelled', h: 'Payment <span style="color:#e42535">cancelled</span>',
+    body: 'No charge was made. Nothing was booked or charged — you can come back and finish anytime; your cart or request is still saved.',
+    steps: [], cta: 'Back to the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
+  });
+  const other = lang === 'es' ? 'en' : 'es';
+  return '<!doctype html><html lang="' + lang + '"><head><meta charset="utf-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>' + T.title + ' — General Handyman Solutions</title>'
+    + '<meta name="theme-color" content="#0b0b0b">'
+    + '<link rel="apple-touch-icon" href="/icons/icon-192.png">'
+    + '<style>body{margin:0;background:#0a0a0c;color:#f2f2f2;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}'
+    + '.wrap{max-width:480px;margin:0 auto;padding:30px 20px 42px;text-align:center}'
+    + '.icon{width:84px;height:84px;border-radius:20px;box-shadow:0 10px 30px rgba(0,0,0,.5)}'
+    + 'h1{font-size:27px;margin:16px 0 8px}.body{color:#c9c9cf;line-height:1.55;margin:0 0 14px}'
+    + '.card{background:#141416;border:1px solid #26262b;border-radius:14px;padding:14px 16px;text-align:left;margin:0 0 18px}'
+    + '.card li{color:#c9c9cf;line-height:1.55;font-size:14.5px;margin:6px 0}.card ul{margin:0;padding-left:18px}'
+    + '.cta{display:inline-block;background:#e42535;color:#fff;padding:14px 28px;border-radius:999px;text-decoration:none;font-weight:800}'
+    + '.lang{margin-top:20px;color:#8a8a92;font-size:14px}.lang a{color:#f2f2f2;font-weight:700;text-decoration:none}'
+    + '.foot{margin-top:14px;color:#8a8a92;font-size:13px}</style></head>'
+    + '<body><div class="wrap">'
+    + '<img class="icon" src="/icons/icon-512.png" alt="General Handyman Solutions">'
+    + '<h1>' + T.h + '</h1><p class="body">' + T.body + '</p>'
+    + (T.steps.length ? '<div class="card"><ul>' + T.steps.map(s => '<li>' + s + '</li>').join('') + '</ul></div>' : '')
+    + '<a class="cta" href="/">' + T.cta + '</a>'
+    + '<div class="lang"><a href="?lang=' + other + '">' + T.otherL + '</a></div>'
+    + '<p class="foot">' + T.foot + '</p>'
+    + '</div></body></html>';
 }
 
 function cartPageHtml(c, user, langOverride, notice) {
@@ -5769,10 +5828,10 @@ const server = http.createServer(async (req, res) => {
     } catch (e) { console.error('stripe webhook failed', e.message); return send(res, 500, { error: 'webhook handler failed' }); }
   }
   if (p === '/payment/success' && req.method === 'GET') {
-    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment received</title><body style="font-family:system-ui;max-width:560px;margin:0 auto;padding:32px 20px;text-align:center"><h1 style="color:#0b0b0b">Payment <span style="color:#e42535">received</span> ✅</h1><p>Thank you — your payment went through. If you joined <b>HomeCare</b>, your first in-person estimate is <b>FREE</b>: log in and request it from your dashboard. If you paid an estimate, your appointment is <b>secured</b> — the Team will confirm your time with you.</p><p><a href="/" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700">Open my dashboard</a></p><p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p></body>');
+    return send(res, 200, payResultPageHtml('success', url.searchParams.get('lang')));
   }
   if (p === '/payment/cancelled' && req.method === 'GET') {
-    return send(res, 200, '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment cancelled</title><body style="font-family:system-ui;max-width:560px;margin:0 auto;padding:32px 20px;text-align:center"><h1>Payment <span style="color:#e42535">cancelled</span></h1><p>No charge was made. You can come back and try again anytime — your request is still saved in the app.</p><p><a href="/" style="background:#0b0b0b;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700">Back to the app</a></p><p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p></body>');
+    return send(res, 200, payResultPageHtml('cancelled', url.searchParams.get('lang')));
   }
 
   const invPageMatch = p.match(/^\/invoice\/([\w-]+)$/);
@@ -5785,7 +5844,7 @@ const server = http.createServer(async (req, res) => {
 
   // ---------- public install page (v49) ----------
   if ((p === '/instalar' || p === '/install') && req.method === 'GET') {
-    return send(res, 200, installPageHtml(url.searchParams.get('lang')));
+    return send(res, 200, installPageHtml(url.searchParams.get('lang'), req.headers['user-agent']));
   }
   // ---------- public cart page (v44; v54 Checkout returns) ----------
   // ---------- v60: public invitation page ----------

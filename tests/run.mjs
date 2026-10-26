@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v71', swSrc.includes("const CACHE = 'ghs-app-v71'"));
+t('static: SW cache is ghs-app-v72', swSrc.includes("const CACHE = 'ghs-app-v72'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1899,7 +1899,7 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const webCheckout43 = fs.readFileSync(path.join(ROOT43, 'checkout.html'), 'utf8');
   t('v43 web: homepage cards repriced — no $135/$108 left, seven $125/$100 cards incl. Save $25', !webIndex43.includes('$135') && !webIndex43.includes('$108') && (webIndex43.match(/Members: \$100/g) || []).length === 7 && webIndex43.includes('Members: $100 · Save $25'));
   t('v43 web: oil / junk / green cards show their new member prices ($60 / $180 / $260 / $340 / $520)', ['Members: $60', 'Members: $180', 'Members: $260', 'Members: $340', 'Members: $520'].every(x => webIndex43.includes(x)));
-  t('v43 web: homepage sample order + sticky bar total $250 (125 + 50 + 75)', webIndex43.includes('<span>$250</span>') && webIndex43.includes('View · $250 →') && !webIndex43.includes('View · $260'));
+  t('v43 web (superseded by v72 W-1): the homepage demo sample-order bar is REMOVED — no Sample order / View · $250 / cartbar anywhere', !webIndex43.includes('Sample order') && !webIndex43.includes('View · $250') && !webIndex43.includes('cartbar'));
   t('v43 web: service.html TV page repriced in markup AND script (base 125 / member 100)', webService43.includes('let base = 125') && webService43.includes('data-price="125" data-mem="100"') && webService43.includes('id="bigPrice">$125<'));
     t('v43 web: service.html pairs-well-with cards also cut ($135 -> $125 x3)', (webService43.match(/class="pp">\$125/g) || []).length === 3 && !webService43.includes('$135'));
   t('v43 zero-$135 proof: no $135 service price survives on any customer surface (app, server, homepage, checkout, tracking)', !htmlSrc.includes('$135') && !serverSrc.includes('$135') && !webIndex43.includes('$135') && !webCheckout43.includes('$135') && !fs.readFileSync(path.join(ROOT43, 'tracking.html'), 'utf8').includes('$135'));
@@ -2952,9 +2952,11 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
 // ---------------- v59: technician sign-in pill + cart materials note ----------------
 // (1) The technician door on the auth screen used to be ONLY the small
 // muted #workerLinkRow text link at the bottom of the card — Gabriel
-// could not see the worker login. It is now ALSO a dedicated
-// high-contrast pill under the Log in button, routed to the same
-// existing #worker entry view (visibility only, no flow changes).
+// could not see the worker login. v59 added a dedicated high-contrast
+// pill under the Log in button, routed to the same existing #worker
+// entry view. v72 (L-4, approved cleanup) then REMOVED the redundant
+// small link row: the pill is now THE technician door on the card
+// (customer-first — one clear door, not two).
 // (2) The cart page printed "Labor only — you buy materials/parts" on
 // EVERY cart, even carts carrying Materials lines. It now switches to
 // the inclusion note when a materials line is present — the same
@@ -2962,7 +2964,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
 // (the v45 page pins below already cover the estimate side).
 t('static v59: auth screen carries a dedicated technician sign-in pill (hammer label, routes to the existing #worker entry)', htmlSrc.includes('id="techSignInBtn"') && htmlSrc.includes('🔨 Technician sign in') && htmlSrc.includes("location.hash='#worker';applyWorkerEntry();return false;"));
 t('static v59: applyWorkerEntry hides the technician pill inside the worker entry itself (same rule as the old link row)', htmlSrc.includes("getElementById('techSignInBtn')") && htmlSrc.includes("tsb.style.display = w ? 'none' : 'block'"));
-t('static v59: the small muted worker link row is still there (the pill is an addition, not a move)', htmlSrc.includes('id="workerLinkRow"') && htmlSrc.includes('Are you a General Handyman Solutions technician?'));
+t('static v72 (was v59): the redundant small worker link row is GONE; the pill is the only technician door on the card', !htmlSrc.includes('id="workerLinkRow"') && !htmlSrc.includes('Are you a General Handyman Solutions technician?') && htmlSrc.includes('id="techSignInBtn"'));
 t('static v59: cart dictionary carries the materials-included note in EN + ES', serverSrc.includes("materialsNote: 'Materials listed above are included in your total.'") && serverSrc.includes("materialsNote: 'Los materiales listados arriba están incluidos en tu total.'"));
 t('static v59: cart page switches its note on cartHasMaterials; estimate page keeps its estimateHasMaterials switch', serverSrc.includes('const cartHasMaterials = (c.items || []).some(it => it.custom && it.kind !==') && serverSrc.includes('cartHasMaterials ? ') && serverSrc.includes('estimateHasMaterials(disp) ? '));
 {
@@ -3295,6 +3297,39 @@ t('static v63: /tecnico + /tech redirect to the worker entry; the activation ema
   const r1 = await fetch(BASE2 + '/tecnico', { redirect: 'manual' });
   const r2 = await fetch(BASE2 + '/tech', { redirect: 'manual' });
   t('v63: GET /tecnico and /tech 302 to /#worker', r1.status === 302 && (r1.headers.get('location') || '').includes('#worker') && r2.status === 302);
+}
+
+// ---------------- v72: approved cleanup (29 proposals + ideas) ----------------
+t('static v72 L-1/L-2/L-3: the application form no longer asks skills 3x — self-rate, tools-level and transport fields are gone (stored data + admin skill display untouched)',
+  !htmlSrc.includes('id="wSelfRate"') && !htmlSrc.includes('renderSelfRate(') && !htmlSrc.includes('id="wTools"') && !htmlSrc.includes('id="wTransport"') && htmlSrc.includes('skillRankHtml(w)'));
+t('static v72 L-5/L-6/L-9: join mode shows ONE charge note, the forgot row never shows in the worker entry, and the customer-face login notes hide there',
+  htmlSrc.includes("m==='homecare' ? 'block':'none'") && htmlSrc.includes("(m==='login' && !isWorkerEntry()) ? 'block':'none'") && htmlSrc.includes("getElementById('loginOnlyNote')"));
+t('static v72 L-7: the technician job list renders ABOVE the profile (trackBanner + jobList before workerProfile)',
+  htmlSrc.indexOf('id="trackBanner"') > -1 && htmlSrc.indexOf('id="trackBanner"') < htmlSrc.indexOf('id="workerProfile"') && htmlSrc.indexOf('id="jobList"') < htmlSrc.indexOf('id="workerProfile"'));
+t('static v72 L-8/L-13: the static auth hint matches the JS customer face, and the rescue row carries the Team fallback line in both languages',
+  htmlSrc.includes('No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.') && htmlSrc.includes("rescueNoEmail: 'No access to that email anymore? Call or text the Team: (707) 862-3773'") && htmlSrc.includes('¿Ya no tienes acceso a ese correo?'));
+t('static v72 C-2/C-3/C-4: sound toggle speaks speaker emoji, the header carries no duplicate text brand, and the header Member Login hides while the auth card is on screen',
+  htmlSrc.includes("soundOn ? '🔊' : '🔇'") && !htmlSrc.includes('<b>General <em>Handyman</em> Solutions</b>') && htmlSrc.includes('function paintMemberLoginBtn()') && htmlSrc.includes('new IntersectionObserver'));
+t('static v72 A-1/A-2/A-3: compact admin worker cards with a Ver detalle toggle, the admNav anchor bar + admGo, and the short create-job candidate hint',
+  htmlSrc.includes('id="admNav"') && htmlSrc.includes('function admGo(') && htmlSrc.includes('function toggleWorkerDetail(') && htmlSrc.includes('Ver detalle ▾') && htmlSrc.includes('aquí salen los mejores para ese oficio'));
+t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered install platform cards',
+  serverSrc.includes('function payResultPageHtml(') && serverSrc.includes('function platformCards(') && serverSrc.includes("installPageHtml(url.searchParams.get('lang'), req.headers['user-agent'])"));
+{
+  const web72 = fs.readFileSync(path.join(APP_DIR, '..', 'index.html'), 'utf8');
+  t('static v72 W: website demo bar, mock-page footer links, sample-review note, duplicate members strip, empty cats row and see-all self-links are gone; step 3 states the real payment policy; reviews hidden until real ones exist (I-2)',
+    !web72.includes('cartbar') && !web72.includes('Sample order') && !web72.includes('href="checkout.html"') && !web72.includes('href="tracking.html"') && !web72.includes('Sample reviews are placeholders') && !web72.includes('class="members"') && !web72.includes('class="cats"') && !web72.includes('class="seeall"') &&
+    web72.includes('Pay in full when you order</b>Menu orders are paid up front.') && web72.includes('data-v72="hidden-until-real-reviews"') && web72.includes("Neighbors' favorites"));
+}
+{
+  const ps = await (await fetch(BASE2 + '/payment/success')).text();
+  const psEs = await (await fetch(BASE2 + '/payment/success?lang=es')).text();
+  const pc = await (await fetch(BASE2 + '/payment/cancelled')).text();
+  t('v72 P-1: payment result pages are branded + bilingual (EN default, ES via ?lang=, cancelled covered too)',
+    ps.includes('Payment received') && ps.includes('icon-512.png') && psEs.includes('Pago recibido') && pc.includes('Payment cancelled'));
+  const instIos = await (await fetch(BASE2 + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' } })).text();
+  const instAnd = await (await fetch(BASE2 + '/instalar')).text();
+  t('v72 P-2: /instalar orders the platform cards by visitor UA (iPhone UA → iOS card first, default → Android first)',
+    instIos.indexOf('On iPhone / iPad (Safari)') > -1 && instIos.indexOf('On iPhone / iPad (Safari)') < instIos.indexOf('On Android (Chrome)') && instAnd.indexOf('On Android (Chrome)') > -1 && instAnd.indexOf('On Android (Chrome)') < instAnd.indexOf('On iPhone / iPad (Safari)'));
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}
