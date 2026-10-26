@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v74', swSrc.includes("const CACHE = 'ghs-app-v74'"));
+t('static: SW cache is ghs-app-v75', swSrc.includes("const CACHE = 'ghs-app-v75'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1535,6 +1535,11 @@ await req2('PATCH', '/api/workers/' + wBId, { token: A2, body: { status: 'active
 const wALogin = await req2('POST', '/api/login', { body: { email: 'wa@t.local', password: 'workpassA' } });
 const wBLogin = await req2('POST', '/api/login', { body: { email: 'wb@t.local', password: 'workpassB' } });
 const WA = wALogin.j.token, WB = wBLogin.j.token;
+// v75 fixture note: WA claims board jobs in the flows below — under the
+// new Connect unlock gate he needs his payouts set up first (the mock
+// Stripe says payouts_enabled, like W3 in the Connect block).
+await req2('POST', '/api/worker/connect/start', { token: WA, body: {} });
+await req2('GET', '/api/worker/connect/status', { token: WA });
 const wACookie = await loginCookie2('wa@t.local', 'workpassA');
 const wBCookie = await loginCookie2('wb@t.local', 'workpassB');
 const adm2Cookie = await loginCookie2('admin2@t.local', 'adminpass1');
@@ -1807,6 +1812,69 @@ t('connect: insufficient platform funds -> pending_funds (nothing lost)', !!j5 &
 stripeState.poorTransfers = false;
 const retry5 = await req2('POST', '/api/admin/jobs/' + J5 + '/pay-worker', { token: A2, body: {} });
 t('connect: manual retry pays once funds are available', retry5.status === 200 && retry5.j.payoutStatus === 'paid');
+
+// ---------------- v75: Connect unlock gate + activation phone guard + availability checkboxes ----------------
+t('static v75: claim gate is server-side with the structured bilingual refusal', serverSrc.includes("code: 'CONNECT_REQUIRED'") && serverSrc.includes('Para desbloquear jales on-demand tienes que conectarte a Stripe Connect') && serverSrc.includes('To unlock on-demand jobs you need to connect Stripe Connect') && serverSrc.includes('j.connectOverrideFor !== user.id'));
+t('static v75: admin connect-override endpoint + audit entry', serverSrc.includes('/connect-override') && serverSrc.includes("audit(user, 'job.connect_override'"));
+t('static v75: phone guard on activation (effective phone, transition-only)', serverSrc.includes("code: 'PHONE_REQUIRED'") && serverSrc.includes('effectivePhone'));
+t('static v75: structured availability — shifts + onDemand in the cleaner and at signup', serverSrc.includes('AVAIL_SHIFTS') && serverSrc.includes('signupAvailability'));
+t('static v75: worker home carries the persistent unlock card + the claim dialog path', htmlSrc.includes('id="connectGateCard"') && htmlSrc.includes('function paintConnectGateCard(') && htmlSrc.includes("e.code === 'CONNECT_REQUIRED'"));
+t('static v75: the application availability is checkboxes now (days / shifts / on-demand)', htmlSrc.includes('class="wDay"') && htmlSrc.includes('class="wShift"') && htmlSrc.includes('id="wOnDemand"') && htmlSrc.includes('function workerAvailFromForm(') && !htmlSrc.includes('id="wAvail"'));
+t('static v75: W_I18N parity — the gate + availability keys exist in EN and ES', (htmlSrc.match(/connectGateMsg:/g) || []).length === 2 && (htmlSrc.match(/availOnDemand:/g) || []).length === 2 && (htmlSrc.match(/shiftMorning:/g) || []).length === 2 && (htmlSrc.match(/connectGateTitle:/g) || []).length === 2);
+t('static v75: admin cards flag phoneless workers + show the structured availability line', htmlSrc.includes('Incomplete — no phone') && htmlSrc.includes('availLine'));
+t('static v75: admin job cards carry the Connect override action', htmlSrc.includes('function connectOverrideHtml(') && htmlSrc.includes('async function connectOverride('));
+const mapFn75 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminMap('), htmlSrc.indexOf('// ---------- Admin captains (v40) ----------'));
+t('static v75 map: a ResizeObserver keeps re-measuring the master map (the zero-size cure)', mapFn75.includes('ResizeObserver') && mapFn75.includes('adminMapRO'));
+t('static v75 map: tile failures swap in the bilingual fallback — never a silent grey box', mapFn75.includes('tileerror') && mapFn75.includes('adminMapFallbackHtml()') && htmlSrc.includes('The map could not load'));
+t('static v75 map: the loadAdmin watchdog refills an empty map box', htmlSrc.includes('!b.innerHTML.trim()') && htmlSrc.includes("getElementById('adminMapBox')"));
+// (a) The gate: an ACTIVE worker with NO Stripe Connect cannot claim a
+//     paid job — 403 with Gabriel's exact bilingual message.
+const W6 = await mkConnectWorker2('w6@t.local', '(707) 555-0206', 'workpass6');
+const gateJob = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job', city: 'Fairfield', when: 'Today', payOffer: 100, customerPrice: 150, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '1 Gate St, Fairfield, CA' } });
+t('v75 gate setup: an open paid job is posted', gateJob.status === 201 && gateJob.j.job.status === 'Open');
+const gateClaim = await req2('POST', '/api/jobs/' + gateJob.j.job.id + '/claim', { token: W6.token, body: {} });
+t('v75 gate: a claim without Connect is refused 403 CONNECT_REQUIRED', gateClaim.status === 403 && gateClaim.j.code === 'CONNECT_REQUIRED' && gateClaim.j.connect && gateClaim.j.connect.ready === false);
+t('v75 gate: the refusal carries the exact bilingual message', !!gateClaim.j.message && gateClaim.j.message.es === 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect' && gateClaim.j.message.en === 'To unlock on-demand jobs you need to connect Stripe Connect');
+const gateJobAfter = await adminJob2(gateJob.j.job.id);
+t('v75 gate: the job stays Open and unassigned after a refused claim', !!gateJobAfter && gateJobAfter.status === 'Open' && !gateJobAfter.assignedWorkerId);
+const gateOvrCust = await req2('POST', '/api/admin/jobs/' + gateJob.j.job.id + '/connect-override', { token: W6.token, body: { workerId: W6.id } });
+t('v75 gate: the override endpoint is admin-only', gateOvrCust.status === 403);
+// (b) Gabriel's override releases THIS job to THIS worker — audited.
+const gateOvr = await req2('POST', '/api/admin/jobs/' + gateJob.j.job.id + '/connect-override', { token: A2, body: { workerId: W6.id } });
+t('v75 override: the admin release lands on the job', gateOvr.status === 200 && gateOvr.j.job.connectOverrideFor === W6.id);
+const audit75 = await req2('GET', '/api/admin/audit', { token: A2 });
+t('v75 override: the release is audit-logged', (audit75.j.entries || []).some(e => e.action === 'job.connect_override' && e.target === gateJob.j.job.id));
+const gateClaim2 = await req2('POST', '/api/jobs/' + gateJob.j.job.id + '/claim', { token: W6.token, body: {} });
+t('v75 override: the released worker can claim despite no Connect', gateClaim2.status === 200 && gateClaim2.j.job.status === 'Claimed');
+// (c) The override does not leak: another gateless worker is still
+//     refused on another job — until HIS Connect is ready.
+const W7 = await mkConnectWorker2('w7@t.local', '(707) 555-0207', 'workpass7');
+const gateJob2 = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job 2', city: 'Fairfield', when: 'Today', payOffer: 80, customerPrice: 120, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '2 Gate St, Fairfield, CA' } });
+const gateClaimW7 = await req2('POST', '/api/jobs/' + gateJob2.j.job.id + '/claim', { token: W7.token, body: {} });
+t('v75 gate: no leak — the next worker without Connect is refused too', gateClaimW7.status === 403 && gateClaimW7.j.code === 'CONNECT_REQUIRED');
+await req2('POST', '/api/worker/connect/start', { token: W7.token, body: {} });
+await req2('GET', '/api/worker/connect/status', { token: W7.token });
+const gateClaimW7b = await req2('POST', '/api/jobs/' + gateJob2.j.job.id + '/claim', { token: W7.token, body: {} });
+t('v75 gate: with Connect payouts enabled the same worker claims freely', gateClaimW7b.status === 200 && gateClaimW7b.j.job.status === 'Claimed');
+// (d) Phone guard: applying without a phone is fine (review), but
+//     ACTIVATION is refused until a number is on file.
+const noPhone = await req2('POST', '/api/signup', { body: { name: 'No Phone Worker', email: 'nophone@t.local', phone: '', password: 'workpass8', role: 'worker', profile: { city: 'Fairfield' } } });
+t('v75 phone setup: a phoneless worker can still apply (lands on review)', noPhone.status === 201 && noPhone.j.user.status === 'review');
+const noPhoneAct = await req2('PATCH', '/api/workers/' + noPhone.j.user.id, { token: A2, body: { status: 'active' } });
+t('v75 phone: activation without a phone is refused PHONE_REQUIRED', noPhoneAct.status === 400 && noPhoneAct.j.code === 'PHONE_REQUIRED');
+const wkList75 = await req2('GET', '/api/workers', { token: A2 });
+const npRec = (wkList75.j.workers || []).find(w => w.id === noPhone.j.user.id);
+t('v75 phone: the refused worker stays on review, still phoneless (admin sees the gap)', !!npRec && npRec.status === 'review' && !npRec.phone);
+const phoneFix = await req2('PATCH', '/api/workers/' + noPhone.j.user.id, { token: A2, body: { phone: '(707) 555-0208', status: 'active' } });
+t('v75 phone: phone + activation in ONE patch succeeds', phoneFix.status === 200 && phoneFix.j.worker.status === 'active' && phoneFix.j.worker.phone === '(707) 555-0208');
+// (e) Availability checkboxes round-trip: the structured payload lands
+//     cleaned on the record; the free-text history stays untouched; an
+//     old payload without the object defaults cleanly.
+const avSign = await req2('POST', '/api/signup', { body: { name: 'Avail Worker', email: 'avail@t.local', phone: '(707) 555-0209', password: 'workpass9', role: 'worker', profile: { city: 'Fairfield', availability: 'Mon Wed Fri · morning · on-demand OK' }, availability: { preset: 'custom', days: [5, 1, 3], shifts: ['morning', 'bogus'], onDemand: true } } });
+t('v75 availability: checkbox payload lands structured (days sorted, bogus shift dropped)', avSign.status === 201 && !!avSign.j.user.availability && JSON.stringify(avSign.j.user.availability.days) === '[1,3,5]' && JSON.stringify(avSign.j.user.availability.shifts) === '["morning"]' && avSign.j.user.availability.onDemand === true && avSign.j.user.availability.preset === 'custom');
+t('v75 availability: the free-text profile history is untouched', !!avSign.j.user.profile && avSign.j.user.profile.availability === 'Mon Wed Fri · morning · on-demand OK');
+const avOld = await req2('POST', '/api/signup', { body: { name: 'Legacy Worker', email: 'legacy@t.local', phone: '(707) 555-0210', password: 'workpass0', role: 'worker', profile: { city: 'Fairfield', availability: 'Weekends' } } });
+t('v75 availability: an old payload (no availability object) defaults cleanly', avOld.status === 201 && !!avOld.j.user.availability && avOld.j.user.availability.preset === 'anytime' && avOld.j.user.availability.onDemand === false && JSON.stringify(avOld.j.user.availability.shifts) === '[]');
 
 // ---------------- v24 A3: receipt email on capture ----------------
 // Seed requests with authorized holds straight into app2's data file,
@@ -2682,7 +2750,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
 {
   const adm41 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
   const A41 = adm41.j.token;
-  const dan = await req2('POST', '/api/signup', { body: { name: 'Direct Dan', email: 'direct@t.local', password: 'workpass42', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const dan = await req2('POST', '/api/signup', { body: { name: 'Direct Dan', email: 'direct@t.local', phone: '(707) 555-0141', password: 'workpass42', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const danId = dan.j.user.id;
   await req2('PATCH', '/api/workers/' + danId, { token: A41, body: { status: 'active' } });
   const directMailFor = async (frag) => (await mockEmails()).filter(e => String(e.subject || '').includes('Direct job offer') && String(e.subject || '').includes(frag));

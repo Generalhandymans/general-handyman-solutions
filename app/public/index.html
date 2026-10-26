@@ -362,8 +362,27 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       </div>
       <div class="row">
         <div><label data-w="insuranceLabel">Insurance</label><select id="wInsurance"><option value="Has general liability" data-w="insHas">Has general liability</option><option value="No insurance yet" data-w="insNo">No insurance yet</option><option value="Not sure" data-w="insUnsure">Not sure</option></select></div>
-        <div><label data-w="availLabel">Availability</label><input id="wAvail" data-wp="availPh" placeholder="Weekdays / weekends / anytime"></div>
       </div>
+      <!-- v75: availability is CHECKBOXES now (Gabriel, 2026-10-25) —
+           days, shifts and the on-demand flag land STRUCTURED on the
+           record (u.availability), not as free text the Team must parse. -->
+      <label data-w="availDaysLabel">Days you can work</label>
+      <div id="wAvailDays" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin:2px 0 8px">
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="1"> <span data-w="day_1">Mon</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="2"> <span data-w="day_2">Tue</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="3"> <span data-w="day_3">Wed</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="4"> <span data-w="day_4">Thu</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="5"> <span data-w="day_5">Fri</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="6"> <span data-w="day_6">Sat</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wDay" value="0"> <span data-w="day_0">Sun</span></label>
+      </div>
+      <label data-w="availShiftsLabel">Shifts</label>
+      <div id="wAvailShifts" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin:2px 0 8px">
+        <label style="font-weight:400"><input type="checkbox" class="wShift" value="morning"> <span data-w="shiftMorning">Mornings</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wShift" value="afternoon"> <span data-w="shiftAfternoon">Afternoons</span></label>
+        <label style="font-weight:400"><input type="checkbox" class="wShift" value="evening"> <span data-w="shiftEvening">Evenings</span></label>
+      </div>
+      <label style="display:block;font-weight:400;margin:2px 0 10px"><input type="checkbox" id="wOnDemand"> <span data-w="availOnDemand">⚡ Available for on-demand / urgent jobs</span></label>
       <label data-w="notesLabel">Anything the Team should know?</label><textarea id="wNotes" data-wp="notesPh" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $29/mo total.</b> Your first month is <b>FREE</b> — <b>$0 charged today</b>, then $29/mo (one free month per account). 20% off any job • Free first in-person estimate • Cancel anytime.</p>
@@ -847,6 +866,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 data-w="openJobs" style="margin:0">Open job offers</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="workerLangEnW" onclick="setWorkerLang('en')">EN</button><button type="button" id="workerLangEsW" onclick="setWorkerLang('es')">ES</button></span></div>
     <p class="mut" id="workerStatus"></p>
     <div id="workerLocLine" style="margin:6px 0"></div>
+    <div id="connectGateCard"></div>
     <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
     <div id="jobList"></div>
     <div id="workerSkillBanner"></div>
@@ -1100,6 +1120,8 @@ const W_I18N = {
     licenseLabel: 'License / ID', licDriver: 'Driver license', licId: 'State ID only', licWorking: 'Working on it',
     insuranceLabel: 'Insurance', insHas: 'Has general liability', insNo: 'No insurance yet', insUnsure: 'Not sure',
     availLabel: 'Availability', availPh: 'Weekdays / weekends / anytime', notesLabel: 'Anything the Team should know?', notesPh: 'Your experience, specialties, anything important',
+    connectGateTitle: '🔒 On-demand jobs are locked', connectGateMsg: 'To unlock on-demand jobs you need to connect Stripe Connect', connectGateBody: 'Your pay lands in your own bank the moment you finish a job — that is why paid jobs unlock only when your Stripe Connect setup is done. It takes about 2 minutes: your ID and your bank.', connectGateBtn: 'Connect Stripe Connect',
+    availDaysLabel: 'Days you can work', availShiftsLabel: 'Shifts', shiftMorning: 'Mornings', shiftAfternoon: 'Afternoons', shiftEvening: 'Evenings', availOnDemand: '⚡ Available for on-demand / urgent jobs',
     permTitle: '⚙️ Finish setting up your app', permNotif: '🔔 Notifications', permNotifSub: 'Alerts with the hammer sound 🔨', permLoc: '📍 Your location', permLocSub: 'Jobs and live route', activate: 'ACTIVATE',
     permHelpT: 'Blocked it? Turn them on in your browser settings: tap the 🔒 lock next to the address → Permissions.',
     permWhyWorker: 'So we can alert you when a job drops in your area and share your route, turn on these two permissions.', permWhyCustomer: 'So we can tell you when your technician is on the way, turn on these two permissions.',
@@ -1152,6 +1174,8 @@ const W_I18N = {
     licenseLabel: 'Licencia / ID', licDriver: 'Licencia de manejar', licId: 'Solo ID estatal', licWorking: 'En trámite',
     insuranceLabel: 'Seguro', insHas: 'Tiene seguro general', insNo: 'Sin seguro todavía', insUnsure: 'No estoy seguro',
     availLabel: 'Disponibilidad', availPh: 'Entre semana / fines de semana / cuando sea', notesLabel: '¿Algo que el Team debe saber?', notesPh: 'Tu experiencia, especialidades, lo importante',
+    connectGateTitle: '🔒 Los jales on-demand están bloqueados', connectGateMsg: 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect', connectGateBody: 'Tu pago cae en tu propio banco en cuanto terminas un trabajo — por eso los jales pagados se desbloquean solo cuando tu Stripe Connect está listo. Toma unos 2 minutos: tu ID y tu banco.', connectGateBtn: 'Conectar Stripe Connect',
+    availDaysLabel: 'Días que puedes trabajar', availShiftsLabel: 'Turnos', shiftMorning: 'Mañanas', shiftAfternoon: 'Tardes', shiftEvening: 'Noches', availOnDemand: '⚡ Disponible para jales on-demand / urgentes',
     permTitle: '⚙️ Termina de activar tu app', permNotif: '🔔 Notificaciones', permNotifSub: 'Avisos con el sonido del martillo 🔨', permLoc: '📍 Tu ubicación', permLocSub: 'Trabajos y ruta en vivo', activate: 'ACTIVAR',
     permHelpT: '¿Tocaste "Bloquear"? Actívalos desde los ajustes de tu navegador: toca el candado 🔒 junto a la dirección → Permisos.',
     permWhyWorker: 'Para avisarte cuando caiga un jale en tu área y compartir tu ruta necesitas estos dos permisos.', permWhyCustomer: 'Para avisarte cuando tu técnico vaya en camino necesitas estos dos permisos.',
@@ -1981,6 +2005,21 @@ document.querySelectorAll('.pick').forEach(function(g){
 });
 function pickVals(idv){ return [...document.querySelectorAll('#'+idv+' button.sel')].map(b=>b.dataset.v); }
 function pickOne(idv){ const b=document.querySelector('#'+idv+' button.sel'); return b?b.dataset.v:''; }
+// v75: read the application's availability CHECKBOXES into the structured
+// shape the server stores (days as JS getDay numbers, shift keys, the
+// on-demand flag) plus a compact English summary that stays on
+// profile.availability as application history (the admin detail row).
+function workerAvailFromForm(){
+  const days = [...document.querySelectorAll('.wDay')].filter(c => c.checked).map(c => parseInt(c.value, 10)).filter(n => Number.isInteger(n) && n >= 0 && n <= 6).sort();
+  const shifts = [...document.querySelectorAll('.wShift')].filter(c => c.checked).map(c => c.value).filter(v => ['morning', 'afternoon', 'evening'].includes(v));
+  const onDemand = !!((document.getElementById('wOnDemand') || {}).checked);
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const parts = [];
+  if (days.length) parts.push(days.map(d => dayNames[d]).join(' '));
+  if (shifts.length) parts.push(shifts.join(', '));
+  if (onDemand) parts.push('on-demand OK');
+  return { value: { preset: days.length ? 'custom' : 'anytime', days: days, shifts: shifts, onDemand: onDemand }, summary: parts.join(' · ') };
+}
 // v72 (L-1): the 1–10 self-rating block was removed from the application
 // form — skills are captured ONCE, in the trades boxes (1–5 + tools).
 // Old profiles keep their stored selfRatings; the admin card still shows
@@ -2070,13 +2109,13 @@ async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
-    else { const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:document.getElementById('wAvail').value.trim(), notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
+    else { const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       const role = (curMode==='homecare' || curMode==='join') ? 'customer' : curMode;
       const homePayload = (curMode==='customer' || curMode==='join' || curMode==='homecare') ? readHomeForm() : {};
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile}, homePayload))});
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile, availability: curMode==='worker' ? availCbs.value : undefined}, homePayload))});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user;
       if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // legacy homecare-mode submit: inline $49 charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks it: never let it become a $49 HomeCare charge; the resume below takes the user to the selected plan's checkout instead
       if(curMode==='join' && pendingJoin){
@@ -2672,6 +2711,7 @@ async function loadMyJobs(){
   initTrackMaps(d.jobs);
 }
 async function loadJobs(){
+  paintConnectGateCard();
   document.getElementById('workerStatus').textContent = me.status==='active' ? WT('statusActive') : WT('statusInactive').replace('{status}', me.status);
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += WT('ratingLine').replace('{avg}', d.workerRating.average).replace('{n}', d.workerRating.count).replace('{jobs}', WT(d.workerRating.count === 1 ? 'ratedJob1' : 'ratedJobN'));
@@ -2855,7 +2895,27 @@ async function saveWorkerTrades(){
 }
 function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
 async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdmin(); }catch(e){ alert(e.message); } }
-async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
+// v75: Gabriel's Connect-gate override, right on the job card — pick the
+// worker, one tap releases THIS job to him despite the claim gate
+// (server audits it). The pill shows when a release is already in place.
+function connectOverrideHtml(j){
+  const opts = (adminWorkersCache || []).filter(function(w){ return w.status === 'active'; }).map(function(w){ return '<option value="' + w.id + '"' + (j.connectOverrideFor === w.id ? ' selected' : '') + '>' + escHtml(w.name) + '</option>'; }).join('');
+  return '<div style="margin-top:8px"><span class="mut">🔒 Connect gate:</span> <select id="cov-' + j.id + '">' + opts + '</select> <button class="ghost" onclick="connectOverride(\'' + j.id + '\')">Unlock claim for this worker</button>' + (j.connectOverrideFor ? ' <span class="pill">Unlocked for one worker</span>' : '') + '</div>';
+}
+async function connectOverride(idv){ const sel=document.getElementById('cov-'+idv); if(!sel||!sel.value){ alert('Pick a worker first'); return; } try{ await api('/api/admin/jobs/'+idv+'/connect-override',{method:'POST', body:JSON.stringify({workerId: sel.value})}); }catch(e){ alert(e.message); } loadAdmin(); }
+async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ if (e.code === 'CONNECT_REQUIRED') { connectGateStateCache = null; paintConnectGateCard(); if (await appConfirm(WT('connectGateMsg') + '\n\n' + WT('connectGateBody'))) startConnect(); } else alert(e.message); } }
+// v75: the persistent Connect unlock card at the top of the worker home.
+// While his Stripe Connect payouts are not enabled, paid jobs stay
+// locked server-side — this card says why, in his language, with the
+// setup button right there. It disappears the moment he is ready.
+let connectGateStateCache = null;
+async function paintConnectGateCard(){
+  const box = document.getElementById('connectGateCard'); if (!box || !me || me.role !== 'worker') return;
+  if (me.status !== 'active') { box.innerHTML = ''; return; }
+  if (!connectGateStateCache) { try { connectGateStateCache = await api('/api/worker/connect/status'); } catch(e) { connectGateStateCache = { connected: false, ready: !!me.payoutsReady }; } }
+  const c = connectGateStateCache || {};
+  box.innerHTML = c.ready ? '' : '<div class="card" style="border:1.5px solid #e42535;background:#2a0d10"><b>' + WT('connectGateTitle') + '</b><br><span>' + WT('connectGateMsg') + '</span><br><span class="mut">' + WT('connectGateBody') + '</span><br><button onclick="startConnect()" style="margin-top:8px">' + WT('connectGateBtn') + '</button></div>';
+}
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
 // ---------- Notification sound (added 2026-10-21, v22) ----------
 // A short synthesized WebAudio chime — no audio files. Browsers refuse
@@ -3911,8 +3971,16 @@ async function loadAdmin(){
     // verification + the edit form live inside a "Ver detalle" fold, so
     // the panel reads at a glance instead of one endless scroll.
     const topTrades = TRADE_KEYS_CLIENT.map(function(k){ const e=(w.tradeSkills||{})[k]; return e ? { k:k, lv:(e.effective!=null?e.effective:e.level)||0 } : null; }).filter(Boolean).sort(function(a,b){ return b.lv-a.lv; }).slice(0,3).map(function(t){ return wTradeName(t.k)+' ★'+t.lv; }).join(' · ');
-    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>'
-    + (pf.city ? '<br><span class="mut">City:</span> '+(''+pf.city).replace(/</g,'&lt;') : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '')
+    // v75: at-a-glance gaps — a worker with NO phone on file is an
+    // incomplete record (he cannot be called when a job lands), and the
+    // structured availability from his application checkboxes reads in
+    // one line (days · shifts · ⚡ on-demand).
+    const noPhonePill = w.phone ? '' : ' <span class="pill" style="background:#7a1616;color:#fff">⚠ Incomplete — no phone</span>';
+    const AV_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const avW = w.availability || {};
+    const availLine = ((avW.days||[]).length || (avW.shifts||[]).length || avW.onDemand) ? '<br><span class="mut">Availability:</span> ' + (avW.days||[]).map(function(d){ return AV_DAY_NAMES[d] || ''; }).filter(Boolean).join(' ') + ((avW.shifts||[]).length ? ' · ' + avW.shifts.join(', ') : '') + (avW.onDemand ? ' · ⚡ on-demand' : '') : '';
+    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>' + noPhonePill
+    + (pf.city ? '<br><span class="mut">City:</span> '+(''+pf.city).replace(/</g,'&lt;') : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '') + availLine
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="toggleWorkerDetail(\''+w.id+'\',this)">Ver detalle ▾</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')
     + '<div id="wdetail-'+w.id+'" style="display:none">'
     + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
@@ -3922,7 +3990,7 @@ async function loadAdmin(){
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w) + workerTradesHtml(w)
     + '<br><button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button><div id="editWorker-'+w.id+'"></div></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   loadInvoices();
   loadAdminRatings();
@@ -3932,7 +4000,14 @@ async function loadAdmin(){
   renderCartPicker();
   loadAdminCarts();
   loadAdminInvites();
-  } finally { _adminLoading = false; if (_adminReloadQueued) { _adminReloadQueued = false; loadAdmin(); } }
+  } finally { _adminLoading = false; if (_adminReloadQueued) { _adminReloadQueued = false; loadAdmin(); }
+    // v75 MAP watchdog: loadAdminMap is the LAST step of a long chain —
+    // if anything above it ever throws, the map box used to stay empty
+    // forever (one more way Gabriel "never saw the map"). If the box is
+    // still empty shortly after a load, fill it on its own; loadAdminMap
+    // fetches what it needs and its own loading guard prevents doubles.
+    setTimeout(function(){ try { const b = document.getElementById('adminMapBox'); if (b && !b.innerHTML.trim() && me && me.role === 'admin' && !adminMapLoading) loadAdminMap(); } catch(e){} }, 1500);
+  }
 }
 // ---------- Admin cart builder (v44) ----------
 let cartDraft = [];
@@ -4130,7 +4205,15 @@ async function loadAdminInvites(){
 // is ADMIN-ONLY — customers never see it.
 let adminMasterMap = null;
 let adminMapLoading = false;
+let adminMapRO = null; // v75: ResizeObserver watching the map container
 let leafletTried = false;
+// v75 MAP: ONE bilingual fallback for every map failure (Leaflet missing,
+// tiles blocked, bad init). The master map must NEVER fail as a silent
+// grey box again — Gabriel has never been able to see it, and a blank
+// rectangle gives him nothing to report. The list above it always works.
+function adminMapFallbackHtml(){
+  return '<div style="padding:16px" class="mut">El mapa no cargó — revisa tu conexión; la lista de arriba muestra quién está compartiendo. / The map could not load — check your connection; the list above shows who is sharing.<br><button type="button" class="ghost" style="margin-top:10px;padding:9px 18px;font-weight:700" onclick="loadAdminMap()">Reintentar · Retry</button></div>';
+}
 // v65: self-heal a missing Leaflet (the audit browser hit "map
 // unavailable" because the CDN script never landed). Re-inject the script
 // once and wait for it, instead of giving up on the first check.
@@ -4192,9 +4275,10 @@ async function loadAdminMap(preloadedJobs){
       + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df;margin-top:8px"></div>'
       + '</div>';
     if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
+    if (adminMapRO) { try { adminMapRO.disconnect(); } catch(e) {} adminMapRO = null; }
     const mapEl = document.getElementById('adminMap');
     if (!(window.L && L.map)) await ensureLeaflet();
-    if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.<br><button type="button" class="ghost" style="margin-top:10px;padding:9px 18px;font-weight:700" onclick="loadAdminMap()">Reintentar · Retry</button></div>'; return; }
+    if (!(window.L && L.map) || !mapEl) { if (mapEl) mapEl.innerHTML = adminMapFallbackHtml(); return; }
     adminMapWhenVisible(mapEl, function () {
       try {
         const map = L.map(mapEl);
@@ -4202,7 +4286,34 @@ async function loadAdminMap(preloadedJobs){
         // Default view FIRST — Solano County (Fairfield) — before any
         // marker can throw or the bounds logic runs.
         map.setView([38.25, -122.04], 10);
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+        const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap contributors' }).addTo(map);
+        // v75 MAP (root cause, finally attacked head-on): the audit for
+        // Gabriel's "el mapa no lo he podido ver" cleared the easy
+        // suspects — the v33 CSP already allows the tile host (img-src
+        // https:), the Leaflet CSS/JS and a sample OSM tile all answer
+        // 200, and the worker-locations feed is correct. What remained
+        // is timing: loadAdmin builds this map during its long async
+        // chain, and if the container is not laid out yet Leaflet locks
+        // onto a 0x0 viewport; v46/v65 re-measured once (400ms) and
+        // gave up. And if the tile host is unreachable from his network,
+        // the failure painted as the same silent grey box. Two cures:
+        // (1) a ResizeObserver on the container re-measures on ANY size
+        // change — panel shown, rotation, keyboard, late layout — for
+        // the life of the map; (2) tile health: if not one tile has
+        // loaded seconds after init, swap in the bilingual fallback
+        // with a Retry button instead of a grey rectangle.
+        let tilesOk = 0;
+        tileLayer.on('tileload', function(){ tilesOk++; });
+        tileLayer.on('tileerror', function(){});
+        const tileDeadline = setTimeout(function(){
+          if (tilesOk === 0 && adminMasterMap === map) {
+            adminMasterMap = null;
+            try { map.remove(); } catch(e) {}
+            if (adminMapRO) { try { adminMapRO.disconnect(); } catch(e) {} adminMapRO = null; }
+            mapEl.innerHTML = adminMapFallbackHtml();
+          }
+        }, 7000);
+        tileLayer.on('load', function(){ if (tilesOk > 0) clearTimeout(tileDeadline); });
         const pts = [];
         liveWorkers.forEach(function(w){ try { const m = L.marker([Number(w.lat), Number(w.lng)], { icon: w.photo ? photoIcon(w.photo) : hammerPinIcon() }).addTo(map); m.bindPopup('<b>' + escHtml(w.name) + '</b><br>📍 ' + escHtml(agoText(w.updatedAt))); pts.push([Number(w.lat), Number(w.lng)]); } catch(e) {} });
         jobPins.forEach(function(j){ try { const m = L.marker([Number(j.destLat), Number(j.destLng)], { icon: pinIcon('🏠') }).addTo(map); m.bindPopup('<b>' + escHtml(j.service || 'Job') + '</b><br>' + escHtml(j.city || '') + ' · ' + escHtml(j.status || '')); pts.push([Number(j.destLat), Number(j.destLng)]); } catch(e) {} });
@@ -4212,8 +4323,14 @@ async function loadAdminMap(preloadedJobs){
         // the panel is laid out, and once more after late layout shifts.
         try { map.invalidateSize(); } catch(e) {}
         setTimeout(function () { try { if (adminMasterMap === map) map.invalidateSize(); } catch(e) {} }, 400);
+        if (window.ResizeObserver) {
+          try {
+            adminMapRO = new ResizeObserver(function(){ try { if (adminMasterMap === map) map.invalidateSize(); } catch(e) {} });
+            adminMapRO.observe(mapEl);
+          } catch(e) {}
+        }
       } catch(e) {
-        if (mapEl) mapEl.innerHTML = '<div style="padding:16px" class="mut">El mapa no cargó — la lista de arriba muestra quién está compartiendo. / Map unavailable — the list above shows who is sharing.</div>';
+        if (mapEl) mapEl.innerHTML = adminMapFallbackHtml();
       }
     });
   } catch(e) {

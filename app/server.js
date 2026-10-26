@@ -285,16 +285,22 @@ function skillsRatedCount(u) { const v = tradeSkillsOf(u); return TRADE_KEYS.fil
 function effectiveSkill(u, key) { const v = tradeSkillsOf(u)[key]; return v ? v.effective : null; }
 // ---------- Availability (v41) ----------
 // u.availability = { preset: 'anytime'|'weekdays'|'weekends'|'custom',
-// days: [0..6] (JS getDay: 0 = Sunday), paused: bool }. Legacy accounts
-// have none — the default view is anytime / not paused, and their old
-// free-text profile.availability stays as application history.
+// days: [0..6] (JS getDay: 0 = Sunday), paused: bool,
+// shifts: ['morning'|'afternoon'|'evening'], onDemand: bool }.
+// v75: shifts + onDemand ride the same record — the new-technician
+// APPLICATION collects them with checkboxes (Gabriel, 2026-10-25).
+// Legacy accounts have none — the default view is anytime / not paused,
+// and their old free-text profile.availability stays as history.
 const AVAIL_PRESETS = ['anytime', 'weekdays', 'weekends', 'custom'];
+const AVAIL_SHIFTS = ['morning', 'afternoon', 'evening'];
 function cleanAvailability(input, existing) {
-  const out = { preset: 'anytime', days: [], paused: false };
+  const out = { preset: 'anytime', days: [], paused: false, shifts: [], onDemand: false };
   const prev = (existing && typeof existing === 'object') ? existing : {};
   if (AVAIL_PRESETS.includes(prev.preset)) out.preset = prev.preset;
   if (Array.isArray(prev.days)) out.days = prev.days.filter(d => Number.isInteger(d) && d >= 0 && d <= 6);
   out.paused = !!prev.paused;
+  if (Array.isArray(prev.shifts)) out.shifts = AVAIL_SHIFTS.filter(s => prev.shifts.includes(s));
+  out.onDemand = !!prev.onDemand;
   if (input && typeof input === 'object') {
     if (input.preset !== undefined) {
       if (!AVAIL_PRESETS.includes(input.preset)) return { error: 'unknown availability preset' };
@@ -305,6 +311,11 @@ function cleanAvailability(input, existing) {
       out.days = Array.from(new Set(input.days.map(d => parseInt(d, 10)).filter(d => Number.isInteger(d) && d >= 0 && d <= 6))).sort();
     }
     if (input.paused !== undefined) out.paused = !!input.paused;
+    if (input.shifts !== undefined) {
+      if (!Array.isArray(input.shifts)) return { error: 'shifts must be a list' };
+      out.shifts = AVAIL_SHIFTS.filter(s => input.shifts.includes(s));
+    }
+    if (input.onDemand !== undefined) out.onDemand = !!input.onDemand;
   }
   return { value: out };
 }
@@ -3784,12 +3795,22 @@ const server = http.createServer(async (req, res) => {
     delete prof.tradeSkills;
     delete prof.photo; // v41: the profile photo is set ONLY from the worker's profile editor, never at signup
     const tradeSkills = role === 'worker' ? mergeTradeSkills(null, tradeSkillsIn) : {};
+    // v75: the application's availability CHECKBOXES (days / shifts /
+    // on-demand) land STRUCTURED on the record as u.availability. Old
+    // payloads carry no availability object at all (their free-text
+    // profile.availability stays as application history) — validation
+    // stays tolerant: an unparseable object simply does not land.
+    let signupAvailability = null;
+    if (role === 'worker' && b.availability && typeof b.availability === 'object' && !Array.isArray(b.availability)) {
+      const ca = cleanAvailability(b.availability, null);
+      if (!ca.error) signupAvailability = ca.value;
+    }
     const serviceAddress = role === 'customer' ? cleanText(b.serviceAddress, 300) : '';
     // Optional home details + start preference (customers only, never
     // required — ZIP included: Gabriel's "no obligatorio" rule).
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
@@ -4482,7 +4503,19 @@ const server = http.createServer(async (req, res) => {
     const w = db.users.find(u => u.id === workerMatch[1] && u.role === 'worker');
     if (!w) return send(res, 404, { error: 'worker not found' });
     const b = await readBody(req);
-    if (['active', 'review', 'notfit'].includes(b.status)) { const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); } }
+    if (['active', 'review', 'notfit'].includes(b.status)) {
+      // v75 (Gabriel, 2026-10-25): nobody goes ACTIVE without a phone
+      // number on file — a technician the Team cannot call does not
+      // exist when a job lands (the Jesús López scare: his number lived
+      // only in one record). The phone may ride THIS same PATCH (the
+      // profile edit below), so the check reads the effective number.
+      // Existing ACTIVE workers are never retroactively deactivated:
+      // the guard fires only on a transition INTO active, and the admin
+      // cards flag phoneless records as "incomplete — no phone".
+      const effectivePhone = (typeof b.phone === 'string' ? cleanText(b.phone, 40) : '') || w.phone || '';
+      if (b.status === 'active' && w.status !== 'active' && !effectivePhone) return send(res, 400, { error: 'worker has no phone on file — add a phone number before activating (incomplete record)', code: 'PHONE_REQUIRED' });
+      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); }
+    }
     // Private Team-only skill ranks (1-5 per skill). Stored outside profile so workers never see them.
     if (b.skillRanks && typeof b.skillRanks === 'object' && !Array.isArray(b.skillRanks)) {
       w.internal = w.internal || {};
@@ -4824,6 +4857,21 @@ const server = http.createServer(async (req, res) => {
     const j = db.jobs.find(x => x.id === claimMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     if (j.status !== 'Open') return send(res, 409, { error: 'job already claimed' });
+    // v75 (Gabriel, 2026-10-25): the Stripe Connect UNLOCK GATE. A worker
+    // may register, be activated and browse — but he cannot claim a PAID
+    // job (above all an on-demand one) until his Stripe Connect payouts
+    // are enabled: his pay has to be able to land in his own bank the
+    // moment the job is Done, and his taxes are his (Stripe reports to
+    // him, never through Gabriel). Enforced HERE, server-side — the
+    // client only renders the refusal. Gabriel can release ONE job to
+    // ONE worker anyway (POST /api/admin/jobs/:id/connect-override,
+    // audited). When Stripe is not configured on this deployment the
+    // gate stays off: nobody can be auto-paid in that world either
+    // (payouts report 'stripe_off'), so bricking the board helps no one.
+    if (Number(j.payOffer) > 0 && j.connectOverrideFor !== user.id && stripeReady()) {
+      const connectReady = user.stripeAccountId ? await refreshWorkerConnect(user) : false;
+      if (!connectReady) return send(res, 403, { error: 'connect_required', code: 'CONNECT_REQUIRED', connect: { connected: !!user.stripeAccountId, ready: false }, message: { en: 'To unlock on-demand jobs you need to connect Stripe Connect', es: 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect' } });
+    }
     j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString();
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
@@ -4899,6 +4947,25 @@ const server = http.createServer(async (req, res) => {
     await maybePayWorkerForJob(j, { force: true });
     audit(user, 'job.pay_worker', j.id, 'payoutStatus ' + (j.payoutStatus || '—'));
     return send(res, 200, { ok: true, payoutStatus: j.payoutStatus || null, payoutTransferId: j.payoutTransferId || null, payoutError: j.payoutError || null });
+  }
+  // v75: Gabriel's Connect-gate override — release ONE job to ONE worker
+  // despite the claim gate (e.g. a tech he trusts whose bank setup is
+  // still pending, on a job that cannot wait). One clear admin action,
+  // always audited, and the worker is told. This unlocks only the
+  // CLAIM: the payout itself still waits for his Stripe setup at Done,
+  // exactly like the v29 flow — no money moves early.
+  const connectOverrideMatch = p.match(/^\/api\/admin\/jobs\/([\w-]+)\/connect-override$/);
+  if (connectOverrideMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const j = db.jobs.find(x => x.id === connectOverrideMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    const b = await readBody(req);
+    const w = db.users.find(u => u.id === cleanText(b.workerId, 60) && u.role === 'worker');
+    if (!w) return send(res, 400, { error: 'worker not found' });
+    j.connectOverrideFor = w.id; j.connectOverrideAt = new Date().toISOString(); j.connectOverrideBy = user.id;
+    audit(user, 'job.connect_override', j.id, 'claim unlocked for ' + w.name + ' (' + (w.email || '') + ') despite incomplete Stripe Connect');
+    notify(w.id, 'job', 'The Team unlocked job ' + j.id + ' (' + (j.service || 'Job') + ') for you — you can claim it now, even before your Stripe setup is finished.');
+    save(); return send(res, 200, { ok: true, job: publicJob(j, user) });
   }
 
   // ---------- Ratings (v25, C1) ----------
