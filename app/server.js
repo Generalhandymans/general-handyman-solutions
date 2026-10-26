@@ -54,7 +54,7 @@ const sessions = new Map(); // token -> { uid, exp } — sessions expire server-
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(pw, s, 64).toString('hex'); }
 function checkPw(pw, stored) { const [s, h] = stored.split(':'); const t = crypto.scryptSync(pw, s, 64).toString('hex'); return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -1296,10 +1296,11 @@ async function createCheckoutSession(kind, user, opts) {
     params['line_items[0][quantity]'] = '1';
     params['subscription_data[metadata][userId]'] = user.id;
     params['subscription_data[metadata][kind]'] = 'homecare';
-    // v60: invite-only free first month — the subscription starts as a
+    // v60/v74: the free first month — the subscription starts as a
     // Stripe trial (card collected today, $0 charged, first $29 charge
-    // when the trial ends). The trial write itself lives at the ONE
-    // shared site below createCheckoutSession's kind chain.
+    // when the trial ends). Since v74 the trial is UNIVERSAL (every
+    // eligible HomeCare join, invitation or not); the trial write
+    // itself lives at the ONE shared site below the kind chain.
   } else if (kind === 'yardcare' || kind === 'homecare-plus') {
     // Membership plans (added 2026-10-21): the price ALWAYS comes from the
     // fixed server-side plan map keyed by opts.plan (yard1/yard2/plus1/
@@ -1398,11 +1399,18 @@ async function createCheckoutSession(kind, user, opts) {
   } else {
     throw new Error('unknown checkout kind');
   }
-  // v60/v70: the free-month trial — exactly ONE write site in the
-  // server. Only the invite-gated flows pass trialDays (the /join
-  // invite checkout and the combined cart-join); Yard/Plus and every
-  // regular join keep charging fully from day one.
-  if (opts.trialDays) params['subscription_data[trial_period_days]'] = String(Math.max(1, Math.round(Number(opts.trialDays) || 0)));
+  // v60/v70/v74: the free-month trial — exactly ONE write site for
+  // hosted Checkout. Callers pass trialDays ONLY for a HomeCare join
+  // whose account passed homeCareTrialEligible() (an invite claim
+  // qualifies the same way it always did); Yard/Plus never trial.
+  // The freeMonth flag rides the session AND subscription metadata
+  // so every settle path can mark the account's free month spent the
+  // moment the trialing subscription activates.
+  if (opts.trialDays) {
+    params['subscription_data[trial_period_days]'] = String(Math.max(1, Math.round(Number(opts.trialDays) || 0)));
+    params['metadata[freeMonth]'] = '1';
+    params['subscription_data[metadata][freeMonth]'] = '1';
+  }
   if (tipCents > 0) {
     params['line_items[1][price_data][currency]'] = 'usd';
     params['line_items[1][price_data][unit_amount]'] = String(tipCents);
@@ -1444,7 +1452,7 @@ async function createInlineSubscription(user, plan) {
     user.stripeSubscriptionId = '';
   }
   const priceId = await membershipPriceIdFor(plan);
-  const sub = await stripeApi('/subscriptions', {
+  const subParams = {
     customer: customerId,
     'items[0][price]': priceId,
     'items[0][quantity]': '1',
@@ -1454,7 +1462,15 @@ async function createInlineSubscription(user, plan) {
     'metadata[kind]': plan.kind,
     'metadata[plan]': plan.key,
     'expand[]': 'latest_invoice.payment_intent'
-  });
+  };
+  // v74: the universal free month covers the inline card flow too —
+  // a trial-eligible HomeCare join starts as a 30-day trial (the card
+  // is still collected and saved today; the first $29 charge lands
+  // when the trial ends). Plus/Yard never trial. This is the second
+  // and last trial write site in the server; both are gated on the
+  // same eligibility helper.
+  if (plan.key === 'homecare' && homeCareTrialEligible(user)) { subParams.trial_period_days = String(INVITE_TRIAL_DAYS); subParams['metadata[freeMonth]'] = '1'; }
+  const sub = await stripeApi('/subscriptions', subParams);
   user.stripeSubscriptionId = sub.id;
   if (plan.key !== 'homecare') setMembershipPlan(user, plan.key, { status: sub.status || 'incomplete', subscriptionId: sub.id });
   save();
@@ -1546,6 +1562,7 @@ function activateHomeCareFromCheckout(u, session) {
   u.stripeCustomerId = session.customer || u.stripeCustomerId || '';
   u.stripeSubscriptionId = subId || u.stripeSubscriptionId || '';
   setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
+  if (session && session.metadata && session.metadata.freeMonth === '1') u.inviteFreeMonthUsed = true; // v74: a trialing HomeCare activation spends the account's ONE free month (the same flag invite claims set)
   applySourceAtActivation(u);
   if (!alreadyActiveHere) {
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
@@ -1669,6 +1686,32 @@ function markInviteAccepted(inv, u, session) {
   if (session && session.subscription) inv.subscriptionId = session.subscription;
   // Claimed anywhere = the offer leaves every cart it was attached to.
   for (const cc of cartsOf()) if (cc.freeMonthInviteId === inv.id) delete cc.freeMonthInviteId;
+  return true;
+}
+// v74 (Gabriel, 2026-10-25): the free first month is UNIVERSAL now —
+// EVERY HomeCare join starts with the 30-day free trial, no personal
+// invitation needed, and the offer is advertised publicly. The guard
+// is the one Gabriel set for the invites, now applied to everyone:
+// ONE free month per account, EVER. An account is eligible only when
+// it never used a free month (inviteFreeMonthUsed — stamped when a
+// trialing subscription activates or an invite is claimed) and never
+// held a HomeCare subscription before: the stored plan record keeps
+// its 'since' across cancellations and plan switches, and legacy
+// accounts (no plan record) fall back to the HomeCare fields, which
+// are never cleared either. Eligibility must be provable from the
+// account — when it cannot be established (no account), the
+// conservative answer is NO trial.
+function homeCareTrialEligible(u) {
+  if (!u || !u.id) return false;
+  if (u.inviteFreeMonthUsed) return false;
+  const stored = (u.membershipPlan && typeof u.membershipPlan === 'object' && MEMBERSHIP_PLANS[u.membershipPlan.planKey]) ? u.membershipPlan : null;
+  if (stored) {
+    if (stored.type === 'homecare' && stored.since) return false; // already held the HomeCare plan itself
+  } else if (u.homeCareSince || (u.homeCareStatus && u.homeCareStatus !== 'none')) {
+    return false; // legacy HomeCare holder — no plan record to say otherwise
+  }
+  const e = (u.email || '').toLowerCase();
+  if (e && db.users.some(x => x.id !== u.id && (x.email || '').toLowerCase() === e && (x.inviteFreeMonthUsed || x.homeCareSince))) return false;
   return true;
 }
 // The trial-aware session proof for the invite return path: the shared
@@ -2187,6 +2230,7 @@ async function handleStripeEvent(event) {
       const plan = planFromSubscription(obj, membershipPlanOf(u));
       if (plan && (obj.status === 'active' || obj.status === 'trialing')) {
         activateMembershipPlan(u, plan.key, { subscriptionId: obj.id });
+        if (plan.key === 'homecare' && obj.status === 'trialing') u.inviteFreeMonthUsed = true; // v74: the free month is spent as soon as the trial subscription activates
       } else {
         syncMembershipPlanFromSubscription(u, obj);
       }
@@ -2729,7 +2773,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       questions: 'Questions? Text or call (707) 862-3773.',
       memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings on labor are already in this estimate.',
       joinLabel: 'Become a HomeCare member — $29/mo — and save 20% on the labor in this estimate',
-      joinBody: 'Join right here and this estimate drops from {list} to {member} (you save {save} — the 20% comes off labor; materials stay at cost). First in-person estimate FREE, priority scheduling, cancel anytime. Or skip it and approve at the regular price — your choice.',
+      joinBody: 'Join right here and this estimate drops from {list} to {member} (you save {save} — the 20% comes off labor; materials stay at cost). First in-person estimate FREE, priority scheduling, cancel anytime. Your first month of HomeCare is FREE — then $29/mo (one free month per account). Or skip it and approve at the regular price — your choice.',
       emailLabel: 'Email for your account', passLabel: 'Create your account password (8+ characters) — or your existing account password',
       joinBtn: 'Join HomeCare — save {save}', joining: 'Joining HomeCare…',
       approveH: 'Approve this estimate?', approveBody: 'Approving creates your invoice right away — then you pay online with a card. No account needed.',
@@ -2757,7 +2801,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.',
       memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% en mano de obra ya está aplicado en este estimado.',
       joinLabel: 'Hazte miembro de HomeCare — $29/mes — y ahorra 20% en la mano de obra de este estimado',
-      joinBody: 'Únete aquí mismo y este estimado baja de {list} a {member} (ahorras {save} — el 20% sale de la mano de obra; los materiales quedan a costo). Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O sáltalo y aprueba al precio normal — tú decides.',
+      joinBody: 'Únete aquí mismo y este estimado baja de {list} a {member} (ahorras {save} — el 20% sale de la mano de obra; los materiales quedan a costo). Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. Tu primer mes de HomeCare es GRATIS — luego $29/mes (un mes gratis por cuenta). O sáltalo y aprueba al precio normal — tú decides.',
       emailLabel: 'Correo para tu cuenta', passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       joinBtn: 'Unirme a HomeCare — ahorrar {save}', joining: 'Uniéndote a HomeCare…',
       approveH: '¿Apruebas este estimado?', approveBody: 'Al aprobar se crea tu factura al momento — luego pagas en línea con tarjeta. No necesitas cuenta.',
@@ -3084,7 +3128,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       memberAppliedH: '✓ HomeCare member price applied', memberAppliedBody: 'Your 20% member savings are already in this cart.',
       memberFoundBody: 'We found your active membership — your 20% savings are in this cart.',
       joinLabel: 'Become a HomeCare member — or pick your plan below — and save 20% on this order',
-      joinBody: 'Join right here and this proposal drops from {list} to {member} — you save {save} on this job. First in-person estimate FREE, priority scheduling, cancel anytime. Or leave it unchecked and pay the regular price — your choice.',
+      joinBody: 'Join right here and this proposal drops from {list} to {member} — you save {save} on this job. First in-person estimate FREE, priority scheduling, cancel anytime. HomeCare starts with your first month FREE — then $29/mo (one free month per account). Or leave it unchecked and pay the regular price — your choice.',
       planHomecare: 'HomeCare — $29/mo · 20% off this order and every order',
       planPlus1: 'HomeCare Plus — $100/mo · 20% off orders + 1 yard visit / month',
       planPlus2: 'HomeCare Plus — $175/mo · 20% off orders + 2 yard visits / month',
@@ -3131,7 +3175,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       memberAppliedH: '✓ Precio de miembro HomeCare aplicado', memberAppliedBody: 'Tu ahorro de miembro del 20% ya está aplicado en este carrito.',
       memberFoundBody: 'Encontramos tu membresía activa — tu ahorro del 20% está en este carrito.',
       joinLabel: 'Hazte miembro de HomeCare — o elige tu plan abajo — y ahorra 20% en esta orden',
-      joinBody: 'Únete aquí mismo y esta propuesta baja de {list} a {member} — ahorras {save} en este trabajo. Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. O déjalo sin marcar y paga el precio normal — tú decides.',
+      joinBody: 'Únete aquí mismo y esta propuesta baja de {list} a {member} — ahorras {save} en este trabajo. Primer estimado en persona GRATIS, prioridad al agendar, cancela cuando quieras. HomeCare empieza con tu primer mes GRATIS — luego $29/mes (un mes gratis por cuenta). O déjalo sin marcar y paga el precio normal — tú decides.',
       planHomecare: 'HomeCare — $29/mes · 20% de descuento en esta orden y en todas',
       planPlus1: 'HomeCare Plus — $100/mes · 20% de descuento en órdenes + 1 visita de yarda / mes',
       planPlus2: 'HomeCare Plus — $175/mes · 20% de descuento en órdenes + 2 visitas de yarda / mes',
@@ -3280,7 +3324,15 @@ function cartPageHtml(c, user, langOverride, notice) {
   // other plans stay full price, exactly as he ordered.
   const fmInv = c.freeMonthInviteId ? invitesOf().find(i => i.id === c.freeMonthInviteId) : null;
   const freeMonth = !!(fmInv && inviteStatusOf(fmInv) === 'pending');
-  const freeTag = freeMonth ? ' <b style="background:#1a9e4b;color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;white-space:nowrap" data-i18n="freeMonthTag">' + S.freeMonthTag + '</b>' : '';
+  // v74: the free month is for EVERYONE now — the HomeCare row carries
+  // the tag whenever the offer applies to this viewer: an attached
+  // invitation, a fresh visitor (the account they are about to create
+  // is eligible by definition), or a logged-in account that never
+  // used its free month and never held HomeCare. The tag is display
+  // only — the server re-checks the real account's eligibility when
+  // the checkout is created, and that check is what grants the trial.
+  const hcFreeMonth = freeMonth || !user || homeCareTrialEligible(user);
+  const freeTag = hcFreeMonth ? ' <b style="background:#1a9e4b;color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;white-space:nowrap" data-i18n="freeMonthTag">' + S.freeMonthTag + '</b>' : '';
   const planPicker = '<div id="planPicker" style="display:none;margin-top:10px">'
     + planRow('homecare', 'planHomecare', true, freeTag)
     + planRow('plus1', 'planPlus1', false)
@@ -3350,7 +3402,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
     + 'var DEP_L=' + depositSplit(Math.round(c.listTotal * 100)).depositCents + ', DEP_M=' + depositSplit(Math.round(c.memberTotal * 100)).depositCents + ', BAL_L=' + depositSplit(Math.round(c.listTotal * 100)).balanceCents + ', BAL_M=' + depositSplit(Math.round(c.memberTotal * 100)).balanceCents + ';'
-    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (freeMonth ? 'true' : 'false') + ';'
+    + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (hcFreeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
     + 'var PLANS={"homecare":{"name":"HomeCare","price":"$29","cents":2900,"disc":1},"plus1":{"name":"HomeCare Plus","price":"$100","cents":10000,"disc":1},"plus2":{"name":"HomeCare Plus","price":"$175","cents":17500,"disc":1},"yard1":{"name":"Yard Care","price":"$75","cents":7500,"disc":0},"yard2":{"name":"Yard Care","price":"$150","cents":15000,"disc":0}};'
@@ -5122,8 +5174,12 @@ const server = http.createServer(async (req, res) => {
       if (b.kind === 'homecare') {
         if (!['customer', 'admin'].includes(user.role)) return send(res, 403, { error: 'not allowed' });
         if (user.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
-        const s = await createCheckoutSession('homecare', user);
-        return send(res, 200, { url: s.url });
+        // v74: the universal free month — an eligible account's join
+        // starts as a 30-day trial; an account that already used its
+        // free month (or ever held HomeCare) joins at $29 from day one.
+        const hcTrial74 = homeCareTrialEligible(user);
+        const s = await createCheckoutSession('homecare', user, { trialDays: hcTrial74 ? INVITE_TRIAL_DAYS : 0 });
+        return send(res, 200, { url: s.url, trial: hcTrial74 });
       }
       if (b.kind === 'estimate' || b.kind === 'member-estimate') {
         const r = db.requests.find(x => x.id === b.requestId);
@@ -5195,8 +5251,10 @@ const server = http.createServer(async (req, res) => {
     try {
       const chk = await inlineSubscriptionPaid(user);
       if (!chk.paid) return send(res, 200, { active: false });
+      const wasTrial74 = !!(chk.sub && chk.sub.status === 'trialing');
+      if (wasTrial74) user.inviteFreeMonthUsed = true; // v74: the trial activation spends the account's one free month
       activateHomeCare(user, true);
-      return send(res, 200, { active: true });
+      return send(res, 200, { active: true, trial: wasTrial74 });
     } catch (e) { console.error('homecare confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
   // ---------- Inline one-submit join: Yard Care / HomeCare Plus ----------
@@ -5641,10 +5699,12 @@ const server = http.createServer(async (req, res) => {
     if (st !== 'pending') return send(res, 400, { error: 'this invitation is no longer available' });
     if (inv.email && (user.email || '').toLowerCase() !== inv.email) return send(res, 400, { error: 'this invitation belongs to a different email — log in with the invited email to claim it' });
     if (membershipPlanOf(user).status === 'active') return send(res, 200, { member: true });
-    // Gabriel's rule (v60): the free first month is ONCE per account —
-    // an account that already claimed an invitation can never claim
-    // another free month, even after cancelling and being re-invited.
-    if (user.inviteFreeMonthUsed) return send(res, 400, { error: 'the free first month is one per account — this account already used its invitation. You can join HomeCare at $29/mo anytime from the app.' });
+    // Gabriel's rule (v60, widened v74): the free first month is ONCE
+    // per account — an account that already used a free month (invite,
+    // universal offer, any path) or ever held a HomeCare subscription
+    // can never get another one, even after cancelling and being
+    // re-invited. The invitation itself stays claimable only here.
+    if (!homeCareTrialEligible(user)) return send(res, 400, { error: 'the free first month is one per account — this account already used its free month. You can join HomeCare at $29/mo anytime from the app.' });
     if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to join' });
     try {
       const s = await createCheckoutSession('homecare', user, {
@@ -5734,16 +5794,23 @@ const server = http.createServer(async (req, res) => {
           const iv = invitesOf().find(i => i.id === c.freeMonthInviteId);
           if (iv && inviteStatusOf(iv) === 'pending') fmInvite = iv;
         }
+        // v74 (Gabriel): the free month is UNIVERSAL — a trial-eligible
+        // account starts HomeCare free HERE with or without an attached
+        // invitation. The invitation still rides the session metadata
+        // and is marked accepted at settle, exactly as before; it just
+        // no longer gates the trial. The trial defers ONLY the plan —
+        // the 40% deposit still charges today (v70's single charge).
+        const hcTrial = joinPlan.key === 'homecare' && homeCareTrialEligible(user);
         const discPlan = joinPlan.type === 'homecare' || joinPlan.type === 'plus';
         const totalCentsJ = Math.round((discPlan ? c.memberTotal : c.listTotal) * 100);
         if (!(totalCentsJ > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
         const splitJ = depositSplit(totalCentsJ);
-        const planFirstCents = fmInvite ? 0 : joinPlan.monthlyCents;
+        const planFirstCents = hcTrial ? 0 : joinPlan.monthlyCents;
         const s = await createCheckoutSession('cart-join', user, {
           plan: joinPlan.key,
           amountCents: splitJ.depositCents,
           cartId: c.id,
-          trialDays: fmInvite ? INVITE_TRIAL_DAYS : 0,
+          trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0,
           label: 'Cart ' + c.id + ' — 40% deposit to book — General Handyman Solutions',
           successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
@@ -5975,7 +6042,13 @@ const server = http.createServer(async (req, res) => {
       try {
         const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
         if (sess && sess.id === retSessionId && sess.mode === 'subscription') {
-          const chk = await checkoutSessionSubscriptionPaid(sess);
+          // v74: a free-month join's session is 'no_payment_required',
+          // never 'paid' — when the strict proof fails, fall back to
+          // the trial-aware one (session complete + the subscription
+          // passes the shared paid rule, trialing included), the same
+          // proof the invitation return has always used.
+          let chk = await checkoutSessionSubscriptionPaid(sess);
+          if (!chk.paid) chk = await inviteSessionVerified(sess);
           if (chk.paid) {
             const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
             if (mu) {
@@ -6050,7 +6123,9 @@ const server = http.createServer(async (req, res) => {
         successUrl: estimatePageLink(r) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: estimatePageLink(r) + '?cancelled=1',
         metadata: { estimateId: r.id, src: 'estimate' },
-        subMetadata: { estimateId: r.id }
+        subMetadata: { estimateId: r.id },
+        // v74: the universal free month reaches the estimate join too.
+        trialDays: homeCareTrialEligible(user) ? INVITE_TRIAL_DAYS : 0
       });
       r.joinSessionId = s.id;
       save();

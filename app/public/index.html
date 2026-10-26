@@ -323,7 +323,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     </div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="cardRow" style="display:none">
-      <label id="cardChargeLabel">Card — charged $29 today, then $29/mo</label>
+      <label id="cardChargeLabel">Card — $0 charged today, then $29/mo</label>
       <div id="cardElement" style="background:#fff;border:1px solid #d8d2c8;border-radius:12px;padding:12px"></div>
       <p class="mut" style="font-size:12.5px">Secure payment via Stripe — your card number never touches our servers. Cancel anytime from your dashboard.</p>
     </div>
@@ -366,7 +366,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
       </div>
       <label data-w="notesLabel">Anything the Team should know?</label><textarea id="wNotes" data-wp="notesPh" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
-    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $29/mo total.</b> Your card will be charged <b>$29 today</b>, then $29/mo. 20% off any job • Free first in-person estimate • Cancel anytime.</p>
+    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $29/mo total.</b> Your first month is <b>FREE</b> — <b>$0 charged today</b>, then $29/mo (one free month per account). 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <!-- v59: technician sign-in entry — a dedicated high-contrast pill.
@@ -414,7 +414,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
   <div id="membershipsBox" style="display:none">
     <p class="mut"><a href="#" onclick="exitMemberships();return false;">← Back to the app</a></p>
     <h2 id="membershipsHeading">Memberships</h2>
-    <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
+    <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. <b>HomeCare starts with a FREE first month for everyone</b> — then $29/mo (one free month per account). Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
   <div id="compareGridBox">
     <div class="compare-grid">
       <div class="cg-card free">
@@ -458,6 +458,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
         <div class="cg-price">$29<span>/mo</span></div>
         <div class="cg-subline">No yard</div>
         <ul>
+          <li><b>First month FREE</b> — for everyone (one per account)</li>
           <li>20% off labor (jobs under $1,000)</li>
           <li>First in-person estimate FREE, then $50</li>
           <li>Priority scheduling</li>
@@ -1019,9 +1020,11 @@ function memberFormPlan(){
 function syncAuthPriceTexts(m){
   const info = (m === 'join' || m === 'homecare') ? JOIN_PLAN_INFO[memberFormPlan()] : null;
   const hc = document.getElementById('hcChargeNote');
-  if (hc && info) hc.innerHTML = '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
+  if (hc && info) hc.innerHTML = info.kind === 'homecare'
+    ? '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your first month is <b>FREE</b> — <b>$0 charged today</b>, then $' + info.monthly + '/mo (one free month per account). ' + info.perks
+    : '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
   const lbl = document.getElementById('cardChargeLabel');
-  if (lbl && info) lbl.textContent = 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
+  if (lbl && info) lbl.textContent = info.kind === 'homecare' ? 'Card — $0 charged today, then $' + info.monthly + '/mo' : 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
   const promo = document.getElementById('hcPromo');
   if (promo) promo.style.display = (m === 'join' || isWorkerEntry()) ? 'none' : 'block';
 }
@@ -1304,7 +1307,7 @@ let pendingAddressCheckout = null;
 // prices here are display-only; the server plan map stays authoritative.
 let pendingJoin = null;
 const JOIN_PLAN_INFO = {
-  homecare: { name: 'HomeCare', monthly: 29, kind: 'homecare', perks: '20% off any job • Free first in-person estimate • Cancel anytime.' },
+  homecare: { name: 'HomeCare', monthly: 29, kind: 'homecare', perks: 'First month FREE • 20% off any job • Free first in-person estimate • Cancel anytime.' },
   yard1: { name: 'Yard Care', monthly: 75, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
   yard2: { name: 'Yard Care', monthly: 150, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
   plus1: { name: 'HomeCare Plus', monthly: 100, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.' },
@@ -1320,7 +1323,9 @@ function renderJoinTexts(){
   const sel = document.getElementById('aPlanSel');
   if (sel && sel.value !== plan) sel.value = plan;
   const note = document.getElementById('joinChargeNote');
-  if (note && info) note.innerHTML = 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, ' + (info.kind === 'homecare' ? '' : 'service address and ') + 'payment together. Cancel anytime.';
+  if (note && info) note.innerHTML = info.kind === 'homecare'
+    ? 'Joining <b>' + info.name + '</b> — your first month is <b>FREE</b>: <b>$0 charged today</b>, then $' + info.monthly + '/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.'
+    : 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, service address and payment together. Cancel anytime.';
   const btn = document.getElementById('authBtn');
   if (btn && info) btn.textContent = 'Create account & join — $' + info.monthly + '/mo';
 }
@@ -1904,7 +1909,7 @@ async function chargeHomeCare(email){
       showErr('Online HomeCare signup is still being connected — your account was created. Text (707) 862-3773 and the Team will finish your membership.');
       render(); return;
     }
-    btn.disabled = true; btn.textContent = 'Processing $29 payment…';
+    btn.disabled = true; btn.textContent = 'Processing…';
     const s = await api('/api/stripe/homecare-subscribe', { method: 'POST', body: JSON.stringify({ source: campaignSource() }) });
     const conf = await stripeObj.confirmCardPayment(s.clientSecret, {
       payment_method: { card: cardEl, billing_details: {
@@ -1918,7 +1923,7 @@ async function chargeHomeCare(email){
     try { cardEl.clear(); } catch(e){}
     btn.disabled = false; mode('homecare');
     if (chk.active) {
-      document.getElementById('authBox').innerHTML = '<h3>Welcome to HomeCare! 🎉</h3><p>Your membership is <b>active</b> — $29/mo. Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.</p>';
+      document.getElementById('authBox').innerHTML = '<h3>Welcome to HomeCare! 🎉</h3><p>Your membership is <b>active</b> — ' + (chk.trial ? 'your first month is <b>FREE</b>, then $29/mo.' : '$29/mo.') + ' Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.</p>';
     }
     render();
   }catch(e){
@@ -4644,7 +4649,7 @@ function orderUpsell(){
   if (orderState.memberActive) { u.innerHTML = '<div class="card" style="border-color:#2fbf71;margin:12px 0"><b>✓ HomeCare member price applied</b><p class="mut" style="margin:4px 0 0">Your 20% member savings are already in this order.</p></div>'; return; }
   if (!svc.member) { u.innerHTML = ''; return; }
   const t = orderTotalsCalc();
-  u.innerHTML = '<div class="card" style="border-color:#e42535;margin:12px 0"><label style="display:block"><input type="checkbox" id="oJoin" ' + (orderState.join ? 'checked' : '') + ' onchange="orderState.join=this.checked;orderTotals()"> <b>Add HomeCare — $29/mo</b></label><p class="mut" style="margin:6px 0 0">Join and <b>save $' + t.savings + ' (20%) on THIS order</b> — the discount applies right away. First in-person estimate free, priority scheduling, cancel anytime. The membership is a monthly Stripe subscription, confirmed in this same step: one card, one tap.</p></div>';
+  u.innerHTML = '<div class="card" style="border-color:#e42535;margin:12px 0"><label style="display:block"><input type="checkbox" id="oJoin" ' + (orderState.join ? 'checked' : '') + ' onchange="orderState.join=this.checked;orderTotals()"> <b>Add HomeCare — $29/mo</b></label><p class="mut" style="margin:6px 0 0">Join and <b>save $' + t.savings + ' (20%) on THIS order</b> — the discount applies right away. First in-person estimate free, priority scheduling, cancel anytime — and your <b>first month is FREE</b> (one per account). The membership is a monthly Stripe subscription, confirmed in this same step: one card, one tap.</p></div>';
 }
 function orderTotals(){
   if (!orderState || orderState.bad) return;
@@ -4654,10 +4659,10 @@ function orderTotals(){
   s += '<div style="display:flex;justify-content:space-between"><span>' + orderState.svc.name + '</span><span>$' + orderState.svc.price + '</span></div>';
   t.extrasList.forEach(function(a){ s += '<div style="display:flex;justify-content:space-between"><span class="mut">+ ' + a.name + '</span><span>$' + a.price + '</span></div>'; });
   if (isMember && t.savings > 0) s += '<div style="display:flex;justify-content:space-between;color:#16a34a"><span>HomeCare member price (−20%)</span><span>−$' + t.savings + '</span></div>';
-  if (orderState.join && !orderState.memberActive) s += '<div style="display:flex;justify-content:space-between"><span>HomeCare membership — first month</span><span>$29</span></div>';
+  if (orderState.join && !orderState.memberActive) s += (me && me.freeMonthAvailable) ? '<div style="display:flex;justify-content:space-between"><span>HomeCare membership — first month</span><span><b>FREE</b></span></div>' : '<div style="display:flex;justify-content:space-between"><span>HomeCare membership — first month</span><span>$29</span></div>';
   if (t.asap) s += '<div style="display:flex;justify-content:space-between"><span>ASAP rush (+25%)</span><span>$' + t.asapFee + '</span></div>';
   s += '<div style="display:flex;justify-content:space-between;border-top:1px solid #d4d4d8;padding-top:6px;margin-top:6px"><b>Total — pay in full today</b><b>$' + t.due + '</b></div>';
-  s += '<p class="mut">Due today: ' + (orderState.join && !orderState.memberActive ? '<b>$29</b> (first HomeCare month) + ' : '') + '<b>$' + t.due + '</b> — the full order total, charged today. Cancel before a technician is dispatched: full refund.</p>';
+  s += '<p class="mut">Due today: ' + (orderState.join && !orderState.memberActive && !(me && me.freeMonthAvailable) ? '<b>$29</b> (first HomeCare month) + ' : '') + '<b>$' + t.due + '</b> — the full order total, charged today. Cancel before a technician is dispatched: full refund.</p>';
   document.getElementById('orderTotals').innerHTML = s;
   document.getElementById('orderBtn').textContent = (orderState.join && !orderState.memberActive ? 'Join HomeCare & pay' : 'Pay') + ' $' + t.due + ' & place order';
 }

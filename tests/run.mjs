@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v72', swSrc.includes("const CACHE = 'ghs-app-v72'"));
+t('static: SW cache is ghs-app-v74', swSrc.includes("const CACHE = 'ghs-app-v74'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1232,7 +1232,7 @@ const stripeMock = http.createServer(async (req, res) => {
   if (req.method === 'GET' && path.startsWith('/customers/')) return send(200, { id: path.split('/')[2] });
   if (req.method === 'POST' && path === '/subscriptions') {
     const n = ++stripeState.n;
-    const sub = { id: 'sub_mock_' + n, status: 'incomplete', customer: form.customer || '', metadata: { userId: form['metadata[userId]'] || '', kind: form['metadata[kind]'] || '', plan: form['metadata[plan]'] || '' }, items: { data: [{ id: 'si_mock_' + n, price: { id: form['items[0][price]'] || '' } }] }, latest_invoice: { id: 'in_mock_' + n, payment_intent: { id: 'pi_mock_' + n, client_secret: 'pi_mock_' + n + '_secret_x', status: 'requires_confirmation' } } };
+    const sub = { id: 'sub_mock_' + n, status: 'incomplete', customer: form.customer || '', trial_period_days: form.trial_period_days || '', metadata: { userId: form['metadata[userId]'] || '', kind: form['metadata[kind]'] || '', plan: form['metadata[plan]'] || '' }, items: { data: [{ id: 'si_mock_' + n, price: { id: form['items[0][price]'] || '' } }] }, latest_invoice: { id: 'in_mock_' + n, payment_intent: { id: 'pi_mock_' + n, client_secret: 'pi_mock_' + n + '_secret_x', status: 'requires_confirmation' } } };
     stripeState.subs[sub.id] = sub;
     stripeState.pis['pi_mock_' + n] = { id: 'pi_mock_' + n, status: 'requires_confirmation', amount: 0, metadata: {} };
     return send(200, sub);
@@ -2161,7 +2161,7 @@ t('connect: manual retry pays once funds are available', retry5.status === 200 &
   const coC = await req2('POST', '/api/carts/' + cartC2.j.cart.id + '/checkout', { token: suC.j.token, body: Object.assign({}, detC, { join: true }) });
   const joinSessC = sessionForCart(cartC2.j.cart.id, 'subscription');
   const joinSubC = joinSessC && stripeState.subs[joinSessC.subscription];
-  t('v70 path C: ONE session carries BOTH — HomeCare price + the $144 member deposit as a one-time line (amount $173 = $29 plan + $144 deposit)', coC.status === 200 && coC.j.next === 'pay' && coC.j.plan === 'homecare' && coC.j.amount === 173 && coC.j.deposit === 144 && coC.j.planFirst === 29 && coC.j.total === 360 && coC.j.memberApplied === true && !!joinSessC && joinSessC.metadata.kind === 'cart-join' && joinSessC.amount_total === 17300 && !!joinSubC && joinSubC.items.data[0].price.id === 'price_hc_mock' && joinSubC.status === 'incomplete');
+  t('v74 path C: ONE session carries BOTH — the HomeCare plan TRIALS free (universal free month, no invite on this cart) so the ONLY charge today is the $144 member deposit as a one-time line (amount $144 = $0 plan + $144 deposit)', coC.status === 200 && coC.j.next === 'pay' && coC.j.plan === 'homecare' && coC.j.amount === 144 && coC.j.deposit === 144 && coC.j.planFirst === 0 && coC.j.total === 360 && coC.j.memberApplied === true && !!joinSessC && joinSessC.metadata.kind === 'cart-join' && joinSessC.metadata.freeMonth === '1' && joinSessC.amount_total === 14400 && !!joinSubC && joinSubC.items.data[0].price.id === 'price_hc_mock' && joinSubC.status === 'incomplete');
   // The ?paid=1 flag WITHOUT Stripe proof activates and books NOTHING.
   const preRetC = await fetch(BASE2 + '/cart/' + cartC2.j.cart.id + '?paid=1&session_id=' + joinSessC.id, { headers: { Authorization: 'Bearer ' + suC.j.token } });
   const preRetCH = await preRetC.text();
@@ -3006,9 +3006,9 @@ t('static v59: cart page switches its note on cartHasMaterials; estimate page ke
 // verifier keys on session completeness + the subscription rule), and
 // the checkout.session.completed webhook activates + marks the invite.
 t('static v60: invite rails exist — store, admin endpoints, join page + checkout, trial-aware verification', serverSrc.includes('function invitesOf(') && serverSrc.includes("p === '/api/admin/invites'") && serverSrc.includes('function invitePageHtml(') && serverSrc.includes('function inviteSessionVerified(') && serverSrc.includes('joinCheckoutMatch') && serverSrc.includes('joinPageMatch'));
-t('static v60: the invite checkout is the ONLY trial — trial_period_days rides subscription_data and the success returns to the invite link', serverSrc.includes("params['subscription_data[trial_period_days]']") && serverSrc.includes("successUrl: inviteLink(inv) + '?joined=1&session_id={CHECKOUT_SESSION_ID}'") && serverSrc.includes('trialDays: INVITE_TRIAL_DAYS'));
+t('static v60: the invite checkout carries the trial — trial_period_days rides subscription_data and the success returns to the invite link', serverSrc.includes("params['subscription_data[trial_period_days]']") && serverSrc.includes("successUrl: inviteLink(inv) + '?joined=1&session_id={CHECKOUT_SESSION_ID}'") && serverSrc.includes('trialDays: INVITE_TRIAL_DAYS'));
 t('static v60: webhook marks invites accepted inside the homecare branch', serverSrc.includes('obj.metadata.inviteId') && serverSrc.includes('markInviteAccepted(inv, u, obj)'));
-t('static v60: the free month is HomeCare-$29 ONLY (Gabriel) — trial_period_days has exactly ONE write site in the server (the invite-gated homecare branch), so Yard/Plus and every regular join keep charging fully from day one', (serverSrc.match(/trial_period_days/g) || []).length === 1 && serverSrc.includes('u.inviteFreeMonthUsed = true'));
+t('static v74: the free month is HomeCare-$29 ONLY (Gabriel) — the trial has exactly TWO write sites in the server (the shared Checkout site + the inline subscription create), BOTH gated on the one-per-account eligibility helper, so Yard/Plus never trial and no path can grant a second free month', (serverSrc.match(/trial_period_days/g) || []).length === 2 && serverSrc.includes('function homeCareTrialEligible(') && serverSrc.includes('u.inviteFreeMonthUsed = true') && serverSrc.includes("session.metadata.freeMonth === '1'"));
 t('static v60: admin carries the Invite a member card + list wiring', htmlSrc.includes('id="invName"') && htmlSrc.includes('Invite a member — first month FREE') && htmlSrc.includes('async function loadAdminInvites()') && htmlSrc.includes('loadAdminInvites();'));
 {
   const adm60 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
@@ -3075,7 +3075,7 @@ t('static v60: admin carries the Invite a member card + list wiring', htmlSrc.in
 }
 // ---------- v61: the free month lives INSIDE the customer's own cart link (Gabriel) ----------
 t('static v61: the cart page renders the free-month offer from the cart flag (banner + badge + FREE_MONTH switch)', serverSrc.includes('const freeMonth = !!') && serverSrc.includes('FREE_MONTH=') && serverSrc.includes('joinOrderNoteFree') && serverSrc.includes('freeMonthTag'));
-t('static v61: the cart join honors the invite trial — HomeCare ONLY, once per account, invite rides the session metadata', serverSrc.includes("joinPlan.key === 'homecare' && c.freeMonthInviteId && !user.inviteFreeMonthUsed") && serverSrc.includes("src: fmInvite ? 'cart-invite' : 'cart'") && serverSrc.includes('trialDays: fmInvite ? INVITE_TRIAL_DAYS : 0'));
+t('static v61/v74: the cart join honors the free month — HomeCare ONLY, once per account via the eligibility helper (the invite no longer gates the trial, it just rides the session metadata)', serverSrc.includes("joinPlan.key === 'homecare' && c.freeMonthInviteId && !user.inviteFreeMonthUsed") && serverSrc.includes("src: fmInvite ? 'cart-invite' : 'cart'") && serverSrc.includes('trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0') && serverSrc.includes("joinPlan.key === 'homecare' && homeCareTrialEligible(user)"));
 t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('invAttachMatch') && htmlSrc.includes('id="invCartId"') && htmlSrc.includes('async function attachInvite('));
 {
   const adm61 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
@@ -3120,6 +3120,72 @@ t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('
   const pgH = await (await fetch(BASE2 + '/cart/' + cartH.j.cart.id)).text();
   t('v61: the attach endpoint puts the free month into an existing cart', atH.status === 200 && atH.j.cartId === cartH.j.cart.id && pgH.includes('FREE_MONTH=true'));
 }
+// ---------- v74: the free month is UNIVERSAL (Gabriel, 2026-10-25) ----------
+// Every HomeCare join starts with the 30-day free trial — no invite
+// needed — on every join rail (hosted checkout, inline card flow,
+// cart-join). The guard is Gabriel's one-per-account-EVER rule: a
+// used free month OR any past HomeCare subscription closes the door.
+// Plus and Yard NEVER trial.
+t('static v74: every hosted HomeCare join passes the eligibility-gated trial (SPA checkout, estimate join-checkout, cart-join, invite checkout) and the offer shows on the customer surfaces — SPA HomeCare card, join-form perks, website HomeCare box',
+  (serverSrc.match(/homeCareTrialEligible\(user\)/g) || []).length >= 4 && serverSrc.includes('trialDays: homeCareTrialEligible(user) ? INVITE_TRIAL_DAYS : 0') &&
+  htmlSrc.includes('First month FREE</b> — for everyone (one per account)') && htmlSrc.includes("perks: 'First month FREE • 20% off any job") &&
+  fs.readFileSync('/home/hatch/workspace/ghs-app/index.html', 'utf8').includes('First month FREE — for everyone (one per account)'));
+{
+  const adm74 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const A74 = adm74.j.token;
+  // 1) Plain SPA join, no invite anywhere: the session TRIALS — the
+  // plan is $0 today and the freeMonth stamp rides the metadata.
+  const uma = await mkMember('uma74@t.local', '(707) 555-0174');
+  const coU = await req2('POST', '/api/stripe/checkout', { token: uma.token, body: { kind: 'homecare' } });
+  const sessU = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.userId === uma.id && s.metadata.kind === 'homecare' && s.mode === 'subscription').slice(-1)[0];
+  t('v74: a plain HomeCare join (no invite) opens a TRIAL session — $0 due today, freeMonth stamped, trial reported to the client', coU.status === 200 && coU.j.trial === true && !!sessU && sessU.metadata.freeMonth === '1' && sessU.amount_total === 0);
+  // Settle via the webhook (a trial session completes with
+  // no_payment_required): membership activates, free month is spent.
+  const whU = await wh2('checkout.session.completed', { id: sessU.id, mode: 'subscription', payment_status: 'no_payment_required', subscription: sessU.subscription, customer: 'cus_mock', metadata: { kind: 'homecare', userId: uma.id, freeMonth: '1' } });
+  const meU = await req2('GET', '/api/me', { token: uma.token });
+  t('v74: the trial join activates through the webhook and the account shows NO free month left', whU.status === 200 && meU.j.user.homeCareStatus === 'active' && meU.j.user.freeMonthAvailable === false);
+  // 2) After cancelling, the SAME account rejoins — no second trial:
+  // the plan charges the full $29 today.
+  const whDelU = await wh2('customer.subscription.deleted', { id: sessU.subscription, status: 'canceled', metadata: { userId: uma.id, kind: 'homecare', plan: 'homecare' } });
+  const coU2 = await req2('POST', '/api/stripe/checkout', { token: uma.token, body: { kind: 'homecare' } });
+  const sessU2 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.userId === uma.id && s.metadata.kind === 'homecare' && s.mode === 'subscription').slice(-1)[0];
+  t('v74: the free month is ONCE per account — a cancelled ex-member rejoins at the full $29 (no freeMonth stamp, $29 due today)', whDelU.status === 200 && coU2.status === 200 && coU2.j.trial === false && !!sessU2 && sessU2.id !== sessU.id && !sessU2.metadata.freeMonth && sessU2.amount_total === 2900);
+  // 3) The inline card flow: an eligible account's subscription is
+  // CREATED with the 30-day trial; once that membership has lived and
+  // been cancelled, the subscription HISTORY alone (no flag needed)
+  // closes the door on any later free month.
+  const ivy = await mkMember('ivy74@t.local', '(707) 555-0175');
+  const subI = await req2('POST', '/api/stripe/homecare-subscribe', { token: ivy.token, body: {} });
+  const subIvy = stripeState.subs[subI.j.subscriptionId];
+  t('v74: the inline card flow creates the HomeCare subscription WITH the 30-day trial for an eligible account', subI.status === 200 && !!subIvy && subIvy.trial_period_days === '30');
+  await mockActivate(subI.j.subscriptionId);
+  const confI = await req2('POST', '/api/stripe/homecare-confirm', { token: ivy.token, body: {} });
+  const whDelI = await wh2('customer.subscription.deleted', { id: subI.j.subscriptionId, status: 'canceled', metadata: { userId: ivy.id, kind: 'homecare', plan: 'homecare' } });
+  const coI2 = await req2('POST', '/api/stripe/checkout', { token: ivy.token, body: { kind: 'homecare' } });
+  const sessI2 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.userId === ivy.id && s.metadata.kind === 'homecare' && s.mode === 'subscription').slice(-1)[0];
+  t('v74: a PAST HomeCare subscription alone (cancelled, free month never flagged) earns NO second free month', confI.status === 200 && confI.j.active === true && whDelI.status === 200 && coI2.status === 200 && coI2.j.trial === false && !!sessI2 && !sessI2.metadata.freeMonth && sessI2.amount_total === 2900);
+  // 4) Plus NEVER trials: a fresh account joining HomeCare Plus pays
+  // from day one — full price due today, no freeMonth stamp.
+  const pam = await mkMember('pam74@t.local', '(707) 555-0176');
+  const coP74 = await req2('POST', '/api/stripe/checkout', { token: pam.token, body: { kind: 'homecare-plus', plan: 'plus1' } });
+  const sessP74 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.userId === pam.id && s.metadata.plan === 'plus1' && s.mode === 'subscription').slice(-1)[0];
+  t('v74: a HomeCare Plus join carries NO trial — $100 due today, no freeMonth stamp', coP74.status === 200 && !!sessP74 && !sessP74.metadata.freeMonth && sessP74.amount_total === 10000);
+  // 5) Cart-join with NO invite attached: the plan trials ($0) and
+  // ONLY the 40% deposit charges today; the verified return activates
+  // the membership AND books the job, and the free month is spent.
+  const cal = await mkMember('cal74@t.local', '(707) 555-0177');
+  const cart74 = await req2('POST', '/api/admin/carts', { token: A74, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }], customerName: 'Cal Cart' } });
+  const det74 = { name: 'Cal Cart', phone: '7075550177', email: 'cal74@t.local', address: '9 Cal St', city: 'Fairfield', when: 'Today', join: true };
+  const coCal = await req2('POST', '/api/carts/' + cart74.j.cart.id + '/checkout', { token: cal.token, body: det74 });
+  const sessCal = sessionForCart(cart74.j.cart.id, 'subscription');
+  t('v74: a cart-join WITHOUT an invite trials the plan and charges ONLY the deposit today ($40 of the $100 member total)', coCal.status === 200 && coCal.j.next === 'pay' && coCal.j.plan === 'homecare' && coCal.j.planFirst === 0 && coCal.j.deposit === 40 && coCal.j.amount === 40 && coCal.j.total === 100 && !!sessCal && sessCal.metadata.kind === 'cart-join' && sessCal.metadata.freeMonth === '1' && sessCal.amount_total === 4000);
+  await mockSessionPaid(sessCal.id);
+  const retCal = await fetch(BASE2 + '/cart/' + cart74.j.cart.id + '?paid=1&session_id=' + sessCal.id, { headers: { Authorization: 'Bearer ' + cal.token } });
+  const chkCal = await req2('POST', '/api/carts/' + cart74.j.cart.id + '/member-check', { body: { email: 'cal74@t.local' } });
+  const meCal = await req2('GET', '/api/me', { token: cal.token });
+  t('v74: the cart-join return activates the member, books the job, and spends the free month', retCal.status === 200 && chkCal.j.member === true && meCal.j.user.homeCareStatus === 'active' && meCal.j.user.freeMonthAvailable === false);
+}
+
 // ---------- v62: the 40/60 policy end-to-end (Gabriel, 2026-10-24) ----------
 t('static v62: the policy rails exist — DEPOSIT_RATE, deposit recorder, ONE settle path, balance branch, deposit/balance page rows', serverSrc.includes('const DEPOSIT_RATE = 0.4') && serverSrc.includes('function recordRequestDeposit(') && serverSrc.includes('function settleCartPayment(') && serverSrc.includes('function completeCartBalance(') && serverSrc.includes("b.balance === true") && serverSrc.includes('id="ctDeposit"') && serverSrc.includes('id="balBtn"'));
 {
