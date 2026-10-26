@@ -1596,6 +1596,46 @@ function readRawBody(req) { return new Promise(r => { let b = ''; req.on('data',
 // as the backup activator and reconciles idempotently: subscription
 // metadata carries userId + kind + plan, and activation is a no-op when
 // the plan is already active on the same subscription.
+// v80.2: the secret a fresh (or reused) inline subscription hands back
+// is DISCRIMINATED. A normal first invoice carries a PaymentIntent
+// (mode 'payment'). A TRIALING subscription's first invoice is $0, so
+// Stripe creates NO PaymentIntent for it (latest_invoice.payment_
+// intent is null) — the card is collected through the subscription's
+// pending_setup_intent instead (mode 'setup'). Returning the wrong
+// kind — or throwing, as the pre-v80.2 code did — is what stranded
+// the v80.1 acceptance customer half-joined.
+async function inlineSubscriptionSecret(sub) {
+  const pi = sub.latest_invoice && sub.latest_invoice.payment_intent;
+  if (pi && typeof pi === 'object' && pi.client_secret) return { mode: 'payment', clientSecret: pi.client_secret, subscriptionId: sub.id };
+  if (typeof pi === 'string' && pi) {
+    try { const p = await stripeGet('/payment_intents/' + pi); if (p && p.client_secret) return { mode: 'payment', clientSecret: p.client_secret, subscriptionId: sub.id }; } catch (e) {}
+  }
+  let si = sub.pending_setup_intent;
+  if (typeof si === 'string' && si) { try { si = await stripeGet('/setup_intents/' + si); } catch (e) { si = null; } }
+  if (si && si.client_secret) return { mode: 'setup', clientSecret: si.client_secret, subscriptionId: sub.id };
+  throw new Error('stripe did not return a payment or setup intent');
+}
+// v80.2: mirror a LIVE inline subscription into the local membership
+// state — the exact body homecare-confirm applies (activation via
+// activateHomeCare; the v74 free month is spent ONLY here, at
+// activation, when the live subscription is the trialing one).
+// Returns true when the account is an active member afterwards. The
+// cart rails call it so a membership left half-applied by an earlier
+// failed attempt becomes STATE the flow continues from — never a
+// terminal "already have a membership" error.
+async function syncInlineMembershipState(u) {
+  if (!u) return false;
+  if (u.homeCareStatus === 'active') return true;
+  if (!stripeReady() || !u.stripeSubscriptionId) return false;
+  try {
+    const chk = await inlineSubscriptionPaid(u);
+    if (!chk.paid) return false;
+    if (chk.plan && chk.plan.key !== 'homecare') { activateMembershipPlan(u, chk.plan.key, { subscriptionId: chk.sub.id, first: true }); return membershipPlanOf(u).status === 'active'; }
+    if (chk.sub && chk.sub.status === 'trialing') u.inviteFreeMonthUsed = true; // v74: spent at ACTIVATION, same as homecare-confirm
+    activateHomeCare(u, true);
+    return u.homeCareStatus === 'active';
+  } catch (e) { return false; }
+}
 async function createInlineSubscription(user, plan) {
   let customerId = user.stripeCustomerId || '';
   if (customerId) { try { await stripeGet('/customers/' + customerId); } catch (e) { customerId = ''; } }
@@ -1604,14 +1644,23 @@ async function createInlineSubscription(user, plan) {
     customerId = c.id;
     user.stripeCustomerId = customerId;
   }
-  // Drop a stale incomplete subscription so card retries don't stack up.
+  // v80.2: a LIVE subscription from an earlier attempt is REUSED,
+  // never stacked — a trialing/active sub already IS the membership,
+  // so hand back ITS secret (setup or payment) and let the flow
+  // finish collecting the card. Only a dead incomplete one is
+  // dropped, so card retries don't stack up subscriptions. (The old
+  // code cleared the id unconditionally and created a second sub.)
   if (user.stripeSubscriptionId) {
-    try {
-      const s = await stripeGet('/subscriptions/' + user.stripeSubscriptionId);
-      if (s && (s.status === 'incomplete' || s.status === 'incomplete_expired')) {
-        await stripeApi('/subscriptions/' + user.stripeSubscriptionId + '/cancel', {});
-      }
-    } catch (e) {}
+    let existing = null;
+    try { existing = await stripeGet('/subscriptions/' + user.stripeSubscriptionId + '?expand[]=latest_invoice.payment_intent&expand[]=pending_setup_intent'); } catch (e) { existing = null; }
+    if (existing && (existing.status === 'trialing' || existing.status === 'active')) {
+      if (plan.key !== 'homecare') setMembershipPlan(user, plan.key, { status: existing.status, subscriptionId: existing.id });
+      save();
+      return inlineSubscriptionSecret(existing);
+    }
+    if (existing && (existing.status === 'incomplete' || existing.status === 'incomplete_expired')) {
+      try { await stripeApi('/subscriptions/' + user.stripeSubscriptionId + '/cancel', {}); } catch (e) {}
+    }
     user.stripeSubscriptionId = '';
   }
   const priceId = await membershipPriceIdFor(plan);
@@ -1637,9 +1686,15 @@ async function createInlineSubscription(user, plan) {
   user.stripeSubscriptionId = sub.id;
   if (plan.key !== 'homecare') setMembershipPlan(user, plan.key, { status: sub.status || 'incomplete', subscriptionId: sub.id });
   save();
-  const pi = sub.latest_invoice && sub.latest_invoice.payment_intent;
-  if (!pi || !pi.client_secret) throw new Error('stripe did not return a payment intent');
-  return { clientSecret: pi.client_secret, subscriptionId: sub.id };
+  // v80.2 ROOT CAUSE of the v80.1 acceptance failure ("payment
+  // service error" on the FIRST join tap, membership left active
+  // server-side, retry blocked): with the v74 trial, the create above
+  // succeeds but the $0 trial invoice has NO PaymentIntent — the old
+  // tail threw 'stripe did not return a payment intent' AFTER the
+  // subscription existed (and its webhook then activated the
+  // membership), so the customer got a 502 with no card ever asked.
+  // The discriminated secret (payment vs setup) is the fix.
+  return inlineSubscriptionSecret(sub);
 }
 // The ONE paid rule for a subscription (v54 factorizes what
 // inlineSubscriptionPaid always did): the subscription is active/trialing,
@@ -5779,7 +5834,7 @@ const server = http.createServer(async (req, res) => {
     if (!cleanText(user.serviceAddress, 300)) return send(res, 400, { error: 'service address required', code: 'ADDRESS_REQUIRED' });
     try {
       const r = await createInlineSubscription(user, plan);
-      return send(res, 200, { clientSecret: r.clientSecret, subscriptionId: r.subscriptionId, plan: plan.key });
+      return send(res, 200, { clientSecret: r.clientSecret, subscriptionId: r.subscriptionId, plan: plan.key, mode: r.mode || 'payment' });
     } catch (e) { console.error('membership subscribe failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
   if (p === '/api/stripe/membership-confirm' && req.method === 'POST') {
@@ -5906,13 +5961,27 @@ const server = http.createServer(async (req, res) => {
     // the cart recoverable server-side (snapshot only — nothing sent).
     { const snap80 = recoverySnapshot(b.items); if (snap80) upsertRecoverableCart(u.email, snap80); }
     // --- optional membership (v77 pattern): HomeCare only, default none ---
+    // v80.2: an account that ALREADY carries an active HomeCare
+    // membership — pre-existing, or activated server-side by an
+    // earlier attempt whose deposit step then failed (the v80.1
+    // acceptance dead-end) — is STATE, not an error: any live
+    // subscription is mirrored into the local state first, and the
+    // flow then falls through to the pay step below at MEMBER totals
+    // so the customer can always finish paying the deposit. Exactly
+    // one membership ever exists: createInlineSubscription reuses a
+    // live subscription instead of stacking a second one.
+    let memberByState802 = false;
     if (b.step === 'join') {
-      if (u.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
-      try {
-        const sub = await createInlineSubscription(u, MEMBERSHIP_PLANS.homecare);
-        const mt = serverCartTotals(b.items, true);
-        return send(res, 200, { step: 'join', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member, deposit: depositSplit(Math.round(mt.member * 100)).depositCents / 100, balance: depositSplit(Math.round(mt.member * 100)).balanceCents / 100 } }, cookieHdr);
-      } catch (e) { console.error('cart checkout join failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+      if (u.homeCareStatus !== 'active') await syncInlineMembershipState(u);
+      if (u.homeCareStatus === 'active') {
+        memberByState802 = true;
+      } else {
+        try {
+          const sub = await createInlineSubscription(u, MEMBERSHIP_PLANS.homecare);
+          const mt = serverCartTotals(b.items, true);
+          return send(res, 200, { step: 'join', mode: sub.mode || 'payment', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member, deposit: depositSplit(Math.round(mt.member * 100)).depositCents / 100, balance: depositSplit(Math.round(mt.member * 100)).balanceCents / 100 } }, cookieHdr);
+        } catch (e) { console.error('cart checkout join failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
+      }
     }
     // --- step 'pay': pending checkout + PaymentIntent (NO order yet) ---
     const isMem = u.homeCareStatus === 'active';
@@ -5924,7 +5993,7 @@ const server = http.createServer(async (req, res) => {
       id: id('CCK'), userId: u.id, pi: '', requestId: '',
       customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
       address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
-      isMember: isMem, joinedMembership: !!b.joinedMembership && isMem, source: u.source || null,
+      isMember: isMem, joinedMembership: (!!b.joinedMembership || memberByState802) && isMem, source: u.source || null,
       items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
       totals: { list: t.list, member: t.member, due: t.due, deposit: depositSplit(Math.round(t.due * 100)).depositCents / 100, balance: depositSplit(Math.round(t.due * 100)).balanceCents / 100 },
       createdAt: new Date().toISOString()
@@ -6028,8 +6097,14 @@ const server = http.createServer(async (req, res) => {
     const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
     if (!serverCartTotals(b.items, u.homeCareStatus === 'active')) return send(res, 400, { error: 'cart has an item we could not price' });
     { const snap80 = recoverySnapshot(b.items); if (snap80) upsertRecoverableCart(u.email, snap80); } // v80 A-7 parity
-    const joinOn = b.step === 'join';
-    if (joinOn && u.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
+    // v80.2: same doctrine as the embedded rail — an already-active
+    // membership (pre-existing, or left half-applied by a failed
+    // embedded attempt) turns a join request into the PLAIN deposit
+    // session at member totals. Never a terminal error, never a
+    // second join: any live subscription is mirrored locally first.
+    if (b.step === 'join' && u.homeCareStatus !== 'active') await syncInlineMembershipState(u);
+    const joinOn = b.step === 'join' && u.homeCareStatus !== 'active';
+    const joinedByStateH = b.step === 'join' && u.homeCareStatus === 'active';
     // Pricing parity with the embedded path: a JOIN prices the order
     // at MEMBER totals because the membership activates inside the
     // same session (v70 design); a plain pay uses the account's
@@ -6044,7 +6119,7 @@ const server = http.createServer(async (req, res) => {
       id: id('CCK'), userId: u.id, pi: '', requestId: '',
       customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
       address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
-      isMember: isMem, joinedMembership: joinOn ? true : (!!b.joinedMembership && isMem), source: u.source || null,
+      isMember: isMem, joinedMembership: joinOn ? true : ((!!b.joinedMembership || joinedByStateH) && isMem), source: u.source || null,
       items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
       totals: { list: t.list, member: t.member, due: t.due, deposit: splitH.depositCents / 100, balance: splitH.balanceCents / 100 },
       hostedKind: joinOn ? 'join' : 'pay', hostedSessionId: '', hostedExpectCents: 0,

@@ -2087,13 +2087,15 @@ async function chargeHomeCare(email){
     }
     btn.disabled = true; btn.textContent = 'Processing…';
     const s = await api('/api/stripe/homecare-subscribe', { method: 'POST', body: JSON.stringify({ source: campaignSource() }) });
-    const conf = await stripeObj.confirmCardPayment(s.clientSecret, {
-      payment_method: { card: cardEl, billing_details: {
+    const pmArgs = { payment_method: { card: cardEl, billing_details: {
         name: document.getElementById('aName').value.trim(),
         email: email,
         phone: document.getElementById('aPhone').value.trim()
-      } }
-    });
+      } } };
+    // v80.2: a trial join's secret is a SetupIntent (the $0 trial
+    // invoice has no PaymentIntent to confirm) — confirm it as a
+    // setup; the card is saved for the day-30 charge either way.
+    const conf = s.mode === 'setup' ? await stripeObj.confirmCardSetup(s.clientSecret, pmArgs) : await stripeObj.confirmCardPayment(s.clientSecret, pmArgs);
     if (conf.error) throw new Error(conf.error.message);
     const chk = await api('/api/stripe/homecare-confirm', { method: 'POST' });
     try { cardEl.clear(); } catch(e){}
@@ -5358,6 +5360,10 @@ function paintCartPayState(){
   const host = document.getElementById('cartPayElement'); if (!host) return;
   if (cartElements) return; // a mounted Payment Element owns the box
   if (cartStripeState === 'loading') host.innerHTML = '<p class="mut" style="padding:10px 2px">⏳ Loading secure payment… · Cargando pago seguro…</p>';
+  // v80.2: idle means NO prepare is running — the box shows nothing,
+  // never a stale "Loading secure payment…" left over from an
+  // earlier, already-finished attempt (the v80.1 acceptance wart).
+  else if (cartStripeState === 'idle') host.innerHTML = '';
   // v80.1: the failure box carries the guaranteed door — the HOSTED
   // Stripe page (no Stripe.js needed in this browser) — plus the
   // retry, plus the stage ref so a real-device test reports WHICH
@@ -5410,10 +5416,40 @@ function cartMountPayment(clientSecret){
   const pe = cartElements.create('payment');
   pe.mount(host);
 }
+let cartErrValidation = false; // v80.2: the visible note came from form validation
 function cartShowErr(t){
+  const e = document.getElementById('cartPayErr');
+  if (!t) cartErrValidation = false; // v80.2: clearing the note retires its validation flag too
+  if (e) { e.textContent = t || ''; e.style.display = t ? 'block' : 'none'; }
+}
+// v80.2: a note that came from FORM VALIDATION (address, account
+// fields) clears itself the moment the customer edits the form — a
+// stale "Enter the service address" must not sit on screen after the
+// address has been typed (the second v80.1 acceptance wart).
+function cartShowValidationErr(t){
+  cartErrValidation = !!t;
   const e = document.getElementById('cartPayErr');
   if (e) { e.textContent = t || ''; e.style.display = t ? 'block' : 'none'; }
 }
+// v80.2: a SERVER-side checkout failure is never a dead end — the
+// error box ALSO carries the hosted door (Stripe's own page; no
+// Stripe.js needed in this browser). cartPayHosted re-reads the
+// CURRENT form intent: join still checked -> the join session;
+// membership already active -> the plain deposit session at member
+// totals. One intent, both doors.
+function cartShowErrWithHosted(t){
+  cartErrValidation = false;
+  const e = document.getElementById('cartPayErr');
+  if (!e) { cartShowErr(t); return; }
+  e.innerHTML = escHtml(t || '') + '<div style="margin-top:8px"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">Pay on Stripe\'s secure page · Pagar en la página segura de Stripe</button></div>';
+  e.style.display = 'block';
+}
+try {
+  ['ccAddress', 'ccCity', 'ccName', 'ccEmail', 'ccPhone', 'ccPass', 'ccWhenText', 'ccNotes'].forEach(function(fid){
+    const f = document.getElementById(fid);
+    if (f && f.addEventListener) f.addEventListener('input', function(){ if (cartErrValidation) cartShowErr(''); });
+  });
+} catch (e) {}
 // v80 A-7 (plumbing only): normalize a server snapshot into the local
 // cart shape; unknown services are dropped (the menu may have changed).
 function cartNormalizeSnapshot(items){
@@ -5497,7 +5533,7 @@ async function cartPayHosted(){
   if (!items.length) return;
   const payload = cartBuildPayload(items);
   const perr = cartValidatePayload(payload);
-  if (perr) { cartShowErr(perr); return; }
+  if (perr) { cartShowValidationErr(perr); return; }
   const joinEl = document.getElementById('ccJoin');
   const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
   const btn = document.getElementById('cartPayBtn');
@@ -5520,6 +5556,13 @@ async function cartPrepare(){
   const items = cartLoad();
   if (!items.length) return;
   const btn = document.getElementById('cartPayBtn');
+  // v80.2: validate BEFORE touching Stripe — an invalid form fails
+  // fast with its note while the pay box stays idle, instead of
+  // sitting in "Loading secure payment…" behind a stale note for a
+  // prepare that was never going to run (v80.1 acceptance wart).
+  const payload = cartBuildPayload(items);
+  const perr = cartValidatePayload(payload);
+  if (perr) { cartShowValidationErr(perr); return; }
   cartBusy = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing secure payment…'; }
   try {
@@ -5532,16 +5575,17 @@ async function cartPrepare(){
     if (cst80 !== 'ready') { cartShowErr(''); if (btn) { btn.disabled = false; btn.textContent = 'Pay'; } return; }
     const joinEl = document.getElementById('ccJoin');
     const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
-    const payload = cartBuildPayload(items);
-    const perr = cartValidatePayload(payload);
-    if (perr) throw new Error(perr);
     const resp = await api('/api/cart/checkout', { method: 'POST', body: JSON.stringify(Object.assign({ step: joinOn ? 'join' : 'pay', joinedMembership: cartJoinedOnce, source: campaignSource() }, payload)) });
     if (resp.user) {
       me = resp.user;
       const acct = document.getElementById('ccAcct'); if (acct) acct.style.display = 'none';
       cartPaintOffer();
     }
-    cartPayCtx = { phase: resp.step, clientSecret: resp.clientSecret, checkoutId: resp.checkoutId || '', paymentIntentId: resp.paymentIntentId || '', subscriptionId: resp.subscriptionId || '', due: resp.totals ? resp.totals.due : 0, deposit: resp.totals && resp.totals.deposit != null ? resp.totals.deposit : (resp.totals ? resp.totals.due : 0), balance: resp.totals && resp.totals.balance != null ? resp.totals.balance : 0 };
+    // v80.2: the server already HAD this membership (state, e.g. a
+    // retried join) and answered with the pay step directly — the
+    // join DID happen, so the confirmation copy must say so.
+    if (joinOn && resp.step === 'pay' && resp.user && resp.user.homeCareStatus === 'active') cartJoinedOnce = true;
+    cartPayCtx = { phase: resp.step, mode: resp.mode || 'payment', clientSecret: resp.clientSecret, checkoutId: resp.checkoutId || '', paymentIntentId: resp.paymentIntentId || '', subscriptionId: resp.subscriptionId || '', due: resp.totals ? resp.totals.due : 0, deposit: resp.totals && resp.totals.deposit != null ? resp.totals.deposit : (resp.totals ? resp.totals.due : 0), balance: resp.totals && resp.totals.balance != null ? resp.totals.balance : 0 };
     if (resp.totals) cartQuote = resp.totals; // server-true totals paint the summary
     // v80 A-7 plumbing: this checkout (guest with an email, or a signed-
     // in customer) leaves a server-side recoverable snapshot of the
@@ -5552,8 +5596,18 @@ async function cartPrepare(){
     renderCartTotalsDue();
     if (btn) { btn.disabled = false; btn.textContent = resp.step === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order' : 'Pay $' + cartPayCtx.deposit + ' deposit'; }
   } catch (e) {
-    if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap Pay again to continue.'; }
-    cartShowErr(e.message);
+    if (e.code === 'ACCOUNT_EXISTS') { const n = document.getElementById('ccAcctNote'); if (n) n.innerHTML = '<b>Welcome back!</b> That email already has an account — enter your account password above and tap Pay again to continue.'; cartShowErr(e.message); }
+    else if (e.status && e.status >= 500) {
+      // v80.2: a SERVER-side failure mid-checkout (the v80.1 join
+      // dead-end) is never the end of the road: refresh the account
+      // state first — the membership may have activated server-side
+      // during the failed attempt, and then the hosted door below is
+      // the plain member deposit session — then show the error WITH
+      // the hosted door carrying the customer's current intent.
+      try { const d = await api('/api/me'); if (d && d.user) { me = d.user; cartPaintOffer(); } } catch (e2) {}
+      cartShowErrWithHosted(e.message);
+    }
+    else cartShowErr(e.message);
     if (btn) { btn.disabled = false; btn.textContent = 'Pay'; }
   } finally { cartBusy = false; }
 }
@@ -5565,8 +5619,12 @@ async function cartPayNow(){
   cartBusy = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Processing…'; }
   try {
-    const res = await stripeObj.confirmPayment({ elements: cartElements, redirect: 'if_required', confirmParams: { return_url: location.origin + location.pathname + '#cart' } });
-    if (res.error) throw new Error(res.error.message);
+    // v80.2: a trial join's secret is a SetupIntent (the $0 trial
+    // invoice has no PaymentIntent) — it confirms as a SETUP; a
+    // normal secret confirms as a payment. Same Elements instance.
+    const confirmArgs = { elements: cartElements, redirect: 'if_required', confirmParams: { return_url: location.origin + location.pathname + '#cart' } };
+    const res = cartPayCtx.mode === 'setup' ? await stripeObj.confirmSetup(confirmArgs) : await stripeObj.confirmPayment(confirmArgs);
+    if (res.error) { const ce = new Error(res.error.message); ce.cardError = true; throw ce; }
     if (cartPayCtx.phase === 'join') {
       const chk = await api('/api/stripe/homecare-confirm', { method: 'POST' });
       if (!chk.active) throw new Error('Your membership payment did not complete — your cart is intact and no order was created. Try the card again.');
@@ -5586,7 +5644,10 @@ async function cartPayNow(){
   } catch (e) {
     // P0-4: a failed payment creates NO order and shows NO success —
     // the cart is untouched and the error renders right here, in-theme.
-    cartShowErr(e.message);
+    // v80.2: a CARD error stays a plain note (the mounted form is the
+    // right retry path); a SERVER error also offers the hosted door.
+    if (e && !e.cardError && e.status && e.status >= 500) cartShowErrWithHosted(e.message);
+    else cartShowErr(e.message);
     if (btn && cartPayCtx) { btn.disabled = false; btn.textContent = cartPayCtx.phase === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order' : 'Pay $' + cartPayCtx.deposit + ' deposit'; }
   } finally { cartBusy = false; }
 }

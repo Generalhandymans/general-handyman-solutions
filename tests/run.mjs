@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-1', swSrc.includes("const CACHE = 'ghs-app-v80-1'"));
+t('static: SW cache is ghs-app-v80-2', swSrc.includes("const CACHE = 'ghs-app-v80-2'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1427,14 +1427,18 @@ t('static v45: builder UI — menu picker, line types, options, photos, preview,
 // instance with its own data file.
 const BASE2 = 'http://127.0.0.1:8979';
 const DATA_FILE2 = '/tmp/ghs-v17-test/data-v24.json';
-const stripeState = { subs: {}, n: 0, connectTransfers: [], poorTransfers: true, pis: {}, refunds: [], sessions: {} };
+const stripeState = { subs: {}, n: 0, connectTransfers: [], poorTransfers: true, pis: {}, refunds: [], sessions: {}, setis: {}, failPiCreates: 0 };
 const stripeMock = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
   const send = (code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
   let raw = ''; for await (const c of req) raw += c;
   let form = {}; try { form = JSON.parse(raw || '{}'); } catch (e) { form = Object.fromEntries(new URLSearchParams(raw)); }
-  if (u.pathname === '/__activate') { const sub = stripeState.subs[form.id]; if (sub) { sub.status = 'active'; const pi = sub.latest_invoice && sub.latest_invoice.payment_intent; if (pi && stripeState.pis[pi.id]) stripeState.pis[pi.id].status = 'succeeded'; } return send(200, { ok: true }); }
+  if (u.pathname === '/__activate') { const sub = stripeState.subs[form.id]; if (sub) { sub.status = 'active'; const pi = sub.latest_invoice && sub.latest_invoice.payment_intent; if (pi && stripeState.pis[pi.id]) stripeState.pis[pi.id].status = 'succeeded'; const si = sub.pending_setup_intent; if (si && stripeState.setis[si]) stripeState.setis[si].status = 'succeeded'; } return send(200, { ok: true }); }
   if (u.pathname === '/__pi') { const pi = stripeState.pis[form.id]; if (pi && form.status) pi.status = form.status; return send(200, { ok: true }); }
+  // v80.2: force the next N POST /payment_intents to fail (the
+  // deposit step dying AFTER a membership activated — the exact
+  // half-applied state the hotfix must make recoverable).
+  if (u.pathname === '/__failpi') { stripeState.failPiCreates = Number(form.times || 1); return send(200, { ok: true }); }
   // v54: mark a stored Checkout session as paid — flips its subscription
   // active (subscription mode) or its PaymentIntent succeeded (payment).
   if (u.pathname === '/__session') { const s = stripeState.sessions[form.id]; if (s && form.paid) { s.payment_status = 'paid'; s.status = 'complete'; if (s.subscription && stripeState.subs[s.subscription]) { const sub = stripeState.subs[s.subscription]; sub.status = 'active'; const pi = sub.latest_invoice && sub.latest_invoice.payment_intent; if (pi && stripeState.pis[pi.id]) stripeState.pis[pi.id].status = 'succeeded'; } if (s.payment_intent && stripeState.pis[s.payment_intent]) { stripeState.pis[s.payment_intent].status = 'succeeded'; stripeState.pis[s.payment_intent].amount_received = stripeState.pis[s.payment_intent].amount; } } return send(200, { ok: true }); }
@@ -1445,10 +1449,23 @@ const stripeMock = http.createServer(async (req, res) => {
   if (req.method === 'POST' && path === '/subscriptions') {
     const n = ++stripeState.n;
     const sub = { id: 'sub_mock_' + n, status: 'incomplete', customer: form.customer || '', trial_period_days: form.trial_period_days || '', metadata: { userId: form['metadata[userId]'] || '', kind: form['metadata[kind]'] || '', plan: form['metadata[plan]'] || '' }, items: { data: [{ id: 'si_mock_' + n, price: { id: form['items[0][price]'] || '' } }] }, latest_invoice: { id: 'in_mock_' + n, payment_intent: { id: 'pi_mock_' + n, client_secret: 'pi_mock_' + n + '_secret_x', status: 'requires_confirmation' } } };
+    // v80.2: model REAL Stripe trial behavior — a subscription
+    // created WITH trial_period_days starts 'trialing', its $0 first
+    // invoice carries NO PaymentIntent, and the card is collected via
+    // a pending SetupIntent. (The pre-v80.2 mock always returned a
+    // PaymentIntent, which is why the suite never saw the production
+    // join failure.)
+    if (form.trial_period_days) {
+      sub.status = 'trialing';
+      sub.latest_invoice.payment_intent = null;
+      sub.pending_setup_intent = 'seti_mock_' + n;
+      stripeState.setis['seti_mock_' + n] = { id: 'seti_mock_' + n, client_secret: 'seti_mock_' + n + '_secret_x', status: 'requires_payment_method' };
+    }
     stripeState.subs[sub.id] = sub;
     stripeState.pis['pi_mock_' + n] = { id: 'pi_mock_' + n, status: 'requires_confirmation', amount: 0, metadata: {} };
     return send(200, sub);
   }
+  if (req.method === 'GET' && path.startsWith('/setup_intents/')) { const si = stripeState.setis[path.split('/')[2]]; return si ? send(200, si) : send(404, { error: { message: 'no such setup_intent' } }); }
   if (req.method === 'GET' && path.startsWith('/subscriptions/')) { const sub = stripeState.subs[path.split('/')[2]]; return sub ? send(200, sub) : send(404, { error: { message: 'no such subscription' } }); }
   const updM = path.match(/^\/subscriptions\/([^/]+)$/);
   if (req.method === 'POST' && updM) {
@@ -1516,7 +1533,7 @@ const stripeMock = http.createServer(async (req, res) => {
   }
   const pcCancelM = path.match(/^\/payment_intents\/([^/]+)\/cancel$/);
   if (req.method === 'POST' && pcCancelM) { const pi = stripeState.pis[pcCancelM[1]]; if (!pi) return send(404, { error: { message: 'no such payment_intent' } }); if (pi.status === 'succeeded') return send(402, { error: { message: 'You cannot cancel a PaymentIntent with a status of succeeded.' } }); pi.status = 'canceled'; return send(200, pi); }
-  if (req.method === 'POST' && path === '/payment_intents') { const pi = { id: 'pi_mock_' + (++stripeState.n), client_secret: 'pi_mock_secret_' + stripeState.n, amount: Number(form.amount || 0), status: 'requires_capture', capture_method: form.capture_method || 'automatic', metadata: { requestId: form['metadata[requestId]'] || '', holdKey: form['metadata[holdKey]'] || '', kind: form['metadata[kind]'] || '', cartId: form['metadata[cartId]'] || '', checkoutId: form['metadata[checkoutId]'] || '' }, latest_charge: null }; stripeState.pis[pi.id] = pi; return send(200, pi); }
+  if (req.method === 'POST' && path === '/payment_intents') { if (stripeState.failPiCreates > 0) { stripeState.failPiCreates--; return send(402, { error: { message: 'mock: forced payment_intent failure' } }); } const pi = { id: 'pi_mock_' + (++stripeState.n), client_secret: 'pi_mock_secret_' + stripeState.n, amount: Number(form.amount || 0), status: 'requires_capture', capture_method: form.capture_method || 'automatic', metadata: { requestId: form['metadata[requestId]'] || '', holdKey: form['metadata[holdKey]'] || '', kind: form['metadata[kind]'] || '', cartId: form['metadata[cartId]'] || '', checkoutId: form['metadata[checkoutId]'] || '' }, latest_charge: null }; stripeState.pis[pi.id] = pi; return send(200, pi); }
   if (req.method === 'GET' && path.startsWith('/payment_intents/')) { const pid = path.split('/')[2]; if (stripeState.pis[pid]) return send(200, stripeState.pis[pid]); return send(200, { id: pid, status: 'succeeded' }); }
   if (req.method === 'GET' && path.startsWith('/invoices/')) { const invId = path.split('/')[2]; const owner = Object.values(stripeState.subs).find(s => s.latest_invoice && s.latest_invoice.id === invId); if (owner) { const pi = owner.latest_invoice.payment_intent; return send(200, { id: invId, status: owner.status === 'active' ? 'paid' : 'open', payment_intent: typeof pi === 'string' ? pi : ((pi && pi.id) || '') }); } return send(200, { id: invId, status: 'paid', payment_intent: 'pi_mock_paid' }); }
   if (req.method === 'GET' && path.startsWith('/prices/')) return send(200, { id: path.split('/')[2], unit_amount: 2900, recurring: { interval: 'month' }, active: true });
@@ -1568,6 +1585,7 @@ async function req2(method, p, opts = {}) {
   return { status: r.status, j };
 }
 async function mockActivate(subId) { await fetch('http://127.0.0.1:8980/__activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: subId }) }); }
+async function mockFailPiOnce() { await fetch('http://127.0.0.1:8980/__failpi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ times: 1 }) }); }
 async function mockPiStatus(id, status) { await fetch('http://127.0.0.1:8980/__pi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); }
 async function mockSessionPaid(id) { await fetch('http://127.0.0.1:8980/__session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, paid: true }) }); }
 const sessionForCart = (cartId, mode) => Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === cartId && (!mode || s.mode === mode)).slice(-1)[0];
@@ -4102,7 +4120,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped to v80-1', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-1'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.2: ghs-app-v80-2)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-2'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4190,6 +4208,141 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   t('v80.1 VM stages: a throwing Stripe() constructor paints ref: INIT', run('cartStripeState') === 'failed' && run('cartStripeFailStage') === 'INIT' && initBox.includes('ref: INIT'));
   sandbox.Stripe = stripeFactoryRef801;
   run('cartResetCheckout();');
+}
+
+// ---------------- v80.2 HOTFIX: join->pay recoverable (trial SetupIntent root cause), hosted door on ANY server failure, prepare polish ----------------
+{
+  const A802 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const admReqs802 = async () => (await req2('GET', '/api/requests', { token: A802 })).j.requests || [];
+  const items802 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }]; // list $125 / member $100 — deposit $50, balance $50 (Gabriel's acceptance case)
+  const subsOf802 = (uid) => Object.values(stripeState.subs).filter(s => s.metadata && s.metadata.userId === uid);
+  // --- statics ---
+  const cartSlice802 = serverSrc.slice(serverSrc.indexOf("p === '/api/cart/checkout'"), serverSrc.indexOf("p === '/api/cart/checkout-confirm'"));
+  const hostedSlice802 = serverSrc.slice(serverSrc.indexOf("p === '/api/cart/checkout-hosted'"), serverSrc.indexOf("p === '/api/cart/checkout-hosted-confirm'"));
+  t('static v80.2 server: the inline subscription secret is discriminated (pending_setup_intent -> mode setup) + the membership-state sync exists', serverSrc.includes('function inlineSubscriptionSecret(') && serverSrc.includes("mode: 'setup'") && serverSrc.includes('pending_setup_intent') && serverSrc.includes('function syncInlineMembershipState('));
+  t('static v80.2 server: NEITHER cart rail carries the terminal already-have-a-membership error anymore', cartSlice802.length > 100 && hostedSlice802.length > 100 && !cartSlice802.includes('you already have an active HomeCare membership') && !hostedSlice802.includes('you already have an active HomeCare membership'));
+  t('static v80.2 SPA: setup confirms + hosted door on server errors + self-clearing validation notes', htmlSrc.includes('confirmSetup') && htmlSrc.includes('function cartShowErrWithHosted(') && htmlSrc.includes('function cartShowValidationErr(') && htmlSrc.includes("addEventListener('input'") && htmlSrc.split('Pay on Stripe').length - 1 >= 2);
+  // --- A: the Gabriel case — guest + $125 service + join. The trial
+  // subscription's $0 invoice has NO PaymentIntent in real Stripe;
+  // the join must answer a SETUP secret, and the flow completes.
+  const gA = { name: 'Join Gwen', email: 'gwen802@t.local', phone: '7075550201', password: 'gwenpass802', address: '21 Gwen St', city: 'Fairfield', when: 'Today', items: items802 };
+  const jA = await req2('POST', '/api/cart/checkout', { body: Object.assign({}, gA, { step: 'join' }) });
+  const subA = stripeState.subs[jA.j.subscriptionId];
+  t('v80.2 join trial: the join step answers mode SETUP with the SetupIntent secret (mock models real Stripe: trialing sub, $0 invoice, payment_intent null)', jA.status === 200 && jA.j.step === 'join' && jA.j.mode === 'setup' && (jA.j.clientSecret || '').startsWith('seti_') && !!subA && subA.status === 'trialing' && subA.latest_invoice.payment_intent === null);
+  const tokA = (await req2('POST', '/api/login', { body: { email: 'gwen802@t.local', password: 'gwenpass802' } })).j.token;
+  const confA = await req2('POST', '/api/stripe/homecare-confirm', { token: tokA, body: {} });
+  t('v80.2 join trial: homecare-confirm activates the membership and reports the trial (free month spent AT activation)', confA.status === 200 && confA.j.active === true && confA.j.trial === true);
+  const payA = await req2('POST', '/api/cart/checkout', { token: tokA, body: { step: 'pay', address: '21 Gwen St', city: 'Fairfield', when: 'Today', joinedMembership: true, items: items802 } });
+  await mockPiStatus(payA.j.paymentIntentId, 'succeeded');
+  const ccA = await req2('POST', '/api/cart/checkout-confirm', { token: tokA, body: { checkoutId: payA.j.checkoutId, paymentIntentId: payA.j.paymentIntentId } });
+  const ordA = (await admReqs802()).find(r => r.id === (ccA.j && ccA.j.requestId));
+  t('v80.2 join trial: the deposit settles a DEPOSIT order at MEMBER totals ($50 of $100) with joinedMembership — exactly ONE subscription exists', payA.status === 200 && payA.j.totals.due === 100 && payA.j.totals.deposit === 50 && ccA.status === 200 && !!ordA && ordA.payment.status === 'deposit' && ordA.payment.amountCents === 5000 && ordA.payment.balanceCents === 5000 && ordA.menuOrder.joinedMembership === true && subsOf802(jA.j.user.id).length === 1);
+  // --- B: forced deposit-step failure AFTER activation (the pin):
+  // the retry must complete the deposit AS A MEMBER, never error.
+  const gB = { name: 'Retry Rob', email: 'rob802@t.local', phone: '7075550202', password: 'robpass802', address: '22 Rob St', city: 'Fairfield', when: 'Today', items: items802 };
+  const jB = await req2('POST', '/api/cart/checkout', { body: Object.assign({}, gB, { step: 'join' }) });
+  const tokB = (await req2('POST', '/api/login', { body: { email: 'rob802@t.local', password: 'robpass802' } })).j.token;
+  const confB = await req2('POST', '/api/stripe/homecare-confirm', { token: tokB, body: {} });
+  await mockFailPiOnce();
+  const payB1 = await req2('POST', '/api/cart/checkout', { token: tokB, body: { step: 'pay', address: '22 Rob St', city: 'Fairfield', when: 'Today', joinedMembership: true, items: items802 } });
+  t('v80.2 forced failure: membership active + the deposit PI creation dies once -> 502 (the half-applied state, reproduced)', jB.status === 200 && confB.j.active === true && payB1.status === 502);
+  const payB2 = await req2('POST', '/api/cart/checkout', { token: tokB, body: { step: 'join', address: '22 Rob St', city: 'Fairfield', when: 'Today', items: items802 } });
+  t('v80.2 retry: step join on the already-member account is NOT terminal — it answers the PAY step at member totals ($100 due, $50 deposit)', payB2.status === 200 && payB2.j.step === 'pay' && payB2.j.totals.due === 100 && payB2.j.totals.deposit === 50);
+  await mockPiStatus(payB2.j.paymentIntentId, 'succeeded');
+  const ccB = await req2('POST', '/api/cart/checkout-confirm', { token: tokB, body: { checkoutId: payB2.j.checkoutId, paymentIntentId: payB2.j.paymentIntentId } });
+  const ordB = (await admReqs802()).find(r => r.id === (ccB.j && ccB.j.requestId));
+  t('v80.2 retry: the deposit completes as a member — DEPOSIT order $50/$100, joinedMembership, exactly ONE membership', ccB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 5000 && ordB.menuOrder.joinedMembership === true && subsOf802(jB.j.user.id).length === 1);
+  // --- D: the production ghost — join created the trialing sub but
+  // the local activation never landed (webhook did it in production).
+  // The retry must MIRROR the live subscription and proceed as member.
+  const gD = { name: 'Ghost Gia', email: 'gia802@t.local', phone: '7075550204', password: 'giapass802', address: '24 Gia St', city: 'Fairfield', when: 'Today', items: items802 };
+  const jD = await req2('POST', '/api/cart/checkout', { body: Object.assign({}, gD, { step: 'join' }) });
+  const tokD = (await req2('POST', '/api/login', { body: { email: 'gia802@t.local', password: 'giapass802' } })).j.token;
+  const meD0 = await req2('GET', '/api/me', { token: tokD });
+  const jD2 = await req2('POST', '/api/cart/checkout', { token: tokD, body: { step: 'join', address: '24 Gia St', city: 'Fairfield', when: 'Today', items: items802 } });
+  const meD1 = await req2('GET', '/api/me', { token: tokD });
+  t('v80.2 half-applied: a live trialing sub with NO local activation is mirrored on retry — member pay step, free month spent at THIS activation, one subscription', jD.status === 200 && meD0.j.user.homeCareStatus !== 'active' && jD2.status === 200 && jD2.j.step === 'pay' && jD2.j.totals.due === 100 && meD1.j.user.homeCareStatus === 'active' && meD1.j.user.freeMonthAvailable === false && subsOf802(jD.j.user.id).length === 1);
+  // --- C: pre-existing active membership + join checked, both rails.
+  const mC = await mkMember('pre802@t.local', '(707) 555-0203');
+  const subC = await req2('POST', '/api/stripe/homecare-subscribe', { token: mC.token, body: {} });
+  await mockActivate(subC.j.subscriptionId);
+  const confC = await req2('POST', '/api/stripe/homecare-confirm', { token: mC.token, body: {} });
+  const jC = await req2('POST', '/api/cart/checkout', { token: mC.token, body: { step: 'join', address: '1 Main St', city: 'Fairfield', items: items802 } });
+  t('v80.2 pre-existing member: step join proceeds as a MEMBER checkout (step pay, member totals) — never the old terminal 400', confC.j.active === true && jC.status === 200 && jC.j.step === 'pay' && jC.j.totals.due === 100 && jC.j.totals.deposit === 50);
+  const hC = await req2('POST', '/api/cart/checkout-hosted', { token: mC.token, body: { step: 'join', address: '1 Main St', city: 'Fairfield', items: items802 } });
+  const hCSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === (hC.j && hC.j.checkoutId));
+  t('v80.2 pre-existing member (hosted): step join opens the PLAIN deposit session at member totals — no second subscription', hC.status === 200 && !!hCSess && hCSess.mode === 'payment' && hCSess.metadata.kind === 'cart-checkout-hosted' && hCSess.amount_total === 5000 && subsOf802(mC.id).length === 1);
+  // --- E: the sibling rail reuses the live trialing subscription —
+  // a retried inline join returns the SAME sub + setup secret.
+  const mE = await mkMember('reuse802@t.local', '(707) 555-0205');
+  const subE1 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mE.token, body: {} });
+  const subE2 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mE.token, body: {} });
+  t('v80.2 reuse: a retried inline join reuses the LIVE trialing subscription (same id, mode setup, exactly one sub — no stacking)', subE1.status === 200 && subE1.j.mode === 'setup' && subE2.status === 200 && subE2.j.subscriptionId === subE1.j.subscriptionId && (subE2.j.clientSecret || '').startsWith('seti_') && subsOf802(mE.id).length === 1);
+}
+{
+  // VM: the hosted door on a SERVER error (carrying the current
+  // intent), the setup-mode join confirming via confirmSetup end to
+  // end, and the prepare polish (fail-fast validation, no fake
+  // loading state).
+  const fetchOrig802 = sandbox.fetch;
+  const stripeOrig802 = sandbox.Stripe;
+  let setupUsed802 = false, paymentUsed802 = false, meActive802 = false, checkoutMode802 = 'fail';
+  const calls802 = [];
+  sandbox.Stripe = function (pk) {
+    return {
+      elements() { return { create() { return makeFakeCardEl(); } }; },
+      confirmCardPayment: async () => ({}),
+      confirmCardSetup: async () => ({}),
+      confirmSetup: async () => { setupUsed802 = true; return { setupIntent: { id: 'seti_vm802', status: 'succeeded' } }; },
+      confirmPayment: async () => { paymentUsed802 = true; return { paymentIntent: { id: 'pi_vm802', status: 'succeeded' } }; }
+    };
+  };
+  const fetch802 = async (url, opts = {}) => {
+    let body = null; try { body = opts && opts.body ? JSON.parse(opts.body) : null; } catch (e) {}
+    if (url === '/api/me') return { ok: true, status: 200, json: async () => ({ user: { id: 'USR-802', role: 'customer', name: 'Vm Vic', email: 'vic802@t.local', homeCareStatus: meActive802 ? 'active' : 'none' } }) };
+    if (url === '/api/cart/checkout') {
+      calls802.push(body && body.step);
+      if (checkoutMode802 === 'fail') return { ok: false, status: 502, json: async () => ({ error: 'payment service error — try again in a minute' }) };
+      if (body && body.step === 'join') return { ok: true, status: 200, json: async () => ({ step: 'join', mode: 'setup', clientSecret: 'seti_secret_802', subscriptionId: 'sub_802', user: { id: 'USR-802', role: 'customer', name: 'Vm Vic', email: 'vic802@t.local', homeCareStatus: 'none' }, totals: { list: 125, member: 100, due: 100, deposit: 50, balance: 50 } }) };
+      return { ok: true, status: 200, json: async () => ({ step: 'pay', checkoutId: 'CCK-802', clientSecret: 'pi_secret_802', paymentIntentId: 'pi_vm802', user: { id: 'USR-802', role: 'customer', name: 'Vm Vic', email: 'vic802@t.local', homeCareStatus: 'active' }, totals: { list: 125, member: 100, due: 100, deposit: 50, balance: 50 } }) };
+    }
+    if (url === '/api/stripe/homecare-confirm') { calls802.push('homecare-confirm'); meActive802 = true; return { ok: true, status: 200, json: async () => ({ active: true }) }; }
+    if (url === '/api/cart/checkout-confirm') { calls802.push('checkout-confirm'); return { ok: true, status: 200, json: async () => ({ ok: true, requestId: 'GHS-802OK' }) }; }
+    if (url === '/api/cart/checkout-hosted') { calls802.push('hosted:' + (body && body.step)); return { ok: true, status: 200, json: async () => ({ hosted: true, url: 'https://checkout.mock/pay/cs_802' }) }; }
+    return fetchStub(url, opts);
+  };
+  sandbox.fetch = fetch802;
+  resetStripeState();
+  stripeCfgMode = 'ok';
+  el('cartDone').style.display = 'none';
+  run("me = null; location.hash = ''; localStorage.removeItem('ghsCart'); cartJoinedOnce = false; cartAdd('tv-mounting');");
+  el('ccName').value = 'Vm Vic'; el('ccEmail').value = 'vic802@t.local'; el('ccPhone').value = '7075550209'; el('ccPass').value = 'vicpass802';
+  el('ccCity').value = 'Fairfield'; el('ccWhenText').value = ''; el('ccNotes').value = '';
+  el('ccJoin').checked = true;
+  // fail-fast validation: no address -> the note paints immediately,
+  // the pay box never enters the loading state, nothing is sent.
+  el('ccAddress').value = '';
+  await run('cartPrepare()');
+  t('v80.2 VM polish: an invalid form fails FAST — validation note up, pay box NOT stuck loading, no checkout call made', (el('cartPayErr').textContent || '').includes('Enter the service address') && run('cartStripeState') === 'idle' && !(el('cartPayElement').innerHTML || '').includes('Loading secure payment') && calls802.length === 0);
+  el('ccAddress').value = '5 Vic St';
+  // server error -> the error WITH the hosted door, intent = join.
+  checkoutMode802 = 'fail';
+  await run('cartPrepare()');
+  t('v80.2 VM: a SERVER error in prepare paints the error WITH the hosted door (no dead end)', el('cartPayErr').style.display === 'block' && (el('cartPayErr').innerHTML || '').includes('payment service error') && (el('cartPayErr').innerHTML || '').includes("Stripe's secure page"));
+  await run('cartPayHosted()');
+  t('v80.2 VM: the hosted door from the error state carries the CURRENT intent (join checked -> hosted step join)', calls802.includes('hosted:join'));
+  // setup-mode join, end to end.
+  checkoutMode802 = 'ok';
+  await run('cartPrepare()');
+  t('v80.2 VM: the trial join prepare records mode setup on the pay context', run('cartPayCtx && cartPayCtx.mode') === 'setup' && run('cartPayCtx.phase') === 'join');
+  await run('cartPayNow()');
+  await run('cartPayNow()');
+  t('v80.2 VM: the setup secret confirms via confirmSetup, the membership confirms, then the deposit pays and the order completes', setupUsed802 === true && paymentUsed802 === true && calls802.join(',') === 'join,hosted:join,join,homecare-confirm,pay,checkout-confirm' && el('cartDone').style.display === 'block');
+  sandbox.fetch = fetchOrig802;
+  sandbox.Stripe = stripeOrig802;
+  el('ccJoin').checked = false;
+  run('cartResetCheckout();');
+  run("me = null; localStorage.removeItem('ghsCart'); cartJoinedOnce = false;");
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}
