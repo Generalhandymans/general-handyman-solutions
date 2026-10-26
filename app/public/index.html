@@ -3879,7 +3879,7 @@ async function loadAdminCarts(){
     box.innerHTML=d.carts.map(function(c){
       const items=(c.items||[]).map(function(it){ return escHtml(it.name)+' ×'+it.qty; }).join(' + ');
       const badge=c.status==='paid'?'<span class="pill" style="background:#1a7f37">paid → '+(c.requestId||'')+'</span>':(c.status==='cancelled'?'<span class="pill" style="background:#6b6762">cancelled</span>':'<span class="pill" style="background:#b26a00">open</span>');
-      return '<div class="card"><b>'+c.id+'</b> '+badge+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+(c.customerName?' • for '+escHtml(c.customerName):'')+(c.payState?'<br><span class="mut">💰 Deposit '+moneyFmt(c.payState.deposit)+' in (40%) · balance '+moneyFmt(c.payState.balance)+(c.payState.balancePaid?' PAID ✓':' due at completion')+'</span>':'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button>'+(c.status==='open'?' <button type="button" class="ghost" onclick="editCart(\''+c.id+'\')">Edit</button>':'')+' <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
+      return '<div class="card"><b>'+c.id+'</b> '+badge+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+(c.customerName?' • for '+escHtml(c.customerName):'')+(c.payState?'<br><span class="mut">💰 Deposit '+moneyFmt(c.payState.deposit)+' in (40%) · balance '+moneyFmt(c.payState.balance)+(c.payState.balancePaid?' PAID ✓':' due at completion')+'</span>'+(c.payState.adjustments&&c.payState.adjustments.length?'<br><span class="mut">🧾 '+c.payState.adjustments.map(function(a){ return (a.delta<0?'-':'+')+moneyFmt(Math.abs(a.delta))+(a.note?' — '+escHtml(a.note):''); }).join(' · ')+'</span>':''):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button>'+(c.status==='open'?' <button type="button" class="ghost" onclick="editCart(\''+c.id+'\')">Edit</button>':'')+(c.payState&&!c.payState.balancePaid?' <button type="button" class="ghost" onclick="adjustCartBalance(\''+c.id+'\')">Adjust balance</button>':'')+' <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }
 }
@@ -3887,6 +3887,23 @@ async function cancelCart(idv){
   if(!await appConfirm('Cancel this cart link? The customer will no longer be able to pay it.')) return;
   try{ await api('/api/admin/carts/'+idv+'/cancel',{method:'POST', body:JSON.stringify({})}); loadAdminCarts(); }
   catch(e){ alert(e.message); }
+}
+// v69: adjust the balance of a BOOKED (deposit-paid) order — materials
+// at cost only, labor never. The original cart lines stay sealed; the
+// adjustment is a signed line the customer sees on his own link.
+async function adjustCartBalance(idv){
+  const amt=await appPrompt('Balance adjustment in dollars — the materials difference, at cost.\nPositive adds (e.g. 35), negative reduces (e.g. -20). Labor is never adjusted here.');
+  if(amt===null || amt===undefined || String(amt).trim()==='') return;
+  const delta=parseFloat(String(amt).replace(/[^0-9.\-]/g,''));
+  if(!isFinite(delta) || delta===0){ alert('Enter a non-zero dollar amount.'); return; }
+  const note=await appPrompt('Note the customer will see on his link (e.g. Updated materials: cable roll + valves, at cost):');
+  if(note===null) return;
+  if(!await appConfirm('Apply '+(delta<0?'-':'+')+moneyFmt(Math.abs(delta))+' to '+idv+'?\nHis link shows the new balance right away.')) return;
+  try{
+    const d=await api('/api/admin/carts/'+idv+'/adjust-balance',{method:'POST', body:JSON.stringify({ delta:delta, note:(note||'').trim() })});
+    alert('Done — '+idv+' balance is now '+moneyFmt(d.cart.payState.balance)+' (total '+moneyFmt(d.cart.payState.total)+').');
+    loadAdminCarts();
+  }catch(e){ alert(e.message); }
 }
 // ---------- Admin membership invites (v60) ----------
 async function createInvite(){

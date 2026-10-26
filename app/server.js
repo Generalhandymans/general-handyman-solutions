@@ -1598,7 +1598,7 @@ function recordRequestPayment(r, info) {
 function cartsOf() { if (!Array.isArray(db.carts)) db.carts = []; return db.carts; }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, balancePaid: !!c.payment.balanceAt } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -2976,7 +2976,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
       depositDueLabel: 'Due today — 40% deposit to book', balanceDueLabel: 'Balance at completion',
-      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion',
+      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
       joinOrderNote: 'How it works: tapping Pay takes you to Stripe first to start your {planName} membership ({price}/mo) — then you come right back here to pay this member total for your order.',
@@ -3023,7 +3023,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
       depositDueLabel: 'Hoy — anticipo del 40% para agendar', balanceDueLabel: 'Resto al terminar',
-      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo',
+      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
       joinOrderNote: 'Así funciona: al tocar Pagar vas primero a Stripe para activar tu membresía {planName} de {price}/mes — y luego regresas aquí mismo para pagar este total de miembro por tu orden.',
@@ -3116,6 +3116,12 @@ function cartPageHtml(c, user, langOverride, notice) {
     return head + '<h2 style="margin-top:0" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#666" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
   }
   if (c.status === 'paid') {
+    // v69: materials adjustments (admin, append-only) render as their
+    // own signed lines under the items — the customer sees exactly
+    // what changed and why, in his page language.
+    const adjRows = (c.payment && Array.isArray(c.payment.adjustments) && c.payment.adjustments.length)
+      ? c.payment.adjustments.map(a => '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#555">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
+      : '';
     // v62: a cart in DEPOSIT state (40% in, balance outstanding) shows
     // the booked state + the balance with its own Pay button on this
     // same link; only when the balance lands does it render the
@@ -3126,6 +3132,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="depPaidH">' + S.depPaidH + '</h2>'
         + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '</p>'
         + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+        + adjRows
         + '<p style="font-size:17px;margin-bottom:2px"><span data-i18n="totalLabel">' + S.totalLabel + '</span> <b>' + usd((Number(c.payment.amountCents) || 0) / 100) + '</b></p>'
         + '<p style="font-size:17px;margin:2px 0"><span data-i18n="depPaidLine">' + S.depPaidLine + '</span> <b>' + usd((Number(c.payment.depositCents) || 0) / 100) + '</b></p>'
         + '<p style="font-size:20px;margin:2px 0"><span data-i18n="balLine">' + S.balLine + '</span> <b>' + usd((Number(c.payment.balanceCents) || 0) / 100) + '</b></p>'
@@ -3136,6 +3143,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="paidH">' + S.paidH + '</h2>'
       + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b> <span data-i18n="paidBodyA">' + S.paidBodyA + '</span>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '. <span data-i18n="paidBodyB">' + S.paidBodyB + '</span></p>'
       + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+      + adjRows
       + '<p style="font-size:20px"><span data-i18n="totalPaid">' + S.totalPaid + '</span> <b>' + usd((c.payment && c.payment.amountCents ? c.payment.amountCents : 0) / 100) + '</b></p>' + foot;
   }
   const savings = money(c.listTotal - c.memberTotal);
@@ -5319,6 +5327,56 @@ const server = http.createServer(async (req, res) => {
     if (b.note !== undefined) c.note = cleanText(b.note, 500);
     if (b.lang !== undefined) c.lang = b.lang === 'es' ? 'es' : 'en';
     audit(user, 'cart.edit', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
+    save();
+    return send(res, 200, { cart: publicCart(c) });
+  }
+  // v69: adjust the BALANCE of a deposit-state cart order (Gabriel,
+  // 2026-10-25 — "modificar el total para que paguen al final con los
+  // materiales actualizados; labor no se cobra extra"). A paid cart's
+  // lines are sealed by design (v55), so the ORIGINAL items and totals
+  // never change: an append-only adjustments list moves the payment
+  // record instead (amountCents/balanceCents), the deposit already in
+  // is a fact and never moves, and the SAME link collects the
+  // corrected balance. Every adjustment carries a customer-visible
+  // note (transparency: at-cost materials, never a surprise), kills
+  // any live Checkout session so a stale amount can never complete,
+  // syncs the order record, and lands in the audit log. Adjusting the
+  // balance to exactly $0 settles the order as paid in full at the
+  // adjusted total.
+  const cartAdjustMatch = p.match(/^\/api\/admin\/carts\/([\w-]+)\/adjust-balance$/);
+  if (cartAdjustMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = cartsOf().find(x => x.id === cartAdjustMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status !== 'paid' || !c.payment || !(Number(c.payment.depositCents) > 0)) return send(res, 400, { error: 'only a booked order with a deposit can be adjusted' });
+    if (c.payment.balanceAt) return send(res, 400, { error: 'the balance is already paid — this order is closed' });
+    const b = await readBody(req);
+    const deltaCents = Math.round(Number(b.delta) * 100);
+    if (!Number.isFinite(deltaCents) || deltaCents === 0) return send(res, 400, { error: 'give the adjustment in dollars (e.g. 35 or -20) — it cannot be 0' });
+    if (Math.abs(deltaCents) > 200000) return send(res, 400, { error: 'that adjustment is over $2,000 — check the number' });
+    const note = cleanText(b.note, 200);
+    const newBalance = Math.round(Number(c.payment.balanceCents) || 0) + deltaCents;
+    if (newBalance < 0) return send(res, 400, { error: 'the balance cannot go below $0 — the deposit already paid is ' + usd(Number(c.payment.depositCents) / 100) });
+    await expireCartSessions(c);
+    if (!Array.isArray(c.payment.adjustments)) c.payment.adjustments = [];
+    c.payment.adjustments.push({ at: new Date().toISOString(), by: user.email || user.id, deltaCents, note });
+    c.payment.amountCents = Math.round(Number(c.payment.amountCents) || 0) + deltaCents;
+    c.payment.balanceCents = newBalance;
+    const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+    if (r) {
+      if (r.payment && r.payment.status === 'deposit') { r.payment.totalCents = c.payment.amountCents; r.payment.balanceCents = newBalance; }
+      if (r.menuOrder && r.menuOrder.totals) r.menuOrder.totals.due = c.payment.amountCents / 100;
+      r.messages = r.messages || [];
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.', at: new Date().toISOString() });
+      if (r.customerId) notify(r.customerId, 'payment', 'Materials update on order ' + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.');
+    }
+    audit(user, 'cart.adjust-balance', c.id, (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + ' · new balance ' + usd(newBalance / 100));
+    if (newBalance === 0) {
+      c.payment.balancePi = 'ADJUSTED';
+      c.payment.balanceAt = new Date().toISOString();
+      if (r) recordRequestPayment(r, { pi: '', amountCents: c.payment.amountCents, kind: 'cart-balance' });
+      notifyAdmins('payment', 'BALANCE ADJUSTED TO $0: cart ' + c.id + ' order ' + (c.requestId || '') + ' is settled in full at ' + usd(c.payment.amountCents / 100) + ' (the deposit covers the adjusted total).');
+    }
     save();
     return send(res, 200, { cart: publicCart(c) });
   }
