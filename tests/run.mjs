@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v70', swSrc.includes("const CACHE = 'ghs-app-v70'"));
+t('static: SW cache is ghs-app-v71', swSrc.includes("const CACHE = 'ghs-app-v71'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -862,6 +862,16 @@ t('v41 worker entry: #worker still shows the worker login (auth) box', elById.ge
 run("location.hash = '';"); run('applyWorkerEntry();'); run('render();');
 t('v41 worker entry: leaving #worker restores the request section', elById.get('customerBox').style.display === 'block');
 
+// --- v71: worker-zone EN|ES toggle (Gabriel: the technician screens
+// speak ONE language at a time, like the Menu) ---
+run("location.hash = '#worker';"); run('applyWorkerEntry();');
+t('v71 worker i18n: the technician door defaults to Spanish (steps hint in ES, no English tail)', (elById.get('authHint').innerHTML || '').includes('jales abiertos') && !(elById.get('authHint').innerHTML || '').includes('open jobs'));
+run("setWorkerLang('en');");
+t('v71 worker i18n: switching to EN re-renders the hint in English + persists ghsWorkerLang', (elById.get('authHint').innerHTML || '').includes('open jobs') && run("localStorage.getItem('ghsWorkerLang')") === 'en' && run("WT('tradesTitle')") === 'My trades');
+run("setWorkerLang('es');");
+t('v71 worker i18n: switching back restores Spanish everywhere (hint, dict, toggle)', (elById.get('authHint').innerHTML || '').includes('jales abiertos') && run("localStorage.getItem('ghsWorkerLang')") === 'es' && run("WT('tradesTitle')") === 'Mis oficios' && run("WT('moneyTitle')") === 'Mi dinero');
+run("location.hash = '';"); run('applyWorkerEntry();'); run('render();');
+
 // ---------------- v42 client: Solicitud Profesional wizard + in-app menu ----------------
 run("location.hash = ''; me = null;"); run('applyWorkerEntry();'); run('render();');
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
@@ -934,7 +944,7 @@ t('v42 confirmation: making another request resets to step 1', run('wzState.step
 
 // ---------------- v40 area captains ----------------
 t('static v40: server has the captain system (seed areas, 5% override, ledger, endpoints)', serverSrc.includes('CAPTAIN_OVERRIDE_RATE = 0.05') && serverSrc.includes("p === '/api/admin/captains'") && serverSrc.includes("p === '/api/me/captain'") && serverSrc.includes('function accrueCaptainOverride(') && serverSrc.includes('db.captainLedger'));
-t('static v40: client has the Capitanes admin section + Mi área worker section', htmlSrc.includes('id="adminCaptains"') && htmlSrc.includes('id="workerCaptain"') && htmlSrc.includes('loadAdminCaptains') && htmlSrc.includes('loadCaptainArea') && htmlSrc.includes('Mi área / My area'));
+t('static v40: client has the Capitanes admin section + Mi área worker section', htmlSrc.includes('id="adminCaptains"') && htmlSrc.includes('id="workerCaptain"') && htmlSrc.includes('loadAdminCaptains') && htmlSrc.includes('loadCaptainArea') && htmlSrc.includes("areaTitle: 'Mi área'") && htmlSrc.includes("areaTitle: 'My area'"));
 const capW = await req('POST', '/api/signup', { body: { name: 'Cap Walter', email: 'capw@t.local', phone: '(707) 555-0301', password: 'cappass1', role: 'worker', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Plumbing'] } } });
 const techW = await req('POST', '/api/signup', { body: { name: 'Tech Tony', email: 'techt@t.local', phone: '(707) 555-0302', password: 'techpass1', role: 'worker', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Electrical'] } } });
 const revW = await req('POST', '/api/signup', { body: { name: 'Review Rita', email: 'revr@t.local', phone: '(707) 555-0303', password: 'revpass1', role: 'worker', profile: { city: 'Napa', areas: 'Napa', skills: [] } } });
@@ -1020,7 +1030,7 @@ t('static v40 WS2: webhook plan resolution also matches resolver-cached price id
 const TRADE_KEYS_TEST = ['handyman', 'carpentry', 'electrical', 'plumbing', 'gardening', 'hvac', 'mechanic'];
 t('static v41: server has trade skills + worker self-service + candidates + money endpoints', serverSrc.includes('const TRADE_SKILLS') && serverSrc.includes("p === '/api/me/trades'") && serverSrc.includes("p === '/api/me/availability'") && serverSrc.includes("p === '/api/me/worker-profile'") && serverSrc.includes("p === '/api/admin/worker-candidates'") && serverSrc.includes("p === '/api/worker/money'") && serverSrc.includes('function mergeTradeSkills(') && serverSrc.includes('function tradeForService('));
 t('static v41: direct offers email the one worker via the job_direct_offer template', serverSrc.includes("type === 'job_direct_offer'") && serverSrc.includes("fireAutomation('job_direct_offer'"));
-t('static v41: client has Mis oficios, Mi dinero, the skill banner and the dispatch picker', htmlSrc.includes('Mis oficios / My trades') && htmlSrc.includes('Mi dinero / My money') && htmlSrc.includes('id="workerSkillBanner"') && htmlSrc.includes('Califica tus oficios') && htmlSrc.includes('id="jWorker"') && htmlSrc.includes('refreshJobCandidates') && htmlSrc.includes('workerTradesHtml'));
+t('static v41: client has Mis oficios, Mi dinero, the skill banner and the dispatch picker', htmlSrc.includes("tradesTitle: 'Mis oficios'") && htmlSrc.includes("moneyTitle: 'Mi dinero'") && htmlSrc.includes('id="workerSkillBanner"') && htmlSrc.includes("skillBannerTitle: '⚠️ Califica tus oficios'") && htmlSrc.includes('id="jWorker"') && htmlSrc.includes('refreshJobCandidates') && htmlSrc.includes('workerTradesHtml'));
 // Signup WITH the 7 boxes filled (new-model account).
 const w41 = await req('POST', '/api/signup', { body: { name: 'Trades Tara', email: 'w41@t.local', phone: '(707) 555-0411', password: 'workpass41', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'], tradeSkills: { plumbing: { level: 4, tools: true }, handyman: { level: 3, tools: false } } } } });
 t('v41 trades: signup stores the trade boxes (level + tools, effective = self)', w41.status === 201 && w41.j.user.tradeSkills.plumbing.level === 4 && w41.j.user.tradeSkills.plumbing.tools === true && w41.j.user.tradeSkills.plumbing.effective === 4 && w41.j.user.tradeSkills.carpentry === null && w41.j.user.skillsRated === 2);
@@ -1100,7 +1110,7 @@ t('static v41 photo: server validates + stores the worker profile photo and the 
 t('static v41 photo: pubUser exposes the photo to workers only + signup cannot smuggle one in', serverSrc.includes("photo: u.role === 'worker' ? workerPhotoOf(u) : undefined") && serverSrc.includes('delete prof.photo'));
 t('static v41 photo: client avatar (initials fallback), photo editor, tech card and admin removal exist', htmlSrc.includes('function avatarHtml(') && htmlSrc.includes('function initialsOf(') && htmlSrc.includes('id="wp-photo"') && htmlSrc.includes('function wpPhotoChange(') && htmlSrc.includes('function wpPhotoRemove(') && htmlSrc.includes('function techCardHtml(') && htmlSrc.includes('function removeWorkerPhoto('));
 t('static v41 pins: map pins are the photo avatar + hammer badge with a hammer fallback — never the car', htmlSrc.includes('function photoIcon(') && htmlSrc.includes('function hammerPinIcon(') && htmlSrc.includes('function techPinIcon(') && htmlSrc.includes('icon: techPinIcon(j)') && !htmlSrc.includes("pinIcon('🚗')"));
-t('static v41 loc: trip gate + duty feed + worker status line + master map present', htmlSrc.includes('function requireTripLocation(') && htmlSrc.includes('Debes compartir tu ubicación para marcar On my way') && htmlSrc.includes('function initDutySharing(') && htmlSrc.includes('id="workerLocLine"') && htmlSrc.includes('Compartiendo ubicación / Sharing location') && htmlSrc.includes('id="adminMapBox"') && htmlSrc.includes('function loadAdminMap('));
+t('static v41 loc: trip gate + duty feed + worker status line + master map present', htmlSrc.includes('function requireTripLocation(') && htmlSrc.includes("tripLocRequired: 'Debes compartir tu ubicación para marcar En camino'") && htmlSrc.includes('function initDutySharing(') && htmlSrc.includes('id="workerLocLine"') && htmlSrc.includes("locLineOn: '📍 Compartiendo ubicación'") && htmlSrc.includes('id="adminMapBox"') && htmlSrc.includes('function loadAdminMap('));
 t('vm v41 photo: initials fallback renders initials and no img without a photo', run("initialsOf('Trades Tara')") === 'TT' && run("avatarHtml(null, 'Trades Tara', 40)").includes('TT') && !run("avatarHtml(null, 'Trades Tara', 40)").includes('<img'));
 t('vm v41 photo: avatar renders the photo img when one exists', run("avatarHtml('data:image/jpeg;base64,AAAA', 'Trades Tara', 40)").includes('<img') && run("avatarHtml('data:image/jpeg;base64,AAAA', 'Trades Tara', 40)").includes('data:image/jpeg'));
 const PHOTO1 = 'data:image/jpeg;base64,' + 'QUJD'.repeat(30);
@@ -1427,7 +1437,7 @@ t('static v28: acabados layer carries the design tokens', htmlSrc.includes('v28 
 t('static v28: plan toggle cards conformed to the dark standard', htmlSrc.includes('.plan-card{background:var(--panel);border:2px solid var(--red)') && htmlSrc.includes('.plan-card .plan-price{font-size:37px;color:var(--red)') && htmlSrc.includes('.plan-card>button{width:100%;border-radius:10px'));
 t('static v28: dark panel utilities + payment panel + designed empty states exist', htmlSrc.includes('.panel-dark{background:var(--panel)') && htmlSrc.includes('.pay-panel{') && htmlSrc.includes('.empty{border:1.5px dashed var(--field-line)'));
 t('static v28: membership status cards use the dark panels', htmlSrc.includes('class="card panel-dark panel-green"') && htmlSrc.includes('class=\"card panel-dark\"'));
-t('static v28: empty states wrapped in .empty blocks, same words', ['No invoices yet.','No requests yet.','No notifications yet.','No workers yet.','No jobs yet.','No yard visits assigned to you right now.'].every(w => htmlSrc.includes('<div class="empty"><p class="mut">' + w + '</p></div>')));
+t('static v28: empty states wrapped in .empty blocks, same words', ['No invoices yet.','No requests yet.','No notifications yet.','No workers yet.','No jobs yet.'].every(w => htmlSrc.includes('<div class="empty"><p class="mut">' + w + '</p></div>')) && htmlSrc.includes("'<div class=\"empty\"><p class=\"mut\">'+WT('yardNone')+'</p></div>'"));
 t('static v27: share panel has one red Copy control for each of the 5 join links', ['homecare', 'yard1', 'yard2', 'plus1', 'plus2'].every(k => htmlSrc.includes("copyShareLink('https://app.generalhandymans.app/#join-" + k + "', this)")) && (htmlSrc.match(/class="share-copy"/g) || []).length === 5);
 t('static v27: no raw signup URL sprawled as visible text, no old ghost copy buttons remain', !htmlSrc.includes('>https://app.generalhandymans.app/#join-') && !htmlSrc.includes('class="copy-link"') && !htmlSrc.includes('Copy signup link'));
 t('static v27: share panel rows name the plan + price', htmlSrc.includes('HomeCare — $29/mo') && htmlSrc.includes('Yard Care — 1 visit · $75/mo') && htmlSrc.includes('Yard Care — 2 visits · $150/mo') && htmlSrc.includes('HomeCare Plus — 1 yard visit · $100/mo') && htmlSrc.includes('HomeCare Plus — 2 yard visits · $175/mo'));
@@ -3257,6 +3267,14 @@ t('static v66: server has VAPID + aes128gcm encryption + subscribe routes + the 
   try { pushMock.close(); } catch (e) {}
 }
 
+// ---------------- v71: worker-zone EN|ES toggle ----------------
+t('static v71: worker i18n rails exist — W_I18N dict + WT/workerLang/setWorkerLang persisted on ghsWorkerLang, toggles on BOTH the auth card and the dashboard, data-w pass, and the worker renderers speak WT',
+  htmlSrc.includes('const W_I18N = {') && htmlSrc.includes('function workerLang(){') && htmlSrc.includes('function setWorkerLang(l){') && htmlSrc.includes("localStorage.setItem('ghsWorkerLang'") && htmlSrc.includes("localStorage.getItem('ghsWorkerLang')") &&
+  htmlSrc.includes('id="workerLangRowA"') && htmlSrc.includes('id="workerLangEnA"') && htmlSrc.includes('id="workerLangEsA"') && htmlSrc.includes('id="workerLangEnW"') && htmlSrc.includes('id="workerLangEsW"') &&
+  htmlSrc.includes('data-w="tabWorker"') && htmlSrc.includes('data-w="rescueBtn"') && htmlSrc.includes('data-w="permTitle"') && htmlSrc.includes('data-w="openJobs"') && htmlSrc.includes('function applyWorkerLang(){') &&
+  htmlSrc.includes("WT('statusActive')") && htmlSrc.includes("WT('moneyTitle')") && htmlSrc.includes("WT('tradesTitle')") && htmlSrc.includes("WT('areaTitle')") && htmlSrc.includes("WT('yardNone')") &&
+  !htmlSrc.includes('Mis oficios / My trades') && !htmlSrc.includes('Mi dinero / My money') && !htmlSrc.includes('Payout sent to your bank ✓</span>'));
+
 // ---------------- v65: in-app dialogs, no boot permission burn, map self-heal ----------------
 t('static v65: in-app dialog system present, the admin flows use it (no native confirm in async admin fns), the boot-time bare permission request is gone, the master map self-heals Leaflet',
   htmlSrc.includes('id="appDlg"') && htmlSrc.includes('function appConfirm(') && htmlSrc.includes('function appPrompt(') &&
@@ -3272,7 +3290,7 @@ t('static v64: the SPA has the permissions card (notificaciones + ubicación, bo
 // ---------------- v63: technician door — direct link + sticky entry + rescue ----------------
 t('static v63: /tecnico + /tech redirect to the worker entry; the activation email carries the link + steps; the SPA has the sticky flag, the rescue button and the ENTRAR face',
   serverSrc.includes("p === '/tecnico'") && serverSrc.includes("Location: '/#worker'") && serverSrc.includes('/tecnico — it takes you straight to the technician door') &&
-  htmlSrc.includes('id="workerRescueRow"') && htmlSrc.includes("localStorage.setItem('ghs_entry','worker')") && htmlSrc.includes("localStorage.getItem('ghs_entry')==='worker'") && htmlSrc.includes("localStorage.removeItem('ghs_entry')") && htmlSrc.includes('¿Primera vez o no recuerdas tu contraseña?') && htmlSrc.includes('ENTRAR · Log in'));
+  htmlSrc.includes('id="workerRescueRow"') && htmlSrc.includes("localStorage.setItem('ghs_entry','worker')") && htmlSrc.includes("localStorage.getItem('ghs_entry')==='worker'") && htmlSrc.includes("localStorage.removeItem('ghs_entry')") && htmlSrc.includes('¿Primera vez o no recuerdas tu contraseña?') && htmlSrc.includes("workerEnter: '🔨 ENTRAR'"));
 {
   const r1 = await fetch(BASE2 + '/tecnico', { redirect: 'manual' });
   const r2 = await fetch(BASE2 + '/tech', { redirect: 'manual' });
