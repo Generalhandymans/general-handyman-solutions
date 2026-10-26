@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v76', swSrc.includes("const CACHE = 'ghs-app-v76'"));
+t('static: SW cache is ghs-app-v77', swSrc.includes("const CACHE = 'ghs-app-v77'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -167,6 +167,7 @@ const A = admLogin.j.token, ACOOKIE = admLogin.cookie;
 const c1 = await req('POST', '/api/signup', { body: { name: 'Cust One', email: 'c1@t.local', phone: '(707) 555-0101', password: 'custpass1', role: 'customer' } });
 const c2 = await req('POST', '/api/signup', { body: { name: 'Cust Two', email: 'c2@t.local', phone: '(707) 555-0102', password: 'custpass2', role: 'customer' } });
 t('customer signups: 201', c1.status === 201 && c2.status === 201);
+t('v77 server: a plain customer signup carries NO membership (free account only)', c1.j.user.homeCareStatus === 'none' && !(c1.j.user.membershipPlan && c1.j.user.membershipPlan.status === 'active'));
 const c1Login = await req('POST', '/api/login', { body: { email: 'c1@t.local', password: 'custpass1' } });
 const c2Login = await req('POST', '/api/login', { body: { email: 'c2@t.local', password: 'custpass2' } });
 const C1 = c1Login.j.token, C1COOKIE = c1Login.cookie, C2COOKIE = c2Login.cookie;
@@ -850,6 +851,73 @@ t('v35 deep link: #join-yard2 lands on the inline join form with yard2 armed', r
 t('v35 deep link: selector + note + button all show yard2 / $150', el('aPlanSel').value === 'yard2' && (el('joinChargeNote').innerHTML || '').includes('$150') && (el('authBtn').textContent || '').includes('$150') && (el('cardChargeLabel').textContent || '').includes('$150'));
 run("location.hash = ''; me = null; pendingJoin = null; pendingMembershipPlan = null;");
 stripeCfgMode = 'empty';
+
+// ---------------- v77 client: plain signup is a FREE account; membership is OPTIONAL ----------------
+// Gabriel's screenshots (2026-10-25): the New customer tab wore the plan
+// picker, the "Joining HomeCare" banner and a priced button — no way to
+// register without a plan — plus the membership fields on a plain form,
+// and a giant technician pill under the customer login.
+resetStripeState();
+stripeCfgMode = 'empty';
+run("location.hash = '';"); run('applyWorkerEntry();');
+// (a) plain tab: account fields + the optional offer ONLY
+run('plainSignupTab()');
+t('v77 plain: New customer shows NO plan selector, NO join banner, NO card row', el('planSelRow').style.display === 'none' && el('joinChargeNote').style.display === 'none' && el('cardRow').style.display === 'none');
+t('v77 plain: membership fields hidden on a plain signup (address / home / start)', el('serviceAddressRow').style.display === 'none' && el('homeGroup').style.display === 'none' && el('startGroup').style.display === 'none');
+t('v77 plain: the OPTIONAL membership picker is visible, defaulted to no membership', el('optPlanRow').style.display === 'block' && el('aOptPlan').value === '' && el('optPlanNote').style.display === 'none');
+t('v77 plain: button is a bare Create account (no price anywhere)', (el('authBtn').textContent || '').trim() === 'Create account');
+t('v77 plain: the HomeCare promo box no longer pressures the signup form', el('hcPromo').style.display === 'none');
+t('v77 tech door: discreet link present on the customer face, giant pill absent from the DOM', !!elById.get('techLinkRow') && el('techLinkRow').style.display !== 'none' && !elById.get('techSignInBtn'));
+// (b) an armed fallback plan does NOT survive an explicit New customer tap
+resetStripeState();
+stripeCfgMode = 'down';
+await run("beginInlineJoin('yardcare', 'yard1')");
+t('v77 escape: fallback armed (sanity — plan UI visible before the tap)', run('pendingMembershipPlan && pendingMembershipPlan.plan') === 'yard1' && el('planSelRow').style.display === 'block');
+run('plainSignupTab()');
+t('v77 escape: tapping New customer DROPS the armed plan — plain form, unpriced button', run('pendingMembershipPlan') === null && run('curMode') === 'customer' && el('planSelRow').style.display === 'none' && el('joinChargeNote').style.display === 'none' && (el('authBtn').textContent || '').trim() === 'Create account');
+// (c) OPTIONAL plan picked: fields appear, submit continues to that plan's checkout
+el('aOptPlan').value = 'yard1'; run('optPlanChanged()');
+t('v77 opt-in: picking a plan reveals the membership fields + a priced note', el('serviceAddressRow').style.display === 'block' && el('homeGroup').style.display === 'block' && el('startGroup').style.display === 'block' && el('optPlanNote').style.display === 'block' && (el('optPlanNote').innerHTML || '').includes('$75'));
+t('v77 opt-in: the button STILL carries no price (the note explains the checkout step)', (el('authBtn').textContent || '').trim() === 'Create account');
+el('aName').value = 'Opt In'; el('aEmail').value = 'optin@t.local'; el('aPhone').value = '7075550111'; el('aPass').value = 'password123'; el('aServiceAddress').value = '7 Oak St';
+stubAuthUser = { id: 'USR-V77A', role: 'customer', name: 'Opt In', email: 'optin@t.local', serviceAddress: '7 Oak St' };
+const optMark = fetchLog.length;
+await run('doAuth()');
+const optCalls = fetchLog.slice(optMark);
+const optCheckout = optCalls.find(f => f.url === '/api/stripe/checkout');
+t('v77 opt-in: submit continues to the PICKED plan checkout (yardcare/yard1)', !!optCheckout && (optCheckout.body || '').includes('"kind":"yardcare"') && (optCheckout.body || '').includes('"plan":"yard1"'));
+t('v77 opt-in: resume never touches the inline membership/HomeCare rails', !optCalls.some(f => f.url.includes('membership-subscribe') || f.url.includes('homecare-subscribe')));
+stubAuthUser = null;
+run('me = null;');
+// (d) NO plan picked: account only — zero payment surface in the whole submit
+run('plainSignupTab()');
+el('aName').value = 'Plain Pam'; el('aEmail').value = 'pam@t.local'; el('aPhone').value = '7075550112'; el('aPass').value = 'password123'; el('aServiceAddress').value = '';
+stubAuthUser = { id: 'USR-V77B', role: 'customer', name: 'Plain Pam', email: 'pam@t.local' };
+const plainMark = fetchLog.length;
+await run('doAuth()');
+const plainCalls = fetchLog.slice(plainMark);
+t('v77 plain submit: signup + login happened and the customer is inside (no checkout, no charge call)', plainCalls.some(f => f.url === '/api/signup') && !plainCalls.some(f => f.url.includes('/api/stripe/')) && run('me && me.id') === 'USR-V77B');
+stubAuthUser = null;
+run('me = null;');
+// (e) member-join exercise, ALL five plans: selector switch reprices note / button / card label
+resetStripeState();
+stripeCfgMode = 'ok';
+await run('openMemberJoin()');
+const planExpect = { homecare: '29', yard1: '75', yard2: '150', plus1: '100', plus2: '175' };
+for (const pk of Object.keys(planExpect)) {
+  el('aPlanSel').value = pk; run('joinPlanChanged()');
+  const px = '$' + planExpect[pk];
+  t('v77 join exercise: ' + pk + ' shows ' + px + ' on note + button + card label', (el('joinChargeNote').innerHTML || '').includes(px) && (el('authBtn').textContent || '').includes(px) && (el('cardChargeLabel').textContent || '').includes(px) && run('pendingJoin && pendingJoin.plan') === pk);
+}
+t('v77 join exercise: HomeCare note sells the v74 FREE first month', (el('aPlanSel').value = 'homecare', run('joinPlanChanged()'), (el('joinChargeNote').innerHTML || '').includes('FREE') && (el('joinChargeNote').innerHTML || '').includes('$0')));
+run('me = null; pendingJoin = null; pendingMembershipPlan = null;');
+stripeCfgMode = 'empty';
+// (f) password rescue intact: forgot row on login + #reset= opens the reset box
+run("location.hash = '';"); run('applyWorkerEntry();'); run("mode('login');");
+t('v77 rescue: forgot-password row shows on the customer login', el('forgotRow').style.display === 'block');
+run("location.hash = '#reset=" + 'a'.repeat(64) + "';"); run('checkResetHash()');
+t('v77 rescue: an emailed #reset= link opens the reset box', elById.get('resetBox').style.display === 'block');
+run("location.hash = '';"); run('checkResetHash()');
 
 // --- v41: worker entry (#worker) hides the customer request section ---
 // Owner screenshot 2026-10-23: at #worker the CUSTOMER "Request a
@@ -3030,9 +3098,11 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
 // the inclusion note when a materials line is present — the same
 // switch the estimate page already made via estimateHasMaterials
 // (the v45 page pins below already cover the estimate side).
-t('static v59: auth screen carries a dedicated technician sign-in pill (hammer label, routes to the existing #worker entry)', htmlSrc.includes('id="techSignInBtn"') && htmlSrc.includes('🔨 Technician sign in') && htmlSrc.includes("location.hash='#worker';applyWorkerEntry();return false;"));
-t('static v59: applyWorkerEntry hides the technician pill inside the worker entry itself (same rule as the old link row)', htmlSrc.includes("getElementById('techSignInBtn')") && htmlSrc.includes("tsb.style.display = w ? 'none' : 'block'"));
-t('static v72 (was v59): the redundant small worker link row is GONE; the pill is the only technician door on the card', !htmlSrc.includes('id="workerLinkRow"') && !htmlSrc.includes('Are you a General Handyman Solutions technician?') && htmlSrc.includes('id="techSignInBtn"'));
+t('static v77 (was v59): the technician door on the customer auth card is a small discreet link (routes to the existing #worker entry)', htmlSrc.includes('id="techLinkRow"') && htmlSrc.includes('Are you a technician? Sign in') && htmlSrc.includes("location.hash='#worker';applyWorkerEntry();return false;"));
+t('static v77: applyWorkerEntry hides the discreet technician link inside the worker entry itself', htmlSrc.includes("getElementById('techLinkRow')") && htmlSrc.includes("tlr.style.display = w ? 'none' : 'block'"));
+t('static v77 (was v59/v72): the giant technician pill is GONE from the customer card — the quiet link is the only technician door there', !htmlSrc.includes('id="techSignInBtn"') && !htmlSrc.includes('id="workerLinkRow"') && htmlSrc.includes('id="techLinkRow"'));
+t('static v77: plain signup carries the OPTIONAL membership picker (free account is the default option)', htmlSrc.includes('id="aOptPlan"') && htmlSrc.includes('Just my free account — no membership') && htmlSrc.includes('function plainSignupTab()') && htmlSrc.includes('function optPlanChanged()'));
+t('static v77: premium design system tokens + auth components are in the stylesheet', htmlSrc.includes('--sh-card:') && htmlSrc.includes('--red-hi:#ff4655') && htmlSrc.includes('.auth-hero') && htmlSrc.includes('.auth-offer') && htmlSrc.includes('#authBox .tabs'));
 t('static v59: cart dictionary carries the materials-included note in EN + ES', serverSrc.includes("materialsNote: 'Materials listed above are included in your total.'") && serverSrc.includes("materialsNote: 'Los materiales listados arriba están incluidos en tu total.'"));
 t('static v59: cart page switches its note on cartHasMaterials; estimate page keeps its estimateHasMaterials switch', serverSrc.includes('const cartHasMaterials = (c.items || []).some(it => it.custom && it.kind !==') && serverSrc.includes('cartHasMaterials ? ') && serverSrc.includes('estimateHasMaterials(disp) ? '));
 {

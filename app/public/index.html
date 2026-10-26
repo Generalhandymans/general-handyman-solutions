@@ -21,7 +21,14 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#b5aea2;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8}
+:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#b5aea2;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8;
+ /* v77 PREMIUM DESIGN SYSTEM — tokens derived from the WEBSITE brand
+    (generalhandymans.app): near-black surfaces #17171b/#1b1b1f, lines
+    #2a2a31, brand red #e42535 (+ #ff4655 highlight), green #2fbf71,
+    amber #ffb800, light ink #e8e8ea — so website and app read as ONE
+    product. Shared by the customer shell components below. */
+ --red-hi:#ff4655;--red-dk:#c21725;--panel-2:#17171b;--panel-3:#1b1b1f;--line-d:#2a2a31;--ink-w:#e8e8ea;--amber:#ffb800;
+ --r-lg:18px;--r-md:12px;--r-sm:10px;--sh-card:0 12px 32px rgba(11,11,11,.10),0 2px 6px rgba(11,11,11,.05);--sh-btn:0 8px 20px rgba(228,37,53,.30);--sh-pop:0 16px 44px rgba(11,11,11,.28);--ring:0 0 0 3px rgba(228,37,53,.16)}
 *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
 header{background:#0b0b0b;color:#fff;padding:10px 18px;display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
 header b{font-size:20px;letter-spacing:.02em;text-transform:uppercase} header b em{color:var(--red);font-style:normal}
@@ -255,6 +262,40 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .menu-prices{display:flex;gap:10px;align-items:baseline;margin:4px 0 8px}
 .menu-price{font-size:19px;font-weight:800;color:#fff}
 .menu-member{color:#2fbf71;font-weight:700;font-size:13.5px}
+
+/* ===== v77 PREMIUM DESIGN SYSTEM — customer shell (Gabriel, 2026-10-25) =====
+   One product with the website: dark brand surfaces, red #e42535, the
+   wide-logo black header treatment, pill CTAs, designed cards. These are
+   SHARED components — every customer screen that uses .card / button /
+   input / .tabs / header inherits the upgrade without a per-screen pass.
+   Technician and admin zones keep their functional tool styling; only
+   the generic base polish below reaches them. */
+header{border-bottom:3px solid var(--red);box-shadow:0 4px 18px rgba(11,11,11,.35)}
+.card{border-radius:var(--r-lg);box-shadow:var(--sh-card)}
+button{background:linear-gradient(180deg,var(--red-hi),var(--red) 46%,var(--red-dk));box-shadow:0 4px 14px rgba(228,37,53,.22);transition:filter .15s ease,transform .05s ease}
+button:active{transform:scale(.985)}
+button.ghost,button.black{box-shadow:none}
+input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
+#teamContactPill a{box-shadow:0 10px 24px rgba(11,11,11,.42)}
+/* --- AUTH: app-grade card (v77) --- */
+#authBox{overflow:hidden}
+.auth-hero{margin:-18px -18px 14px;padding:16px 18px;background:linear-gradient(180deg,var(--panel-3),var(--panel-2));border-bottom:3px solid var(--red);display:flex;align-items:center;gap:13px;color:#fff}
+.auth-hero img{width:48px;height:48px;border-radius:13px;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.auth-hero b{display:block;font-size:16.5px;letter-spacing:.03em;text-transform:uppercase;line-height:1.15}
+.auth-hero b em{color:var(--red);font-style:normal}
+.auth-hero b i{font-style:normal}
+.auth-hero span{display:block;color:var(--panel-mut);font-size:12.5px;margin-top:2px;line-height:1.35}
+#authBox h3{font-size:21px;margin:2px 0 4px;letter-spacing:.01em}
+#authBox .tabs{display:flex;flex-wrap:nowrap;background:#f0eee9;border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;margin:12px 0 14px}
+#authBox .tabs button{flex:1 1 0;background:transparent;color:var(--ink);border:0;border-radius:999px;padding:10px 4px;font-size:13px;font-weight:800;box-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#authBox .tabs button.on{background:var(--ink);color:#fff;box-shadow:0 3px 10px rgba(11,11,11,.30)}
+#authBox input,#authBox select,#authBox textarea{margin:4px 0 12px;padding:13px}
+#authBtn{width:100%;min-height:54px;font-size:16.5px;border-radius:999px;margin-top:8px;box-shadow:var(--sh-btn)}
+.auth-offer{border:1.5px dashed rgba(228,37,53,.55);background:#fff7f7;border-radius:14px;padding:13px 14px 6px;margin:2px 0 12px}
+.auth-offer>b{font-size:14.5px}
+.auth-offer select{margin-bottom:8px}
+#techLinkRow a{color:var(--muted);font-weight:700;text-decoration:none}
+#techLinkRow a:hover{color:var(--red)}
 </style>
 </head>
 <body>
@@ -276,11 +317,12 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 
   <!-- AUTH -->
   <div id="authBox" class="card">
+    <div class="auth-hero"><img src="/icons/icon-192.png" alt="General Handyman Solutions"><div><b><i>General</i> <em>Handyman</em> Solutions</b><span>Handyman · Mobile mechanic · Yard care — Solano County</span></div></div>
     <div id="workerLangRowA" style="display:none;text-align:right;margin:0 0 4px"><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="workerLangEnA" onclick="setWorkerLang('en')">EN</button><button type="button" id="workerLangEsA" onclick="setWorkerLang('es')">ES</button></span></div>
     <h3>Log in / Sign up</h3>
     <div class="tabs">
       <button id="tabLogin" class="on" onclick="mode('login')">Log in</button>
-      <button id="tabCustomer" onclick="mode('customer')">New customer</button>
+      <button id="tabCustomer" onclick="plainSignupTab()">New customer</button>
       <button id="tabHomecare" onclick="openMemberJoin()">New member — join a plan</button>
       <button id="tabWorker" onclick="mode('worker')" data-w="tabWorker">New technician application</button>
     </div>
@@ -300,6 +342,26 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
+    <!-- v77 (Gabriel, 2026-10-25): membership is an OPTIONAL offer inside
+         the plain signup — default is the free account alone. Picking a
+         plan reveals the membership fields and, on submit, continues to
+         that plan's checkout (the member-join rails). No pick = no
+         charge, no checkout, straight into the account. -->
+    <div id="optPlanRow" style="display:none">
+      <div class="auth-offer">
+        <b>⭐ Optional — add a membership &amp; save</b>
+        <p class="mut" style="margin:4px 0 8px">Members save 20% on labor and get $50 in-person estimates. Totally optional: your free account works without it, and you can join anytime later from inside your account.</p>
+        <select id="aOptPlan" onchange="optPlanChanged()">
+          <option value="">Just my free account — no membership</option>
+          <option value="homecare">HomeCare — $29/mo · first month FREE</option>
+          <option value="yard1">Yard Care — $75/mo · 1 yard visit / month</option>
+          <option value="yard2">Yard Care — $150/mo · 2 yard visits / month</option>
+          <option value="plus1">HomeCare Plus — $100/mo · 1 yard visit / month</option>
+          <option value="plus2">HomeCare Plus — $175/mo · 2 yard visits / month</option>
+        </select>
+        <p class="mut" id="optPlanNote" style="display:none;margin:2px 0 6px"></p>
+      </div>
+    </div>
     <div id="serviceAddressRow" style="display:none">
       <label>Service address — where we'll do the work</label>
       <input id="aServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
@@ -388,14 +450,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
     <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px"><b>HomeCare — $29/mo total.</b> Your first month is <b>FREE</b> — <b>$0 charged today</b>, then $29/mo (one free month per account). 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
-    <!-- v59: technician sign-in entry — a dedicated high-contrast pill.
-         BEFORE this, the only door from the customer auth screen to the
-         technician login was the small muted "Log in here →" text link
-         (#workerLinkRow) at the very bottom of the card, below the
-         HomeCare promo (Gabriel, 2026-10-23: "no veo el login bien").
-         Visibility only: the pill routes to the existing #worker entry
-         view, exactly like that link always did — no auth flow changes. -->
-    <button type="button" id="techSignInBtn" data-w="techSignIn" onclick="location.hash='#worker';applyWorkerEntry();return false;" style="width:100%;margin-top:12px;background:#0b0b0b;color:#fff;border:2px solid #0b0b0b;border-radius:999px;padding:15px 20px;min-height:54px;font-weight:800;font-size:16.5px;cursor:pointer">🔨 Technician sign in</button>
+    <!-- v77 (Gabriel, 2026-10-25): CUSTOMER-FIRST — the technician door
+         on customer surfaces is a small, quiet text link. The giant black
+         pill (v59) is GONE from this card; the /tecnico entry itself is
+         the technician sign-in (its own face: login + rescue button). -->
+    <p id="techLinkRow" style="text-align:center;margin:14px 0 2px;font-size:14px"><a href="#worker" onclick="location.hash='#worker';applyWorkerEntry();return false;">Are you a technician? Sign in →</a></p>
     <p class="mut" id="workerAgreeRow" style="display:none;text-align:center;margin-top:8px"><span data-w="agreeApplyPre">By applying you agree to the</span> <a href="#terms" data-w="termsLink">Terms &amp; Conditions</a></p>
     <p id="forgotRow" style="display:none;text-align:center;margin-top:8px"><a href="#" data-w="forgotPw" onclick="forgotPassword();return false;">Forgot my password</a></p>
     <!-- v63: technician rescue — shown ONLY in the #worker entry. A big,
@@ -1046,7 +1105,39 @@ function syncAuthPriceTexts(m){
   const lbl = document.getElementById('cardChargeLabel');
   if (lbl && info) lbl.textContent = info.kind === 'homecare' ? 'Card — $0 charged today, then $' + info.monthly + '/mo' : 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
   const promo = document.getElementById('hcPromo');
-  if (promo) promo.style.display = (m === 'join' || isWorkerEntry()) ? 'none' : 'block';
+  if (promo) promo.style.display = (m === 'join' || m === 'customer' || isWorkerEntry()) ? 'none' : 'block';
+}
+// ---------- v77: plain signup + OPTIONAL membership (Gabriel, 2026-10-25) ----------
+// "Estábamos presionando mucho pa' que paguen": the New customer tab is a
+// FREE account form — name / email / phone / password and nothing else.
+// An explicit tap on the tab is a fresh start: any plan armed by an
+// earlier CTA or by the Stripe.js fallback is DROPPED (that state was
+// the screenshot bug — the plan picker, banner and priced button stuck
+// to the plain form with no way out). Inside the form, an optional
+// membership picker (default: no membership) offers the plans without
+// pressure; picking one reveals the membership fields and arms the same
+// post-signup checkout resume the member-join path uses.
+function plainSignupTab(){
+  pendingMembershipPlan = null;
+  const s = document.getElementById('aOptPlan');
+  if (s) s.value = '';
+  mode('customer');
+}
+function optPlanPicked(){
+  const s = document.getElementById('aOptPlan');
+  return !!(s && s.value && JOIN_PLAN_INFO[s.value]);
+}
+function optPlanChanged(){ if (curMode === 'customer') mode('customer'); }
+function paintOptPlanNote(){
+  const note = document.getElementById('optPlanNote');
+  if (!note) return;
+  const s = document.getElementById('aOptPlan');
+  const info = (s && JOIN_PLAN_INFO[s.value]) ? JOIN_PLAN_INFO[s.value] : null;
+  if (!info) { note.style.display = 'none'; note.innerHTML = ''; return; }
+  note.style.display = 'block';
+  note.innerHTML = info.kind === 'homecare'
+    ? '<b>' + info.name + ' — your first month is FREE.</b> $0 at checkout today, then $' + info.monthly + '/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.'
+    : '<b>' + info.name + ' — $' + info.monthly + '/mo.</b> Tap Create account and we take you straight to secure checkout to start it — $' + info.monthly + ' charged today, then $' + info.monthly + '/mo. Cancel anytime.';
 }
 function mode(m){ curMode=m;
   // The member tab IS the join form now (v17): landing on it — via the tab
@@ -1061,12 +1152,20 @@ function mode(m){ curMode=m;
   document.getElementById('tabWorker').classList.toggle('on', m==='worker');
   document.getElementById('nameRow').style.display = m==='login' ? 'none':'block';
   document.getElementById('phoneRow').style.display = m==='login' ? 'none':'block';
-  document.getElementById('serviceAddressRow').style.display = (m==='customer' || m==='join') ? 'block':'none';
   // Account-first fallback (v35): when Stripe.js could not load, the join
   // stays ARMED in pendingMembershipPlan on the plain signup form — the
   // plan selector, the plan note and the priced button must stay visible
   // there too, so the visitor always sees WHICH plan and WHAT price.
   const fbInfo = (m==='customer' && pendingMembershipPlan && JOIN_PLAN_INFO[pendingMembershipPlan.plan]) ? JOIN_PLAN_INFO[pendingMembershipPlan.plan] : null;
+  // v77: on the plain customer form the membership fields (service
+  // address, home details, preferred start) render ONLY when a plan is
+  // actually in play — the armed fallback plan (fbInfo) or a plan the
+  // visitor picked in the optional-membership picker. A plain signup
+  // shows account fields + the optional offer, nothing more.
+  const custPlan = !!fbInfo || (m==='customer' && optPlanPicked());
+  const optRow = document.getElementById('optPlanRow');
+  if (optRow) optRow.style.display = (m==='customer' && !fbInfo) ? 'block':'none';
+  document.getElementById('serviceAddressRow').style.display = (m==='join' || (m==='customer' && custPlan)) ? 'block':'none';
   const planSelRow = document.getElementById('planSelRow');
   if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare' || fbInfo) ? 'block':'none';
   const forgotRow = document.getElementById('forgotRow');
@@ -1081,9 +1180,9 @@ function mode(m){ curMode=m;
     : 'Optional for a regular account. Required when joining Yard Care or HomeCare Plus.';
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   const homeGroupEl = document.getElementById('homeGroup');
-  if (homeGroupEl) homeGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
+  if (homeGroupEl) homeGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
   const startGroupEl = document.getElementById('startGroup');
-  if (startGroupEl) startGroupEl.style.display = (m==='customer' || m==='join' || m==='homecare') ? 'block':'none';
+  if (startGroupEl) startGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
   document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('joinChargeNote').style.display = (m==='join' || fbInfo) ? 'block':'none';
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
@@ -1091,6 +1190,9 @@ function mode(m){ curMode=m;
   if (fbInfo) { const promoEl = document.getElementById('hcPromo'); if (promoEl) promoEl.style.display = 'none'; } // the armed plan is the only price on this form — never a competing $49 promo under a Yard/Plus fallback
   document.getElementById('authBtn').textContent = (m==='homecare' || m==='join') ? 'Create account & join — $' + JOIN_PLAN_INFO[memberFormPlan()].monthly + '/mo' : (fbInfo ? 'Create account & continue — $' + fbInfo.monthly + '/mo' : (m==='login' ? 'Log in' : 'Create account'));
   if (m==='homecare') ensureStripe();
+  paintOptPlanNote();
+  const tlrM = document.getElementById('techLinkRow');
+  if (tlrM) tlrM.style.display = isWorkerEntry() ? 'none' : 'block';
   applyWorkerLang();
 }
 // ---------- Worker-zone language (v71, Gabriel 2026-10-25) ----------
@@ -1276,8 +1378,8 @@ function applyWorkerEntry(){
     : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
   const hc = document.getElementById('hcPromo');
   if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
-  const tsb = document.getElementById('techSignInBtn');
-  if (tsb) tsb.style.display = w ? 'none' : 'block';
+  const tlr = document.getElementById('techLinkRow');
+  if (tlr) tlr.style.display = w ? 'none' : 'block';
   const cl = document.getElementById('custLinkRow');
   if (cl) cl.style.display = w ? 'block' : 'none';
   if (w && (curMode === 'customer' || curMode === 'homecare')) mode('login');
@@ -1399,7 +1501,7 @@ function renderMemberFallback(){
   const sel = document.getElementById('aPlanSel');
   if (sel) sel.value = pending.plan;
   const note = document.getElementById('joinChargeNote');
-  if (note) note.innerHTML = 'Joining <b>' + info.name + '</b> — <b>$' + info.monthly + '/mo</b>. Create your account and we will take you straight to secure checkout for this plan.' + (info.kind === 'homecare' ? '' : ' Your service address is required for Yard Care and HomeCare Plus.');
+  if (note) note.innerHTML = 'Joining <b>' + info.name + '</b> — <b>$' + info.monthly + '/mo</b>. Create your account and we will take you straight to secure checkout for this plan.' + (info.kind === 'homecare' ? ' Your first month is <b>FREE</b> — $0 at checkout today, then $' + info.monthly + '/mo (one free month per account).' : ' Your service address is required for Yard Care and HomeCare Plus.');
   hideErr();
 }
 async function beginInlineJoin(kind, plan){
@@ -2105,12 +2207,23 @@ async function saveHomeDetails(){
     if (msg) msg.textContent = 'Saved ✓';
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
+let authBusy = false;
 async function doAuth(){
+  // v77: one submit at a time — a double-tap on the join button used to
+  // fire a second signup (409 "email already registered") or a duplicate
+  // charge attempt while the first was still in flight.
+  if (authBusy) return; authBusy = true;
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; }
     else { const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
+      // v77: a plan picked in the plain form's OPTIONAL membership picker
+      // arms the standard resume — after the account exists, submit
+      // continues to that plan's secure checkout (v74 trial included for
+      // HomeCare), exactly like the member-join fallback. No pick = the
+      // account alone, no charge surface at all.
+      if (curMode==='customer' && !pendingMembershipPlan && optPlanPicked()) { const op = document.getElementById('aOptPlan').value; pendingMembershipPlan = { kind: JOIN_PLAN_INFO[op].kind, plan: op }; }
       if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
       const role = (curMode==='homecare' || curMode==='join') ? 'customer' : curMode;
@@ -2138,6 +2251,7 @@ async function doAuth(){
     if (pendingMembershipPlan && me && me.role !== 'customer') pendingMembershipPlan = null;
     render();
   }catch(e){ showErr(e.message); }
+  finally { authBusy = false; }
 }
 async function logout(){ await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){} render(); }
