@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v79', swSrc.includes("const CACHE = 'ghs-app-v79'"));
+t('static: SW cache is ghs-app-v80', swSrc.includes("const CACHE = 'ghs-app-v80'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1468,7 +1468,10 @@ const stripeMock = http.createServer(async (req, res) => {
   if (req.method === 'POST' && path === '/checkout/sessions') {
     const n = ++stripeState.n;
     const md = {}; for (const k of Object.keys(form)) { const m = /^metadata\[(.+)\]$/.exec(k); if (m) md[m[1]] = form[k]; }
-    const sess = { id: 'cs_mock_' + n, url: 'https://checkout.mock/pay/cs_mock_' + n, mode: form.mode || 'payment', status: 'open', payment_status: 'unpaid', metadata: md, customer_email: form.customer_email || '', customer: form.customer || '', subscription: '', payment_intent: '', amount_total: null };
+    const sess = { id: 'cs_mock_' + n, url: 'https://checkout.mock/pay/cs_mock_' + n, mode: form.mode || 'payment', status: 'open', payment_status: 'unpaid', metadata: md, customer_email: form.customer_email || '', customer: form.customer || '', subscription: '', payment_intent: '', amount_total: null,
+      // v80 piece 4: capture what the server told Stripe about language
+      // + consent copy so tests can pin locale + custom_text.
+      locale: form.locale || '', customText: { submit: form['custom_text[submit][message]'] || '', afterSubmit: form['custom_text[after_submit][message]'] || '' } };
     if (sess.mode === 'subscription') {
       const sn = ++stripeState.n;
       const cus = sess.customer || ('cus_mock_' + (++stripeState.n));
@@ -2801,6 +2804,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 csp: tile.openstreetmap.org images are allowed by the v33 CSP (img-src https:)', serverSrc.includes("img-src 'self' data: blob: https:"));
 }
 
+
 try { child2.kill('SIGTERM'); } catch (e) {}
 await sleep(400);
 const seedDb = JSON.parse(fs.readFileSync(DATA_FILE2, 'utf8'));
@@ -3910,6 +3914,177 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   // --- Legacy #order retirement statics ---
   t('v79 #order: the legacy page is GONE (no orderBox, no submitOrder, no orderState) and the route converts to the cart', !htmlSrc.includes('id="orderBox"') && !htmlSrc.includes('function submitOrder') && !htmlSrc.includes('orderState') && htmlSrc.includes('function retireOrderRoute()') && htmlSrc.includes('function orderNow(id)') && htmlSrc.includes('function orderNow(id)'));
   t('v79 #order: the server payment rails for in-app balances survive (/api/orders/pay + pay-confirm)', serverSrc.includes("p === '/api/orders/pay'") && serverSrc.includes("p === '/api/orders/pay-confirm'") && serverSrc.includes('function settleRequestBalance('));
+}
+
+// ---------------- v80 CONVERSIÓN: targets, claim, honest states, locale, ASAP fee, recovery plumbing, Stripe loader ----------------
+t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout card + the server — the card now states the deposit law', !htmlSrc.includes('You pay the full total today') && !serverSrc.includes('You pay the full total today') && htmlSrc.includes('You pay only the <b>booking deposit</b> today') && htmlSrc.includes('$50 flat</b> on totals up to $300'));
+t('static v80-1: notifications carry structured targets end to end (server stores + returns target, push payload url = target, SPA rows tappable with the role guard)', serverSrc.includes('function notify(userId, type, text, target)') && serverSrc.includes("target: typeof target === 'string' ? target.slice(0, 200) : ''") && serverSrc.includes("url: (typeof target === 'string' && target) ? target : '/'") && htmlSrc.includes('function notifGo(') && htmlSrc.includes('function routeNotifHash()') && htmlSrc.includes('function notifTargetFor(') && htmlSrc.includes("me.role === 'worker'") && htmlSrc.includes('id="reqcard-') && htmlSrc.includes('id="wjobcard-'));
+t('static v80-2: the orphan claim is email-exact, audited and hooked at signup + login + cart-checkout account birth', serverSrc.includes('function claimOrphanRecords(u)') && serverSrc.includes("audit(u, 'account.claim_orphans'") && serverSrc.includes('claimOrphanRecords(u);') && serverSrc.includes('guest history under this email becomes theirs at signup') && serverSrc.includes('also at login — covers accounts created before the claim existed') && serverSrc.includes('an account born at checkout claims the guest history'));
+t('static v80-3: honest async states — the shared loading/error pattern serves requests, jobs, invoices, proposals and the worker job list', htmlSrc.includes('function listLoadingHtml(') && htmlSrc.includes('function listErrorHtml(') && htmlSrc.includes("listErrorHtml('loadRequests()'") && htmlSrc.includes("listErrorHtml('loadMyJobs()'") && htmlSrc.includes("listErrorHtml('loadMyInvoices()'") && htmlSrc.includes("listErrorHtml('loadProposals()'") && htmlSrc.includes("listErrorHtml('loadJobs()'") && (() => { const s = htmlSrc.indexOf('async function loadRequests()'); const seg = htmlSrc.slice(s, s + 1200); return seg.includes('listLoadingHtml(') && !seg.includes('.catch('); })());
+t('static v80-4: hosted checkout always carries an explicit locale + localized custom_text (never auto)', serverSrc.includes('function checkoutLang(opts)') && serverSrc.includes('params.locale = coLang') && serverSrc.includes("custom_text[submit][message]") && serverSrc.includes('Tu primer mes es GRATIS') && serverSrc.includes('retención de autorización'));
+t('static v80-5: wzFee has NO ASAP uplift left (no when-read, no 1.25) — the fee is flat 75/50/0', (() => { const s0 = htmlSrc.indexOf('function wzFee()'); const s = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return !s.includes('1.25') && !s.includes('cWhen') && s.includes('due: base'); })());
+t('static v80-6: recovery plumbing exists and the whole recovery section NEVER sends mail or fires automations (STOP TOTAL)', serverSrc.includes("p === '/api/cart/save-recovery'") && serverSrc.includes("p === '/api/me/recoverable-cart'") && serverSrc.includes('function upsertRecoverableCart(') && (() => { const segA = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7: recoverable-cart store'), serverSrc.indexOf('// Recorder for a landed DEPOSIT')); const segB = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7 PLUMBING ONLY'), serverSrc.indexOf('// ---------- v78: guest cart + EMBEDDED checkout')); const seg = segA + segB; return segA.length > 500 && segB.length > 500 && !seg.includes('sendMail(') && !seg.includes('fireAutomation(') && !seg.includes('setInterval('); })());
+t('static v80-7B: the cart loads Stripe.js through the resilient injector and reserves the house message for a genuinely unconfigured server', htmlSrc.includes('function loadStripeJsOnce(') && htmlSrc.includes('https://js.stripe.com/v3/') && htmlSrc.includes("cartStripeState = 'unconfigured'") && htmlSrc.includes('function cartRetryStripe()') && htmlSrc.includes('Loading secure payment… · Cargando pago seguro…'));
+{
+  const A80 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+
+  // --- PIECE 2: orphan history claimed by exact email ---
+  const invOrph = await req2('POST', '/api/admin/invoices', { token: A80, body: { customerName: 'Claim Carla', customerEmail: 'claim1@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 150 }] } });
+  const anonReq = await req2('POST', '/api/requests', { body: { customerName: 'Claim Carla', customerEmail: 'claim1@t.local', customerPhone: '(707) 555-0111', service: 'Plumbing', description: 'leak under sink', city: 'Fairfield', address: '9 Pine St', when: 'Tomorrow', estimateType: 'photo' } });
+  const anonOther = await req2('POST', '/api/requests', { body: { customerName: 'Other Otto', customerEmail: 'claim3@t.local', customerPhone: '(707) 555-0133', service: 'Carpentry', description: 'deck', city: 'Fairfield', address: '3 Elm St', when: 'Friday', estimateType: 'photo' } });
+  const cartOrph = await req2('POST', '/api/admin/carts', { token: A80, body: { customerName: 'Claim Carla', customerEmail: 'claim1@t.local', items: [{ serviceId: 'faucet-repair', name: 'Faucet Repair', qty: 1, unitPrice: 125 }] } });
+  const suClaim = await req2('POST', '/api/signup', { body: { name: 'Claim Carla', email: 'claim1@t.local', password: 'claimpass1', role: 'customer' } });
+  const claimedReqs = await req2('GET', '/api/requests', { token: suClaim.j.token });
+  t('v80 claim: signup claims the anonymous request whose email EXACTLY matches (and not another email\'s)', claimedReqs.j.requests.some(r => r.id === anonReq.j.request.id) && !claimedReqs.j.requests.some(r => r.id === anonOther.j.request.id));
+  const claimedInvs = await req2('GET', '/api/invoices/mine', { token: suClaim.j.token });
+  t('v80 claim: the orphan invoice under the same email lands in the new account', claimedInvs.j.invoices.some(i => i.id === invOrph.j.invoice.id));
+  const claimedProps = await req2('GET', '/api/me/proposals', { token: suClaim.j.token });
+  t('v80 claim: Gabriel\'s cart for that email is claimed into the account proposals', claimedProps.j.proposals.some(p => p.id === cartOrph.j.cart.id));
+  const audClaim = await req2('GET', '/api/admin/audit', { token: A80 });
+  t('v80 claim: the claim is written to the activity log', (audClaim.j.entries || []).some(e => e.action === 'account.claim_orphans' && e.actorId === suClaim.j.user.id));
+  // LOGIN path: a Gabriel cart issued to an EXISTING account's email is
+  // only email-matched at read time — the login hook is what claims it
+  // into the account, and the audit entry (written ONLY when something
+  // was actually claimed; this cart is Leo's only orphan) proves it.
+  const suClaim2 = await req2('POST', '/api/signup', { body: { name: 'Claim Leo', email: 'claim2@t.local', password: 'claimpass2', role: 'customer' } });
+  const cartOrph2 = await req2('POST', '/api/admin/carts', { token: A80, body: { customerName: 'Claim Leo', customerEmail: 'claim2@t.local', items: [{ serviceId: 'faucet-repair', name: 'Faucet Repair', qty: 1, unitPrice: 125 }] } });
+  const login2 = await req2('POST', '/api/login', { body: { email: 'claim2@t.local', password: 'claimpass2' } });
+  const audLogin80 = await req2('GET', '/api/admin/audit', { token: A80 });
+  const propsLeo = await req2('GET', '/api/me/proposals', { token: login2.j.token });
+  t('v80 claim: LOGIN claims the matching Gabriel cart into the account (audit entry + proposal visible)', login2.status === 200 && cartOrph2.j.cart && (audLogin80.j.entries || []).some(e => e.action === 'account.claim_orphans' && e.actorId === suClaim2.j.user.id) && propsLeo.j.proposals.some(p => p.id === cartOrph2.j.cart.id));
+
+  // --- PIECE 1: notification targets, in-app + worker side ---
+  const suNotif = await req2('POST', '/api/signup', { body: { name: 'Notif Nadia', email: 'notif@t.local', password: 'notifpass1', role: 'customer' } });
+  const rqNotif = await req2('POST', '/api/requests', { token: suNotif.j.token, body: { service: 'Faucet repair', description: 'drips', city: 'Fairfield', estimateType: 'photo' } });
+  await req2('PATCH', '/api/requests/' + rqNotif.j.request.id, { token: A80, body: { estimate: { items: [{ description: 'Faucet swap — labor', qty: 1, unitPrice: 125, type: 'labor' }] } } });
+  const notifsC = await req2('GET', '/api/notifications', { token: suNotif.j.token });
+  t('v80 targets: the estimate notification carries the exact target /estimate/<id>', notifsC.j.notifications.some(n => n.target === '/estimate/' + rqNotif.j.request.id));
+  const suWork = await req2('POST', '/api/signup', { body: { name: 'Worker Wally', email: 'wally@t.local', phone: '(707) 555-0144', password: 'wallypass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  await req2('PATCH', '/api/workers/' + suWork.j.user.id, { token: A80, body: { status: 'active' } });
+  const jobW = await req2('POST', '/api/jobs', { token: A80, body: { service: 'Gate fix', city: 'Fairfield', when: 'Today', payOffer: 100, customerPrice: 150, customerName: 'Some Customer', customerPhone: '(707) 555-0999', address: '7 Elm St, Fairfield, CA', assignedWorkerId: suWork.j.user.id, silent: true } });
+  const notifsW = await req2('GET', '/api/notifications', { token: suWork.j.token });
+  t('v80 targets: the assigned worker\'s notification targets his own job card (#wjob=<id>)', jobW.status === 201 && notifsW.j.notifications.some(n => n.target === '#wjob=' + jobW.j.job.id));
+
+  // --- PIECE 5 (server side): ASAP never inflates the estimate fee ---
+  const asapRq = await req2('POST', '/api/requests', { token: suNotif.j.token, body: { service: 'Plumbing', description: 'burst pipe', city: 'Fairfield', when: 'ASAP / Emergency', estimateType: 'inperson' } });
+  t('v80 P1-7: an ASAP in-person request still carries the FLAT $75 estimate fee server-side', asapRq.j.request.estimateDue === 75);
+
+  // --- PIECE 4: locale + custom_text on hosted sessions ---
+  const cartLang = await req2('POST', '/api/admin/carts', { token: A80, body: { customerName: 'Lang Luisa', customerEmail: 'lang@t.local', items: [{ serviceId: 'faucet-repair', name: 'Faucet Repair', qty: 1, unitPrice: 125 }] } });
+  const coLang = await req2('POST', '/api/carts/' + cartLang.j.cart.id + '/checkout', { body: { name: 'Lang Luisa', phone: '7075550123', email: 'lang@t.local', address: '1 Main St', city: 'Fairfield', when: 'Today', lang: 'es' } });
+  const sessLang = sessionForCart(cartLang.j.cart.id, 'payment');
+  t('v80 locale: the ES cart checkout session carries locale es + the ES pay submit text (amount untouched: $50 deposit on $125)', coLang.status === 200 && sessLang && sessLang.locale === 'es' && sessLang.customText.submit.includes('Esto cobra tu tarjeta por el monto mostrado') && sessLang.amount_total === 5000);
+  const cartLangEn = await req2('POST', '/api/admin/carts', { token: A80, body: { customerName: 'Lang Larry', customerEmail: 'langen@t.local', items: [{ serviceId: 'faucet-repair', name: 'Faucet Repair', qty: 1, unitPrice: 125 }] } });
+  await req2('POST', '/api/carts/' + cartLangEn.j.cart.id + '/checkout', { body: { name: 'Lang Larry', phone: '7075550124', email: 'langen@t.local', address: '2 Main St', city: 'Fairfield', when: 'Today' } });
+  const sessLangEn = sessionForCart(cartLangEn.j.cart.id, 'payment');
+  t('v80 locale: no page language -> explicit locale en (never auto) + EN submit text', sessLangEn && sessLangEn.locale === 'en' && sessLangEn.customText.submit.includes('This charges your card for the amount shown'));
+  const suJoin = await req2('POST', '/api/signup', { body: { name: 'Join Juan', email: 'joinjuan@t.local', password: 'juanpass12', role: 'customer' } });
+  const joinEs = await req2('POST', '/api/stripe/checkout', { token: suJoin.j.token, body: { kind: 'homecare', lang: 'es' } });
+  const sessJoin = Object.values(stripeState.sessions).slice(-1)[0];
+  t('v80 locale: the ES HomeCare join session is a TRIAL session with the ES free-month submit text', joinEs.status === 200 && sessJoin && sessJoin.mode === 'subscription' && sessJoin.locale === 'es' && sessJoin.customText.submit.includes('Tu primer mes es GRATIS') && sessJoin.amount_total === 0);
+  const suHold = await req2('POST', '/api/signup', { body: { name: 'Hold Hugo', email: 'holdhugo@t.local', password: 'hugopass12', role: 'customer' } });
+  const rqHold = await req2('POST', '/api/requests', { token: suHold.j.token, body: { service: 'Deck repair', description: 'boards', city: 'Fairfield', estimateType: 'inperson' } });
+  const holdEs = await req2('POST', '/api/stripe/checkout', { token: suHold.j.token, body: { kind: 'estimate-hold', requestId: rqHold.j.request.id, lang: 'es' } });
+  const sessHold = Object.values(stripeState.sessions).slice(-1)[0];
+  t('v80 locale: the ES estimate-hold session localizes the authorization text (existing deposit hold copy, now in ES)', holdEs.status === 200 && sessHold && sessHold.metadata.kind === 'estimate-hold' && sessHold.locale === 'es' && sessHold.customText.submit.includes('Esto coloca una retención de autorización'));
+  const invLoc = await req2('POST', '/api/admin/invoices', { token: A80, body: { customerName: 'Lang Luisa', customerEmail: 'lang@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 200 }] } });
+  await req2('POST', '/api/invoices/' + invLoc.j.invoice.id + '/pay', { body: { lang: 'es' } });
+  const sessInv = Object.values(stripeState.sessions).slice(-1)[0];
+  t('v80 locale: the invoice pay session carries locale es + the ES pay text', sessInv && sessInv.locale === 'es' && sessInv.customText.submit.includes('Esto cobra tu tarjeta por el monto mostrado'));
+
+  // --- PIECE 6: recoverable-cart plumbing (NOTHING is sent) ---
+  const emailsBefore80 = (await mockEmails()).length;
+  const sv1 = await req2('POST', '/api/cart/save-recovery', { body: { email: 'rec@t.local', items: [{ serviceId: 'faucet-replacement', qty: 2 }, { serviceId: 'closet-doors', qty: 1 }] } });
+  t('v80 recovery: a guest snapshot is stored and returns a token + the /#cart-recover= restore path', sv1.status === 200 && !!sv1.j.token && sv1.j.restorePath === '/#cart-recover=' + sv1.j.token);
+  t('v80 recovery: the expiry is ~30 days out', Math.abs(new Date(sv1.j.expiresAt).getTime() - Date.now() - 30 * 864e5) < 3600e3);
+  const got1 = await req2('GET', '/api/cart/recovery/' + sv1.j.token);
+  t('v80 recovery: the token restores the EXACT cart snapshot (ids, quantities, addons)', got1.status === 200 && JSON.stringify(got1.j.items) === JSON.stringify([{ id: 'faucet-replacement', q: 2, x: [] }, { id: 'closet-doors', q: 1, x: [] }]));
+  const sv2 = await req2('POST', '/api/cart/save-recovery', { body: { email: 'rec@t.local', items: [{ serviceId: 'faucet-replacement', qty: 1 }] } });
+  const gotOld = await req2('GET', '/api/cart/recovery/' + sv1.j.token);
+  const gotNew = await req2('GET', '/api/cart/recovery/' + sv2.j.token);
+  t('v80 recovery: a fresher save REPLACES the snapshot and rotates the token (old link dies)', sv2.j.token !== sv1.j.token && gotOld.status === 404 && gotNew.status === 200 && gotNew.j.items.length === 1);
+  const suRec = await req2('POST', '/api/signup', { body: { name: 'Rec Rita', email: 'rec@t.local', password: 'recpass123', role: 'customer' } });
+  const mineRec = await req2('GET', '/api/me/recoverable-cart', { token: suRec.j.token });
+  t('v80 recovery: the account surface finds the snapshot by session email — and never leaks the token', mineRec.j.cart && mineRec.j.cart.items.length === 1 && !JSON.stringify(mineRec.j).includes(sv2.j.token));
+  const badRec = await req2('POST', '/api/cart/save-recovery', { body: { email: 'rec@t.local', items: [{ serviceId: 'not-a-service', qty: 1 }] } });
+  const emailsAfter80 = (await mockEmails()).length;
+  t('v80 recovery: an invalid snapshot is refused, and the WHOLE flow sent ZERO emails (STOP TOTAL)', badRec.status === 400 && emailsAfter80 === emailsBefore80);
+}
+
+{
+  // PIECE 1, push half: the encrypted Web Push payload itself must carry
+  // the target (v66 mock pattern, port 8982).
+  const cap80 = [];
+  const pushMock80 = http.createServer((rq, rs) => { const chunks = []; rq.on('data', c => chunks.push(c)); rq.on('end', () => { cap80.push({ headers: rq.headers, body: Buffer.concat(chunks) }); rs.writeHead(201); rs.end('{}'); }); });
+  await new Promise(r => pushMock80.listen(8982, r));
+  const ua80 = nodeCrypto.createECDH('prime256v1'); ua80.generateKeys();
+  const uaPub80 = ua80.getPublicKey(); const auth80 = nodeCrypto.randomBytes(16);
+  const sub80 = { endpoint: 'http://127.0.0.1:8982/push/v80', keys: { p256dh: uaPub80.toString('base64url'), auth: auth80.toString('base64url') } };
+  const decrypt80 = (cap) => {
+    const salt = cap.body.subarray(0, 16), idLen = cap.body[20], asPub = cap.body.subarray(21, 21 + idLen), ct = cap.body.subarray(21 + idLen);
+    const secret = ua80.computeSecret(asPub);
+    const prkKey = nodeCrypto.createHmac('sha256', auth80).update(secret).digest();
+    const ikm = nodeCrypto.createHmac('sha256', prkKey).update(Buffer.concat([Buffer.from('WebPush: info\0'), uaPub80, asPub, Buffer.from([1])])).digest().subarray(0, 32);
+    const prk = nodeCrypto.createHmac('sha256', salt).update(ikm).digest();
+    const exp = (info, len) => nodeCrypto.createHmac('sha256', prk).update(Buffer.concat([info, Buffer.from([1])])).digest().subarray(0, len);
+    const decipher = nodeCrypto.createDecipheriv('aes-128-gcm', exp(Buffer.from('Content-Encoding: aes128gcm\0'), 16), exp(Buffer.from('Content-Encoding: nonce\0'), 12));
+    decipher.setAuthTag(ct.subarray(ct.length - 16));
+    return Buffer.concat([decipher.update(ct.subarray(0, ct.length - 16)), decipher.final()]).toString('utf8');
+  };
+  const suPush80 = await req2('POST', '/api/signup', { body: { name: 'Push Pia', email: 'push80@t.local', password: 'pushpass80', role: 'customer' } });
+  await req2('POST', '/api/push/subscribe', { token: suPush80.j.token, body: { subscription: sub80 } });
+  const rqPush80 = await req2('POST', '/api/requests', { token: suPush80.j.token, body: { service: 'Faucet repair', description: 'drips', city: 'Fairfield', estimateType: 'photo' } });
+  const A80b = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  await req2('PATCH', '/api/requests/' + rqPush80.j.request.id, { token: A80b, body: { estimate: { items: [{ description: 'Labor', qty: 1, unitPrice: 125, type: 'labor' }] } } });
+  let plain80 = '';
+  for (let i = 0; i < 30; i++) { if (cap80.length >= 2) { plain80 = decrypt80(cap80[cap80.length - 1]); if (plain80.includes('/estimate/')) break; } await sleep(150); }
+  t('v80 targets: the Web Push payload for the estimate lands on /estimate/<id>, not the app root', plain80.includes('"url":"/estimate/' + rqPush80.j.request.id + '"'));
+  try { pushMock80.close(); } catch (e) {}
+}
+{
+  // VM: notification target guard + wzFee + the honest error card.
+  t('v80 VM targets: a worker session is NEVER routed to a customer surface; legacy invoice text still resolves', run("me={role:'worker'}; notifTargetFor({target:'#req=GHS-1'})") === '#worker' && run("me={role:'customer'}; notifTargetFor({target:'#req=GHS-1'})") === '#req=GHS-1' && run("notifTargetFor({text:'Invoice ready: /invoice/INV-9 pay'})") === '/invoice/INV-9' && run("me=null; typeof routeNotifHash") === 'function');
+  run("me=null; wzState.est='inperson'; wzState.when='ASAP / Emergency';");
+  const feeGuest80 = JSON.parse(run('JSON.stringify(wzFee())'));
+  run("me={role:'customer', homeCareStatus:'active', freeEstimateUsed:true};");
+  const feeMember80 = JSON.parse(run('JSON.stringify(wzFee())'));
+  run('me=null;');
+  t('v80 VM P1-7: wzFee under ASAP — guest $75, member $50, and NO ASAP text in the fee label', feeGuest80.due === 75 && feeMember80.due === 50 && !feeGuest80.label.includes('ASAP') && !feeMember80.label.includes('ASAP'));
+  t('v80 VM P1-2: the shared error card carries its Retry button wired to the loader', run("listErrorHtml('loadRequests()')").includes('loadRequests()') && run("listErrorHtml('loadRequests()')").includes('Retry'));
+}
+{
+  // VM PIECE 7B: Gabriel's phone scenario, replayed — Stripe.js blocked
+  // on first load, fine on retry; then the genuinely-unconfigured case;
+  // then a hard failure with recovery through the Try again button.
+  const stripeFactoryRef = sandbox.Stripe;
+  resetStripeState(); stripeCfgMode = 'ok'; sandbox.fetch = v78Fetch; v78JoinArmed = false;
+  run("stripeObj=null; cartStripeState='idle'; cartBusy=false; me=null; location.hash=''; localStorage.setItem('ghsCart','[]'); cartAdd('tv-mounting');");
+  el('ccName').value = 'Retry Ana'; el('ccEmail').value = 'retry@t.local'; el('ccPhone').value = '7075550100'; el('ccPass').value = 'retrypass1';
+  el('ccAddress').value = '5 Oak St'; el('ccCity').value = 'Fairfield'; el('ccWhenText').value = ''; el('ccNotes').value = '';
+  let scriptTries = 0;
+  const origCreate80 = sandbox.document.createElement;
+  sandbox.document.createElement = function (tag) { const e = origCreate80(tag); if (tag === 'script') { scriptTries++; const n = scriptTries; setTimeout(function () { if (n === 1) { if (e.onerror) e.onerror(); } else { sandbox.Stripe = stripeFactoryRef; if (e.onload) e.onload(); } }, 5); } return e; };
+  sandbox.Stripe = undefined;
+  const peBefore80 = v78PeCreates;
+  await run('cartPrepare()');
+  t('v80 7B: Stripe.js fails once, the loader retries, and the Payment Element still mounts (no false "not connected")', scriptTries >= 2 && run('cartStripeState') === 'ready' && v78PeCreates > peBefore80 && (el('cartPayBtn').textContent || '').includes('Pay $'));
+  sandbox.document.createElement = origCreate80;
+  stripeCfgMode = 'empty'; resetStripeState();
+  run('cartResetCheckout(); stripeObj=null;');
+  await run('cartPrepare()');
+  t('v80 7B: an empty server key is the ONLY path to the "still being connected" house message', run('cartStripeState') === 'unconfigured' && (el('cartPayErr').textContent || '').includes('still being connected'));
+  stripeCfgMode = 'ok'; resetStripeState();
+  sandbox.Stripe = undefined;
+  sandbox.document.createElement = function (tag) { const e = origCreate80(tag); if (tag === 'script') setTimeout(function () { if (e.onerror) e.onerror(); }, 5); return e; };
+  run('cartResetCheckout(); stripeObj=null;');
+  await run('cartPrepare()');
+  const failedPainted80 = (el('cartPayElement').innerHTML || '').includes('Try again');
+  sandbox.document.createElement = origCreate80;
+  sandbox.Stripe = stripeFactoryRef;
+  run('cartRetryStripe()');
+  for (let i = 0; i < 40 && run('cartStripeState') !== 'ready'; i++) await sleep(100);
+  t('v80 7B: a hard Stripe.js failure paints the honest error + Try again (never the house message), and Try again recovers', failedPainted80 && run('cartStripeState') === 'ready');
+  run('cartResetCheckout();');
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}

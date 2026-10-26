@@ -204,6 +204,8 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .pay-panel{margin-top:10px;background:#fff8e6;border:1px solid #ecd28f;border-radius:12px;padding:12px 14px;line-height:1.5}
 /* designed empty states — same words, finished blocks */
 .empty{border:1.5px dashed var(--field-line);background:var(--soft);border-radius:14px;padding:18px 16px;text-align:center;margin:14px 0}
+.flash{animation:ghsflash 1.2s ease-in-out 2}
+@keyframes ghsflash{0%,100%{box-shadow:0 0 0 0 rgba(228,37,53,0)}50%{box-shadow:0 0 0 3px rgba(228,37,53,.85)}}
 .empty p{margin:0}
 .empty .mut{font-size:14px}
 .thread .empty{margin:0}
@@ -723,7 +725,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
       <div id="ccAddList" style="display:none"></div>
       <div id="cartTotalsDue" style="margin:10px 0"></div>
       <h4>Payment</h4>
-      <p class="mut">You pay the full total today — one charge, no balance later. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
+      <p class="mut">You pay only the <b>booking deposit</b> today — <b>$50 flat</b> on totals up to $300, <b>40%</b> on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="cartPayElement"></div>
       <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
       <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%">Pay</button>
@@ -946,6 +948,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
         <button onclick="saveHomeDetails()">Save home details</button> <span id="homeDetailsMsg" class="mut"></span>
       </div>
     </div>
+    <div id="myRecoveredCart" class="custAccountOnly"></div>
     <div id="myProposals" class="custAccountOnly"></div>
     <h2 class="custAccountOnly">My requests</h2>
     <div id="myRequests" class="custAccountOnly"></div>
@@ -1449,7 +1452,7 @@ window.addEventListener('hashchange', applyWorkerEntry);
 // first, then land on the checkout automatically.
 async function startHomeCareCheckout(){
   try{
-    const d = await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'homecare'})});
+    const d = await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'homecare', lang:menuLang()})});
     location.href = d.url;
   }catch(e){ showErr(e.message); }
 }
@@ -1862,7 +1865,7 @@ async function startMembershipCheckout(kind, planOverride){
   if (me.role !== 'customer' && me.role !== 'admin') { alert('Membership checkout is for customer accounts — log in with a customer account to join.'); return; }
   if (!(me.serviceAddress || '').trim()) { showMembershipAddressForm(kind, plan); return; }
   try {
-    const d = await api('/api/stripe/checkout', { method: 'POST', body: JSON.stringify({ kind, plan, source: campaignSource() }) });
+    const d = await api('/api/stripe/checkout', { method: 'POST', body: JSON.stringify({ kind, plan, source: campaignSource(), lang: menuLang() }) });
     location.href = d.url;
   } catch (e) {
     if (e.code === 'ADDRESS_REQUIRED') { showMembershipAddressForm(kind, plan); return; }
@@ -2308,8 +2311,50 @@ function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerH
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
   if(urgent){ var m=String(n.text).match(/\/invoice\/([\w-]+)/); if(m) payBtn='<div style="margin-top:6px"><a href="/invoice/'+m[1]+'"><button style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer">Pay now</button></a></div>'; }
-  return '<div style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+n.text+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
+  // v80 P1-4: a row with a structured target is TAPPABLE — it lands on
+  // the exact request / job / proposal / page the notice is about.
+  var tgt = notifTargetFor(n);
+  var click = tgt ? ' onclick="notifGo(\''+tgt.replace(/'/g,"\\'")+'\')" style="cursor:pointer" title="Open · Abrir"' : '';
+  var arrow = tgt ? ' <span style="color:#e42535;font-weight:700">→</span>' : '';
+  return '<div'+click+' style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+escHtml(n.text)+arrow+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
 }).join(''):'<div class="empty"><p class="mut">No notifications yet.</p></div>'); }
+// v80 P1-4: resolve a notification's target for THIS session. Worker
+// sessions are NEVER routed to a customer surface (v79 frontier): a
+// customer-side target in a worker's bell falls back to #worker.
+function notifTargetFor(n){
+  var t = (n && n.target) || '';
+  if (!t) { var m = String((n && n.text) || '').match(/\/invoice\/([\w-]+)/); return m ? '/invoice/' + m[1] : ''; }
+  if (me && me.role === 'worker' && (t.indexOf('#req=') === 0 || t.indexOf('#job=') === 0 || t.indexOf('/cart/') === 0 || t.indexOf('/estimate/') === 0 || t === '#memberships')) return '#worker';
+  return t;
+}
+function notifGo(t){
+  if (!t) return;
+  var p = document.getElementById('notifPanel'); if (p) p.style.display = 'none';
+  if (t.charAt(0) === '/') { location.href = t; return; }
+  if (location.hash === t) { routeNotifHash(); return; }
+  location.hash = t; // hashchange -> routeNotifHash (deep hashes) or render (plain routes)
+  if (t === '#worker' || t === '#memberships') render();
+}
+// Deep notification hashes (#req= / #job= / #wjob=) are not routes of
+// their own: they land on the owner view and FOCUS the exact card.
+function routeNotifHash(){
+  var h = location.hash || '';
+  var m = h.match(/^#(req|job|wjob)=([\w-]+)$/);
+  if (!m) return false;
+  var elId = (m[1] === 'req' ? 'reqcard-' : m[1] === 'job' ? 'jobcard-' : 'wjobcard-') + m[2];
+  try { history.replaceState(null, '', location.pathname + location.search + (m[1] === 'wjob' ? '#worker' : '')); } catch (e) { if (m[1] === 'wjob') location.hash = '#worker'; }
+  render();
+  focusCardWhenReady(elId);
+  return true;
+}
+function focusCardWhenReady(elId){
+  var tries = 0;
+  var iv = setInterval(function(){
+    var el = document.getElementById(elId);
+    if (el) { clearInterval(iv); try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} el.classList.add('flash'); setTimeout(function(){ el.classList.remove('flash'); }, 2600); }
+    else if (++tries > 24) clearInterval(iv);
+  }, 250);
+}
 async function toggleNotifs(){ const p=document.getElementById('notifPanel'); const open=p.style.display==='block'; p.style.display=open?'none':'block'; if(!open){ renderNotifs(); try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); setTimeout(loadNotifs,600); }catch(e){} } }
 setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
@@ -2441,7 +2486,7 @@ function render(){
       try { sessionStorage.removeItem('ghsRoleNote'); } catch (e) {}
     } else rn.style.display = 'none';
   }
-  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); custSummary(); }
+  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); }
   if(!(me && me.role==='worker' && me.status==='active')) stopDutySharing();
   if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadCaptainArea(); loadWorkerProfile(); initDutySharing(); }
   if(me && me.role==='admin'){ loadAdmin(); }
@@ -2826,7 +2871,9 @@ function copyInvoiceLink(idv){
 }
 async function loadMyInvoices(){
   const el=document.getElementById('myInvoices'); if(!el) return;
-  const d=await api('/api/invoices/mine').catch(()=>({invoices:[]}));
+  if(!el.innerHTML) el.innerHTML=listLoadingHtml('Loading your invoices… · Cargando tus facturas…');
+  let d=null;
+  try{ d=await api('/api/invoices/mine'); }catch(e){ el.innerHTML=listErrorHtml('loadMyInvoices()','We could not load your invoices.'); return; }
   el.innerHTML = d.invoices.map(function(inv){
     const unpaid=['draft','sent','overdue'].indexOf(inv.status)>=0;
     return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br>'+(inv.dueDate?'<span class="mut">Due '+escHtml(inv.dueDate)+' • </span>':'')+'<b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b><br>'+(unpaid?'<a href="/invoice/'+inv.id+'"><button style="margin-top:8px">View & pay invoice</button></a>':'<a href="/invoice/'+inv.id+'" class="mut">View invoice</a>')+'</div>';
@@ -2852,9 +2899,13 @@ async function sendMsg(idv){
 // parked in the account, still visible, no nagging.
 async function loadProposals(){
   const host = document.getElementById('myProposals'); if (!host) return;
+  if (!host.innerHTML) host.innerHTML = listLoadingHtml('Loading proposals… · Cargando propuestas…');
   let d = null;
-  try { d = await api('/api/me/proposals'); } catch (e) { host.innerHTML = ''; return; }
+  try { d = await api('/api/me/proposals'); } catch (e) { host.innerHTML = listErrorHtml('loadProposals()', 'We could not load your proposals.'); return; }
   const ps = (d && d.proposals) || [];
+  // Genuinely empty (a SUCCESSFUL response with none): the section
+  // simply does not render — v79's no-nagging design. An ERROR never
+  // lands here anymore (v80 P1-2).
   if (!ps.length) { host.innerHTML = ''; return; }
   const money = function (n) { return '$' + (Math.round(Number(n) * 100) / 100); };
   let h = '<h2>📩 Proposals from the Team</h2>';
@@ -2879,15 +2930,26 @@ async function propSaveLater(kind, idv, saved){
   try { await api('/api/me/proposals/' + kind + '/' + idv + '/save-later', { method: 'POST', body: JSON.stringify({ saved: !!saved }) }); } catch (e) {}
   loadProposals();
 }
+// ---------- v80 P1-2: honest async states ----------
+// ONE pattern for every remotely-loaded list: LOADING (skeleton line,
+// only painted when the host is empty so refreshes never flicker),
+// genuinely EMPTY (only after a SUCCESSFUL response), and ERROR with a
+// Retry button that re-runs the loader. A network failure must never
+// again paint a false "nothing here yet".
+function listLoadingHtml(label){ return '<div class="empty" aria-busy="true"><p class="mut">⏳ ' + (label || 'Loading… · Cargando…') + '</p></div>'; }
+function listErrorHtml(retryFn, msg){ return '<div class="empty" style="border-color:#e42535"><p class="mut">⚠️ ' + escHtml(msg || 'We could not load this — check your connection.') + '</p><button type="button" class="ghost" onclick="' + retryFn + '">↻ Retry · Reintentar</button></div>'; }
 async function loadRequests(){
-  const d=await api('/api/requests').catch(()=>({requests:[]}));
-  document.getElementById('myRequests').innerHTML = d.requests.map(function(r){
+  const host=document.getElementById('myRequests'); if(!host) return;
+  if(!host.innerHTML) host.innerHTML=listLoadingHtml('Loading your requests… · Cargando tus solicitudes…');
+  let d=null;
+  try{ d=await api('/api/requests'); }catch(e){ host.innerHTML=listErrorHtml('loadRequests()','We could not load your requests.'); return; }
+  host.innerHTML = d.requests.map(function(r){
     const est=estimateHtml(r,true);
     const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
     const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
     const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">Secure my appointment — authorize '+moneyFmt(r.estimateDue)+' hold (not a charge yet)</button></div>':'');
     const payBlock=r.payment?'<div class="pay-panel"><b>💳 '+(r.payment.status==='paid'?'Paid in full: '+moneyFmt((r.payment.amountCents||0)/100):(r.payment.status==='partially_refunded'?'Paid '+moneyFmt((r.payment.amountCents||0)/100)+' — partially refunded':'Payment refunded'))+'</b>'+(r.refund?'<br><span class="mut">Refund issued: '+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+' booking fee kept (already dispatched)':'')+'</span>':'')+'</div>':'';
-    return '<div class="card"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+payBlock+holdBlock+threadHtml(r)+'</div>';
+    return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+payBlock+holdBlock+threadHtml(r)+'</div>';
   }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
@@ -2924,9 +2986,11 @@ async function submitRating(idv){
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
 async function loadMyJobs(){
-  const d=await api('/api/jobs').catch(()=>({jobs:[]}));
   const el=document.getElementById('myJobs'); if(!el) return;
-  el.innerHTML = d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
+  if(!el.innerHTML) el.innerHTML=listLoadingHtml('Loading your jobs… · Cargando tus trabajos…');
+  let d=null;
+  try{ d=await api('/api/jobs'); }catch(e){ el.innerHTML=listErrorHtml('loadMyJobs()','We could not load your jobs.'); return; }
+  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -2935,7 +2999,7 @@ async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? WT('statusActive') : WT('statusInactive').replace('{status}', me.status);
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += WT('ratingLine').replace('{avg}', d.workerRating.average).replace('{n}', d.workerRating.count).replace('{jobs}', WT(d.workerRating.count === 1 ? 'ratedJob1' : 'ratedJobN'));
-  document.getElementById('jobList').innerHTML = d.err ? '<p class="mut">'+d.err+'</p>' : (d.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>'+WT('payOffer')+' <span class="st">$'+j.payOffer+'</span>'+workerPayoutLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
+  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>'+WT('payOffer')+' <span class="st">$'+j.payOffer+'</span>'+workerPayoutLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
   sndWorkerJobs(d.jobs || []);
 }
 function workerPayoutLine(j){ if(!j.mine||!j.payoutStatus) return ''; if(j.payoutStatus==='paid') return '<br><span class="st">'+WT('payoutSent')+'</span>'; return '<br><span class="mut">'+WT('payoutLabel')+String(j.payoutStatus).replace(/_/g,' ')+'</span>'; }
@@ -3734,7 +3798,7 @@ function holdStatusHtml(r){
 }
 async function secureHold(idv){
   try{
-    const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'estimate-hold', requestId:idv})});
+    const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'estimate-hold', requestId:idv, lang:menuLang()})});
     if(d.url) location.href=d.url; else alert('Could not start the authorization.');
   }catch(e){ alert(e.message); }
 }
@@ -4792,7 +4856,7 @@ async function createJob(){
 // v63: reopen at the technician door on devices that entered as one.
 try{ if(!location.hash && localStorage.getItem('ghs_entry')==='worker') location.hash = '#worker'; }catch(e){}
 applyWorkerEntry();
-window.addEventListener('hashchange', function(){ render(); });
+window.addEventListener('hashchange', function(){ if (!routeNotifHash()) render(); });
 // ---------- Menu checkout (added 2026-10-22, v32) ----------
 // The REAL checkout behind the website's Order buttons: the customer fills
 // their data right here, can add HomeCare (its own Stripe monthly
@@ -5220,7 +5284,7 @@ function cartCheckoutEmptied(){
   const box = document.getElementById('cartBox'); if (box && box.scrollIntoView) box.scrollIntoView({ behavior: 'smooth' });
 }
 function cartResetCheckout(){
-  cartPayCtx = null; cartElements = null;
+  cartPayCtx = null; cartElements = null; cartStripeState = 'idle';
   const pe = document.getElementById('cartPayElement'); if (pe) pe.innerHTML = '';
   const e = document.getElementById('cartPayErr'); if (e) { e.textContent = ''; e.style.display = 'none'; }
   const b = document.getElementById('cartPayBtn'); if (b) { b.disabled = false; b.textContent = 'Pay'; }
@@ -5247,12 +5311,75 @@ function cartJoinToggled(){
   renderCartTotalsDue();
   if (had) cartPrepare();
 }
+// ---------- v80 piece 7: resilient Stripe.js loading for the cart ----------
+// ROOT CAUSE (Gabriel's live screenshot, 2026-10-25 22:39): the pay box
+// showed the permanent "still being connected" banner on a phone whose
+// server config was VERIFIED good (configured:true + the real pk_live)
+// — the static js.stripe.com tag had simply failed/slow-loaded on the
+// device, cartEnsureStripe returned false with NO retry, and a
+// transient load failure got painted as a permanent state. Now:
+// Stripe.js loads through a dynamic injector with timeouts + retries
+// (the v35 no-latch discipline, extended to the script itself), the
+// config fetch retries too, and the pay box paints HONEST states —
+// loading / load-failed with Try again — reserving "still being
+// connected" for a server that genuinely reports no key.
+let cartStripeState = 'idle'; // idle | loading | ready | unconfigured | failed
+let stripeJsPromise = null;
+function loadStripeJsOnce(timeoutMs){
+  return new Promise(function(resolve){
+    if (typeof Stripe !== 'undefined') { resolve(true); return; }
+    let done = false;
+    const finish = function(ok){ if (done) return; done = true; resolve(!!ok && typeof Stripe !== 'undefined'); };
+    try {
+      const s = document.createElement('script');
+      s.src = 'https://js.stripe.com/v3/';
+      s.async = true;
+      s.onload = function(){ finish(true); };
+      s.onerror = function(){ try { s.remove(); } catch (e) {} finish(false); };
+      (document.head || document.body || document.documentElement).appendChild(s);
+    } catch (e) { finish(false); return; }
+    setTimeout(function(){ finish(typeof Stripe !== 'undefined'); }, timeoutMs || 8000);
+  });
+}
+async function loadStripeJs(){
+  if (typeof Stripe !== 'undefined') return true;
+  if (stripeJsPromise) return stripeJsPromise;
+  stripeJsPromise = (async function(){
+    for (let i = 0; i < 3; i++) {
+      if (await loadStripeJsOnce(8000)) return true;
+      if (i < 2) await new Promise(function(r){ setTimeout(r, 600 * (i + 1)); });
+    }
+    return typeof Stripe !== 'undefined';
+  })();
+  try { return await stripeJsPromise; } finally { stripeJsPromise = null; }
+}
+function paintCartPayState(){
+  const host = document.getElementById('cartPayElement'); if (!host) return;
+  if (cartElements) return; // a mounted Payment Element owns the box
+  if (cartStripeState === 'loading') host.innerHTML = '<p class="mut" style="padding:10px 2px">⏳ Loading secure payment… · Cargando pago seguro…</p>';
+  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">⚠️ The secure payment form could not load — check your connection. · El formulario de pago seguro no cargó — revisa tu conexión.<div style="margin-top:8px"><button type="button" onclick="cartRetryStripe()">↻ Try again · Reintentar</button></div></div>';
+}
+function cartRetryStripe(){ cartStripeState = 'idle'; cartPrepare(); }
 async function cartEnsureStripe(){
-  if (typeof Stripe === 'undefined') return false;
-  const cfg = await api('/api/stripe/config');
-  if (!cfg.publishableKey) return false;
-  if (!stripeObj) stripeObj = Stripe(cfg.publishableKey);
-  return true;
+  if (stripeObj) { cartStripeState = 'ready'; return 'ready'; }
+  cartStripeState = 'loading'; paintCartPayState();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let cfg = null;
+    try { cfg = await api('/api/stripe/config'); } catch (e) { cfg = null; }
+    if (cfg) {
+      // The server ANSWERED: an empty key is a genuine "not connected"
+      // (no retry — it is a fact, not a hiccup); a real key moves on to
+      // the script load, which retries on its own loop.
+      if (!cfg.publishableKey) { cartStripeState = 'unconfigured'; return 'unconfigured'; }
+      if (await loadStripeJs()) {
+        try { stripeObj = Stripe(cfg.publishableKey); } catch (e) { stripeObj = null; }
+        if (stripeObj) { cartStripeState = 'ready'; return 'ready'; }
+      }
+      cartStripeState = 'failed'; paintCartPayState(); return 'failed';
+    }
+    if (attempt < 2) await new Promise(function(r){ setTimeout(r, 700 * (attempt + 1)); });
+  }
+  cartStripeState = 'failed'; paintCartPayState(); return 'failed';
 }
 function cartMountPayment(clientSecret){
   const host = document.getElementById('cartPayElement'); if (!host) return;
@@ -5265,6 +5392,50 @@ function cartShowErr(t){
   const e = document.getElementById('cartPayErr');
   if (e) { e.textContent = t || ''; e.style.display = t ? 'block' : 'none'; }
 }
+// v80 A-7 (plumbing only): normalize a server snapshot into the local
+// cart shape; unknown services are dropped (the menu may have changed).
+function cartNormalizeSnapshot(items){
+  return (items || []).filter(function(it){ return it && MENU_CATALOG[it.id]; }).map(function(it){ return { id: it.id, q: Math.max(1, Math.round(Number(it.q) || 1)), x: Array.isArray(it.x) ? it.x.slice() : [] }; });
+}
+// A restore link (…#cart-recover=<token>) rehydrates the guest cart
+// from the server-side snapshot and lands on the cart. Expired/unknown
+// tokens simply land on the cart untouched. NOTHING is ever emailed or
+// texted by this flow (STOP TOTAL — the send is a separate decision).
+async function cartRecoverFromHash(){
+  const m = (location.hash || '').match(/^#cart-recover=([\w-]+)$/);
+  if (!m) return;
+  try { history.replaceState(null, '', location.pathname + location.search + '#cart'); } catch (e) { location.hash = '#cart'; }
+  render();
+  try {
+    const d = await api('/api/cart/recovery/' + m[1]);
+    if (d && Array.isArray(d.items) && d.items.length) {
+      cartSave(cartNormalizeSnapshot(d.items));
+      cartToast('Your saved cart is back · Tu carrito guardado volvió');
+      renderCart();
+    }
+  } catch (e) { /* expired / unknown token: plain cart landing */ }
+}
+// In-account surface (customer home): the server-held snapshot shows
+// as an honest "you left items" card with a Restore button — in-app
+// only, never an outbound message.
+async function loadRecoveredCart(){
+  const host = document.getElementById('myRecoveredCart'); if (!host || !me || me.role !== 'customer') return;
+  let d = null;
+  try { d = await api('/api/me/recoverable-cart'); } catch (e) { host.innerHTML = ''; return; }
+  const rec = d && d.cart;
+  if (!rec || !Array.isArray(rec.items) || !rec.items.length) { host.innerHTML = ''; return; }
+  const sig = function(arr){ return JSON.stringify((arr || []).map(function(i){ return [i.id, i.q || 1, (i.x || []).join(',')]; })); };
+  if (sig(cartLoad()) === sig(rec.items)) { host.innerHTML = ''; return; }
+  const n = rec.items.reduce(function(s, i){ return s + Math.max(1, Math.round(Number(i.q) || 1)); }, 0);
+  host._recItems = rec.items;
+  host.innerHTML = '<div class="card" style="margin:8px 0"><b>🛒 You left ' + n + ' item' + (n === 1 ? '' : 's') + ' in your cart</b><div class="mut">From your last visit — pick up right where you left off. · De tu última visita — sigue justo donde ibas.</div><div style="margin-top:8px"><button type="button" onclick="applyRecoveredCart()">Restore my cart · Restaurar</button></div></div>';
+}
+function applyRecoveredCart(){
+  const host = document.getElementById('myRecoveredCart'); if (!host || !host._recItems) return;
+  cartSave(cartNormalizeSnapshot(host._recItems));
+  host.innerHTML = '';
+  openCart();
+}
 async function cartPrepare(){
   if (cartBusy) return;
   cartShowErr('');
@@ -5274,7 +5445,13 @@ async function cartPrepare(){
   cartBusy = true;
   if (btn) { btn.disabled = true; btn.textContent = 'Preparing secure payment…'; }
   try {
-    if (!(await cartEnsureStripe())) throw new Error('Online payment is still being connected — text or call (707) 862-3773 and the Team will take your order.');
+    // v80 piece 7: three distinct outcomes — 'unconfigured' is the ONLY
+    // one that earns the "still being connected" house message; a load
+    // failure keeps the honest error + Try again painted in the pay box
+    // and simply stops (no false permanent banner).
+    const cst80 = await cartEnsureStripe();
+    if (cst80 === 'unconfigured') throw new Error('Online payment is still being connected — text or call (707) 862-3773 and the Team will take your order.');
+    if (cst80 !== 'ready') { cartShowErr(''); if (btn) { btn.disabled = false; btn.textContent = 'Pay'; } return; }
     const joinEl = document.getElementById('ccJoin');
     const joinOn = !cartIsMember() && !!(joinEl && joinEl.checked);
     const payload = {
@@ -5301,6 +5478,11 @@ async function cartPrepare(){
     }
     cartPayCtx = { phase: resp.step, clientSecret: resp.clientSecret, checkoutId: resp.checkoutId || '', paymentIntentId: resp.paymentIntentId || '', subscriptionId: resp.subscriptionId || '', due: resp.totals ? resp.totals.due : 0, deposit: resp.totals && resp.totals.deposit != null ? resp.totals.deposit : (resp.totals ? resp.totals.due : 0), balance: resp.totals && resp.totals.balance != null ? resp.totals.balance : 0 };
     if (resp.totals) cartQuote = resp.totals; // server-true totals paint the summary
+    // v80 A-7 plumbing: this checkout (guest with an email, or a signed-
+    // in customer) leaves a server-side recoverable snapshot of the
+    // cart. Fire-and-forget; it never affects the payment flow, and
+    // NOTHING is sent anywhere by it (STOP TOTAL).
+    try { api('/api/cart/save-recovery', { method: 'POST', body: JSON.stringify({ email: payload.email || '', items: payload.items }) }).catch(function(){}); } catch (e) {}
     cartMountPayment(resp.clientSecret);
     renderCartTotalsDue();
     if (btn) { btn.disabled = false; btn.textContent = resp.step === 'join' ? 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order' : 'Pay $' + cartPayCtx.deposit + ' deposit'; }
@@ -5464,11 +5646,12 @@ function wzFee() {
   const est = pickOne('cEst') || wzState.est || 'inperson';
   if (est === 'photo') return { label: 'FREE photo estimate', due: 0 };
   const member = wzMemberState();
-  const when = pickOne('cWhen') || wzState.when;
+  // v80 P1-7 (Gabriel's law): the ASAP +25% applies to LABOR — never to
+  // the estimate fee itself. The fee is flat: $75 regular / $50 member /
+  // $0 for the member's free first estimate, urgent or not. (The server
+  // has always computed estimateDue flat; the wizard display now agrees.)
   const base = member === 'new' ? 0 : (member === 'member' ? 50 : 75);
-  const urgent = when === 'ASAP / Emergency';
-  const due = urgent && base > 0 ? Math.round(base * 1.25 * 100) / 100 : base;
-  return { label: (member === 'new' ? 'FREE — first estimate with your membership' : (member === 'member' ? '$50 member estimate' : '$75 flat')) + (urgent && base > 0 ? ' + 25% ASAP/Emergency = $' + due : ''), due: due };
+  return { label: (member === 'new' ? 'FREE — first estimate with your membership' : (member === 'member' ? '$50 member estimate' : '$75 flat')), due: base };
 }
 function wzBuildSummary() {
   const box = document.getElementById('wzSummary'); if (!box) return;
@@ -5722,7 +5905,7 @@ WZ_CATS.forEach(function (c) { const img = document.getElementById('wzImg-' + c.
 if (location.hash === '#join-homecare') { openMemberJoin(); }
 window.addEventListener('hashchange', checkResetHash);
 checkResetHash();
-loadMe();
+loadMe().then(function(){ try { routeNotifHash(); } catch (e) {} try { cartRecoverFromHash(); } catch (e) {} });
 </script>
 <script>
 // v27: keep every visitor on the CURRENT app version. When an updated

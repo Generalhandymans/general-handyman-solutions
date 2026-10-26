@@ -127,15 +127,24 @@ async function sendPasswordResetEmail(u, token) {
 }
 function requireRole(user, roles, res) { if (!user) { send(res, 401, { error: 'login required' }); return false; } if (!roles.includes(user.role)) { send(res, 403, { error: 'not allowed' }); return false; } return true; }
 // ---------- notifications ----------
-function notify(userId, type, text) {
+// v80 P1-4: every notification carries a STRUCTURED TARGET — the route
+// (+ object) the notice is ABOUT — so the bell rows are tappable and the
+// Web Push lands on the thing itself, not the app root. Targets are
+// SPA hashes ('#req=<id>', '#job=<id>', '#wjob=<id>', '#worker',
+// '#memberships') or public page paths ('/cart/<id>', '/estimate/<id>',
+// '/invoice/<id>'). Callers pick the target that matches the RECIPIENT's
+// role: a worker only ever receives worker-side targets, so a notice can
+// never route a technician onto a customer surface (the v79 guards stay
+// as the backstop). Legacy rows without a target just open the app.
+function notify(userId, type, text, target) {
   if (!userId || !text) return;
   if (!Array.isArray(db.notifications)) db.notifications = [];
-  db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, read: false, at: new Date().toISOString() });
+  db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, target: typeof target === 'string' ? target.slice(0, 200) : '', read: false, at: new Date().toISOString() });
   if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-2000);
   // v66: the same event also goes out as a real Web Push (phone buzzes
   // with the app closed). Fire-and-forget — a push failure never touches
   // the flow that raised the notification.
-  sendPushToUser(userId, { type: type || 'info', text }).catch(() => {});
+  sendPushToUser(userId, { type: type || 'info', text, url: (typeof target === 'string' && target) ? target : '/' }).catch(() => {});
 }
 // ---------- Web Push (v66, Gabriel: alerts must reach them with the app closed) ----------
 // Zero-dependency RFC 8291 (aes128gcm payload encryption) + RFC 8292
@@ -190,7 +199,7 @@ async function sendPushToUser(userId, note) {
   const subs = (db.pushSubs && db.pushSubs[userId]) || [];
   if (!subs.length) return;
   const keys = vapidKeys();
-  const payload = JSON.stringify({ title: 'General Handyman Solutions', body: String(note.text || '').slice(0, 180), url: '/', tag: String(note.type || 'ghs').slice(0, 32) });
+  const payload = JSON.stringify({ title: 'General Handyman Solutions', body: String(note.text || '').slice(0, 180), url: (typeof note.url === 'string' && note.url) ? note.url : '/', tag: String(note.type || 'ghs').slice(0, 32) });
   for (const sub of subs.slice()) {
     try {
       const body = encryptPushPayload(sub, payload);
@@ -203,6 +212,43 @@ async function sendPushToUser(userId, note) {
   }
 }
 function notifyAdmins(type, text) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text)); }
+// ---------- v80 P1-1: claim orphan history by email ----------
+// Requests/orders a guest created BEFORE having an account carry their
+// email but customerId null — when that person later signs up (or logs
+// in) with the SAME email, the history becomes theirs: requests, the
+// jobs hanging off them, invoices addressed to the email, and the
+// account stamp on Gabriel-issued carts (the same email matching the
+// v79 proposals use). STRICT privacy rule: a record is claimed ONLY
+// when it has NO owner yet and its stored contact email exactly
+// matches the account email — a record owned by somebody else is never
+// touched. Idempotent (a second login finds everything already linked)
+// and audited like every other claim.
+function claimOrphanRecords(u) {
+  if (!u || u.role !== 'customer' || !u.email) return 0;
+  const em = String(u.email).toLowerCase();
+  let nReq = 0, nJob = 0, nInv = 0, nCart = 0;
+  const claimedReqIds = new Set();
+  for (const r of (db.requests || [])) {
+    if (!r.customerId && (r.customerEmail || '').toLowerCase() === em) { r.customerId = u.id; claimedReqIds.add(r.id); nReq++; }
+  }
+  if (claimedReqIds.size) {
+    for (const j of (db.jobs || [])) {
+      if (!j.customerId && j.requestId && claimedReqIds.has(j.requestId)) { j.customerId = u.id; nJob++; }
+    }
+  }
+  for (const inv of (db.invoices || [])) {
+    if (!inv.customerId && (inv.customerEmail || '').toLowerCase() === em) { inv.customerId = u.id; nInv++; }
+  }
+  for (const c of cartsOf()) {
+    if (!c.accountId && cartProposalEmail(c) === em) { c.accountId = u.id; nCart++; }
+  }
+  const total = nReq + nJob + nInv + nCart;
+  if (total > 0) {
+    audit(u, 'account.claim_orphans', u.id, 'email match claimed: ' + nReq + ' request(s), ' + nJob + ' job(s), ' + nInv + ' invoice(s), ' + nCart + ' cart(s)');
+    save();
+  }
+  return total;
+}
 // ---------- Admin audit log (v33 security) ----------
 // Every admin action and money movement lands here (who, what, which
 // record, when) so Gabriel can review the trail in his panel. Capped at
@@ -463,7 +509,7 @@ function accrueCaptainOverride(j) {
     // v79 P0-1: the captain's own notification names ONLY his money — the
     // customer's charged total never leaves admin surfaces (it used to read
     // "5% of the $X charged", leaking the customer price to the captain).
-    notify(entry.captainId, 'captain', 'Captain override accrued: ' + usd(amount) + ' on job ' + j.id + ' (' + area.name + '). The Team pays overrides out by hand.');
+    notify(entry.captainId, 'captain', 'Captain override accrued: ' + usd(amount) + ' on job ' + j.id + ' (' + area.name + '). The Team pays overrides out by hand.', '#worker');
     notifyAdmins('captain', 'Captain override accrued in ' + area.name + ': ' + usd(amount) + ' on job ' + j.id + ' (5% of ' + usd(charged) + ').');
     save();
     return true;
@@ -497,7 +543,7 @@ function workerOverlapsArea(u, area) {
 
 function notifyWorkersForJob(j) {
   matchedWorkersForJob(j).forEach(w => {
-    notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.');
+    notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.', '#wjob=' + j.id);
   });
 }
 function publicJob(j, viewer) {
@@ -952,10 +998,10 @@ function activateMembershipPlan(u, planKey, opts) {
   }
   if (!sameActive) {
     if (plan.type === 'yard') {
-      notify(u.id, 'membership', 'Welcome to Yard Care! Your plan is active — ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month included. The Team will schedule your visits with you.');
+      notify(u.id, 'membership', 'Welcome to Yard Care! Your plan is active — ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month included. The Team will schedule your visits with you.', '#memberships');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined Yard Care ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
     } else if (plan.type === 'plus') {
-      notify(u.id, 'membership', 'Welcome to HomeCare Plus! Your membership is active: all HomeCare benefits (first in-person estimate FREE, then $50 member estimates, 20% off labor on jobs under $1,000, priority scheduling) PLUS ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month.');
+      notify(u.id, 'membership', 'Welcome to HomeCare Plus! Your membership is active: all HomeCare benefits (first in-person estimate FREE, then $50 member estimates, 20% off labor on jobs under $1,000, priority scheduling) PLUS ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + ' per month.', '#memberships');
       notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare Plus ($' + (plan.monthlyCents / 100) + '/mo, ' + plan.visitsPerMonth + ' yard visit' + (plan.visitsPerMonth === 1 ? '' : 's') + '/mo).');
     }
   }
@@ -1143,7 +1189,7 @@ async function maybePayWorkerForJob(j, opts) {
     finally { delete j.payoutInFlight; }
     j.payoutTransferId = tr.id; j.payoutStatus = 'paid'; j.payoutAt = new Date().toISOString(); j.workerPaid = true; delete j.payoutError;
     save();
-    notify(w.id, 'payment', 'Your payout of ' + usd(j.payOffer) + ' for job ' + j.id + ' (' + (j.service || '') + ') was sent via Stripe — it pays out to your bank automatically.');
+    notify(w.id, 'payment', 'Your payout of ' + usd(j.payOffer) + ' for job ' + j.id + ' (' + (j.service || '') + ') was sent via Stripe — it pays out to your bank automatically.', '#worker');
     notifyAdmins('payment', 'Worker payout sent: ' + usd(j.payOffer) + ' to ' + w.name + ' for job ' + j.id + ' (transfer ' + tr.id + ').');
   } catch (e) {
     const msg = String((e && e.message) || e);
@@ -1300,6 +1346,33 @@ async function membershipPriceIdFor(plan) {
   } catch (e) { console.error('stripe: ' + plan.key + ' price resolution failed, using configured price:', e.message); return plan.priceId || ''; }
 }
 function appBase() { return APP_URL.replace(/\/$/, ''); }
+// v80: hosted Checkout speaks the CUSTOMER's language — an explicit
+// Stripe locale ('en' | 'es', never 'auto') plus localized submit /
+// after-submit text. Callers pass opts.lang from the surface that knows
+// it (the public cart/estimate/join pages send their current LANG; the
+// SPA sends menuLang()); the fallback is English, the language the
+// hosted pages historically rendered in.
+function checkoutLang(opts) { return opts && opts.lang === 'es' ? 'es' : 'en'; }
+const CHECKOUT_TEXTS = {
+  en: {
+    paySubmit: 'This charges your card for the amount shown — no more, no less. The Team confirms your booking right after.',
+    payAfter: 'Payment received — thank you! You can close this tab; your booking and receipts live in your account.',
+    joinSubmit: 'Your membership starts today. Cancel anytime from your account — no commitment, no rules.',
+    joinTrialSubmit: 'Your first month is FREE — your card is saved today and the first charge lands when the trial ends. Cancel anytime from your account.',
+    joinAfter: 'Welcome aboard! You can close this tab and head back to the app.',
+    holdSubmit: 'This places an authorization HOLD for an estimated amount — it is NOT a final charge. The hold may increase if you approve a larger written quote, and you are only charged the final amount when the work is done.',
+    holdAfter: 'Your card was authorized (hold only, not charged). You can follow your payment live from your estimate page.'
+  },
+  es: {
+    paySubmit: 'Esto cobra tu tarjeta por el monto mostrado — ni más, ni menos. El Team confirma tu reserva enseguida.',
+    payAfter: 'Pago recibido — ¡gracias! Puedes cerrar esta pestaña; tu reserva y tus recibos quedan en tu cuenta.',
+    joinSubmit: 'Tu membresía empieza hoy. Cancela cuando quieras desde tu cuenta — sin compromiso, sin reglas.',
+    joinTrialSubmit: 'Tu primer mes es GRATIS — hoy guardas tu tarjeta y el primer cargo llega cuando termina la prueba. Cancela cuando quieras desde tu cuenta.',
+    joinAfter: '¡Bienvenido/a! Puedes cerrar esta pestaña y volver a la app.',
+    holdSubmit: 'Esto coloca una retención de autorización por un monto estimado — NO es un cargo final. La retención puede aumentar si apruebas un presupuesto escrito mayor, y solo se te cobra el monto final cuando el trabajo esté terminado.',
+    holdAfter: 'Tu tarjeta quedó autorizada (solo retención, sin cargo). Puedes seguir tu pago en vivo desde tu página de estimado.'
+  }
+};
 async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
@@ -1319,6 +1392,9 @@ async function createCheckoutSession(kind, user, opts) {
   if (opts.cancelUrl) params.cancel_url = opts.cancelUrl;
   if (opts.metadata) for (const k of Object.keys(opts.metadata)) params['metadata[' + k + ']'] = opts.metadata[k];
   if (opts.subMetadata) for (const k of Object.keys(opts.subMetadata)) params['subscription_data[metadata][' + k + ']'] = opts.subMetadata[k];
+  const coLang = checkoutLang(opts); // v80: explicit locale on EVERY hosted session
+  params.locale = coLang;
+  const CT = CHECKOUT_TEXTS[coLang];
   // Only send customer_email when we actually have one — Stripe rejects an
   // empty string (e.g. text-message invoices created without an email).
   if (user.email) params.customer_email = user.email;
@@ -1376,8 +1452,8 @@ async function createCheckoutSession(kind, user, opts) {
     params['payment_intent_data[metadata][requestId]'] = opts.requestId || '';
     params['payment_intent_data[metadata][holdKey]'] = opts.holdKey || 'visit';
     params['payment_method_options[card][request_incremental_authorization]'] = 'if_available';
-    params['custom_text[submit][message]'] = 'This places an authorization HOLD for an estimated amount — it is NOT a final charge. The hold may increase if you approve a larger written quote, and you are only charged the final amount when the work is done.';
-    params['custom_text[after_submit][message]'] = 'Your card was authorized (hold only, not charged). You can follow your payment live from your estimate page.';
+    params['custom_text[submit][message]'] = CT.holdSubmit; // v80: the estimate deposit/hold text, localized with the rest
+    params['custom_text[after_submit][message]'] = CT.holdAfter;
   } else if (kind === 'cart-join') {
     // v70 (Gabriel, 2026-10-25): ONE single checkout for join + book.
     // The plan's recurring price and the job's 40% DEPOSIT ride the
@@ -1430,6 +1506,14 @@ async function createCheckoutSession(kind, user, opts) {
     params['metadata[customerEmail]'] = (user && user.email) || opts.email || '';
   } else {
     throw new Error('unknown checkout kind');
+  }
+  // v80: localized submit / after-submit text for every hosted session
+  // that did not set its own (the estimate-hold branch sets its pair
+  // above). Joins speak membership (trial-aware); payments speak charge.
+  if (!params['custom_text[submit][message]']) {
+    const isJoin = params.mode === 'subscription';
+    params['custom_text[submit][message]'] = isJoin ? (opts.trialDays ? CT.joinTrialSubmit : CT.joinSubmit) : CT.paySubmit;
+    params['custom_text[after_submit][message]'] = isJoin ? CT.joinAfter : CT.payAfter;
   }
   // v60/v70/v74: the free-month trial — exactly ONE write site for
   // hosted Checkout. Callers pass trialDays ONLY for a HomeCare join
@@ -1568,11 +1652,11 @@ function activateHomeCare(u, isFirst) {
   setMembershipPlan(u, 'homecare', { status: 'active', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince, cancelAt: null });
   if (first) {
     if (!hadMembership) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
-    notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
+    notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
     fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
   } else {
-    notify(u.id, 'membership', 'Your HomeCare payment went through — your membership is active again with all member benefits.');
+    notify(u.id, 'membership', 'Your HomeCare payment went through — your membership is active again with all member benefits.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') HomeCare payment succeeded — membership active.');
   }
   save();
@@ -1597,7 +1681,7 @@ function activateHomeCareFromCheckout(u, session) {
   if (session && session.metadata && session.metadata.freeMonth === '1') u.inviteFreeMonthUsed = true; // v74: a trialing HomeCare activation spends the account's ONE free month (the same flag invite claims set)
   applySourceAtActivation(u);
   if (!alreadyActiveHere) {
-    notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.');
+    notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
     fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
   }
@@ -1655,7 +1739,7 @@ function recordRequestPayment(r, info) {
   r.payment = { status: 'paid', kind: info.kind || 'menu-order', pi: info.pi || '', amountCents: Math.round(Number(info.amountCents) || 0), at: new Date().toISOString() };
   r.messages = r.messages || [];
   r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: ' + usd(r.payment.amountCents / 100) + ' — your order ' + r.id + ' is paid in full. Thank you! The Team confirms your time right here.', at: new Date().toISOString() });
-  if (r.customerId) notify(r.customerId, 'payment', 'Payment received (' + usd(r.payment.amountCents / 100) + ') on order ' + r.id + ' — paid in full.');
+  if (r.customerId) notify(r.customerId, 'payment', 'Payment received (' + usd(r.payment.amountCents / 100) + ') on order ' + r.id + ' — paid in full.', '#req=' + r.id);
   notifyAdmins('payment', 'PAID IN FULL: ' + usd(r.payment.amountCents / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: r.payment.amountCents / 100 }));
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
@@ -1680,6 +1764,7 @@ function settleCartCheckout(pc, pi) {
   db.requests.push(r);
   pc.requestId = r.id;
   pc.settledAt = new Date().toISOString();
+  consumeRecoverableCart(pc.customerEmail); // v80 A-7: the recovered cart became an order — it is no longer "left behind"
   const ccSplit = depositSplit(Math.round(Number(pc.totals.due) * 100));
   if (ccSplit.balanceCents > 0) recordRequestDeposit(r, { pi: pi.id, depositCents: ccSplit.depositCents, totalCents: ccSplit.depositCents + ccSplit.balanceCents, kind: 'cart-checkout' });
   else recordRequestPayment(r, { pi: pi.id, amountCents: Math.round(Number(pi.amount_received || pi.amount) || 0), kind: 'menu-order' });
@@ -1951,7 +2036,7 @@ function invitePageHtml(inv, user, lang, notice) {
     + ' if(!loggedIn){ if(!val("jName")) return fail(T("errName")); if(!/.+@.+\\..+/.test(val("jEmail"))) return fail(T("errEmail")); }'
     + ' btn.disabled=true; btn.textContent=T("working"); m.textContent="";'
     + ' try{ await ensureAccount(); btn.textContent=T("opening");'
-    + ' var o=await jpost("/join/"+INV_ID+"/checkout",{});'
+    + ' var o=await jpost("/join/"+INV_ID+"/checkout",{lang:LANG});'
     + ' if(o.d && o.d.member){ location.reload(); return; }'
     + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errJoin"));'
     + ' location.href=o.d.url;'
@@ -2035,6 +2120,38 @@ function depositSplit(totalCents) {
   const d = t <= DEPOSIT_FLAT_MAX_CENTS ? Math.min(DEPOSIT_FLAT_CENTS, t) : Math.round(t * DEPOSIT_RATE);
   return { depositCents: d, balanceCents: t - d };
 }
+// ---------- v80 A-7: recoverable-cart store (plumbing only) ----------
+// Snapshots are stored in the SPA's own cart shape ({id, q, x}) so a
+// restore drops straight into localStorage 'ghsCart'. Items are priced
+// through serverCartTotals first — an unpriceable line rejects the
+// whole snapshot, never a guess. One live record per email: a fresh
+// save replaces the snapshot AND rotates the token (the old link dies).
+const RECOVERY_TTL_MS = 30 * 24 * 3600 * 1000;
+function recoverableCartsOf() { if (!Array.isArray(db.recoverableCarts)) db.recoverableCarts = []; return db.recoverableCarts; }
+function recoverySnapshot(items) {
+  const t = serverCartTotals(items, false);
+  if (!t) return null;
+  return t.lines.map(l => ({ id: l.serviceId, q: l.qty, x: (l.extras || []).map(e => e.id) }));
+}
+function upsertRecoverableCart(email, snap) {
+  const em = String(email || '').toLowerCase();
+  if (!/.+@.+\..+/.test(em) || !Array.isArray(snap) || !snap.length) return null;
+  const list = recoverableCartsOf();
+  const token = crypto.randomBytes(24).toString('hex');
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + RECOVERY_TTL_MS).toISOString();
+  let rec = list.find(x => x.email === em && !x.consumedAt);
+  if (rec) { rec.items = snap; rec.tokenHash = sha256hex(token); rec.updatedAt = now; rec.expiresAt = expiresAt; }
+  else { rec = { id: id('RCV'), email: em, items: snap, tokenHash: sha256hex(token), createdAt: now, updatedAt: now, expiresAt, consumedAt: null }; list.push(rec); }
+  if (list.length > 500) db.recoverableCarts = list.slice(-500);
+  save();
+  return { rec, token };
+}
+function consumeRecoverableCart(email) {
+  const em = String(email || '').toLowerCase();
+  if (!em) return;
+  for (const rec of recoverableCartsOf()) if (rec.email === em && !rec.consumedAt) rec.consumedAt = new Date().toISOString();
+}
 // Recorder for a landed DEPOSIT on a request: status 'deposit' — NOT
 // paid. requestIsPaid() stays false, so worker payouts and captain
 // accrual keep waiting for the balance, exactly like the money rules
@@ -2046,7 +2163,7 @@ function recordRequestDeposit(r, info) {
   r.payment = { status: 'deposit', kind: info.kind || 'cart-order', pi: info.pi || '', amountCents: dep, totalCents: tot, balanceCents: Math.max(0, tot - dep), at: new Date().toISOString() };
   r.messages = r.messages || [];
   r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Deposit received: ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' — your job ' + r.id + ' is booked. The balance of ' + usd(r.payment.balanceCents / 100) + ' is due when the work is done. The Team confirms your time right here.', at: new Date().toISOString() });
-  if (r.customerId) notify(r.customerId, 'payment', 'Deposit received (' + usd(dep / 100) + ') on job ' + r.id + ' — booked. Balance ' + usd(r.payment.balanceCents / 100) + ' due at completion.');
+  if (r.customerId) notify(r.customerId, 'payment', 'Deposit received (' + usd(dep / 100) + ') on job ' + r.id + ' — booked. Balance ' + usd(r.payment.balanceCents / 100) + ' due at completion.', '#req=' + r.id);
   notifyAdmins('payment', 'DEPOSIT: ' + usd(dep / 100) + ' of ' + usd(tot / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — balance ' + usd(r.payment.balanceCents / 100) + ' at completion.');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: dep / 100 }));
   return true;
@@ -2064,7 +2181,7 @@ function settleRequestBalance(r, piId, cents) {
   r.payment = { status: 'paid', kind: old.kind || 'menu-order', pi: old.pi || '', balancePi: piId || '', depositCents: dep, amountCents: tot, totalCents: tot, balanceCents: 0, at: old.at || new Date().toISOString(), balanceAt: new Date().toISOString() };
   r.messages = r.messages || [];
   r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Balance received: ' + usd(bal / 100) + ' — your job ' + r.id + ' is now paid in full (' + usd(tot / 100) + '). Thank you!', at: new Date().toISOString() });
-  if (r.customerId) notify(r.customerId, 'payment', 'Balance received (' + usd(bal / 100) + ') on job ' + r.id + ' — paid in full.');
+  if (r.customerId) notify(r.customerId, 'payment', 'Balance received (' + usd(bal / 100) + ') on job ' + r.id + ' — paid in full.', '#req=' + r.id);
   notifyAdmins('payment', 'PAID IN FULL (balance landed): ' + usd(tot / 100) + ' total on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: bal / 100 }));
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
@@ -2211,7 +2328,7 @@ async function holdFromCheckoutSession(obj) {
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: key === 'balance'
       ? 'Balance authorization received: ' + usd(h.authorizedCents / 100) + ' is on hold (authorized only — NOT charged yet). The Team will confirm the final charge with you when the work is done.'
       : 'Appointment secured: we placed a ' + usd(h.authorizedCents / 100) + ' authorization HOLD on your card (authorized only — NOT charged yet). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
-    if (r.customerId) notify(r.customerId, 'payment', 'Authorization hold placed (' + usd(h.authorizedCents / 100) + ') on request ' + r.id + ' — not charged yet. Your appointment is secured.');
+    if (r.customerId) notify(r.customerId, 'payment', 'Authorization hold placed (' + usd(h.authorizedCents / 100) + ') on request ' + r.id + ' — not charged yet. Your appointment is secured.', '#req=' + r.id);
     notifyAdmins('payment', 'Authorization HOLD ' + usd(h.authorizedCents / 100) + ' placed on request ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ') — ' + key + ' hold, PI ' + (pi || 'n/a') + '.');
   }
 }
@@ -2237,7 +2354,7 @@ async function tryHoldIncrementAfterApproval(r) {
     r.holdSync = { targetCents: target, state: 'incremented', at: new Date().toISOString() };
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your card authorization was updated to ' + usd(target / 100) + ' (hold only — still NOT charged). You are only charged the final amount when the work is done.', at: new Date().toISOString() });
-    if (r.customerId) notify(r.customerId, 'payment', 'Authorization on request ' + r.id + ' updated to ' + usd(target / 100) + ' (hold only, not charged).');
+    if (r.customerId) notify(r.customerId, 'payment', 'Authorization on request ' + r.id + ' updated to ' + usd(target / 100) + ' (hold only, not charged).', '#req=' + r.id);
     notifyAdmins('payment', 'Authorization on request ' + r.id + ' incremented to ' + usd(target / 100) + '.');
   } catch (e) {
     console.error('hold increment after approval failed', r.id, e.message);
@@ -2248,13 +2365,13 @@ async function tryHoldIncrementAfterApproval(r) {
 // Shared by the admin button and the public estimate page: create a
 // balance-authorization checkout for whatever of the approved total is not
 // yet authorized. Throws plain Errors with customer-safe messages.
-async function startBalanceAuthorization(r) {
+async function startBalanceAuthorization(r, lang) {
   const target = holdTargetCents(r);
   if (!r.estimate || !(target > 0)) throw new Error('build the estimate first — the balance is the approved total minus what is already authorized');
   const missing = target - holdsPool(r);
   if (missing <= 0) throw new Error('the authorized pool already covers the approved total');
   if (requestHolds(r).some(h => h.key === 'balance' && h.status === 'authorized')) throw new Error('a balance authorization is already active on this request');
-  const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents: missing, requestId: r.id, holdKey: 'balance', label: 'Balance authorization (request ' + r.id + ') — General Handyman Solutions' });
+  const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents: missing, requestId: r.id, holdKey: 'balance', label: 'Balance authorization (request ' + r.id + ') — General Handyman Solutions', lang });
   return { url: s.url, amount: missing / 100 };
 }
 async function handleStripeEvent(event) {
@@ -2344,7 +2461,7 @@ async function handleStripeEvent(event) {
         r.estimatePaid = { sessionId: obj.id, amount: amount, tip: tipCents / 100, at: new Date().toISOString() };
         r.messages = r.messages || [];
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: $' + amount.toFixed(2) + ' towards your estimate. Your appointment is secured — the Team will confirm your time here.', at: new Date().toISOString() });
-        notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.');
+        notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.', '#req=' + r.id);
         fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: amount }));
       }
       notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ')' + (r ? ' on request ' + r.id : '') + '.');
@@ -2361,7 +2478,7 @@ async function handleStripeEvent(event) {
         inv.tip = tipCents / 100;
         notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + (tipCents > 0 ? ' (incl. $' + (tipCents / 100).toFixed(2) + ' tip)' : '') + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
         const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
-        if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!');
+        if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!', '/invoice/' + inv.id);
         fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       }
     }
@@ -2388,13 +2505,13 @@ async function handleStripeEvent(event) {
       const plan = planFromSubscription(obj, current) || (current.planKey ? MEMBERSHIP_PLANS[current.planKey] : MEMBERSHIP_PLANS.homecare);
       cancelMembershipPlan(u, plan.key, { subscriptionId: obj.id });
       if (plan.type === 'yard') {
-        notify(u.id, 'membership', 'Your Yard Care membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notify(u.id, 'membership', 'Your Yard Care membership has been cancelled. You can rejoin anytime from your dashboard.', '#memberships');
         notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled Yard Care.');
       } else if (plan.type === 'plus') {
-        notify(u.id, 'membership', 'Your HomeCare Plus membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notify(u.id, 'membership', 'Your HomeCare Plus membership has been cancelled. You can rejoin anytime from your dashboard.', '#memberships');
         notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare Plus.');
       } else {
-        notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.');
+        notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.', '#memberships');
         notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare.');
         fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
       }
@@ -2408,7 +2525,7 @@ async function handleStripeEvent(event) {
       if (obj.cancel_at_period_end) {
         const until = new Date(Number(obj.cancel_at) * 1000);
         const planName = mp && mp.name ? mp.name : 'HomeCare';
-        notify(u.id, 'membership', planName + ' cancellation noted — your membership stays active until ' + until.toLocaleDateString('en-US') + '.');
+        notify(u.id, 'membership', planName + ' cancellation noted — your membership stays active until ' + until.toLocaleDateString('en-US') + '.', '#memberships');
       }
     }
   } else if (type === 'invoice.payment_failed') {
@@ -2419,13 +2536,13 @@ async function handleStripeEvent(event) {
       const current = membershipPlanOf(u);
       if (current.planKey && current.status === 'active' && current.type !== 'homecare') {
         cancelMembershipPlan(u, current.planKey, { subscriptionId: current.subscriptionId || '' });
-        notify(u.id, 'payment', 'Your ' + current.name + ' payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your benefits back.');
+        notify(u.id, 'payment', 'Your ' + current.name + ' payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your benefits back.', '#memberships');
         notifyAdmins('payment', current.name + ' payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
       } else if (u.homeCareStatus === 'active') {
         u.homeCareStatus = 'cancelled';
         u.homeCareCancelAt = new Date().toISOString();
         setMembershipPlan(u, 'homecare', { status: 'cancelled', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince || null, cancelAt: u.homeCareCancelAt });
-        notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.');
+        notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.', '#memberships');
         notifyAdmins('payment', 'HomeCare payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
         fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
       }
@@ -2486,7 +2603,7 @@ async function handleStripeEvent(event) {
         h.updatedAt = new Date().toISOString();
         r.messages = r.messages || [];
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment captured: ' + usd(h.capturedCents / 100) + ' was charged to your card for request ' + r.id + '. Thank you!', at: new Date().toISOString() });
-        if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!');
+        if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!', '#req=' + r.id);
         notifyAdmins('payment', 'Hold CAPTURED on request ' + r.id + ': ' + usd(h.capturedCents / 100) + ' (PI ' + h.pi + ').');
         db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); }); sweepPendingPayouts();
       }
@@ -3057,7 +3174,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
       + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});'
       + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
-      + ' var o=await jpost("/estimate/"+EST_ID+"/join-checkout",{});'
+      + ' var o=await jpost("/estimate/"+EST_ID+"/join-checkout",{lang:LANG});'
       + ' if(o.ok && o.d.member){ var ap=await jpost("/estimate/"+EST_ID+"/member-apply",{email:em}); if(ap.ok && ap.d.member){ location.reload(); return; } }'
       + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errMemberFail"));'
       + ' location.href=o.d.url; }'
@@ -3443,7 +3560,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     // classic paid-in-full view.
     const balOut = c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt;
     if (balOut) {
-      const balScript = '<script>document.getElementById("balBtn").addEventListener("click", async function(){ var b=this; b.disabled=true; document.getElementById("balMsg").textContent="..."; try{ var r=await fetch("/api/carts/' + c.id + '/checkout", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ balance:true }) }); var d=await r.json(); if(d.url){ location.href=d.url; } else { document.getElementById("balMsg").textContent=(d.error||"error"); b.disabled=false; } }catch(e){ document.getElementById("balMsg").textContent="connection error — try again"; b.disabled=false; } });</scr' + 'ipt>';
+      const balScript = '<script>document.getElementById("balBtn").addEventListener("click", async function(){ var b=this; b.disabled=true; document.getElementById("balMsg").textContent="..."; try{ var r=await fetch("/api/carts/' + c.id + '/checkout", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ balance:true, lang:(function(){ try { return localStorage.getItem("ghsCartLang") || "en"; } catch(e){ return "en"; } })() }) }); var d=await r.json(); if(d.url){ location.href=d.url; } else { document.getElementById("balMsg").textContent=(d.error||"error"); b.disabled=false; } }catch(e){ document.getElementById("balMsg").textContent="connection error — try again"; b.disabled=false; } });</scr' + 'ipt>';
       return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="depPaidH">' + S.depPaidH + '</h2>'
         + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '</p>'
         + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
@@ -3590,7 +3707,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + ' var wantJoin=!!($("cJoin") && $("cJoin").checked && !memberApplied);'
     + ' if(wantJoin){ btn.textContent=T("joining"); await ensureAccount(); }'
     + ' btn.textContent=T("processing");'
-    + ' var o=await jpost("/api/carts/"+CART_ID+"/checkout",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen(),join:wantJoin,plan:wantJoin?selPlan():""});'
+    + ' var o=await jpost("/api/carts/"+CART_ID+"/checkout",{name:val("cName"),phone:val("cPhone"),email:val("cEmail"),address:val("cAddr"),city:val("cCity"),when:buildWhen(),join:wantJoin,plan:wantJoin?selPlan():"",lang:LANG});'
     + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errPay"));'
     + ' location.href=o.d.url;'
     + ' }catch(e){ fail(e.message); } };'
@@ -3986,7 +4103,8 @@ const server = http.createServer(async (req, res) => {
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     stampUserSource(u, b); // v79 P0-7: acquisition source on the record from day one
-    db.users.push(u); if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
+    db.users.push(u); claimOrphanRecords(u); // v80 P1-1: guest history under this email becomes theirs at signup
+    if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
@@ -3997,6 +4115,7 @@ const server = http.createServer(async (req, res) => {
     if (!u || !checkPw(b.password || '', u.pw)) { noteLoginFailure(req, email); audit(null, 'auth.login_failed', email, 'from ' + clientIp(req)); return send(res, 401, { error: 'wrong email or password' }); }
     loginAttempts.delete(loginKey(req, email));
     if (u.role === 'admin') audit(u, 'auth.login', '', 'admin sign-in from ' + clientIp(req));
+    claimOrphanRecords(u); // v80 P1-1: also at login — covers accounts created before the claim existed
     const token = newSession(u);
     return send(res, 200, { user: pubUser(u), token }, { 'Set-Cookie': sessionCookie(token, req) });
   }
@@ -4202,7 +4321,7 @@ const server = http.createServer(async (req, res) => {
       // follows reconciles to the same deduped set).
       if (plan.visitsPerMonth > 0) ensureYardVisitProposals(user);
       save();
-      notify(user.id, 'membership', 'Your membership is now ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo). Your new plan starts today.');
+      notify(user.id, 'membership', 'Your membership is now ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo). Your new plan starts today.', '#memberships');
       notifyAdmins('membership', user.name + ' (' + user.email + ') changed their plan from ' + current.name + ' ($' + current.monthly + '/mo) to ' + plan.name + ' ($' + (plan.monthlyCents / 100) + '/mo).');
       return send(res, 200, { ok: true, user: pubUser(user), plan: membershipPlanOf(user) });
     } catch (e) { console.error('membership change failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
@@ -4221,7 +4340,7 @@ const server = http.createServer(async (req, res) => {
       setMembershipPlan(user, current.planKey, { status: 'active', subscriptionId: current.subscriptionId, since: current.since || null, priceId: current.priceId || undefined, cancelAt });
       if (current.type === 'homecare' || current.type === 'plus') user.homeCareCancelAt = cancelAt;
       save();
-      notify(user.id, 'membership', 'Your ' + current.name + ' membership will stay active until ' + (cancelAt ? new Date(cancelAt).toLocaleDateString('en-US') : 'the end of your paid period') + ', then it ends and you will not be charged again.');
+      notify(user.id, 'membership', 'Your ' + current.name + ' membership will stay active until ' + (cancelAt ? new Date(cancelAt).toLocaleDateString('en-US') : 'the end of your paid period') + ', then it ends and you will not be charged again.', '#memberships');
       notifyAdmins('membership', user.name + ' (' + user.email + ') cancelled ' + current.name + ' — active until ' + (cancelAt ? new Date(cancelAt).toLocaleDateString('en-US') : 'period end') + '.');
       return send(res, 200, { ok: true, cancelAt, user: pubUser(user), plan: membershipPlanOf(user) });
     } catch (e) { console.error('membership cancel failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
@@ -4237,7 +4356,7 @@ const server = http.createServer(async (req, res) => {
       setMembershipPlan(user, current.planKey, { status: 'active', subscriptionId: current.subscriptionId, since: current.since || null, priceId: current.priceId || undefined, cancelAt: null });
       if (current.type === 'homecare' || current.type === 'plus') user.homeCareCancelAt = null;
       save();
-      notify(user.id, 'membership', 'Good news — your ' + current.name + ' membership will keep renewing as usual. The cancellation was undone.');
+      notify(user.id, 'membership', 'Good news — your ' + current.name + ' membership will keep renewing as usual. The cancellation was undone.', '#memberships');
       notifyAdmins('membership', user.name + ' (' + user.email + ') undid their ' + current.name + ' cancellation.');
       return send(res, 200, { ok: true, user: pubUser(user), plan: membershipPlanOf(user) });
     } catch (e) { console.error('membership reactivate failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
@@ -4411,7 +4530,7 @@ const server = http.createServer(async (req, res) => {
         : 'Your FREE HomeCare estimate was applied to this request. No estimate charge — just approve the work when the quote arrives.', at: new Date().toISOString() });
       notify(user.id, 'membership', yardFree
         ? 'Your free Yard Care estimate was applied to request ' + r.id + '.'
-        : 'Your free HomeCare estimate was applied to request ' + r.id + '.');
+        : 'Your free HomeCare estimate was applied to request ' + r.id + '.', '#req=' + r.id);
     }
     if (menuOrder && menuOrder.totalsCorrected) audit(user, 'order.totals_corrected', r.id, 'client due ' + usd(menuOrder.clientDue || 0) + ' -> catalog due ' + usd(menuOrder.totals.due));
     db.requests.push(r); notifyAdmins('request', 'New request ' + r.id + ': ' + (r.service || 'Service') + ' in ' + (r.city || '') + ' from ' + r.customerName + '.'); save(); emitRequestNew(r); fireAutomation('new_request', requestAutomationPayload(r)); return send(res, 201, { request: r });
@@ -4445,7 +4564,7 @@ const server = http.createServer(async (req, res) => {
         if (est.credit > 0) quoteText += ' Appointment credit applied: -$' + est.credit.toFixed(2) + '.';
         if (est.bookingDue > 0) quoteText += ' Due to book: $' + est.bookingDue.toFixed(2) + '; balance at completion: $' + est.balanceDue.toFixed(2) + '.';
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: quoteText + (b.note ? ' ' + b.note : ''), at: new Date().toISOString() });
-        notify(r.customerId, 'quote', 'You received a professional estimate for request ' + r.id + ': ' + totalText + '. Open your request to review it and approve.');
+        notify(r.customerId, 'quote', 'You received a professional estimate for request ' + r.id + ': ' + totalText + '. Open your request to review it and approve.', '/estimate/' + r.id);
         if (b.sendEmail) {
           save();
           automation = await sendAutomation('estimate_sent', requestAutomationPayload(r));
@@ -4594,8 +4713,9 @@ const server = http.createServer(async (req, res) => {
     if (!r) return send(res, 404, { error: 'request not found' });
     if (r.status !== 'Approved') return send(res, 400, { error: 'approve the estimate first' });
     if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773' });
+    const bb = await readBody(req).catch(() => ({}));
     try {
-      const out = await startBalanceAuthorization(r);
+      const out = await startBalanceAuthorization(r, bb && bb.lang);
       return send(res, 200, out);
     } catch (e) {
       if (String(e.message).indexOf('stripe:') === 0) return send(res, 502, { error: 'payment service error — try again in a minute' });
@@ -4618,7 +4738,7 @@ const server = http.createServer(async (req, res) => {
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
-    notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.');
+    notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.', '#job=' + j.id);
     notifyWorkersForJob(j);
     fireAutomation('job_posted', jobWorkerAutomationPayload(j));
     audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer);
@@ -4637,7 +4757,7 @@ const server = http.createServer(async (req, res) => {
     if (!text) return send(res, 400, { error: 'message required' });
     r.messages = r.messages || [];
     r.messages.push({ from: isTeam ? 'team' : 'customer', name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
-    if (isTeam) notify(r.customerId, 'message', 'New message from the General Handyman Solutions Team on request ' + r.id + '.');
+    if (isTeam) notify(r.customerId, 'message', 'New message from the General Handyman Solutions Team on request ' + r.id + '.', '#req=' + r.id);
     else notifyAdmins('message', 'New message from ' + user.name + ' on request ' + r.id + '.');
     save(); return send(res, 201, { request: r });
   }
@@ -4693,7 +4813,7 @@ const server = http.createServer(async (req, res) => {
       // cards flag phoneless records as "incomplete — no phone".
       const effectivePhone = (typeof b.phone === 'string' ? cleanText(b.phone, 40) : '') || w.phone || '';
       if (b.status === 'active' && w.status !== 'active' && !effectivePhone) return send(res, 400, { error: 'worker has no phone on file — add a phone number before activating (incomplete record)', code: 'PHONE_REQUIRED' });
-      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); }
+      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); }
     }
     // Private Team-only skill ranks (1-5 per skill). Stored outside profile so workers never see them.
     if (b.skillRanks && typeof b.skillRanks === 'object' && !Array.isArray(b.skillRanks)) {
@@ -4828,7 +4948,7 @@ const server = http.createServer(async (req, res) => {
       inv.paidAmount = inv.total;
       notifyAdmins('payment', 'Invoice ' + inv.id + ' marked PAID (' + usd(inv.total) + ', ' + inv.paidMethod + ').');
       const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
-      if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + inv.total.toFixed(2) + ') was marked paid. Thank you!');
+      if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + inv.total.toFixed(2) + ') was marked paid. Thank you!', '/invoice/' + inv.id);
       audit(user, 'invoice.mark_paid', inv.id, usd(inv.total) + ' · ' + inv.paidMethod);
       // A hand-marked paid invoice is captured money for captain-override
       // purposes — accrue now if its job is already Done (the sweep covers
@@ -4847,7 +4967,7 @@ const server = http.createServer(async (req, res) => {
       const cust = (inv.customerId && db.users.find(u => u.id === inv.customerId)) || (inv.customerEmail && db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail));
       inv.reminderCount = (inv.reminderCount || 0) + 1;
       inv.remindedAt = new Date().toISOString();
-      if (cust) notify(cust.id, 'invoice_reminder', 'Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv));
+      if (cust) notify(cust.id, 'invoice_reminder', 'Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv), '/invoice/' + inv.id);
       notifyAdmins('invoice', 'Payment reminder #' + inv.reminderCount + ' sent for invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ').');
       audit(user, 'invoice.remind', inv.id, 'reminder #' + inv.reminderCount);
       save();
@@ -4949,7 +5069,7 @@ const server = http.createServer(async (req, res) => {
     if (assignedWorkerId) j.claimedAt = j.createdAt;
     db.jobs.push(j);
     if (silent) {
-      notify(assignedWorkerId, 'job', 'The Team assigned you a job: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + '. It is in your jobs list.');
+      notify(assignedWorkerId, 'job', 'The Team assigned you a job: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + '. It is in your jobs list.', '#wjob=' + j.id);
       // v41: a DIRECT offer also emails the one worker (never a board
       // broadcast). fireAutomation swallows every failure — email can
       // never block or fail the assignment.
@@ -5054,7 +5174,7 @@ const server = http.createServer(async (req, res) => {
     j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString();
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
-    if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.');
+    if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.', '#job=' + j.id);
     fireAutomation('job_claimed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), customer: cust ? { name: cust.name, email: cust.email } : null, worker: { name: user.name, email: user.email }, job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', when: j.when || '', payOffer: j.payOffer || 0 } });
     save(); emitJobStatus(j, 'Open'); return send(res, 200, { job: publicJob(j, user) });
   }
@@ -5065,14 +5185,14 @@ const server = http.createServer(async (req, res) => {
     const b = await readBody(req);
     const prevJobStatus = j.status; // v23: one job.status event per PATCH, emitted at the end if it changed
     if (user && user.role === 'admin') {
-      if (b.status) { applyJobStatus(j, b.status); if (b.status === 'On my way') geocodeJobDestination(j); if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".'); }
+      if (b.status) { applyJobStatus(j, b.status); if (b.status === 'On my way') geocodeJobDestination(j); if (b.workerPaid !== undefined) j.workerPaid = !!b.workerPaid; if (j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'Update on your job ' + j.id + ' (' + (j.service || '') + '): status is now "' + j.status + '".', '#wjob=' + j.id); }
       if (b.address !== undefined) j.address = cleanText(b.address, 300);
       if (b.when !== undefined) j.when = cleanText(b.when, 200);
       if (b.schedDate !== undefined) j.schedDate = cleanDate(b.schedDate);
       if (b.schedTime !== undefined) j.schedTime = cleanText(b.schedTime, 50);
       if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
       if (b.reviewPublished !== undefined) j.reviewPublished = !!b.reviewPublished; // v25 (C1): admin-only review publish flag
-      if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.'); }
+      if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.', '#wjob=' + j.id); }
     }
     else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && (b.photosDone || b.status)) {
       // Worker status flow (v22): Claimed -> On my way -> Arrived, then the
@@ -5086,8 +5206,8 @@ const server = http.createServer(async (req, res) => {
         if (b.status === 'On my way') geocodeJobDestination(j);
         notifyAdmins('job', user.name + ' set job ' + j.id + ' (' + (j.service || '') + ') to "' + b.status + '".');
         const cust = jobCustomer(j);
-        if (cust && b.status === 'On my way') notify(cust.id, 'job', 'Your technician is on the way for your ' + (j.service || 'job') + ' in ' + (j.city || '') + ' — watch the live map in the app.');
-        if (cust && b.status === 'Arrived') notify(cust.id, 'job', 'Your technician has arrived for your ' + (j.service || 'job') + ' in ' + (j.city || '') + '.');
+        if (cust && b.status === 'On my way') notify(cust.id, 'job', 'Your technician is on the way for your ' + (j.service || 'job') + ' in ' + (j.city || '') + ' — watch the live map in the app.', '#job=' + j.id);
+        if (cust && b.status === 'Arrived') notify(cust.id, 'job', 'Your technician has arrived for your ' + (j.service || 'job') + ' in ' + (j.city || '') + '.', '#job=' + j.id);
         handled = true;
       }
       if (b.photosDone) { j.photosReceived = true; applyJobStatus(j, 'Done — photos sent'); notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); handled = true; }
@@ -5143,7 +5263,7 @@ const server = http.createServer(async (req, res) => {
     if (!w) return send(res, 400, { error: 'worker not found' });
     j.connectOverrideFor = w.id; j.connectOverrideAt = new Date().toISOString(); j.connectOverrideBy = user.id;
     audit(user, 'job.connect_override', j.id, 'claim unlocked for ' + w.name + ' (' + (w.email || '') + ') despite incomplete Stripe Connect');
-    notify(w.id, 'job', 'The Team unlocked job ' + j.id + ' (' + (j.service || 'Job') + ') for you — you can claim it now, even before your Stripe setup is finished.');
+    notify(w.id, 'job', 'The Team unlocked job ' + j.id + ' (' + (j.service || 'Job') + ') for you — you can claim it now, even before your Stripe setup is finished.', '#wjob=' + j.id);
     save(); return send(res, 200, { ok: true, job: publicJob(j, user) });
   }
 
@@ -5238,8 +5358,8 @@ const server = http.createServer(async (req, res) => {
     const prevCaptain = area.captainId && area.captainId !== w.id ? db.users.find(u => u.id === area.captainId) : null;
     area.captainId = w.id;
     audit(user, 'captain.assign', area.id, w.name + ' → Capitán de ' + area.name + (prevArea && prevArea.id !== area.id ? ' (moved from ' + prevArea.name + ')' : '') + (prevCaptain ? ' (replaces ' + prevCaptain.name + ')' : ''));
-    notify(w.id, 'captain', 'You are now Capitán / Captain of ' + area.name + '. Open "Mi área / My area" in your worker panel to see your area, your team and your 5% override balance.');
-    if (prevCaptain) notify(prevCaptain.id, 'captain', 'The Team reassigned the captaincy of ' + area.name + ' to ' + w.name + '. Any override you already accrued stays yours.');
+    notify(w.id, 'captain', 'You are now Capitán / Captain of ' + area.name + '. Open "Mi área / My area" in your worker panel to see your area, your team and your 5% override balance.', '#worker');
+    if (prevCaptain) notify(prevCaptain.id, 'captain', 'The Team reassigned the captaincy of ' + area.name + ' to ' + w.name + '. Any override you already accrued stays yours.', '#worker');
     save(); return send(res, 200, { ok: true, captains: captainsAdminPayload() });
   }
   if (p === '/api/admin/captains/unassign' && req.method === 'POST') {
@@ -5252,7 +5372,7 @@ const server = http.createServer(async (req, res) => {
     const prev = db.users.find(u => u.id === area.captainId);
     area.captainId = null;
     audit(user, 'captain.unassign', area.id, (prev ? prev.name : 'captain') + ' removed from ' + area.name);
-    if (prev) notify(prev.id, 'captain', 'The Team removed you as Capitán of ' + area.name + '. Any override you already accrued stays yours.');
+    if (prev) notify(prev.id, 'captain', 'The Team removed you as Capitán of ' + area.name + '. Any override you already accrued stays yours.', '#worker');
     save(); return send(res, 200, { ok: true, captains: captainsAdminPayload() });
   }
   if (p === '/api/admin/captains/payout' && req.method === 'POST') {
@@ -5280,7 +5400,7 @@ const server = http.createServer(async (req, res) => {
     const payout = { id: id('CPO'), captainId, captainName: cap.name, amount, at: nowIso, byId: user.id, byName: user.name, byEmail: user.email || '' };
     db.captainPayouts.push(payout);
     audit(user, 'captain.payout', captainId, usd(amount) + ' → ' + cap.name + ' (manual) · balance now ' + usd(captainOutstanding(captainId)));
-    notify(captainId, 'captain', 'The Team marked ' + usd(amount) + ' of your captain override as PAID. Remaining accrued balance: ' + usd(captainOutstanding(captainId)) + '.');
+    notify(captainId, 'captain', 'The Team marked ' + usd(amount) + ' of your captain override as PAID. Remaining accrued balance: ' + usd(captainOutstanding(captainId)) + '.', '#worker');
     save(); return send(res, 200, { ok: true, payout, totals: { accrued: captainOutstanding(captainId), paidOut: captainPaidOut(captainId) }, captains: captainsAdminPayload() });
   }
   // The captain's own view: his area ONLY — area jobs (id, service, city,
@@ -5388,8 +5508,8 @@ const server = http.createServer(async (req, res) => {
     const from = isTeam ? 'team' : (isWorker ? 'worker' : 'customer');
     j.messages.push({ from, name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
     if (!isTeam) notifyAdmins('message', 'Job ' + j.id + ': new message from ' + user.name + '.');
-    if (!isWorker && j.assignedWorkerId) notify(j.assignedWorkerId, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the Team' : user.name) + '.');
-    if (!isCust && cust) notify(cust.id, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the General Handyman Solutions Team' : user.name) + '.');
+    if (!isWorker && j.assignedWorkerId) notify(j.assignedWorkerId, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the Team' : user.name) + '.', '#wjob=' + j.id);
+    if (!isCust && cust) notify(cust.id, 'message', 'Job ' + j.id + ': new message from ' + (isTeam ? 'the General Handyman Solutions Team' : user.name) + '.', '#job=' + j.id);
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
 
@@ -5438,7 +5558,7 @@ const server = http.createServer(async (req, res) => {
       if (membershipPlanOf(user).status === 'active') return send(res, 400, { error: 'you already have an active membership plan' });
       if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
       try {
-        const s = await createCheckoutSession(b.kind, user, { plan: plan.key });
+        const s = await createCheckoutSession(b.kind, user, { plan: plan.key, lang: b.lang });
         return send(res, 200, { url: s.url, plan: plan.key });
       } catch (e) { console.error('stripe checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
     }
@@ -5455,7 +5575,7 @@ const server = http.createServer(async (req, res) => {
         // starts as a 30-day trial; an account that already used its
         // free month (or ever held HomeCare) joins at $29 from day one.
         const hcTrial74 = homeCareTrialEligible(user);
-        const s = await createCheckoutSession('homecare', user, { trialDays: hcTrial74 ? INVITE_TRIAL_DAYS : 0 });
+        const s = await createCheckoutSession('homecare', user, { trialDays: hcTrial74 ? INVITE_TRIAL_DAYS : 0, lang: b.lang });
         return send(res, 200, { url: s.url, trial: hcTrial74 });
       }
       if (b.kind === 'estimate' || b.kind === 'member-estimate') {
@@ -5482,7 +5602,7 @@ const server = http.createServer(async (req, res) => {
         let tipCents = Math.round(Number(b.tipCents) || 0);
         if (tipCents < 0) tipCents = 0;
         if (tipCents > amountCents) tipCents = amountCents;
-        const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label });
+        const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label, lang: b.lang });
         return send(res, 200, { url: s.url, amount: (amountCents + tipCents) / 100, tip: tipCents / 100 });
       }
       if (b.kind === 'estimate-hold') {
@@ -5496,7 +5616,7 @@ const server = http.createServer(async (req, res) => {
         const amountCents = Math.round((Number(r.estimateDue) || 0) * 100);
         if (!(amountCents > 0)) return send(res, 400, { error: 'this request has no estimate fee to authorize (free estimate or already covered)' });
         if (requestHolds(r).some(h => h.key === 'visit' && h.status === 'authorized')) return send(res, 400, { error: 'an authorization hold is already active on this request' });
-        const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions' });
+        const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions', lang: b.lang });
         return send(res, 200, { url: s.url, amount: amountCents / 100, hold: true });
       }
       return send(res, 400, { error: 'unknown checkout kind' });
@@ -5572,6 +5692,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
+  // ---------- v80 A-7 PLUMBING ONLY: recoverable guest carts ----------
+  // The v78 guest cart is BORN recoverable: when a guest reaches the
+  // checkout with an email (or an account checks out with items), the
+  // server keeps a snapshot keyed by a one-time recovery token (only
+  // its SHA-256 is stored) so the SAME cart can be rehydrated later —
+  // in the account ("you left items in your cart", in-app only) or via
+  // the restore link shape /#cart-recover=<token>. Expiry ~30 days.
+  // *** NOTHING IS SENT FROM HERE: no email, no SMS, no push, no cron,
+  // no timers. Gabriel's STOP TOTAL stands — the send is a separate
+  // decision he has not made. This block must never call a mail or
+  // automation function. ***
+  if (p === '/api/cart/save-recovery' && req.method === 'POST') {
+    const b = await readBody(req);
+    const email = (user && user.role === 'customer' && user.email) ? user.email : cleanText(b.email, 160).toLowerCase();
+    if (!/.+@.+\..+/.test(email || '')) return send(res, 400, { error: 'a valid email is required to save the cart' });
+    const snap = recoverySnapshot(b.items);
+    if (!snap) return send(res, 400, { error: 'cart has an item we could not price' });
+    const out = upsertRecoverableCart(email, snap);
+    if (!out) return send(res, 400, { error: 'could not save the cart' });
+    return send(res, 200, { ok: true, token: out.token, restorePath: '/#cart-recover=' + out.token, expiresAt: out.rec.expiresAt });
+  }
+  const recoveryGetMatch = p.match(/^\/api\/cart\/recovery\/([\w-]+)$/);
+  if (recoveryGetMatch && req.method === 'GET') {
+    const rec = recoverableCartsOf().find(x => x.tokenHash === sha256hex(recoveryGetMatch[1]));
+    if (!rec || rec.consumedAt || new Date(rec.expiresAt).getTime() < Date.now()) return send(res, 404, { error: 'this cart link is no longer available' });
+    return send(res, 200, { email: rec.email, items: rec.items, updatedAt: rec.updatedAt });
+  }
+  if (p === '/api/me/recoverable-cart' && req.method === 'GET') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    if (user.role !== 'customer') return send(res, 200, { cart: null });
+    const rec = recoverableCartsOf().filter(x => x.email === (user.email || '').toLowerCase() && !x.consumedAt && new Date(x.expiresAt).getTime() >= Date.now()).sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
+    return send(res, 200, { cart: rec ? { items: rec.items, updatedAt: rec.updatedAt, expiresAt: rec.expiresAt } : null });
+  }
   // ---------- v78: guest cart + EMBEDDED checkout (Payment Element) ----------
   // Gabriel's Amazon model (2026-10-25): the customer fills a cart as a
   // GUEST, and the account is created at the END, inside this checkout —
@@ -5633,6 +5786,7 @@ const server = http.createServer(async (req, res) => {
         const hf = homeFieldsFrom(Object.assign({}, b, { homeNotes: b.notes || b.homeNotes || '' }));
         u = { id: id('USR'), name, email, phone: cleanText(b.phone, 40), serviceAddress: cleanText(b.address, 300), zipCode: hf.zipCode, homeType: hf.homeType, yardSize: hf.yardSize, homeNotes: hf.homeNotes, startPreference: cleanStartPreference(b.startPreference), role: 'customer', status: 'active', skills: [], vehicle: '', profile: {}, tradeSkills: {}, availability: null, pw: hashPw(String(b.password)), createdAt: new Date().toISOString() };
         db.users.push(u);
+        claimOrphanRecords(u); // v80 P1-1: an account born at checkout claims the guest history under its email too
         save();
       }
       setCookie = sessionCookie(newSession(u), req);
@@ -5643,6 +5797,9 @@ const server = http.createServer(async (req, res) => {
     // The cart is priced BEFORE anything is created — a line the
     // catalog cannot price stops the whole checkout (never a guess).
     if (!serverCartTotals(b.items, u.homeCareStatus === 'active')) return send(res, 400, { error: 'cart has an item we could not price' });
+    // v80 A-7: reaching checkout with an account/email + items makes
+    // the cart recoverable server-side (snapshot only — nothing sent).
+    { const snap80 = recoverySnapshot(b.items); if (snap80) upsertRecoverableCart(u.email, snap80); }
     // --- optional membership (v77 pattern): HomeCare only, default none ---
     if (b.step === 'join') {
       if (u.homeCareStatus === 'active') return send(res, 400, { error: 'you already have an active HomeCare membership' });
@@ -5839,7 +5996,7 @@ const server = http.createServer(async (req, res) => {
     jobs.forEach(j => { if (j.status !== 'Done — photos sent' && j.status !== 'Cancelled') { j.status = 'Cancelled'; delete j.liveLoc; } });
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'This order was cancelled by the Team. Refund: ' + usd(refundedCents / 100) + ' back to your card.' + (keptCents > 0 ? ' A ' + usd(keptCents / 100) + ' booking fee was kept because a technician had already been dispatched.' : ''), at: new Date().toISOString() });
-    if (r.customerId) notify(r.customerId, 'payment', 'Order ' + r.id + ' cancelled — refund of ' + usd(refundedCents / 100) + ' issued' + (keptCents > 0 ? ' (' + usd(keptCents / 100) + ' booking fee kept — already dispatched)' : '') + '.');
+    if (r.customerId) notify(r.customerId, 'payment', 'Order ' + r.id + ' cancelled — refund of ' + usd(refundedCents / 100) + ' issued' + (keptCents > 0 ? ' (' + usd(keptCents / 100) + ' booking fee kept — already dispatched)' : '') + '.', '#req=' + r.id);
     notifyAdmins('payment', 'Order ' + r.id + ' CANCELLED + refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' (kept ' + usd(keptCents / 100) + ' booking fee — was dispatched)' : ' (full refund — not dispatched)') + '.');
     audit(user, 'request.refund', r.id, 'refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' · kept ' + usd(keptCents / 100) : '') + (dispatched ? ' · dispatched' : ' · not dispatched'));
     save();
@@ -5982,7 +6139,7 @@ const server = http.createServer(async (req, res) => {
       if (r.menuOrder && r.menuOrder.totals) r.menuOrder.totals.due = c.payment.amountCents / 100;
       r.messages = r.messages || [];
       r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.', at: new Date().toISOString() });
-      if (r.customerId) notify(r.customerId, 'payment', 'Materials update on order ' + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.');
+      if (r.customerId) notify(r.customerId, 'payment', 'Materials update on order ' + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.', '#req=' + r.id);
     }
     audit(user, 'cart.adjust-balance', c.id, (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + ' · new balance ' + usd(newBalance / 100));
     if (newBalance === 0) {
@@ -6129,6 +6286,7 @@ const server = http.createServer(async (req, res) => {
   }
   const joinCheckoutMatch = p.match(/^\/join\/([\w-]+)\/checkout$/);
   if (joinCheckoutMatch && req.method === 'POST') {
+    const jb = await readBody(req).catch(() => ({}));
     const inv = invitesOf().find(x => x.id === joinCheckoutMatch[1]);
     if (!inv) return send(res, 404, { error: 'invite not found' });
     if (!user) return send(res, 401, { error: 'create your account above first, then tap the button again' });
@@ -6148,6 +6306,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const s = await createCheckoutSession('homecare', user, {
         trialDays: INVITE_TRIAL_DAYS,
+        lang: jb && jb.lang,
         successUrl: inviteLink(inv) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: inviteLink(inv) + '?cancelled=1',
         metadata: { inviteId: inv.id, src: 'invite' },
@@ -6164,6 +6323,7 @@ const server = http.createServer(async (req, res) => {
     if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
     const b = await readBody(req);
+    const cartLang80 = (b && (b.lang === 'es' || b.lang === 'en')) ? b.lang : (c.lang === 'es' ? 'es' : 'en'); // v80: page language wins, cart's stored language is the fallback
     if (c.status === 'paid') {
       // v62: the SAME link collects the balance (60%) when the work is
       // done. Only the exact outstanding balance can be opened, and
@@ -6175,6 +6335,7 @@ const server = http.createServer(async (req, res) => {
             amountCents: Math.round(Number(c.payment.balanceCents)),
             cartId: c.id,
             payStep: 'balance',
+            lang: cartLang80,
             label: 'Cart ' + c.id + ' — balance at completion — General Handyman Solutions',
             successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
             cancelUrl: cartLink(c) + '?cancelled=1'
@@ -6250,6 +6411,7 @@ const server = http.createServer(async (req, res) => {
           plan: joinPlan.key,
           amountCents: splitJ.depositCents,
           cartId: c.id,
+          lang: cartLang80,
           trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0,
           label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
           successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
@@ -6277,6 +6439,7 @@ const server = http.createServer(async (req, res) => {
         amountCents: split.depositCents,
         cartId: c.id,
         payStep: 'deposit',
+        lang: cartLang80,
         label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
         successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: cartLink(c) + '?cancelled=1'
@@ -6311,7 +6474,7 @@ const server = http.createServer(async (req, res) => {
       if (tipCents < 0) tipCents = 0;
       const maxTip = Math.round(inv.total * 100);
       if (tipCents > maxTip) tipCents = maxTip;
-      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '' });
+      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '', lang: body && body.lang });
       return send(res, 200, { url: s.url, amount: inv.total + tipCents / 100, tip: tipCents / 100 });
     } catch (e) { console.error('invoice checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
@@ -6522,7 +6685,7 @@ const server = http.createServer(async (req, res) => {
       r.status = 'Approved';
       r.messages.push({ from: 'customer', name: r.customerName || 'Customer', text: 'Approved the estimate from the public link.', at: new Date().toISOString() });
       notifyAdmins('quote', (r.customerName || 'Customer') + ' APPROVED the estimate on ' + r.id + ' (' + usd(r.estimate.total) + ') via the public link.');
-      if (r.customerId) notify(r.customerId, 'quote', 'You approved the estimate on request ' + r.id + '. Your invoice is ready — pay online with the link below.');
+      if (r.customerId) notify(r.customerId, 'quote', 'You approved the estimate on request ' + r.id + '. Your invoice is ready — pay online with the link below.', '#req=' + r.id);
       const inv = invoiceFromEstimate(r);
       notifyAdmins('invoice', 'Invoice ' + inv.id + ' auto-created from approved estimate on ' + r.id + ' (' + usd(inv.total) + ') — sent to ' + (inv.customerEmail || 'customer') + '.');
       save();
@@ -6562,9 +6725,11 @@ const server = http.createServer(async (req, res) => {
     if (estimateIsExpired(r.estimate)) return send(res, 400, { error: 'this estimate has expired — ask the Team for a fresh one' });
     if (cartMemberUserFor(user, r.customerEmail || '')) return send(res, 200, { member: true });
     if (!stripeReady()) return send(res, 400, { error: 'online payments are not connected yet — text/call (707) 862-3773 to join' });
+    const eb = await readBody(req).catch(() => ({}));
     try {
       const s = await createCheckoutSession('homecare', user, {
         successUrl: estimatePageLink(r) + '?joined=1&session_id={CHECKOUT_SESSION_ID}',
+        lang: eb && eb.lang,
         cancelUrl: estimatePageLink(r) + '?cancelled=1',
         metadata: { estimateId: r.id, src: 'estimate' },
         subMetadata: { estimateId: r.id },
@@ -6682,7 +6847,7 @@ const server = http.createServer(async (req, res) => {
     // reset the one-free-estimate flag (e.g. goodwill re-grant).
     if (b.freeEstimateUsed !== undefined) {
       c.freeEstimateUsed = !!b.freeEstimateUsed;
-      if (!c.freeEstimateUsed) notify(c.id, 'membership', 'The Team re-granted your free HomeCare estimate — request it from your dashboard.');
+      if (!c.freeEstimateUsed) notify(c.id, 'membership', 'The Team re-granted your free HomeCare estimate — request it from your dashboard.', '#memberships');
     }
     save(); return send(res, 200, { customer: { id: c.id, name: c.name, email: c.email, homeCareStatus: c.homeCareStatus || 'none', homeCareSince: c.homeCareSince || null, homeCareCancelAt: c.homeCareCancelAt || null, freeEstimateUsed: !!c.freeEstimateUsed } });
   }
@@ -6758,7 +6923,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
       v.assignedWorkerId = assignTo.id; v.status = 'assigned';
     }
     db.yardVisits.push(v); save();
-    if (assignTo) { notify(assignTo.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.'); emitYardAssigned(v); }
+    if (assignTo) { notify(assignTo.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', '#worker'); emitYardAssigned(v); }
     return send(res, 201, { visit: publicYardVisit(v) });
   }
   const yvMatch = p.match(/^\/api\/admin\/yard-visits\/([\w-]+)$/);
@@ -6798,7 +6963,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
       }
     }
     save();
-    if (assignedNow) { notify(assignedNow.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.'); emitYardAssigned(v); }
+    if (assignedNow) { notify(assignedNow.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', '#worker'); emitYardAssigned(v); }
     return send(res, 200, { visit: publicYardVisit(v) });
   }
   if (yvMatch && req.method === 'DELETE') {
@@ -6860,7 +7025,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
         v.workerPay = YARD_WORKER_PAY;
         notifyAdmins('yard', user.name + ' completed yard visit ' + v.id + ' (' + v.date + ') — photos are in the Yard Calendar.');
         const member = db.users.find(x => x.id === v.userId);
-        if (member) notify(member.id, 'yard', 'Your yard visit on ' + v.date + ' is done — the after photo is in your membership card.');
+        if (member) notify(member.id, 'yard', 'Your yard visit on ' + v.date + ' is done — the after photo is in your membership card.', '#memberships');
       }
       v.status = b.status;
     }
