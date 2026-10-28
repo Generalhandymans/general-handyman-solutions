@@ -998,7 +998,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     <h3 id="admSecCart">Cart — build it, send ONE link</h3>
     <div class="card" id="cartBuilderCard">
       <div id="cartEditBanner" style="display:none;background:#fff4d6;border:1px solid #e3c878;border-radius:10px;padding:10px;margin-bottom:10px">✏️ <b>Editing cart <span id="cartEditWhich"></span></b> — the link does NOT change; the customer sees the updated lines and totals. <button type="button" class="ghost" onclick="cancelCartEdit()">Cancel edit</button></div>
-      <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays in full.</p>
+      <p class="mut" style="margin-top:0">Pick menu services, set your prices (your quote wins), and generate the link. The customer opens it, fills their info + address + when, decides on HomeCare, and pays the deposit to book — the balance is due at completion.</p>
       <label>Search the menu<input id="cartSearch" placeholder="Type to search services…" oninput="renderCartPicker()"></label>
       <div id="cartPicker" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:8px;margin-top:6px"></div>
       <div id="cartBuilderLines" style="margin-top:10px"></div>
@@ -1077,7 +1077,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
       <div id="iMsg" class="mut"></div>
     </div>
     <div id="adminInvoices"></div>
-    <h3 id="admSecSources">Sources — where customers come from (v79)</h3>
+    <h3 id="admSecSources">Sources — where customers come from</h3>
     <div id="adminSources"></div>
     <h3>Security &amp; activity log</h3>
     <p class="mut">Every admin action and money movement is recorded here — quotes, status changes, captures, releases, payouts, worker changes, sign-ins. Only you see this.</p>
@@ -1268,7 +1268,7 @@ const W_I18N = {
     licenseLabel: 'License / ID', licDriver: 'Driver license', licId: 'State ID only', licWorking: 'Working on it',
     insuranceLabel: 'Insurance', insHas: 'Has general liability', insNo: 'No insurance yet', insUnsure: 'Not sure',
     availLabel: 'Availability', availPh: 'Weekdays / weekends / anytime', notesLabel: 'Anything the Team should know?', notesPh: 'Your experience, specialties, anything important',
-    connectGateTitle: '🔒 On-demand jobs are locked', connectGateMsg: 'To unlock on-demand jobs you need to connect Stripe Connect', connectGateBody: 'Your pay lands in your own bank the moment you finish a job — that is why paid jobs unlock only when your Stripe Connect setup is done. It takes about 2 minutes: your ID and your bank.', connectGateBtn: 'Connect Stripe Connect',
+    connectGateTitle: '💵 Work now — your pay waits in the app', connectGateMsg: 'You can take jobs now, even without Stripe Connect', connectGateBody: 'Your pay for each finished job is held in the app until you connect Stripe Connect — then it pays out to your own bank. Setup takes about 2 minutes: your ID and your bank.', connectGateBtn: 'Connect Stripe Connect',
     availDaysLabel: 'Days you can work', availShiftsLabel: 'Shifts', shiftMorning: 'Mornings', shiftAfternoon: 'Afternoons', shiftEvening: 'Evenings', availOnDemand: '⚡ Available for on-demand / urgent jobs',
     permTitle: '⚙️ Finish setting up your app', permNotif: '🔔 Notifications', permNotifSub: 'Alerts with the hammer sound 🔨', permLoc: '📍 Your location', permLocSub: 'Jobs and live route', activate: 'ACTIVATE',
     permHelpT: 'Blocked it? Turn them on in your browser settings: tap the 🔒 lock next to the address → Permissions.',
@@ -1322,7 +1322,7 @@ const W_I18N = {
     licenseLabel: 'Licencia / ID', licDriver: 'Licencia de manejar', licId: 'Solo ID estatal', licWorking: 'En trámite',
     insuranceLabel: 'Seguro', insHas: 'Tiene seguro general', insNo: 'Sin seguro todavía', insUnsure: 'No estoy seguro',
     availLabel: 'Disponibilidad', availPh: 'Entre semana / fines de semana / cuando sea', notesLabel: '¿Algo que el Team debe saber?', notesPh: 'Tu experiencia, especialidades, lo importante',
-    connectGateTitle: '🔒 Los jales on-demand están bloqueados', connectGateMsg: 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect', connectGateBody: 'Tu pago cae en tu propio banco en cuanto terminas un trabajo — por eso los jales pagados se desbloquean solo cuando tu Stripe Connect está listo. Toma unos 2 minutos: tu ID y tu banco.', connectGateBtn: 'Conectar Stripe Connect',
+    connectGateTitle: '💵 Trabaja ya — tu paga espera en la app', connectGateMsg: 'Ya puedes agarrar jales, aunque todavía no tengas Stripe Connect', connectGateBody: 'Tu paga de cada jale terminado se guarda en la app hasta que conectes Stripe Connect — y de ahí se paga a tu propio banco. La configuración toma unos 2 minutos: tu ID y tu banco.', connectGateBtn: 'Conectar Stripe Connect',
     availDaysLabel: 'Días que puedes trabajar', availShiftsLabel: 'Turnos', shiftMorning: 'Mañanas', shiftAfternoon: 'Tardes', shiftEvening: 'Noches', availOnDemand: '⚡ Disponible para jales on-demand / urgentes',
     permTitle: '⚙️ Termina de activar tu app', permNotif: '🔔 Notificaciones', permNotifSub: 'Avisos con el sonido del martillo 🔨', permLoc: '📍 Tu ubicación', permLocSub: 'Trabajos y ruta en vivo', activate: 'ACTIVAR',
     permHelpT: '¿Tocaste "Bloquear"? Actívalos desde los ajustes de tu navegador: toca el candado 🔒 junto a la dirección → Permisos.',
@@ -1934,6 +1934,7 @@ function paintDeleteAccount(){
   const sfxs = { customer: 'C', worker: 'W', admin: 'A' };
   for (const role in slots) { const el = document.getElementById(slots[role]); if (el && (!me || me.role !== role)) el.innerHTML = ''; }
   if (!me) { delAcctPaintedFor = ''; return; }
+  if (me.role === 'admin') { const aEl = document.getElementById(slots.admin); if (aEl) aEl.innerHTML = ''; delAcctPaintedFor = ''; return; } // v80.8: customer-facing panel — never in admin view
   const el = document.getElementById(slots[me.role]);
   if (!el) return;
   if (delAcctPaintedFor === me.id && el.innerHTML) return; // never wipe a half-typed confirmation on re-render
@@ -2995,7 +2996,7 @@ async function loadMyJobs(){
   if(!el.innerHTML) el.innerHTML=listLoadingHtml('Loading your jobs… · Cargando tus trabajos…');
   let d=null;
   try{ d=await api('/api/jobs'); }catch(e){ el.innerHTML=listErrorHtml('loadMyJobs()','We could not load your jobs.'); return; }
-  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br><span class="mut">'+j.city+' • '+j.when+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -3004,7 +3005,7 @@ async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? WT('statusActive') : WT('statusInactive').replace('{status}', me.status);
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += WT('ratingLine').replace('{avg}', d.workerRating.average).replace('{n}', d.workerRating.count).replace('{jobs}', WT(d.workerRating.count === 1 ? 'ratedJob1' : 'ratedJobN'));
-  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span><br>'+j.description+'<br><span class="mut">'+j.city+' • '+j.when+'</span><br>'+WT('payOffer')+' <span class="st">$'+j.payOffer+'</span>'+workerPayoutLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
+  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br>'+escHtml(j.description)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span><br>'+WT('payOffer')+' <span class="st">$'+escHtml(j.payOffer)+'</span>'+workerPayoutLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
   sndWorkerJobs(d.jobs || []);
 }
 function workerPayoutLine(j){ if(!j.mine||!j.payoutStatus) return ''; if(j.payoutStatus==='paid') return '<br><span class="st">'+WT('payoutSent')+'</span>'; return '<br><span class="mut">'+WT('payoutLabel')+String(j.payoutStatus).replace(/_/g,' ')+'</span>'; }
@@ -3184,26 +3185,36 @@ async function saveWorkerTrades(){
 }
 function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
 async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdminJobs(); }catch(e){ alert(e.message); } }
-// v75: Gabriel's Connect-gate override, right on the job card — pick the
-// worker, one tap releases THIS job to him despite the claim gate
-// (server audits it). The pill shows when a release is already in place.
+// v75 → v80.8: Gabriel's per-job claim release, right on the job
+// card. While the Connect claim gate lived this released THIS job to
+// one worker despite it; since v80.8 every active worker can claim
+// anyway, so the action is a harmless legacy flag — it records the
+// release (server audits it) and tells the worker the Team picked
+// him. The pill shows when a release is already in place.
 function connectOverrideHtml(j){
   const opts = (adminWorkersCache || []).filter(function(w){ return w.status === 'active'; }).map(function(w){ return '<option value="' + w.id + '"' + (j.connectOverrideFor === w.id ? ' selected' : '') + '>' + escHtml(w.name) + '</option>'; }).join('');
-  return '<div style="margin-top:8px"><span class="mut">🔒 Connect gate:</span> <select id="cov-' + j.id + '">' + opts + '</select> <button class="ghost" onclick="connectOverride(\'' + j.id + '\')">Unlock claim for this worker</button>' + (j.connectOverrideFor ? ' <span class="pill">Unlocked for one worker</span>' : '') + '</div>';
+  return '<div style="margin-top:8px"><span class="mut">Claim release (optional):</span> <select id="cov-' + j.id + '">' + opts + '</select> <button class="ghost" onclick="connectOverride(\'' + j.id + '\')">Release claim to this worker</button>' + (j.connectOverrideFor ? ' <span class="pill">Released to one worker</span>' : '') + '</div>';
 }
 async function connectOverride(idv){ const sel=document.getElementById('cov-'+idv); if(!sel||!sel.value){ alert('Pick a worker first'); return; } try{ await api('/api/admin/jobs/'+idv+'/connect-override',{method:'POST', body:JSON.stringify({workerId: sel.value})}); }catch(e){ alert(e.message); } loadAdminJobs(); }
-async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ if (e.code === 'CONNECT_REQUIRED') { connectGateStateCache = null; paintConnectGateCard(); if (await appConfirm(WT('connectGateMsg') + '\n\n' + WT('connectGateBody'))) startConnect(); } else alert(e.message); } }
-// v75: the persistent Connect unlock card at the top of the worker home.
-// While his Stripe Connect payouts are not enabled, paid jobs stay
-// locked server-side — this card says why, in his language, with the
-// setup button right there. It disappears the moment he is ready.
+// v80.8: claims are open to every active worker — the server no longer
+// refuses for missing Stripe Connect (the pay is held in-app until he
+// connects; see the payout-setup card below), so a failed claim here is
+// a plain error alert, nothing Connect-specific.
+async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'POST'}); loadJobs(); }catch(e){ alert(e.message); } }
+// v75 → v80.8: the persistent card at the top of the worker home. It
+// used to explain a CLAIM LOCK; since v80.8 there is no lock — any
+// active worker can take jobs. The card is now a payout-setup
+// reminder: while his Stripe Connect payouts are not enabled, his pay
+// for finished jobs is held in the app, and this card says so, in his
+// language, with the setup button right there. It disappears the
+// moment he is ready.
 let connectGateStateCache = null;
 async function paintConnectGateCard(){
   const box = document.getElementById('connectGateCard'); if (!box || !me || me.role !== 'worker') return;
   if (me.status !== 'active') { box.innerHTML = ''; return; }
   if (!connectGateStateCache) { try { connectGateStateCache = await api('/api/worker/connect/status'); } catch(e) { connectGateStateCache = { connected: false, ready: !!me.payoutsReady }; } }
   const c = connectGateStateCache || {};
-  box.innerHTML = c.ready ? '' : '<div class="card" style="border:1.5px solid #e42535;background:#2a0d10"><b>' + WT('connectGateTitle') + '</b><br><span>' + WT('connectGateMsg') + '</span><br><span class="mut">' + WT('connectGateBody') + '</span><br><button onclick="startConnect()" style="margin-top:8px">' + WT('connectGateBtn') + '</button></div>';
+  box.innerHTML = c.ready ? '' : '<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>' + WT('connectGateTitle') + '</b><br><span>' + WT('connectGateMsg') + '</span><br><span class="mut">' + WT('connectGateBody') + '</span><br><button onclick="startConnect()" style="margin-top:8px">' + WT('connectGateBtn') + '</button></div>';
 }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
 // ---------- Notification sound (added 2026-10-21, v22) ----------
@@ -3337,6 +3348,7 @@ async function refreshPermCard(){
   const card = document.getElementById('permCard');
   if (!card) return;
   if (!me) { card.style.display = 'none'; return; }
+  if (me.role === 'admin') { card.style.display = 'none'; return; } // v80.8: customer-facing panel — never in admin view
   const nPerm = ('Notification' in window) ? Notification.permission : 'unsupported';
   let locState = permLocGranted() ? 'granted' : 'default';
   if (navigator.permissions && navigator.permissions.query) {
@@ -3749,6 +3761,11 @@ function buildTrackMap(j, box){
     if (j.destLat != null && j.destLng != null) { L.marker([j.destLat, j.destLng], { icon: pinIcon('🏠') }).addTo(map); pts.push([j.destLat, j.destLng]); }
     if (pts.length > 1) map.fitBounds(pts, { padding: [28, 28] }); else map.setView(pts[0], 14);
     trackMaps[j.id] = { map: map, tech: tech };
+    // v80.8: same zero-size cure as the master map — a per-job map is
+    // built inside a just-painted card whose layout settles late, so
+    // re-measure now and once more after the layout lands.
+    try { map.invalidateSize(); } catch(e) {}
+    setTimeout(function () { try { map.invalidateSize(); } catch(e) {} }, 400);
   } catch(e) { box.innerHTML = trackFallbackHtml(j); }
 }
 function initTrackMaps(jobs){
@@ -4234,7 +4251,7 @@ async function loadAdminWorkers(){
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
   document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
-    function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+(''+v).replace(/</g,'&lt;') : ''; }
+    function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+escHtml(v) : ''; }
     // v72 (A-1): compact card by default — photo, name, status, payouts
     // and the top trades; the full profile rows + Team ranks + trade
     // verification + the edit form live inside a "Ver detalle" fold, so
@@ -4248,8 +4265,8 @@ async function loadAdminWorkers(){
     const AV_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const avW = w.availability || {};
     const availLine = ((avW.days||[]).length || (avW.shifts||[]).length || avW.onDemand) ? '<br><span class="mut">Availability:</span> ' + (avW.days||[]).map(function(d){ return AV_DAY_NAMES[d] || ''; }).filter(Boolean).join(' ') + ((avW.shifts||[]).length ? ' · ' + avW.shifts.join(', ') : '') + (avW.onDemand ? ' · ⚡ on-demand' : '') : '';
-    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+w.name+'</b> ('+w.email+(w.phone?' • '+w.phone:'')+') <span class="pill">'+w.status+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>' + noPhonePill
-    + (pf.city ? '<br><span class="mut">City:</span> '+(''+pf.city).replace(/</g,'&lt;') : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '') + availLine
+    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+escHtml(w.name)+'</b> ('+escHtml(w.email)+(w.phone?' • '+escHtml(w.phone):'')+') <span class="pill">'+escHtml(w.status)+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>' + noPhonePill
+    + (pf.city ? '<br><span class="mut">City:</span> '+escHtml(pf.city) : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '') + availLine
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="toggleWorkerDetail(\''+w.id+'\',this)">Ver detalle ▾</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')
     + '<div id="wdetail-'+w.id+'" style="display:none">'
     + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
@@ -4261,7 +4278,7 @@ async function loadAdminWorkers(){
 }
 async function loadAdminJobs(){
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+j.service+' <span class="pill">'+j.status+'</span> • Pay offer $'+j.payOffer+'<br><span class="mut">'+j.city+' • '+j.when+' • Customer: '+(j.customerName||'—')+' '+(j.customerPhone||'')+' • '+(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span> • Pay offer $'+escHtml(j.payOffer)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+' • Customer: '+escHtml(j.customerName||'—')+' '+escHtml(j.customerPhone||'')+' • '+escHtml(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   return jb.jobs;
 }
@@ -4301,9 +4318,9 @@ function renderCartPicker(){
   const box=document.getElementById('cartPicker'); if(!box || typeof MENU_CATALOG==='undefined') return;
   const q=((document.getElementById('cartSearch')||{}).value||'').toLowerCase();
   const ids=Object.keys(MENU_CATALOG).filter(function(id){ return !q || MENU_CATALOG[id].name.toLowerCase().indexOf(q)>=0; });
-  box.innerHTML=ids.slice(0,60).map(function(id){ const s=MENU_CATALOG[id]; return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed #eee"><span><b>'+escHtml(s.name)+'</b> <span class="mut">'+escHtml(s.meta||'')+'</span></span><span style="white-space:nowrap">$'+s.price+' <button type="button" class="ghost" onclick="cartAdd(\''+id+'\')">+ Add</button></span></div>'; }).join('') || '<span class="mut">No services match.</span>';
+  box.innerHTML=ids.slice(0,60).map(function(id){ const s=MENU_CATALOG[id]; return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed #eee"><span><b>'+escHtml(s.name)+'</b> <span class="mut">'+escHtml(s.meta||'')+'</span></span><span style="white-space:nowrap">$'+s.price+' <button type="button" class="ghost" onclick="builderCartAdd(\''+id+'\')">+ Add</button></span></div>'; }).join('') || '<span class="mut">No services match.</span>';
 }
-function cartAdd(idv){
+function builderCartAdd(idv){
   const s=MENU_CATALOG[idv]; if(!s) return;
   const ex=cartDraft.find(function(x){ return x.serviceId===idv; });
   if(ex) ex.qty=Math.min(99, ex.qty+1); else cartDraft.push({ serviceId:idv, name:s.name, qty:1, unitPrice:s.price });
@@ -4326,7 +4343,7 @@ function cartAddLabor75(){
 }
 function cartSetQty(i,v){ cartDraft[i].qty=Math.max(1,Math.min(99,Math.round(Number(v)||1))); renderCartLines(); }
 function cartSetPrice(i,v){ cartDraft[i].unitPrice=Math.max(0,Math.round((Number(v)||0)*100)/100); renderCartSummary(); }
-function cartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
+function builderCartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
 // v80.6: the builder paints into its OWN container (#cartBuilderLines).
 // It used to share the cartLines id with the customer cart, so
 // getElementById handed BOTH renderers the customer's (hidden) node —
@@ -4335,7 +4352,7 @@ function cartRemove(i){ cartDraft.splice(i,1); renderCartLines(); }
 // never the DOM. The customer cart keeps #cartLines, untouched.
 function renderCartLines(){
   const box=document.getElementById('cartBuilderLines'); if(!box) return;
-  box.innerHTML=cartDraft.map(function(it,i){ const tag=it.custom?' <span class="pill" style="font-size:11px;padding:2px 8px">'+(it.kind==='other'?'Material':'CUSTOM · Labor')+'</span>':''; return '<div class="est-row"><span><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name" style="width:100%">'+tag+'</span><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="cartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
+  box.innerHTML=cartDraft.map(function(it,i){ const tag=it.custom?' <span class="pill" style="font-size:11px;padding:2px 8px">'+(it.kind==='other'?'Material':'CUSTOM · Labor')+'</span>':''; return '<div class="est-row"><span><input value="'+escHtml(it.name)+'" oninput="cartDraft['+i+'].name=this.value" placeholder="Service name" style="width:100%">'+tag+'</span><input type="number" min="1" max="99" step="1" value="'+it.qty+'" onchange="cartSetQty('+i+',this.value)"><input type="number" min="0" step="0.01" value="'+it.unitPrice+'" oninput="cartSetPrice('+i+',this.value)"><button type="button" class="est-x" onclick="builderCartRemove('+i+')" title="Remove line">×</button></div>'; }).join('');
   renderCartSummary();
 }
 function renderCartSummary(){
@@ -4345,8 +4362,18 @@ function renderCartSummary(){
   const member=cartDraft.reduce(function(s,it){ const u=(it.custom && it.kind==='other') ? it.unitPrice : Math.round(it.unitPrice*0.8*100)/100; return s+it.qty*u; },0);
   el.innerHTML='<b>Total:</b> <span class="st">'+moneyFmt(list)+'</span> • HomeCare member pays: <b>'+moneyFmt(member)+'</b> (member price applies only if the customer is — or becomes — a HomeCare / Plus member on the cart page)';
 }
+// v80.8 BUILDER HARDENING: every draft line's name is editable —
+// including catalog lines. A line whose name gets blanked is DROPPED
+// by the server's item filter without any error, so the created link
+// would total LESS than the builder showed (a $225 starter + a $125
+// door came back as a $125 cart). Guard here, in the builder's own
+// layer, the same way cartAddCustomLine already guards its name.
+function builderNameProblem(){
+  return cartDraft.some(function(it){ return !String(it.name || '').trim(); }) ? 'Every line needs a name — it is what the customer sees on the link. Fill in the blank line (or remove it) and try again.' : '';
+}
 async function createCartLink(){
   if(!cartDraft.length){ alert('Add at least one service first.'); return; }
+  const nameProblem = builderNameProblem(); if(nameProblem){ alert(nameProblem); return; }
   const out=document.getElementById('cartLinkOut');
   try{
     const d=await api('/api/admin/carts',{method:'POST', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
@@ -4399,6 +4426,7 @@ function cancelCartEdit(){
 async function submitCart(){ if(cartEditId) return saveCartEdit(); return createCartLink(); }
 async function saveCartEdit(){
   if(!cartDraft.length){ alert('Add at least one service first.'); return; }
+  const nameProblem = builderNameProblem(); if(nameProblem){ alert(nameProblem); return; }
   const idv=cartEditId;
   try{
     const d=await api('/api/admin/carts/'+idv,{method:'PUT', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
@@ -4573,12 +4601,23 @@ function adminMapSignature(liveWorkers, jobPins){
 async function loadAdminMap(preloadedJobs, force){
   const box = document.getElementById('adminMapBox'); if (!box || !me || me.role !== 'admin') return;
   if (adminMapLoading) return;
+  // v80.8: paint the section shell IMMEDIATELY when no live map is on
+  // screen — heading + loading note — so the panel never sits blank
+  // while the data reads are in flight. The shell deliberately carries
+  // no map element; the real paint below replaces it wholesale.
+  let mapAliveNow = false;
+  try { mapAliveNow = !!adminMasterMap && !!adminMasterMap.getContainer() && document.contains(adminMasterMap.getContainer()); } catch(e) {}
+  if (!mapAliveNow) box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card"><p class="mut">Cargando mapa… / Loading map…</p></div>';
   adminMapLoading = true;
   try {
-    let wk = [];
-    try { const d = await api('/api/admin/worker-locations'); wk = (d && d.workers) || []; } catch(e) {}
-    let jobs = Array.isArray(preloadedJobs) ? preloadedJobs : null;
-    if (!jobs) { try { const jd = await api('/api/jobs'); jobs = (jd && jd.jobs) || []; } catch(e) { jobs = []; } }
+    // v80.8: both reads fire together — the old sequential awaits made
+    // the map wait for two full round trips before painting anything.
+    const parD = await Promise.all([
+      api('/api/admin/worker-locations').catch(function(){ return null; }),
+      Array.isArray(preloadedJobs) ? Promise.resolve(null) : api('/api/jobs').catch(function(){ return null; })
+    ]);
+    let wk = (parD[0] && parD[0].workers) || [];
+    let jobs = Array.isArray(preloadedJobs) ? preloadedJobs : ((parD[1] && parD[1].jobs) || []);
     const today = new Date().toISOString().slice(0, 10);
     const jobPins = jobs.filter(function(j){ return j.destLat != null && j.destLng != null && isFinite(Number(j.destLat)) && isFinite(Number(j.destLng)) && ['Done — photos sent', 'Cancelled', 'Canceled'].indexOf(j.status) === -1 && (!j.schedDate || j.schedDate === today); });
     const liveWorkers = wk.filter(function(w){ return isFinite(Number(w.lat)) && isFinite(Number(w.lng)); });
@@ -4694,7 +4733,7 @@ async function loadAdminCaptains(){
   const el = document.getElementById('adminCaptains'); if(!el) return;
   try{
     const d = await api('/api/admin/captains');
-    const selOpts = function(selId){ return (d.workers || []).map(function(w){ return '<option value="' + w.id + '"' + (w.id === selId ? ' selected' : '') + '>' + escHtml(w.name) + '</option>'; }).join(''); };
+    const selOpts = function(selId){ return '<option value=""' + (!selId ? ' selected' : '') + '>Sin capitán / No captain</option>' + (d.workers || []).map(function(w){ return '<option value="' + w.id + '"' + (w.id === selId ? ' selected' : '') + '>' + escHtml(w.name) + '</option>'; }).join(''); };
     el.innerHTML = (d.areas || []).map(function(a){
       const capLine = a.fixed
         ? '<b>El General</b> <span class="mut">(el dueño — su base; no se asigna, no acumula override)</span>'
@@ -5049,7 +5088,13 @@ function parseOrderHash(){
   return { id: m[1], params };
 }
 function cartAddWithAddons(id, extras){
-  const svc = MENU_CATALOG[id]; if (!svc) return;
+  const svc = MENU_CATALOG[id]; if (!svc) return false;
+  // v80.8 SEAL: the legacy #order converter rides the SAME role gate as
+  // cartAdd — an admin's converted service lands in the cart BUILDER
+  // (base service; add-ons do not carry into a draft line), a worker is
+  // a no-op, and the shopper cart stays customer/guest-only. Returns
+  // false when the gate handled the tap so the caller stops.
+  if (cartRoleGate(id)) return false;
   const items = cartLoad();
   const key = JSON.stringify(extras || []);
   let line = null;
@@ -5058,8 +5103,10 @@ function cartAddWithAddons(id, extras){
   else items.push({ id: id, q: 1, x: extras || [] });
   cartSave(items);
   paintCartBtn();
+  return true;
 }
 function orderNow(id){
+  if (cartRoleGate(id)) return; // v80.8 cart gate: admin/worker never land on #cart (see cartRoleGate)
   cartAdd(id);
   try { sessionStorage.removeItem('ghsCcPrefill'); } catch (e) {}
   location.hash = '#cart';
@@ -5071,7 +5118,11 @@ function retireOrderRoute(){
     const valid = {};
     (svc.addons || []).forEach(function (a) { valid[a.id] = true; });
     const extras = String(p.params.x || '').split(',').map(function (x) { return x.trim(); }).filter(function (x) { return valid[x]; });
-    cartAddWithAddons(p.id, extras);
+    // v80.8 SEAL: when the role gate handled the conversion (admin →
+    // builder / worker → notice), there is no shopper cart to land on:
+    // consume the #order hash so a later render cannot re-fire the
+    // conversion, and skip the checkout prefill + #cart landing.
+    if (!cartAddWithAddons(p.id, extras)) { location.hash = ''; return; }
     const pre = {};
     ['nm', 'ph', 'ad', 'cy', 'wt', 'n'].forEach(function (k) { if (p.params[k]) pre[k] = p.params[k]; });
     try { if (Object.keys(pre).length) sessionStorage.setItem('ghsCcPrefill', JSON.stringify(pre)); else sessionStorage.removeItem('ghsCcPrefill'); } catch (e) {}
@@ -5134,8 +5185,34 @@ function cartToast(msg){
   if (cartToastTimer) clearTimeout(cartToastTimer);
   cartToastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
 }
+// v80.8 CART GATE (Gabriel 2026-10-28): two clean doors by role. The
+// shopper cart (localStorage 'ghsCart') belongs to customers + guests
+// ONLY — paintCartBtn already hides its button for other roles, but
+// the menu Add / Order buttons reached cartAdd unchecked, so an ADMIN
+// building a client quote silently filled his OWN shopper cart: no
+// proposal, no order, nothing to send. Now an admin add routes to the
+// cart BUILDER (cartDraft -> POST /api/admin/carts), says so, and
+// takes him to that section. A WORKER session is a hard no-op —
+// technicians have no cart; they only see jobs (no shopper mutation,
+// no builder, no customer pricing action). Returns true when the gate
+// handled the tap; the caller must stop.
+function cartRoleGate(id){
+  if (!me) return false;
+  if (me.role === 'admin') {
+    if (typeof builderCartAdd === 'function') builderCartAdd(id);
+    alert("You're signed in as admin — " + svcName(id) + " went to your cart builder below, NOT the customer cart. Finish it there (customer info + Generate cart link) to send the client their link.");
+    admGo('admSecCart');
+    return true;
+  }
+  if (me.role === 'worker') {
+    alert('The cart is for customers only — technicians see jobs, not the cart.');
+    return true;
+  }
+  return false;
+}
 function cartAdd(id){
   if (typeof MENU_CATALOG === 'undefined' || !MENU_CATALOG[id]) return;
+  if (cartRoleGate(id)) return;
   const items = cartLoad();
   const ex = items.find(function(it){ return it.id === id && !(it.x && it.x.length); });
   if (ex) ex.q = Math.min(10, Math.max(1, Math.round(Number(ex.q) || 1)) + 1); else items.push({ id: id, q: 1 });

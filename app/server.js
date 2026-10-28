@@ -52,6 +52,11 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
 const sessions = new Map(); // token -> { uid, exp } — sessions expire server-side too, not just in the browser
 
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
+// v80.8 (audit #2): ids that ARE bearer credentials — the public cart /
+// invoice / estimate(request) links — get 72 bits of entropy instead of
+// 24. Only NEW records mint these; every existing record keeps its old
+// id and keeps resolving (lookups are exact-match, format-agnostic).
+function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUpperCase(); }
 // v80.7 fix #1 (audit #1): scryptSync THROWS on non-string input — a
 // JSON body like {"password":12345678} killed the whole process via
 // login/signup. Coerce at this boundary so the hash functions can
@@ -119,6 +124,46 @@ function loginBlockedSecs(req, email) {
   return rec.fails.length >= LOGIN_MAX_FAILS ? Math.max(1, Math.ceil((rec.fails[0] + LOGIN_WINDOW_MS - now) / 1000)) : 0;
 }
 function noteLoginFailure(req, email) { const k = loginKey(req, email); const rec = loginAttempts.get(k) || { fails: [] }; rec.fails.push(Date.now()); loginAttempts.set(k, rec); }
+// ---------- Public-link guard (v80.8, audit #2) ----------
+// The cart / invoice / estimate / join ids are bearer credentials: the
+// link IS the credential. New ids carry 72 bits (linkId, above), but the
+// links minted before v80.8 carry only 24 — so the public lookup surface
+// also counts UNRESOLVED-id lookups per IP and locks itself for that IP
+// once they pile up: a 24-bit space that needed ~10^5–10^6 requests to
+// hit is impractical against an 80-misses-per-10-minutes budget, and the
+// 72-bit ids are out of reach entirely. Resolved lookups are never
+// counted; existing links keep working exactly as before.
+const publicMisses = new Map(); // clientIp -> [ms timestamps]
+const PUBLIC_MISS_WINDOW_MS = 10 * 60 * 1000, PUBLIC_MISS_MAX = 80;
+function publicMissList(req) {
+  const k = clientIp(req);
+  const now = Date.now();
+  const arr = (publicMisses.get(k) || []).filter(ts => now - ts < PUBLIC_MISS_WINDOW_MS);
+  if (arr.length) publicMisses.set(k, arr); else publicMisses.delete(k);
+  return arr;
+}
+function publicLinkBlocked(req) { return publicMissList(req).length >= PUBLIC_MISS_MAX; }
+function notePublicMiss(req) { const arr = publicMissList(req); arr.push(Date.now()); publicMisses.set(clientIp(req), arr); }
+// Which public credential family a path resolves against — null when the
+// path is not a public credential lookup at all.
+function publicCredTarget(p) {
+  let m = p.match(/^\/cart\/([\w-]+)$/) || p.match(/^\/api\/carts\/([\w-]+)\/(?:checkout|member-check)$/);
+  if (m) return { kind: 'cart', id: m[1] };
+  m = p.match(/^\/invoice\/([\w-]+)$/) || p.match(/^\/api\/invoices\/([\w-]+)\/(?:pay|schedule)$/);
+  if (m) return { kind: 'invoice', id: m[1] };
+  m = p.match(/^\/estimate\/([\w-]+)(?:\/(?:approve|decline|option|member-check|member-apply|join-checkout))?$/) || p.match(/^\/api\/requests\/([\w-]+)\/hold\/customer-balance$/);
+  if (m) return { kind: 'request', id: m[1] };
+  m = p.match(/^\/join\/([\w-]+)$/);
+  if (m) return { kind: 'invite', id: m[1] };
+  return null;
+}
+function publicCredResolves(t) {
+  if (t.kind === 'cart') return cartsOf().some(x => x.id === t.id);
+  if (t.kind === 'invoice') return (db.invoices || []).some(x => x.id === t.id);
+  if (t.kind === 'request') return db.requests.some(x => x.id === t.id);
+  if (t.kind === 'invite') return invitesOf().some(x => x.id === t.id);
+  return true;
+}
 async function sendPasswordResetEmail(u, token) {
   const link = appBase() + '/#reset=' + token;
   const html = mailShell('Reset your password',
@@ -1183,6 +1228,11 @@ async function maybePayWorkerForJob(j, opts) {
     if (!stripeReady()) { j.payoutStatus = 'stripe_off'; save(); return; }
     if (w.stripeAccountId && !w.stripePayoutsReady) await refreshWorkerConnect(w);
     if (!w.stripeAccountId || !w.stripePayoutsReady) {
+      // v80.8: THE hold. Since claims no longer require Connect, this is
+      // the normal path for a gateless worker's finished job: NO
+      // transfer is attempted — the pay waits in-app under
+      // 'awaiting_worker_setup', the admin is nagged once (below), and
+      // the sweep / connect-status retry releases it after setup.
       j.payoutStatus = 'awaiting_worker_setup'; save();
       if (!j.payoutSetupNagAt) { j.payoutSetupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Job ' + j.id + ' is done but ' + w.name + ' has not finished setting up payouts — their ' + usd(j.payOffer) + ' is waiting.'); save(); }
       return;
@@ -1941,7 +1991,7 @@ function settleCartCheckout(pc, pi) {
   if (pc.superseded) return null; // v78 refine: a replaced checkout NEVER settles
   if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
   const itemsTxt = pc.items.map(it => it.name + ' ×' + it.qty).join(', ');
-  const r = { id: id('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, source: pc.source || null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: linkId('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, source: pc.source || null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   pc.requestId = r.id;
   pc.settledAt = new Date().toISOString();
@@ -2435,7 +2485,7 @@ function convertCartToRequest(c, payInfo) {
   const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
   const isDeposit = Number(payInfo.depositCents) > 0 && Number(payInfo.balanceCents) > 0 && Number(payInfo.totalCents) > 0;
   const totalCents = isDeposit ? Math.round(Number(payInfo.totalCents)) : Math.round(Number(payInfo.amountCents) || 0);
-  const r = { id: id('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — booking deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: linkId('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — booking deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString();
   if (isDeposit) {
@@ -4020,7 +4070,7 @@ function invoiceFromEstimate(r) {
   const cust = db.users.find(u => u.id === r.customerId);
   const email = (r.customerEmail || (cust && cust.email) || '').toLowerCase();
   const inv = {
-    id: id('INV'), customerName: r.customerName || (cust ? cust.name : ''), customerEmail: email,
+    id: linkId('INV'), customerName: r.customerName || (cust ? cust.name : ''), customerEmail: email,
     customerPhone: r.customerPhone || (cust && cust.phone) || '', customerId: r.customerId || '',
     jobId: '', requestId: r.id, items: invNorm.items, subtotal: invNorm.subtotal,
     discount: invNorm.discount, total: invNorm.total, status: 'sent',
@@ -4289,6 +4339,15 @@ async function handleRequest(req, res) {
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const user = auth(req);
   ensureCaptainState();
+  // v80.8 (audit #2): on the public credential-link surface, unresolved
+  // ids count against the caller's miss budget; a caller over budget is
+  // locked out of the surface for a while (429). Resolved links — old
+  // 24-bit ones included — are unaffected.
+  const pubCred = publicCredTarget(p);
+  if (pubCred) {
+    if (publicLinkBlocked(req)) return send(res, 429, { error: 'too many link lookups from this connection — wait a few minutes, then open your link again' });
+    if (!publicCredResolves(pubCred)) notePublicMiss(req);
+  }
 
   // ---------- static ----------
   // v63: the technicians' direct door. Gabriel texts ONE link —
@@ -4464,7 +4523,20 @@ async function handleRequest(req, res) {
     save();
     return send(res, 200, { ok: true, message: 'Your password has been updated — log in with your new password.' });
   }
-  if (p === '/api/logout' && req.method === 'POST') { if (user && user.role === 'worker' && user.liveLoc) { delete user.liveLoc; save(); } return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') }); }
+  if (p === '/api/logout' && req.method === 'POST') {
+    // v80.8 (audit #6): logout REVOKES the server-side session — the
+    // presented token (Bearer or cookie) dies here, not just the cookie
+    // in the browser. Before, the token stayed valid for its full 30-day
+    // TTL after "logging out". Other sessions of the same account (other
+    // devices) are NOT touched — that is invalidateSessionsFor's job,
+    // reserved for password reset / account deletion.
+    const bearerOut = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+    const cookieOut = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith('ghs_session='));
+    const tokOut = bearerOut || (cookieOut ? cookieOut.slice('ghs_session='.length) : '');
+    if (tokOut) sessions.delete(tokOut);
+    if (user && user.role === 'worker' && user.liveLoc) { delete user.liveLoc; save(); }
+    return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') });
+  }
   if (p === '/api/me' && req.method === 'GET') { if (!user) return send(res, 401, { error: 'login required' }); return send(res, 200, { user: pubUser(user) }); }
   if (p === '/api/me/service-address' && req.method === 'POST') {
     if (!requireRole(user, ['customer', 'admin'], res)) return;
@@ -4817,7 +4889,7 @@ async function handleRequest(req, res) {
         clientDue: (clientDue != null && isFinite(clientDue)) ? Math.round(clientDue * 100) / 100 : undefined
       };
     }
-    const r = { id: id('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const r = { id: linkId('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     // v79 P0-7: the order carries its acquisition source; a first order
     // also promotes the source onto the customer account (first touch).
     r.source = (user && user.source) || acquisitionSource(b) || null;
@@ -5206,7 +5278,7 @@ async function handleRequest(req, res) {
     if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
     const email = cleanText(b.customerEmail, 160).toLowerCase();
     const inv = {
-      id: id('INV'), customerName: cleanText(b.customerName, 120), customerEmail: email,
+      id: linkId('INV'), customerName: cleanText(b.customerName, 120), customerEmail: email,
       customerPhone: cleanText(b.customerPhone, 40), customerId: cleanText(b.customerId, 40),
       jobId: cleanText(b.jobId, 40), requestId: cleanText(b.requestId, 40), items: norm.items, subtotal: norm.subtotal,
       discount: norm.discount, total: norm.total, status: 'draft',
@@ -5470,21 +5542,17 @@ async function handleRequest(req, res) {
     const j = db.jobs.find(x => x.id === claimMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     if (j.status !== 'Open') return send(res, 409, { error: 'job already claimed' });
-    // v75 (Gabriel, 2026-10-25): the Stripe Connect UNLOCK GATE. A worker
-    // may register, be activated and browse — but he cannot claim a PAID
-    // job (above all an on-demand one) until his Stripe Connect payouts
-    // are enabled: his pay has to be able to land in his own bank the
-    // moment the job is Done, and his taxes are his (Stripe reports to
-    // him, never through Gabriel). Enforced HERE, server-side — the
-    // client only renders the refusal. Gabriel can release ONE job to
-    // ONE worker anyway (POST /api/admin/jobs/:id/connect-override,
-    // audited). When Stripe is not configured on this deployment the
-    // gate stays off: nobody can be auto-paid in that world either
-    // (payouts report 'stripe_off'), so bricking the board helps no one.
-    if (Number(j.payOffer) > 0 && j.connectOverrideFor !== user.id && stripeReady()) {
-      const connectReady = user.stripeAccountId ? await refreshWorkerConnect(user) : false;
-      if (!connectReady) return send(res, 403, { error: 'connect_required', code: 'CONNECT_REQUIRED', connect: { connected: !!user.stripeAccountId, ready: false }, message: { en: 'To unlock on-demand jobs you need to connect Stripe Connect', es: 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect' } });
-    }
+    // v80.8 (Gabriel, 2026-10-27): the v75 Connect CLAIM GATE IS GONE.
+    // Any ACTIVE worker may claim a paid job with or without Stripe
+    // Connect (a phone on file is still required to be active at all —
+    // the v75 activation phone guard, unchanged). What protects the
+    // money is the PAYOUT side, not the claim: maybePayWorkerForJob
+    // never transfers to a worker whose Connect payouts are not
+    // enabled — the pay is HELD in-app as 'awaiting_worker_setup', the
+    // admin is nagged once, and it auto-releases the moment his setup
+    // completes (v29 sweep + connect/status retry). The per-job admin
+    // release (j.connectOverrideFor) survives as a harmless legacy
+    // flag — claims no longer consult it.
     j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString();
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
@@ -5561,12 +5629,14 @@ async function handleRequest(req, res) {
     audit(user, 'job.pay_worker', j.id, 'payoutStatus ' + (j.payoutStatus || '—'));
     return send(res, 200, { ok: true, payoutStatus: j.payoutStatus || null, payoutTransferId: j.payoutTransferId || null, payoutError: j.payoutError || null });
   }
-  // v75: Gabriel's Connect-gate override — release ONE job to ONE worker
-  // despite the claim gate (e.g. a tech he trusts whose bank setup is
-  // still pending, on a job that cannot wait). One clear admin action,
-  // always audited, and the worker is told. This unlocks only the
-  // CLAIM: the payout itself still waits for his Stripe setup at Done,
-  // exactly like the v29 flow — no money moves early.
+  // v75 → v80.8: the Connect-gate override endpoint STAYS, harmless.
+  // While the v75 claim gate lived, this released ONE job to ONE
+  // worker despite it. Since v80.8 any active worker may claim, so
+  // setting the flag changes nobody's access — it only records the
+  // release, audits it, and tells the worker the Team picked him for
+  // this job. Kept working so old admin habits, links and the audit
+  // trail never break; the payout itself still waits for his Stripe
+  // setup at Done, exactly like the v29 flow — no money moves early.
   const connectOverrideMatch = p.match(/^\/api\/admin\/jobs\/([\w-]+)\/connect-override$/);
   if (connectOverrideMatch && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -6547,7 +6617,7 @@ async function handleRequest(req, res) {
     const email = cleanText(b.customerEmail, 160).toLowerCase();
     if (!cleanText(b.customerName, 80) && !email) return send(res, 400, { error: 'add at least the customer name or email so the estimate can be sent' });
     const cust = email ? db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email) : null;
-    const r = { id: id('GHS'), customerId: cust ? cust.id : '', customerName: cleanText(b.customerName, 80) || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: cleanText(b.description, 1000) || 'Estimate prepared by the Team.', city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate started by the Team — add the lines (menu, labor, materials), preview it as the customer, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const r = { id: linkId('GHS'), customerId: cust ? cust.id : '', customerName: cleanText(b.customerName, 80) || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: cleanText(b.description, 1000) || 'Estimate prepared by the Team.', city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate started by the Team — add the lines (menu, labor, materials), preview it as the customer, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     db.requests.unshift(r);
     audit(user, 'estimate.new', r.id, (r.customerName || r.customerEmail || '') + ' · ' + (r.service || ''));
     save();
@@ -6569,7 +6639,7 @@ async function handleRequest(req, res) {
     if (!srcR.estimate) return send(res, 400, { error: 'this request has no estimate to duplicate' });
     const estCopy = JSON.parse(JSON.stringify(srcR.estimate));
     estCopy.sentAt = null; estCopy.remindedAt = null; estCopy.validUntil = '';
-    const r = { id: id('GHS'), customerId: srcR.customerId || '', customerName: srcR.customerName || '', customerEmail: srcR.customerEmail || '', customerPhone: srcR.customerPhone || '', service: srcR.service || '', description: srcR.description || '', city: srcR.city || '', address: srcR.address || '', when: srcR.when || '', estimateType: srcR.estimateType || 'inperson', membership: srcR.membership || 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: srcR.quoteNote || '', estimate: estCopy, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate duplicated from ' + srcR.id + ' — review the lines and the valid-until date, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const r = { id: linkId('GHS'), customerId: srcR.customerId || '', customerName: srcR.customerName || '', customerEmail: srcR.customerEmail || '', customerPhone: srcR.customerPhone || '', service: srcR.service || '', description: srcR.description || '', city: srcR.city || '', address: srcR.address || '', when: srcR.when || '', estimateType: srcR.estimateType || 'inperson', membership: srcR.membership || 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: srcR.quoteNote || '', estimate: estCopy, photos: [], messages: [{ from: 'team', name: 'General Handyman Solutions Team', text: 'Estimate duplicated from ' + srcR.id + ' — review the lines and the valid-until date, then send.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
     db.requests.unshift(r);
     audit(user, 'estimate.duplicate', r.id, 'cloned from ' + srcR.id);
     save();
@@ -6584,7 +6654,7 @@ async function handleRequest(req, res) {
     if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
     const totals = cartTotals(items);
     if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
-    const c = { id: id('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
+    const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
     cartsOf().push(c);
     audit(user, 'cart.create', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
     save();
@@ -7320,6 +7390,58 @@ async function handleRequest(req, res) {
     notifyAdmins('schedule', 'Scheduling request on invoice ' + inv.id + ' (' + (inv.customerName || inv.customerEmail || '') + '): preferred ' + (inv.preferredDate || 'no date') + ' • ' + (inv.preferredTime || 'no window') + (inv.scheduleNotes ? ' • Notes: ' + inv.scheduleNotes : '') + ' — confirm the final schedule yourself.');
     save();
     return send(res, 200, { ok: true, invoice: publicInvoice(inv) });
+  }
+
+  // ---------- v80.8: admin purge of TEST residue ----------
+  // The controlled tests (GPS proof, smoke runs) left accounts and a
+  // cancelled cart that NO admin surface could remove: admins can delete
+  // workers but had no customer-account delete at all, and a cancelled
+  // cart could not be deleted or hidden. This route removes exactly what
+  // the admin names — customer accounts by email (their history is
+  // anonymized with the same pattern as self-service deletion, their
+  // sessions and notifications die with the record) and ONE cart by id,
+  // only while it sits in 'cancelled'. Hard guards: role must be
+  // 'customer' (workers go through the worker delete, admins are never
+  // deletable here), the caller can never name himself, and a live cart
+  // (open/paid) is never touched.
+  if (p === '/api/admin/purge-test-residue' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const emails = Array.isArray(b.emails) ? [...new Set(b.emails.map(e => cleanText(e, 160).toLowerCase()).filter(Boolean))] : [];
+    const cartId = cleanText(b.cartId, 60);
+    const deletedUsers = [], skipped = [];
+    for (const email of emails) {
+      const u = db.users.find(x => (x.email || '').toLowerCase() === email);
+      if (!u) { skipped.push({ email, reason: 'not found' }); continue; }
+      if (u.id === user.id) { skipped.push({ email, reason: 'cannot delete your own account' }); continue; }
+      if (u.role !== 'customer') { skipped.push({ email, reason: 'not a customer account' }); continue; }
+      const uid = u.id;
+      const myReqIds = new Set(db.requests.filter(r => r.customerId === uid).map(r => r.id));
+      db.requests.forEach(r => {
+        if (!myReqIds.has(r.id)) return;
+        r.customerId = null; r.anonymized = true;
+        r.customerName = 'Deleted user'; r.customerEmail = ''; r.customerPhone = ''; r.address = '';
+        (r.messages || []).forEach(m => { if (m && m.from === 'customer') m.name = ''; });
+      });
+      (db.invoices || []).forEach(inv => {
+        if (inv.customerId === uid) { inv.customerId = null; inv.anonymized = true; inv.customerName = 'Deleted user'; inv.customerEmail = ''; inv.customerPhone = ''; }
+      });
+      db.notifications = (db.notifications || []).filter(n => n.userId !== uid);
+      const idx = db.users.findIndex(x => x.id === uid);
+      if (idx !== -1) db.users.splice(idx, 1);
+      invalidateSessionsFor(uid);
+      deletedUsers.push(email);
+    }
+    let cartDeleted = false, cartSkipped = '';
+    if (cartId) {
+      const ci = cartsOf().findIndex(x => x.id === cartId);
+      if (ci === -1) cartSkipped = 'not found';
+      else if (cartsOf()[ci].status !== 'cancelled') cartSkipped = 'cart is not cancelled (status: ' + cartsOf()[ci].status + ') — only cancelled carts can be purged';
+      else { cartsOf().splice(ci, 1); cartDeleted = true; }
+    }
+    audit(user, 'admin.purge_test_residue', cartId || '', 'users deleted: ' + (deletedUsers.join(', ') || 'none') + (cartDeleted ? ' · cart deleted: ' + cartId : '') + (skipped.length ? ' · skipped: ' + skipped.map(s => s.email + ' (' + s.reason + ')').join(', ') : '') + (cartSkipped ? ' · cart skipped: ' + cartSkipped : ''));
+    save();
+    return send(res, 200, { ok: true, deletedUsers, skipped, cartDeleted, cartSkipped });
   }
 
   // ---------- memberships (admin) ----------

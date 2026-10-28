@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-7', swSrc.includes("const CACHE = 'ghs-app-v80-7'"));
+t('static: SW cache is ghs-app-v80-8', swSrc.includes("const CACHE = 'ghs-app-v80-8'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -181,7 +181,7 @@ const act2 = await req('PATCH', '/api/workers/' + w2Id, { token: A, body: { stat
 t('admin activates workers', act1.status === 200 && act2.status === 200);
 const w1Login = await req('POST', '/api/login', { body: { email: 'w1@t.local', password: 'workpass1' } });
 const w2Login = await req('POST', '/api/login', { body: { email: 'w2@t.local', password: 'workpass2' } });
-const W1 = w1Login.j.token, W1COOKIE = w1Login.cookie, W2 = w2Login.j.token;
+let W1 = w1Login.j.token; const W1COOKIE = w1Login.cookie, W2 = w2Login.j.token;
 
 const badLogin = await req('POST', '/api/login', { body: { email: 'c1@t.local', password: 'wrong' } });
 t('login wrong password: 401', badLogin.status === 401);
@@ -544,6 +544,92 @@ run('cartShowCheckout();');
 t('v79 prefill: name / phone land in the checkout fields', elById.get('ccName').value === 'Ana Test' && elById.get('ccPhone').value === '7075550199');
 t('v79 prefill: address / city / notes land in the checkout fields', elById.get('ccAddr').value === '5 Oak St' && elById.get('ccCity').value === 'Vallejo' && elById.get('ccNotes').value === 'Gate 42');
 run("cartSave([]); location.hash = '';");
+
+// --- v80.8 CART GATE (VM): two clean doors by role (Gabriel 2026-10-28) ---
+// Customers + guests keep the normal shopper cart; the admin's menu adds
+// route to the cart BUILDER (cartDraft); a worker session is a hard no-op.
+run("cartSave([]); cartDraft = []; me = null; location.hash = '';");
+run("cartAdd('tv-mounting');");
+t('v80.8 cart gate (d): a GUEST add still lands in the shopper cart (door unchanged)', run("cartLoad().length === 1 && cartLoad()[0].id === 'tv-mounting'") === true);
+run("location.hash = ''; orderNow('tv-mounting');");
+t('v80.8 cart gate (d): a GUEST Order still navigates to #cart', run('location.hash') === '#cart');
+run("cartSave([]); location.hash = '';");
+run("me = { id: 'USR-CG8', role: 'customer', name: 'Cust Gate' }; cartAdd('tv-mounting');");
+t('v80.8 cart gate (d): a CUSTOMER add still lands in the shopper cart', run('cartLoad().length === 1') === true);
+run('cartSave([]);');
+run("me = { id: 'USR-AG8', role: 'admin', name: 'Admin Gate' }; cartDraft = []; cartAdd('tv-mounting');");
+t('v80.8 cart gate (a): an ADMIN add leaves the shopper cart untouched (gate fires before cartLoad/cartSave)', run('cartLoad().length === 0') === true);
+t('v80.8 cart gate (b): an ADMIN add lands in the builder draft instead', run("cartDraft.length === 1 && cartDraft[0].serviceId === 'tv-mounting'") === true);
+run("cartDraft = []; location.hash = ''; orderNow('tv-mounting');");
+t('v80.8 cart gate (e): an ADMIN Order does NOT navigate to #cart', run("location.hash !== '#cart'") === true);
+t('v80.8 cart gate (e): an ADMIN Order still lands in the builder draft', run('cartDraft.length === 1') === true);
+run("me = { id: 'USR-WG8', role: 'worker', name: 'Work Gate' }; cartDraft = []; location.hash = ''; cartAdd('tv-mounting'); orderNow('tv-mounting');");
+t('v80.8 cart gate (c): a WORKER add/order is a hard no-op — no shopper cart, no builder line', run('cartLoad().length === 0 && cartDraft.length === 0') === true);
+t('v80.8 cart gate (c): a WORKER Order does NOT navigate to #cart', run("location.hash !== '#cart'") === true);
+run("me = null; cartDraft = []; cartSave([]); location.hash = '';");
+
+// --- v80.8 BUILDER HARDENING (VM): the money machine exercised the way
+// Gabriel uses it on his phone — picker search, adds, price edits,
+// summary math, Generate, the edit round trip — plus the seals: a
+// blanked line name can no longer slip a short link past him, an SSE
+// loadAdmin() cannot clobber a draft mid-quote, and the legacy #order
+// converter rides the role gate. fetch is wrapped for this block only
+// so /api/admin/carts answers the way the real server does.
+run("window.__fetchBak = fetch; window.__vmCarts = []; window.__cartPost = null; window.__cartPut = null;");
+run("fetch = async function(url, opts){"
+  + " var m = ((opts || {}).method || 'GET').toUpperCase();"
+  + " if (url === '/api/admin/carts' && m === 'POST') { window.__cartPost = JSON.parse(opts.body); return { ok: true, status: 201, json: async () => ({ cart: { id: 'CRT-VMBUILD1', link: 'http://localhost/cart/CRT-VMBUILD1', listTotal: 485, memberTotal: 400 } }) }; }"
+  + " if (url === '/api/admin/carts' && m === 'GET') return { ok: true, status: 200, json: async () => ({ carts: window.__vmCarts }) };"
+  + " if (url.indexOf('/api/admin/carts/') === 0 && m === 'PUT') { window.__cartPut = { url: url, body: JSON.parse(opts.body) }; return { ok: true, status: 200, json: async () => ({ cart: { id: 'CRT-VMBUILD1', link: 'http://localhost/cart/CRT-VMBUILD1', listTotal: 460, memberTotal: 380 } }) }; }"
+  + " if (url === '/api/workers') return { ok: true, status: 200, json: async () => ({ workers: [] }) };"
+  + " if (url === '/api/admin/invoices') return { ok: true, status: 200, json: async () => ({ invoices: [] }) };"
+  + " return window.__fetchBak(url, opts); };");
+run("me = { id: 'USR-ADM', role: 'admin', name: 'Team Admin' }; cartDraft = []; cartSave([]); location.hash = '';");
+run("document.getElementById('cartSearch').value = 'starter'; renderCartPicker();");
+t('v80.8 builder: picker search "starter" surfaces the Starter Replacement @ $225 (and filters the rest out)', elById.get('cartPicker').innerHTML.includes('Starter Replacement') && elById.get('cartPicker').innerHTML.includes('$225') && !elById.get('cartPicker').innerHTML.includes('TV Mounting'));
+run("builderCartAdd('starter-replacement');");
+t('v80.8 builder: + Add puts the starter in the draft at the $225 catalog floor and paints the line editor', run("cartDraft.length === 1 && cartDraft[0].unitPrice === 225 && cartDraft[0].name === 'Starter Replacement'") === true && elById.get('cartBuilderLines').innerHTML.includes('Starter Replacement'));
+run("builderCartAdd('starter-replacement');");
+t('v80.8 builder: adding the same service again merges qty (no duplicate line)', run('cartDraft.length === 1 && cartDraft[0].qty === 2') === true);
+run('cartSetQty(0, 1); cartSetPrice(0, 275);');
+t('v80.8 builder: qty + price edits land in the summary — list $275.00 / member $220.00 (the $225-$300 range is his to set)', run('cartDraft[0].qty === 1 && cartDraft[0].unitPrice === 275') === true && elById.get('cartSummary').innerHTML.includes('$275.00') && elById.get('cartSummary').innerHTML.includes('$220.00'));
+run("document.getElementById('cartCustomName').value = 'Materials — serpent belt'; document.getElementById('cartCustomPrice').value = '60'; document.getElementById('cartCustomQty').value = '1'; cartAddCustomLine('other'); cartAddLabor75(); cartAddLabor75();");
+t('v80.8 builder: custom materials + Labor $75 lines — list $485.00 / member $400.00 (materials never discount, labor does)', run('cartDraft.length === 3') === true && elById.get('cartSummary').innerHTML.includes('$485.00') && elById.get('cartSummary').innerHTML.includes('$400.00'));
+run("document.getElementById('cartCustName').value = 'Starter Client'; document.getElementById('cartCustPhone').value = '7075550130'; document.getElementById('cartCustEmail').value = 'starter@client.com'; document.getElementById('cartNote').value = 'Mercedes GLK';");
+await run('createCartLink()');
+t('v80.8 builder: Generate POSTs the full draft + customer fields to /api/admin/carts', run("!!window.__cartPost && window.__cartPost.items.length === 3 && window.__cartPost.customerEmail === 'starter@client.com' && window.__cartPost.items[0].unitPrice === 275") === true);
+t('v80.8 builder: the link is painted for copying and the draft resets for the next quote', elById.get('cartLinkOut').innerHTML.includes('/cart/CRT-VMBUILD1') && run('cartDraft.length === 0') === true);
+run("builderCartAdd('starter-replacement'); cartDraft[0].name = ''; window.__cartPost = null;");
+await run('createCartLink()');
+t('v80.8 builder hardening: a line whose name was blanked is NEVER posted (the server would silently drop it and short the link)', run('window.__cartPost === null && cartDraft.length === 1') === true);
+run('cartDraft = []; window.__cartPost = null;');
+await run('createCartLink()');
+t('v80.8 builder: Generate on an empty draft posts nothing', run('window.__cartPost === null') === true);
+run("window.__vmCarts = [{ id: 'CRT-VMBUILD1', status: 'open', items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 275 }, { custom: true, kind: 'other', name: 'Materials — serpent belt', qty: 1, unitPrice: 60 }, { custom: true, kind: 'labor', name: 'Labor', qty: 2, unitPrice: 75 }], listTotal: 485, memberTotal: 400, customerName: 'Starter Client', customerPhone: '7075550130', customerEmail: 'starter@client.com', note: '', lang: 'en', link: 'http://localhost/cart/CRT-VMBUILD1' }]; cartDraft = [];");
+await run("editCart('CRT-VMBUILD1')");
+t('v80.8 builder: Edit loads an open cart back into the draft (same lines, edit banner up)', run("cartDraft.length === 3 && cartEditId === 'CRT-VMBUILD1'") === true && elById.get('cartEditBanner').style.display === 'block');
+run("cartDraft[1].name = ''; window.__cartPut = null;");
+await run('submitCart()');
+t('v80.8 builder hardening: the blank-name guard covers Save too (no PUT, the edit stays open)', run("window.__cartPut === null && cartEditId === 'CRT-VMBUILD1'") === true);
+run("cartDraft[1].name = 'Materials — serpent belt'; cartSetPrice(0, 250);");
+await run('submitCart()');
+t('v80.8 builder: Save PUTs the edited lines to the SAME cart (the link never changes) and reports the new total', run("!!window.__cartPut && window.__cartPut.url === '/api/admin/carts/CRT-VMBUILD1' && window.__cartPut.body.items[0].unitPrice === 250") === true && elById.get('cartLinkOut').innerHTML.includes('$460.00') && run('cartEditId === null') === true);
+run("builderCartAdd('starter-replacement'); document.getElementById('cartCustName').value = 'Mid Quote'; document.getElementById('cartSearch').value = 'starter';");
+const builderLinesBefore = elById.get('cartBuilderLines').innerHTML;
+await run('loadAdmin()');
+await sleep(30);
+t('v80.8 builder hardening: an SSE-driven loadAdmin() leaves the in-progress draft untouched', run("cartDraft.length === 1 && cartDraft[0].serviceId === 'starter-replacement'") === true);
+t('v80.8 builder hardening: loadAdmin() leaves the typed builder fields + the line editor untouched', elById.get('cartCustName').value === 'Mid Quote' && elById.get('cartBuilderLines').innerHTML === builderLinesBefore);
+run("cartDraft = []; document.getElementById('cartCustName').value = ''; document.getElementById('cartSearch').value = ''; renderCartPicker(); fetch = window.__fetchBak;");
+
+// --- v80.8 LEGACY SEAL (VM): the retired #order converter rides the
+// same role gate as the menu buttons — through the real render() route.
+run("me = { id: 'USR-ADM', role: 'admin', name: 'Team Admin' }; cartDraft = []; cartSave([]); location.hash = '#order/tv-mounting?x=raceway'; render();");
+t('v80.8 legacy seal: an ADMIN opening an old #order link lands the service in the BUILDER draft', run("cartDraft.length === 1 && cartDraft[0].serviceId === 'tv-mounting'") === true);
+t('v80.8 legacy seal: the shopper cart stays empty and the #order hash is consumed (no #cart landing, no re-fire)', run("cartLoad().length === 0 && location.hash === ''") === true);
+run("me = { id: 'USR-WK8', role: 'worker', name: 'Work Legacy' }; cartDraft = []; cartSave([]); location.hash = '#order/tv-mounting'; render();");
+t('v80.8 legacy seal: a WORKER opening an old #order link converts nothing (no shopper cart, no draft — he lands on his #worker home)', run("cartLoad().length === 0 && cartDraft.length === 0 && location.hash === '#worker'") === true);
+run("me = null; cartDraft = []; cartSave([]); location.hash = '';");
 
 // --- throttle math (pure) ---
 const dist1 = run('trackDistM(38, -122, 38.001, -122)');
@@ -1406,6 +1492,12 @@ await req('POST', '/api/me/location', { token: W1, body: { lat: 38.31, lng: -122
 await req('POST', '/api/logout', { token: W1 });
 const admLoc4 = await req('GET', '/api/admin/worker-locations', { token: A });
 t('v41 loc: logout clears the worker point from the master map', !(admLoc4.j.workers || []).some(w => w.id === w1Id));
+// v80.8 (audit #6): that logout also REVOKED W1's session server-side —
+// the token is dead, not just the cookie. The suite keeps using W1
+// below, so he logs straight back in and W1 now holds the fresh token.
+const w1MeAfterLogout = await req('GET', '/api/me', { token: W1 });
+t('v80.8 logout: the token W1 logged out with is dead server-side (401)', w1MeAfterLogout.status === 401);
+W1 = (await req('POST', '/api/login', { body: { email: 'w1@t.local', password: 'workpass1' } })).j.token;
 
 
 // ---------- v45 statics: estimate builder + member estimate page + reminder ----------
@@ -2052,12 +2144,22 @@ stripeState.poorTransfers = false;
 const retry5 = await req2('POST', '/api/admin/jobs/' + J5 + '/pay-worker', { token: A2, body: {} });
 t('connect: manual retry pays once funds are available', retry5.status === 200 && retry5.j.payoutStatus === 'paid');
 
-// ---------------- v75: Connect unlock gate + activation phone guard + availability checkboxes ----------------
-t('static v75: claim gate is server-side with the structured bilingual refusal', serverSrc.includes("code: 'CONNECT_REQUIRED'") && serverSrc.includes('Para desbloquear jales on-demand tienes que conectarte a Stripe Connect') && serverSrc.includes('To unlock on-demand jobs you need to connect Stripe Connect') && serverSrc.includes('j.connectOverrideFor !== user.id'));
+// ---------------- v75 + v80.8: activation phone guard + availability checkboxes (v75); the Connect CLAIM GATE was REMOVED in v80.8 — claims are open, pay is held ----------------
+t('static v80.8: the claim gate is GONE — no CONNECT_REQUIRED refusal or gate copy left in the server', !serverSrc.includes("code: 'CONNECT_REQUIRED'") && !serverSrc.includes('Para desbloquear jales on-demand tienes que conectarte a Stripe Connect') && !serverSrc.includes('To unlock on-demand jobs you need to connect Stripe Connect') && !serverSrc.includes('j.connectOverrideFor !== user.id'));
+t('static v80.8: the claim route documents the new rule (gate removal + held-pay comment)', serverSrc.includes('the v75 Connect CLAIM GATE IS GONE'));
 t('static v75: admin connect-override endpoint + audit entry', serverSrc.includes('/connect-override') && serverSrc.includes("audit(user, 'job.connect_override'"));
 t('static v75: phone guard on activation (effective phone, transition-only)', serverSrc.includes("code: 'PHONE_REQUIRED'") && serverSrc.includes('effectivePhone'));
 t('static v75: structured availability — shifts + onDemand in the cleaner and at signup', serverSrc.includes('AVAIL_SHIFTS') && serverSrc.includes('signupAvailability'));
-t('static v75: worker home carries the persistent unlock card + the claim dialog path', htmlSrc.includes('id="connectGateCard"') && htmlSrc.includes('function paintConnectGateCard(') && htmlSrc.includes("e.code === 'CONNECT_REQUIRED'"));
+t('static v80.8: worker home carries the payout-setup card + claimJob has no Connect lock path', htmlSrc.includes('id="connectGateCard"') && htmlSrc.includes('function paintConnectGateCard(') && !htmlSrc.includes("e.code === 'CONNECT_REQUIRED'"));
+t('static v80.8: the card copy states the new rule in EN and ES (work now, pay held until Connect)', htmlSrc.includes('You can take jobs now, even without Stripe Connect') && htmlSrc.includes('Ya puedes agarrar jales, aunque todavía no tengas Stripe Connect') && htmlSrc.includes('is held in the app until you connect Stripe Connect') && htmlSrc.includes('se guarda en la app hasta que conectes Stripe Connect'));
+t('static v80.8 cart gate: cartAdd calls cartRoleGate BEFORE any cartLoad/cartSave (gate precedes the shopper mutation)', (() => { const s0 = htmlSrc.indexOf('function cartAdd(id){'); const seg = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return htmlSrc.includes('function cartRoleGate(') && seg.includes('if (cartRoleGate(id)) return;') && seg.indexOf('cartRoleGate(id)') < seg.indexOf('cartLoad()'); })());
+t('static v80.8 cart gate: the admin branch routes to builderCartAdd + the builder section and never touches the shopper cart inside the gate', (() => { const s0 = htmlSrc.indexOf('function cartRoleGate('); const seg = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return seg.includes("me.role === 'admin'") && seg.includes('builderCartAdd(id)') && seg.includes("admGo('admSecCart')") && !seg.includes('cartSave(') && !seg.includes('cartLoad('); })());
+t('static v80.8 cart gate: the worker branch is a hard no-op (notice only — no builder call, no cart write on that path)', (() => { const s0 = htmlSrc.indexOf('function cartRoleGate('); const seg = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); const w = seg.indexOf("me.role === 'worker'"); return w > seg.indexOf("me.role === 'admin'") && !seg.slice(w).includes('builderCartAdd(') && !seg.slice(w).includes('cartSave(') && !seg.slice(w).includes('cartLoad('); })());
+t('static v80.8 cart gate: orderNow checks the gate BEFORE it can navigate to #cart', (() => { const s0 = htmlSrc.indexOf('function orderNow(id){'); const seg = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return seg.includes('cartRoleGate(id)') && seg.indexOf('cartRoleGate(id)') < seg.indexOf("location.hash = '#cart'"); })());
+t('static v80.8 legacy seal: cartAddWithAddons rides cartRoleGate and reports whether it added', (() => { const s0 = htmlSrc.indexOf('function cartAddWithAddons('); const seg = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return seg.includes('if (cartRoleGate(id)) return false;') && seg.includes('return true;'); })());
+t('static v80.8 legacy seal: retireOrderRoute stops when the gate handled the conversion (hash consumed, no prefill, no #cart)', htmlSrc.includes("if (!cartAddWithAddons(p.id, extras)) { location.hash = ''; return; }"));
+t('static v80.8 builder hardening: the blank-name guard exists and BOTH submit paths (create + save) check it', htmlSrc.includes('function builderNameProblem()') && (htmlSrc.match(/builderNameProblem/g) || []).length >= 3);
+t('static v80.8 builder copy: the builder header states the deposit law (no stale "pays in full")', (() => { const s0 = htmlSrc.indexOf('id="cartBuilderCard"'); const seg = htmlSrc.slice(s0, s0 + 1500); return !seg.includes('pays in full') && seg.includes('pays the deposit to book'); })());
 t('static v75: the application availability is checkboxes now (days / shifts / on-demand)', htmlSrc.includes('class="wDay"') && htmlSrc.includes('class="wShift"') && htmlSrc.includes('id="wOnDemand"') && htmlSrc.includes('function workerAvailFromForm(') && !htmlSrc.includes('id="wAvail"'));
 t('static v75: W_I18N parity — the gate + availability keys exist in EN and ES', (htmlSrc.match(/connectGateMsg:/g) || []).length === 2 && (htmlSrc.match(/availOnDemand:/g) || []).length === 2 && (htmlSrc.match(/shiftMorning:/g) || []).length === 2 && (htmlSrc.match(/connectGateTitle:/g) || []).length === 2);
 t('static v75: admin cards flag phoneless workers + show the structured availability line', htmlSrc.includes('Incomplete — no phone') && htmlSrc.includes('availLine'));
@@ -2066,35 +2168,55 @@ const mapFn75 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminMap('), h
 t('static v75 map: a ResizeObserver keeps re-measuring the master map (the zero-size cure)', mapFn75.includes('ResizeObserver') && mapFn75.includes('adminMapRO'));
 t('static v75 map: tile failures swap in the bilingual fallback — never a silent grey box', mapFn75.includes('tileerror') && mapFn75.includes('adminMapFallbackHtml()') && htmlSrc.includes('The map could not load'));
 t('static v75 map: the loadAdmin watchdog refills an empty map box', htmlSrc.includes('!b.innerHTML.trim()') && htmlSrc.includes("getElementById('adminMapBox')"));
-// (a) The gate: an ACTIVE worker with NO Stripe Connect cannot claim a
-//     paid job — 403 with Gabriel's exact bilingual message.
+// (a) v80.8: an ACTIVE worker with NO Stripe Connect claims a paid job
+//     freely — the v75 gate is gone. The admin override endpoints stay
+//     (admin-only, audited) as a harmless release flag.
 const W6 = await mkConnectWorker2('w6@t.local', '(707) 555-0206', 'workpass6');
 const gateJob = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job', city: 'Fairfield', when: 'Today', payOffer: 100, customerPrice: 150, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '1 Gate St, Fairfield, CA' } });
-t('v75 gate setup: an open paid job is posted', gateJob.status === 201 && gateJob.j.job.status === 'Open');
-const gateClaim = await req2('POST', '/api/jobs/' + gateJob.j.job.id + '/claim', { token: W6.token, body: {} });
-t('v75 gate: a claim without Connect is refused 403 CONNECT_REQUIRED', gateClaim.status === 403 && gateClaim.j.code === 'CONNECT_REQUIRED' && gateClaim.j.connect && gateClaim.j.connect.ready === false);
-t('v75 gate: the refusal carries the exact bilingual message', !!gateClaim.j.message && gateClaim.j.message.es === 'Para desbloquear jales on-demand tienes que conectarte a Stripe Connect' && gateClaim.j.message.en === 'To unlock on-demand jobs you need to connect Stripe Connect');
-const gateJobAfter = await adminJob2(gateJob.j.job.id);
-t('v75 gate: the job stays Open and unassigned after a refused claim', !!gateJobAfter && gateJobAfter.status === 'Open' && !gateJobAfter.assignedWorkerId);
+t('v80.8 setup: an open paid job is posted', gateJob.status === 201 && gateJob.j.job.status === 'Open');
 const gateOvrCust = await req2('POST', '/api/admin/jobs/' + gateJob.j.job.id + '/connect-override', { token: W6.token, body: { workerId: W6.id } });
-t('v75 gate: the override endpoint is admin-only', gateOvrCust.status === 403);
-// (b) Gabriel's override releases THIS job to THIS worker — audited.
+t('v80.8: the override endpoint stays admin-only', gateOvrCust.status === 403);
 const gateOvr = await req2('POST', '/api/admin/jobs/' + gateJob.j.job.id + '/connect-override', { token: A2, body: { workerId: W6.id } });
-t('v75 override: the admin release lands on the job', gateOvr.status === 200 && gateOvr.j.job.connectOverrideFor === W6.id);
+t('v80.8: the admin release still lands on the job (harmless flag)', gateOvr.status === 200 && gateOvr.j.job.connectOverrideFor === W6.id);
 const audit75 = await req2('GET', '/api/admin/audit', { token: A2 });
-t('v75 override: the release is audit-logged', (audit75.j.entries || []).some(e => e.action === 'job.connect_override' && e.target === gateJob.j.job.id));
-const gateClaim2 = await req2('POST', '/api/jobs/' + gateJob.j.job.id + '/claim', { token: W6.token, body: {} });
-t('v75 override: the released worker can claim despite no Connect', gateClaim2.status === 200 && gateClaim2.j.job.status === 'Claimed');
-// (c) The override does not leak: another gateless worker is still
-//     refused on another job — until HIS Connect is ready.
+t('v80.8: the release is still audit-logged', (audit75.j.entries || []).some(e => e.action === 'job.connect_override' && e.target === gateJob.j.job.id));
+const gateClaim = await req2('POST', '/api/jobs/' + gateJob.j.job.id + '/claim', { token: W6.token, body: {} });
+t('v80.8 (a): an active worker WITHOUT Connect claims a paid job', gateClaim.status === 200 && gateClaim.j.job.status === 'Claimed' && gateClaim.j.job.mine === true);
+const gateJobAfter = await adminJob2(gateJob.j.job.id);
+t('v80.8 (a): the claim assigns the job to that worker', !!gateJobAfter && gateJobAfter.status === 'Claimed' && gateJobAfter.assignedWorkerId === W6.id);
+// (b) A second gateless worker needs no override either — and when he
+//     COMPLETES the job, the pay is HELD in-app: no transfer is
+//     attempted, the job still settles to Done, payoutStatus reads
+//     'awaiting_worker_setup' and the admin is nagged once.
 const W7 = await mkConnectWorker2('w7@t.local', '(707) 555-0207', 'workpass7');
 const gateJob2 = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job 2', city: 'Fairfield', when: 'Today', payOffer: 80, customerPrice: 120, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '2 Gate St, Fairfield, CA' } });
 const gateClaimW7 = await req2('POST', '/api/jobs/' + gateJob2.j.job.id + '/claim', { token: W7.token, body: {} });
-t('v75 gate: no leak — the next worker without Connect is refused too', gateClaimW7.status === 403 && gateClaimW7.j.code === 'CONNECT_REQUIRED');
+t('v80.8 (a2): no override needed — a second worker without Connect claims freely', gateClaimW7.status === 200 && gateClaimW7.j.job.status === 'Claimed');
+const trBeforeHold = stripeState.connectTransfers.length;
+await req2('PATCH', '/api/jobs/' + gateJob2.j.job.id, { token: W7.token, body: { photosDone: true } });
+const j7done = await adminJob2(gateJob2.j.job.id);
+t('v80.8 (b): completion holds the pay — job settles to Done, awaiting_worker_setup, NO transfer attempted', !!j7done && j7done.status === 'Done — photos sent' && j7done.payoutStatus === 'awaiting_worker_setup' && !j7done.payoutTransferId && stripeState.connectTransfers.length === trBeforeHold);
+const notifA = await req2('GET', '/api/notifications', { token: A2 });
+t('v80.8 (b2): the admin is nagged that the pay is held pending the worker Connect setup', (notifA.j.notifications || []).some(n => (n.text || '').includes(gateJob2.j.job.id) && (n.text || '').includes('has not finished setting up payouts')));
+// (c) A worker WITH Connect ready still gets the normal v29 flow:
+//     claim, complete, payout auto-releases with a real transfer.
+const W8 = await mkConnectWorker2('w8@t.local', '(707) 555-0211', 'workpassA');
+await req2('POST', '/api/worker/connect/start', { token: W8.token, body: {} });
+const cs8 = await req2('GET', '/api/worker/connect/status', { token: W8.token });
+t('v80.8 (c) setup: the connected worker is payouts-ready', cs8.status === 200 && cs8.j.ready === true);
+const gateJob3 = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job 3', city: 'Fairfield', when: 'Today', payOffer: 90, customerPrice: 140, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '3 Gate St, Fairfield, CA' } });
+const gateClaimW8 = await req2('POST', '/api/jobs/' + gateJob3.j.job.id + '/claim', { token: W8.token, body: {} });
+t('v80.8 (c): the connected worker claims the paid job', gateClaimW8.status === 200 && gateClaimW8.j.job.status === 'Claimed');
+const trBeforePaid = stripeState.connectTransfers.length;
+await req2('PATCH', '/api/jobs/' + gateJob3.j.job.id, { token: W8.token, body: { photosDone: true } });
+let j8 = null; for (let i = 0; i < 14; i++) { j8 = await adminJob2(gateJob3.j.job.id); if (j8 && j8.payoutStatus === 'paid') break; await sleep(200); }
+t('v80.8 (c): the connected worker payout auto-releases on Done (transfer created)', !!j8 && j8.payoutStatus === 'paid' && /^tr_mock/.test(j8.payoutTransferId || '') && stripeState.connectTransfers.length === trBeforePaid + 1);
+// (b3) The held pay is not stuck: once W7 finishes his Connect setup,
+//      the payout that was held in (b) releases on its own.
 await req2('POST', '/api/worker/connect/start', { token: W7.token, body: {} });
 await req2('GET', '/api/worker/connect/status', { token: W7.token });
-const gateClaimW7b = await req2('POST', '/api/jobs/' + gateJob2.j.job.id + '/claim', { token: W7.token, body: {} });
-t('v75 gate: with Connect payouts enabled the same worker claims freely', gateClaimW7b.status === 200 && gateClaimW7b.j.job.status === 'Claimed');
+let j7paid = null; for (let i = 0; i < 14; i++) { j7paid = await adminJob2(gateJob2.j.job.id); if (j7paid && j7paid.payoutStatus === 'paid') break; await sleep(200); }
+t('v80.8 (b3): the held payout releases once the worker connects Stripe', !!j7paid && j7paid.payoutStatus === 'paid' && !!j7paid.payoutTransferId);
 // (d) Phone guard: applying without a phone is fine (review), but
 //     ACTIVATION is refused until a number is on file.
 const noPhone = await req2('POST', '/api/signup', { body: { name: 'No Phone Worker', email: 'nophone@t.local', phone: '', password: 'workpass8', role: 'worker', profile: { city: 'Fairfield' } } });
@@ -2386,6 +2508,23 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v44 cart: an admin-cancelled cart cannot be paid and the page says so', cx.status === 200 && cx.j.cart.status === 'cancelled' && cpX.status === 400 && pageXHtml.includes('was cancelled'));
   const cartList = await req2('GET', '/api/admin/carts', { token: A2 });
   t('v44 cart: the admin list shows carts with their statuses', cartList.status === 200 && (cartList.j.carts || []).some(x => x.id === cartId && x.status === 'paid') && (cartList.j.carts || []).some(x => x.id === cart4.j.cart.id && x.status === 'cancelled'));
+
+  // --- v80.8 builder hardening (API): the starter quote Gabriel actually
+  // tried to send — created at the $225 catalog floor, the deposit law on
+  // the public page + at guest checkout, and a price edit inside the
+  // $225-$300 range. Plus the server fact behind the builder's new
+  // blank-name guard: the item filter drops nameless lines silently. ---
+  const cartStarter = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 225 }], customerName: 'Starter Client', customerEmail: 'starter@client.com' } });
+  t('v80.8 builder: the starter cart is created at the $225 floor (list $225 / member $180, one CRT link)', cartStarter.status === 201 && cartStarter.j.cart.listTotal === 225 && cartStarter.j.cart.memberTotal === 180 && /^CRT-/.test(cartStarter.j.cart.id) && cartStarter.j.cart.link.includes('/cart/' + cartStarter.j.cart.id));
+  const pageStarter = await (await fetch(BASE2 + '/cart/' + cartStarter.j.cart.id)).text();
+  t('v80.8 builder: the public starter page shows $225.00 with the $50 flat deposit + $175.00 balance', pageStarter.includes('Starter Replacement') && pageStarter.includes('$225.00') && pageStarter.includes('$50.00') && pageStarter.includes('$175.00'));
+  const cpStarter = await req2('POST', '/api/carts/' + cartStarter.j.cart.id + '/checkout', { body: { name: 'Starter Client', phone: '7075550130', email: 'starter@client.com', address: '9 Wrench Way', city: 'Fairfield', when: 'Today' } });
+  const sessStarter = sessionForCart(cartStarter.j.cart.id, 'payment');
+  t('v80.8 builder: guest checkout on the $225 starter charges ONLY the $50 deposit (session 5000, balance $175)', cpStarter.status === 200 && cpStarter.j.amount === 50 && cpStarter.j.deposit === 50 && cpStarter.j.balance === 175 && cpStarter.j.total === 225 && !!sessStarter && sessStarter.amount_total === 5000);
+  const cartStarter275 = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 275 }] } });
+  t('v80.8 builder: a builder price edit inside the range holds server-side (list $275 / member $220)', cartStarter275.status === 201 && cartStarter275.j.cart.listTotal === 275 && cartStarter275.j.cart.memberTotal === 220);
+  const cartBlank = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: '', qty: 1, unitPrice: 225 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }] } });
+  t('v80.8 builder hardening (server fact): a nameless line is dropped by the item filter — the reason the builder now guards names client-side', cartBlank.status === 201 && cartBlank.j.cart.items.length === 1 && cartBlank.j.cart.listTotal === 125);
 
   // --- v52: custom lines (labor / materials) end to end + displayed == charged ---
   // Mixed cart, deliberately built in scrambled order (materials, labor,
@@ -4125,7 +4264,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.7: ghs-app-v80-7)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-7'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.8: ghs-app-v80-8)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-8'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4745,6 +4884,111 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.7 form: POST /api/jobs with payOffer 75 succeeds and the created job shows payOffer 75', goodPay807.status === 201 && !!goodPay807.j.job && goodPay807.j.job.payOffer === 75);
   if (goodPay807.j && goodPay807.j.job) await req2('DELETE', '/api/jobs/' + goodPay807.j.job.id, { token: A807 });
   t('static v80.7 form: Create-a-job money placeholders are marked as examples (Ej:) and the client pay guard exists', htmlSrc.includes('id="jPay" placeholder="Ej: 75"') && htmlSrc.includes('id="jCustPrice" placeholder="Ej: 150"') && htmlSrc.includes('the example is not a value'));
+}
+
+
+// ---------------- v80.8 OPTIMIZATION: builder cart scope, public-link security, XSS escapes, logout revocation, admin micro-fixes, map shell/parallel, purge route (Gabriel 2026-10-27) ----------------
+{
+  const A808 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+
+  // --- statics ---
+  t('static v80.8 links: linkId mints strong ids + the public-miss guard + the purge route exist', serverSrc.includes('function linkId(') && serverSrc.includes('PUBLIC_MISS_MAX = 80') && serverSrc.includes('function publicCredTarget(') && serverSrc.includes("p === '/api/admin/purge-test-residue'"));
+  t('static v80.8 builder: the builder owns builderCartAdd/builderCartRemove and exactly ONE global cartAdd/cartRemove pair remains', htmlSrc.includes('function builderCartAdd(') && htmlSrc.includes('function builderCartRemove(') && (htmlSrc.match(/function cartAdd\(/g) || []).length === 1 && (htmlSrc.match(/function cartRemove\(/g) || []).length === 1);
+  const picker808 = htmlSrc.slice(htmlSrc.indexOf('function renderCartPicker()'), htmlSrc.indexOf('function builderCartAdd('));
+  t('static v80.8 builder: the picker + Add button calls builderCartAdd, never the customer cartAdd', picker808.includes('builderCartAdd(') && !picker808.includes('onclick="cartAdd('));
+  const lj808 = htmlSrc.slice(htmlSrc.indexOf('async function loadJobs()'), htmlSrc.indexOf('function workerPayoutLine('));
+  const mj808 = htmlSrc.slice(htmlSrc.indexOf('async function loadMyJobs()'), htmlSrc.indexOf('async function loadJobs()'));
+  const aj808 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminJobs()'), htmlSrc.indexOf('async function loadAdmin()'));
+  const aw808 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminWorkers()'), htmlSrc.indexOf('async function loadAdminJobs()'));
+  t('static v80.8 xss: worker board escapes service/status/description/city/when/payOffer', lj808.includes('escHtml(j.service)') && lj808.includes('escHtml(j.status)') && lj808.includes('escHtml(j.description)') && lj808.includes('escHtml(j.city)') && lj808.includes('escHtml(j.when)') && lj808.includes('escHtml(j.payOffer)'));
+  t('static v80.8 xss: customer jobs escape service/status/city/when', mj808.includes('escHtml(j.service)') && mj808.includes('escHtml(j.status)') && mj808.includes('escHtml(j.city)') && mj808.includes('escHtml(j.when)'));
+  t('static v80.8 xss: admin jobs escape the customer-controlled fields', aj808.includes('escHtml(j.service)') && aj808.includes('escHtml(j.customerName') && aj808.includes('escHtml(j.customerPhone') && aj808.includes('escHtml(j.address'));
+  t('static v80.8 xss: admin workers header + profile rows escape through escHtml', aw808.includes('escHtml(w.name)') && aw808.includes('escHtml(w.email)') && aw808.includes('escHtml(w.status)') && aw808.includes("'+escHtml(v)"));
+  t('static v80.8 admin: captains dropdown carries the empty placeholder + Sources lost its (v79) tag', htmlSrc.includes('<option value=""') && htmlSrc.includes('Sin capitán / No captain</option>') && htmlSrc.includes('Sources — where customers come from</h3>') && !htmlSrc.includes('where customers come from (v79)'));
+  t('static v80.8 admin: permCard + delete-account panel are suppressed for the admin role', htmlSrc.includes("me.role === 'admin') { card.style.display = 'none'; return; }") && htmlSrc.slice(htmlSrc.indexOf('function paintDeleteAccount()'), htmlSrc.indexOf('function showDeleteAccount(')).includes("me.role === 'admin'"));
+  const map808 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminMap('), htmlSrc.indexOf('// ---------- Admin captains (v40) ----------'));
+  const shell808 = map808.slice(0, map808.indexOf('adminMapLoading = true;'));
+  t('static v80.8 map: shell paints immediately (heading + loading note, NO map element) + the two reads run in parallel', shell808.includes('Cargando mapa… / Loading map…') && !shell808.includes('id="adminMap"') && map808.includes('Promise.all(['));
+  const trk808 = htmlSrc.slice(htmlSrc.indexOf('function buildTrackMap('), htmlSrc.indexOf('function initTrackMaps('));
+  t('static v80.8 map: the per-job tracking map re-measures (invalidateSize now + delayed)', (trk808.match(/invalidateSize\(\)/g) || []).length >= 2 && trk808.includes('}, 400);'));
+
+  // --- VM: the builder pair works on cartDraft only ---
+  run("cartDraft = []; localStorage.removeItem('ghsCart'); builderCartAdd('tv-mounting'); builderCartAdd('tv-mounting');");
+  t('v80.8 builder VM: builderCartAdd fills cartDraft (qty merges) and never touches the customer ghsCart', run('cartDraft.length') === 1 && run('cartDraft[0].qty') === 2 && !String(run("localStorage.getItem('ghsCart')") || '').includes('tv-mounting'));
+  run('builderCartRemove(0);');
+  t('v80.8 builder VM: builderCartRemove empties the draft', run('cartDraft.length') === 0);
+
+  // --- VM: XSS — a hostile job renders escaped on all three boards ---
+  const xssJob808 = [{ id: 'JOB-XSS808', status: 'Open', service: '<img src=x onerror=alert(1)>', city: '<b>City</b>', when: 'Today', description: '<script>alert(2)</script>', payOffer: '50', customerName: '<i>Cust</i>', customerPhone: '555', address: '<u>Addr</u>', messages: [] }];
+  run("me = { id: 'USR-W808', role: 'worker', status: 'active', name: 'W' };");
+  fetchJobsResponse = { jobs: xssJob808 };
+  run('loadJobs();'); await sleep(60);
+  const wHtml808 = el('jobList').innerHTML;
+  t('v80.8 xss VM: worker board escapes the hostile service + description', wHtml808.includes('&lt;img') && wHtml808.includes('&lt;script&gt;') && !wHtml808.includes('<img src=x') && !wHtml808.includes('<script>alert(2)'));
+  run("me = { id: 'USR-C808', role: 'customer', name: 'C' };");
+  run('loadMyJobs();'); await sleep(60);
+  const cHtml808 = el('myJobs').innerHTML;
+  t('v80.8 xss VM: customer board escapes the hostile service', cHtml808.includes('&lt;img') && !cHtml808.includes('<img src=x'));
+  run("me = { id: 'USR-A808', role: 'admin', name: 'A' };");
+  run('loadAdminJobs();'); await sleep(60);
+  const aHtml808 = el('adminJobs').innerHTML;
+  t('v80.8 xss VM: admin board escapes service + customer name + address', aHtml808.includes('&lt;img') && aHtml808.includes('&lt;i&gt;Cust') && aHtml808.includes('&lt;u&gt;Addr') && !aHtml808.includes('<img src=x'));
+  fetchJobsResponse = { jobs: [] };
+
+  // --- HTTP (app2): new public ids carry 72 bits; real links keep resolving ---
+  const cart808 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }], customerName: 'Link Pin' } });
+  t('v80.8 links: a NEW cart id carries 72 bits (CRT- + 18 hex)', /^CRT-[0-9A-F]{18}$/.test(cart808.j.cart.id));
+  const inv808 = await req2('POST', '/api/admin/invoices', { token: A808, body: { customerName: 'Link Pin', customerEmail: 'link808@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 100 }] } });
+  t('v80.8 links: a NEW invoice id carries 72 bits (INV- + 18 hex)', /^INV-[0-9A-F]{18}$/.test(inv808.j.invoice.id));
+  const cust808 = await req2('POST', '/api/signup', { body: { name: 'Req Pin', email: 'req808@t.local', phone: '(707) 555-0808', password: 'password123', role: 'customer' } });
+  const req808 = await req2('POST', '/api/requests', { token: cust808.j.token, body: { service: 'Link pin job', description: 'v80.8 id pin', address: '1 Pin Way', city: 'Fairfield', when: 'Today', estimateType: 'inperson' } });
+  t('v80.8 links: a NEW request id carries 72 bits (GHS- + 18 hex)', /^GHS-[0-9A-F]{18}$/.test(req808.j.request.id));
+  const cartPage808 = await fetch(BASE2 + '/cart/' + cart808.j.cart.id);
+  const invPage808 = await fetch(BASE2 + '/invoice/' + inv808.j.invoice.id);
+  t('v80.8 links: the new cart + invoice pages load (200)', cartPage808.status === 200 && invPage808.status === 200);
+  const bogus808 = await fetch(BASE2 + '/cart/CRT-ABCDEF');
+  t('v80.8 links: an unknown old-style id answers 404, not 500', bogus808.status === 404);
+
+  // --- HTTP: the public-link miss budget (isolated X-Forwarded-For bucket) ---
+  const miss808 = { headers: { 'X-Forwarded-For': '203.0.113.77' } };
+  let lastMiss808 = 0; const firstMiss808 = [];
+  for (let i = 0; i < 81; i++) { const r = await fetch(BASE2 + '/cart/CRT-000000000000000000', miss808); lastMiss808 = r.status; if (i < 3) firstMiss808.push(r.status); }
+  t('v80.8 links: guessing ids from one connection is cut off — 404s until the budget, then 429', firstMiss808.every(s => s === 404) && lastMiss808 === 429);
+  const stillOk808 = await fetch(BASE2 + '/cart/' + cart808.j.cart.id);
+  t('v80.8 links: a REAL link from another connection still resolves while the guesser is blocked', stillOk808.status === 200);
+
+  // --- HTTP: logout revokes the presented session (Bearer AND cookie); other sessions survive ---
+  const lo1 = await req2('POST', '/api/login', { body: { email: 'req808@t.local', password: 'password123' } });
+  const lo2 = await req2('POST', '/api/login', { body: { email: 'req808@t.local', password: 'password123' } });
+  const meBefore808 = await req2('GET', '/api/me', { token: lo1.j.token });
+  const loOut808 = await req2('POST', '/api/logout', { token: lo1.j.token, body: {} });
+  const meAfter808 = await req2('GET', '/api/me', { token: lo1.j.token });
+  const meSecond808 = await req2('GET', '/api/me', { token: lo2.j.token });
+  t('v80.8 logout: the logged-out Bearer token dies (401) while a second session of the same account survives', meBefore808.status === 200 && loOut808.status === 200 && meAfter808.status === 401 && meSecond808.status === 200);
+  const rawLogin808 = await fetch(BASE2 + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'req808@t.local', password: 'password123' }) });
+  const cookie808 = (rawLogin808.headers.getSetCookie()[0] || '').split(';')[0];
+  await fetch(BASE2 + '/api/logout', { method: 'POST', headers: { Cookie: cookie808, 'Content-Type': 'application/json' }, body: '{}' });
+  const meCookie808 = await fetch(BASE2 + '/api/me', { headers: { Cookie: cookie808 } });
+  t('v80.8 logout: the logged-out COOKIE session dies too (401)', cookie808.startsWith('ghs_session=') && meCookie808.status === 401);
+
+  // --- HTTP: purge-test-residue removes test customers + a cancelled cart, nothing else ---
+  const tA808 = await req2('POST', '/api/signup', { body: { name: 'Test A', email: 'test808a@t.local', phone: '(707) 555-0811', password: 'password123', role: 'customer' } });
+  await req2('POST', '/api/signup', { body: { name: 'Test B', email: 'test808b@t.local', phone: '(707) 555-0812', password: 'password123', role: 'customer' } });
+  await req2('POST', '/api/signup', { body: { name: 'Keep Me', email: 'keep808@t.local', phone: '(707) 555-0813', password: 'password123', role: 'customer' } });
+  await req2('POST', '/api/signup', { body: { name: 'Worker Keep', email: 'worker808@t.local', phone: '(707) 555-0814', password: 'password123', role: 'worker' } });
+  const purgeCart808 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'oil-change', name: 'Oil Change', qty: 1, unitPrice: 75 }] } });
+  await req2('POST', '/api/admin/carts/' + purgeCart808.j.cart.id + '/cancel', { token: A808, body: {} });
+  const liveCart808 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'oil-change', name: 'Oil Change', qty: 1, unitPrice: 75 }] } });
+  const purge808 = await req2('POST', '/api/admin/purge-test-residue', { token: A808, body: { emails: ['test808a@t.local', 'test808b@t.local', 'admin2@t.local', 'worker808@t.local', 'ghost808@t.local'], cartId: purgeCart808.j.cart.id } });
+  t('v80.8 purge: the two test customers are deleted; admin/worker/ghost are skipped with reasons; the cancelled cart is deleted', purge808.status === 200 && purge808.j.deletedUsers.length === 2 && purge808.j.skipped.length === 3 && purge808.j.cartDeleted === true);
+  const deadLogin808 = await req2('POST', '/api/login', { body: { email: 'test808a@t.local', password: 'password123' } });
+  const deadToken808 = await req2('GET', '/api/me', { token: tA808.j.token });
+  const keepLogin808 = await req2('POST', '/api/login', { body: { email: 'keep808@t.local', password: 'password123' } });
+  t('v80.8 purge: the deleted customer cannot log in and its old token is dead; the kept customer is untouched', deadLogin808.status === 401 && deadToken808.status === 401 && keepLogin808.status === 200);
+  const purgeLive808 = await req2('POST', '/api/admin/purge-test-residue', { token: A808, body: { emails: [], cartId: liveCart808.j.cart.id } });
+  t('v80.8 purge: a LIVE (open) cart is never deleted — skipped with the reason', purgeLive808.status === 200 && purgeLive808.j.cartDeleted === false && /not cancelled/.test(purgeLive808.j.cartSkipped || ''));
+  const purgeForbidden808 = await req2('POST', '/api/admin/purge-test-residue', { token: keepLogin808.j.token, body: { emails: ['keep808@t.local'] } });
+  t('v80.8 purge: the route is admin-only (a customer gets 403)', purgeForbidden808.status === 403);
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}
