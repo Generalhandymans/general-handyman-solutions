@@ -4319,6 +4319,19 @@ const server = http.createServer((req, res) => {
 async function handleRequest(req, res) {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
+  // v80.9 FUSIÓN — host redirect, GATED on MERGED_DOMAIN_LIVE=1 (set on
+  // Render only at the apex cutover). While the gate is ON, the old app
+  // subdomain stops serving: every path+query 308-redirects to the same
+  // address on generalhandymans.app — EXCEPT /api/stripe/webhook, which
+  // keeps being served here until Stripe is re-pointed at the apex.
+  // With the env unset (everywhere today), all hosts behave as before.
+  if (process.env.MERGED_DOMAIN_LIVE === '1') {
+    const reqHost = String(req.headers.host || '').split(':')[0].toLowerCase();
+    if (reqHost === 'app.generalhandymans.app' && p !== '/api/stripe/webhook') {
+      res.writeHead(308, { Location: 'https://generalhandymans.app' + req.url });
+      return res.end();
+    }
+  }
   // Security headers on EVERY response (v33). The CSP names exactly what
   // the app loads — Stripe.js/Elements, Leaflet (unpkg), OSM tiles — and
   // keeps everything else same-origin; frame-ancestors/X-Frame-Options
@@ -4355,6 +4368,17 @@ async function handleRequest(req, res) {
   // the technician login (the SPA's #worker entry), never on the customer
   // door. /tech is the English twin.
   if (req.method === 'GET' && (p === '/tecnico' || p === '/tech')) { res.writeHead(302, { Location: '/#worker' }); return res.end(); }
+  // v80.9 FUSIÓN — the promo's direct door (Gabriel, 2026-11-01): the bio/QR
+  // link generalhandymans.app/plus lands the customer straight on the
+  // HomeCare Plus $100 join (#join-plus1), never on the homepage. Any query
+  // (?src=CODE) moves INSIDE the fragment, where the client's join-route
+  // parser reads it (e.g. #join-plus1?src=INSTA1). /plus2 is the 2-visit twin.
+  if (req.method === 'GET' && (p === '/plus' || p === '/plus2')) {
+    const frag = p === '/plus' ? '#join-plus1' : '#join-plus2';
+    const qs = url.search ? url.search.slice(1) : '';
+    res.writeHead(302, { Location: '/' + frag + (qs ? '?' + qs : '') });
+    return res.end();
+  }
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
     return send(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
   }
@@ -4382,8 +4406,24 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
-  // Membership plan card images (added 2026-10-21) + app logo banner (v40) — exact filenames only.
-  if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png', '/logo-header.png'].includes(p)) {
+  // Hero technician photo (v80.9, ported from the website hero) — exact name.
+  if (req.method === 'GET' && p === '/hero-tech.jpg') {
+    const file = path.join(__dirname, 'public', 'hero-tech.jpg');
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // Before/after yard photos (v80.9, ported from the website slider):
+  // /ba/before.jpg + /ba/after.jpg — basename only, jpg only.
+  if (req.method === 'GET' && p.startsWith('/ba/') && p.endsWith('.jpg')) {
+    const file = path.join(__dirname, 'public', 'ba', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // Membership plan card images (added 2026-10-21) + app logo banner (v40)
+  // + the v80.9 hero tracking slide — exact filenames only.
+  if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png', '/logo-header.png', '/hero-tracking.png'].includes(p)) {
     const file = path.join(__dirname, 'public', path.basename(p));
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
