@@ -5,6 +5,14 @@ cotizaciones y en los anuncios. Si un precio cambia, se cambia aquí primero.
 Construida sobre la base que Gabriel eligió el 2026-10-20
 (`PRICE-LIST-DRAFT.md`).
 
+**ACTUALIZACIÓN 2026-10-23 (v43, decisiones de Gabriel):** (1) los 43
+servicios que estaban a $135 bajaron a **$125** (miembro: $100);
+(2) la lista completa quedó cargada como menú ordenable en la app —
+98 servicios (fuera solo las filas de planes/membresías, el estimado
+en persona, que es la tarifa del estimado mismo, y la labor por hora,
+que no es precio fijo); (3) el −20% de miembro es **universal** en
+todo el menú.
+
 **Las cinco categorías oficiales de Gabriel (2026-10-20):**
 **Carpintería, Electricidad, Plomería, Jardinería y Mecánica.**
 Todo servicio vive en UNA sola categoría; si un trabajo podría caer en dos,
@@ -27,16 +35,19 @@ queda en una y la otra solo trae una nota de referencia.
   = 2.9% + $0.30. Precio pasa si (precio − pago − fee) / precio ≥ 20%.
 - **Estimado en persona: $75** — se abona al total si el cliente aprueba el
   mismo día. Miembros: $50, y **gratis el primer estimado** (una vez por cuenta, todos los planes).
-- **ASAP / Emergencia: +25%** sobre el precio de lista.
-- **Miembros HomeCare: −20% en labor** en trabajos de menos de $1,000.
+- **ASAP / Emergencia: +25%** sobre el precio ya con el descuento de
+  miembro aplicado (para no-miembros, sobre el precio de lista — así lo
+  calcula la app; criterio asentado por Gabriel el 2026-10-23).
+- **Miembros HomeCare y HomeCare Plus: −20% en labor** en trabajos de
+  menos de $1,000.
   (El descuento lo absorbe la compañía — el pago del trabajador no baja.)
-  **Decisión de Gabriel (2026-10-22): el −20% SÍ aplica a los trabajos
-  del menú aunque se despachen a un trabajador; NO aplica a junk
-  removal ni a hauling / green waste** (esos precios están armados
-  sobre costos duros: viaje del trabajador + dump). **Tampoco aplica
-  a los servicios de $75** — ya son el mínimo de la casa; en ellos el
-  miembro paga lo mismo que todos (decisión de Gabriel, 2026-10-22,
-  tras la auditoría de márgenes).
+  **Decisión de Gabriel (2026-10-23, "fuck it"): el −20% aplica a TODO
+  el menú** — trabajos despachados, servicios de $75 (oil change:
+  miembro $60), junk removal (miembro $180/$260/$340/$520) y green
+  waste / hauling (miembro $180). Reemplaza la decisión del 2026-10-22
+  que excluía junk, hauling y los servicios de $75. Sin descuento solo
+  quedan los ADD-ONS de haul-away (haul-toilet / haul-vanity y
+  equivalentes), que son extras, no servicios.
 - **Guardrail: ningún servicio individual pasa de $1,000.** Lo que pasa de ahí
   no va en el menú fijo — va por estimado (ver la sección al final). Trabajos
   de varios días o varias visitas, y las remodelaciones, van por estimado
@@ -59,23 +70,23 @@ queda en una y la otra solo trae una nota de referencia.
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
 | Closet doors (pair) | $175 | per pair | ~2.5 h | CONFIRMADO |
-| Interior door slab swap | $135 | per door | ~2 h | CONFIRMADO |
+| Interior door slab swap | $125 | per door | ~2 h | CONFIRMADO |
 | Door knob / lever install | $75 | per door | ~1 h | CONFIRMADO |
 | Deadbolt install — single | $75 | flat | ~45 min | CONFIRMADO |
-| Deadbolt + knob combo install | $135 | flat | ~1 h | CONFIRMADO |
-| Smart lock install & setup | $135 | flat | ~1.5 h | CONFIRMADO |
+| Deadbolt + knob combo install | $125 | flat | ~1 h | CONFIRMADO |
+| Smart lock install & setup | $125 | flat | ~1.5 h | CONFIRMADO |
 | Door adjustment (sticks / won't latch) | $75 | per door | ~1 h | CONFIRMADO |
 | Weatherstripping | $75 | per door | ~1 h | CONFIRMADO |
-| Screen door install | $135 | flat | ~2 h | CONFIRMADO |
-| Sliding door roller / track service | $135 | flat | ~1.5 h | CONFIRMADO |
+| Screen door install | $125 | flat | ~2 h | CONFIRMADO |
+| Sliding door roller / track service | $125 | flat | ~1.5 h | CONFIRMADO |
 | Window screen rescreen / repair | $75 | per visit (up to 2 screens) | ~1 h | CONFIRMADO |
-| Pet door install (in door) | $135 | flat | ~2 h | CONFIRMADO |
+| Pet door install (in door) | $125 | flat | ~2 h | CONFIRMADO |
 
 *Deadbolt single y chapa sola a $75 (Gabriel, 2026-10-21): con el
 nuevo mínimo del trabajador de $50 por trabajo corto, un servicio de
 $75 despachado deja ~30% de margen — SÍ se puede despachar.*
 
-*Cambio de slab $135 (Gabriel, 2026-10-21): NO incluye instalar la
+*Cambio de slab $125 (Gabriel, 2026-10-21; precio actualizado el 2026-10-23): NO incluye instalar la
 chapa ni el cerrojo en la puerta nueva — esa instalación se cobra
 aparte, $75 por cada uno (su precio single).*
 
@@ -83,19 +94,19 @@ aparte, $75 por cada uno (su precio single).*
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| Furniture assembly, standard (1 piece) | $135 | per piece | ~1 h | CONFIRMADO |
+| Furniture assembly, standard (1 piece) | $125 | per piece | ~1 h | CONFIRMADO |
 | Furniture assembly, large/complex (wardrobe, bunk bed) | $175 | per piece | ~2.5 h | CONFIRMADO |
 | Closet organizer system install | $225 | flat | ~3 h | CONFIRMADO |
-| Floating shelves (set of 2) | $135 | per set | ~1 h | CONFIRMADO |
-| Cabinet hardware install (up to 10 pulls) | $135 | per set | ~1 h | CONFIRMADO |
-| Baby gate install | $135 | flat | ~1 h | CONFIRMADO |
+| Floating shelves (set of 2) | $125 | per set | ~1 h | CONFIRMADO |
+| Cabinet hardware install (up to 10 pulls) | $125 | per set | ~1 h | CONFIRMADO |
+| Baby gate install | $125 | flat | ~1 h | CONFIRMADO |
 
 ### Colgar e instalar
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| Picture & mirror hanging (up to 3 pieces) | $135 | per visit | ~1 h | CONFIRMADO |
-| Mirror / medicine cabinet install | $135 | flat | ~1 h | CONFIRMADO |
+| Picture & mirror hanging (up to 3 pieces) | $125 | per visit | ~1 h | CONFIRMADO |
+| Mirror / medicine cabinet install | $125 | flat | ~1 h | CONFIRMADO |
 | Curtain rod install | $75 | per window | ~45 min | CONFIRMADO |
 | Blinds install (1–3 windows) | $75 | per window | ~30 min | CONFIRMADO |
 | Blinds install — deal (4+ windows) | $55 | per window | ~30 min | CONFIRMADO |
@@ -105,10 +116,10 @@ aparte, $75 por cada uno (su precio single).*
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
 | Baseboard install (1 room, up to ~40 linear ft) | $225 | per room | ~3 h | CONFIRMADO |
-| Baseboard repair / section replace | $135 | flat | ~1.5 h | CONFIRMADO |
+| Baseboard repair / section replace | $125 | flat | ~1.5 h | CONFIRMADO |
 | Laminate / LVP plank repair (a few planks) | $225 | flat | ~3 h | CONFIRMADO |
 | Carpet repair (general) | $175 | flat | ~2.5 h | CONFIRMADO |
-| Transition strip / threshold install | $135 | flat | ~1 h | CONFIRMADO |
+| Transition strip / threshold install | $125 | flat | ~1 h | CONFIRMADO |
 
 ### Drywall
 
@@ -116,7 +127,7 @@ aparte, $75 por cada uno (su precio single).*
 |---|---|---|---|---|
 | Drywall patch, small (up to ~1 ft) | $150 | flat | ~1.5 h | CONFIRMADO |
 | Drywall patch, medium (up to 2×2 ft, texture match) | $250 | flat | ~3 h | CONFIRMADO |
-| Small-holes patch set (up to 3: doorknob, anchors) | $135 | per set | ~1 h | CONFIRMADO |
+| Small-holes patch set (up to 3: doorknob, anchors) | $125 | per set | ~1 h | CONFIRMADO |
 
 *Parche chico $150 (Gabriel, 2026-10-22): la labor es $135 y se llega
 a $150 cobrando aparte los materiales (mud, tape, parche) cuando los
@@ -140,10 +151,10 @@ o parcheo extenso va por la ruta de estimado.*
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| Fence picket repair (up to 5 pickets) | $135 | flat | ~2 h | CONFIRMADO |
-| Fence post replacement (add-on to a fence repair visit) | $135 | per post | ~1–1.5 h | CONFIRMADO |
-| Deck board replacement (up to 5 boards) | $185 | flat | ~2 h | CONFIRMADO |
-| Gate repair / adjustment | $135 | flat | ~1.5 h | CONFIRMADO |
+| Fence picket repair (up to 5 pickets) | $125 | flat | ~2 h | CONFIRMADO |
+| Fence post replacement (add-on to a fence repair visit) | $125 | per post | ~1–1.5 h | CONFIRMADO |
+| Deck board replacement (up to 5 boards) | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
+| Gate repair / adjustment | $125 | flat | ~1.5 h | CONFIRMADO |
 
 ## 2. Electricidad
 
@@ -152,18 +163,18 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| TV mounting (up to 65") | $135 | flat | ~2 h | CONFIRMADO |
-| TV mounting, large (over 65") | $185 | flat | ~2.5 h | CONFIRMADO |
-| Soundbar mounting | $135 | flat | ~1 h | CONFIRMADO |
-| Ceiling fan install or swap | $135 | flat | ~1.5 h | CONFIRMADO |
-| Chandelier / light fixture swap | $135 | flat | ~1.5 h | CONFIRMADO |
-| Light fixture swap, simple (flush-mount, porch, vanity) | $135 | flat | ~1 h | CONFIRMADO |
-| Bathroom exhaust fan swap | $185 | flat | ~2 h | CONFIRMADO |
-| Dimmer / switch swap | $135 | flat | ~45 min | CONFIRMADO |
-| Smoke / CO detector install (up to 3, battery) | $135 | per set | ~1 h | CONFIRMADO |
-| Ring / video doorbell install | $135 | flat | ~1 h | CONFIRMADO |
-| Smart thermostat install | $135 | flat | ~1.5 h | CONFIRMADO |
-| Security camera install (wireless) | $135 | per camera | ~1 h | CONFIRMADO |
+| TV mounting (up to 65") | $125 | flat | ~2 h | CONFIRMADO |
+| TV mounting, large (over 65") | $175 | flat | ~2.5 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
+| Soundbar mounting | $125 | flat | ~1 h | CONFIRMADO |
+| Ceiling fan install or swap | $125 | flat | ~1.5 h | CONFIRMADO |
+| Chandelier / light fixture swap | $125 | flat | ~1.5 h | CONFIRMADO |
+| Light fixture swap, simple (flush-mount, porch, vanity) | $125 | flat | ~1 h | CONFIRMADO |
+| Bathroom exhaust fan swap | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
+| Dimmer / switch swap | $125 | flat | ~45 min | CONFIRMADO |
+| Smoke / CO detector install (up to 3, battery) | $125 | per set | ~1 h | CONFIRMADO |
+| Ring / video doorbell install | $125 | flat | ~1 h | CONFIRMADO |
+| Smart thermostat install | $125 | flat | ~1.5 h | CONFIRMADO |
+| Security camera install (wireless) | $125 | per camera | ~1 h | CONFIRMADO |
 | Garage door opener swap | $375 | flat | ~3 h | CONFIRMADO |
 | Holiday lights install (single story) | $175 | flat | ~2.5 h | CONFIRMADO |
 | Holiday lights install (two-story) | $250 | flat | ~3.5 h | CONFIRMADO |
@@ -175,23 +186,23 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| Faucet swap | $135 | flat | ~1.5 h | CONFIRMADO |
+| Faucet swap | $125 | flat | ~1.5 h | CONFIRMADO |
 | Toilet replacement (full swap) | $175 | flat | ~2.5 h | CONFIRMADO |
 | Old toilet removal / haul-away (optional add-on — checkbox) | $50 | add-on | — | CONFIRMADO |
-| Toilet repair (fill valve / flapper) | $135 | flat | ~1 h | CONFIRMADO |
-| Garbage disposal swap | $135 | flat | ~2 h | CONFIRMADO |
+| Toilet repair (fill valve / flapper) | $125 | flat | ~1 h | CONFIRMADO |
+| Garbage disposal swap | $125 | flat | ~2 h | CONFIRMADO |
 | Showerhead swap | $75 | flat | ~45 min | CONFIRMADO |
-| Tub / shower re-caulk | $135 | flat | ~1.5 h | CONFIRMADO |
-| Grab bar install | $135 | each | ~1 h | CONFIRMADO |
-| P-trap / drain assembly swap | $135 | flat | ~1.5 h | CONFIRMADO |
-| Bidet seat install | $135 | flat | ~1.5 h | CONFIRMADO |
-| Dryer vent cleaning | $135 | flat | ~1.5 h | CONFIRMADO |
-| Washer & dryer hookup / install (existing connections) | $135 | flat | ~1.5 h | CONFIRMADO |
-| Drain unclog — basic (sink / shower, 1 drain) | $185 | flat | ~1 h | CONFIRMADO |
+| Tub / shower re-caulk | $125 | flat | ~1.5 h | CONFIRMADO |
+| Grab bar install | $125 | each | ~1 h | CONFIRMADO |
+| P-trap / drain assembly swap | $125 | flat | ~1.5 h | CONFIRMADO |
+| Bidet seat install | $125 | flat | ~1.5 h | CONFIRMADO |
+| Dryer vent cleaning | $125 | flat | ~1.5 h | CONFIRMADO |
+| Washer & dryer hookup / install (existing connections) | $125 | flat | ~1.5 h | CONFIRMADO |
+| Drain unclog — basic (sink / shower, 1 drain) | $175 | flat | ~1 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
 | Dishwasher swap (existing hookups) | $200 | flat | ~2 h | CONFIRMADO |
 | Vanity swap | $250 | flat | ~2.5 h | CONFIRMADO |
-| Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces) | $135 | per set | ~1 h | CONFIRMADO |
-| Hose bibb / outdoor faucet swap | $135 | flat | ~1.5 h | CONFIRMADO |
+| Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces) | $125 | per set | ~1 h | CONFIRMADO |
+| Hose bibb / outdoor faucet swap | $125 | flat | ~1.5 h | CONFIRMADO |
 
 *Washer & dryer hookup: conexiones existentes. Abrir pared, vent
 nuevo o plomería/electricidad nueva va por estimado, no en el precio fijo.*
@@ -224,7 +235,7 @@ no se repiten aquí.*
 | **HomeCare Plus — 2 visitas de yarda/mes incluidas** | $175 | per month | membresía + ~45–60 min/visita | CONFIRMADO |
 
 *PRECIOS DE MEMBRESÍA ACTUALIZADOS (Gabriel, 2026-10-23): **−$20 en los 5 planes, en todos lados** — decidió precio único y simple; el diseño de precios por zona (Bay Area / non-Bay Area) quedó CANCELADO por complicado ("mucha mamada por $20"). Precios finales: HomeCare $29 · Yard **$75/$150** · Plus **$100/$175** (Gabriel redondeó a su estilo: Yard 2 visitas bajó a $150 parejo; cada Plus ahorra $4 vs comprar por separado — $100 vs $104 y $175 vs $179). Pendiente: Stripe, app, web y creatividades todavía muestran los precios viejos — actualización = v39.*
-| Sprinkler & drip irrigation basics (heads, timers, small leaks) | $135 | flat | ~1.5 h | CONFIRMADO |
+| Sprinkler & drip irrigation basics (heads, timers, small leaks) | $125 | flat | ~1.5 h | CONFIRMADO |
 | Green waste hauling | $225 | per load | ~1.5 h | CONFIRMADO |
 | Junk removal — minimum load | $225 | per load | ~1.5 h | CONFIRMADO |
 | Junk removal — medium load | $325 | per load | ~2 h | CONFIRMADO |
@@ -242,7 +253,7 @@ piezas más) o una esquina de garaje; la pickup llena. **Grande
 llenos — la grandísima: limpieza de garaje completo o de casa. Si
 al cargar la pila cruza al siguiente nivel, se para y se acuerda el
 nuevo nivel con el cliente antes de seguir.*
-| Mailbox install | $185 | flat | ~1.5 h | CONFIRMADO |
+| Mailbox install | $175 | flat | ~1.5 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
 
 ## 5. Mecánica
 
@@ -254,14 +265,14 @@ transmisión, y todo trabajo de **$1,000 o más**, va por la ruta de estimado
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
 | Fuel pump replacement | $300 | flat | ~4 h | CONFIRMADO |
-| Battery replacement | $135 | flat | ~1 h | CONFIRMADO |
+| Battery replacement | $125 | flat | ~1 h | CONFIRMADO |
 | Check-engine diagnostics / scan | $75 | flat | ~1 h | CONFIRMADO |
 | Oil change & fluid service | $75 | flat | ~1 h | CONFIRMADO |
 | Brake pads | $100 | per pair | ~1 h | CONFIRMADO |
-| Alternator replacement | $185 | flat | ~2 h | CONFIRMADO |
+| Alternator replacement | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
 | Starter replacement | $225–$300 | range (from $225) | ~2–3 h | CONFIRMADO |
-| Belt / hose replacement (basics) | $135 | flat | ~1.5 h | CONFIRMADO |
-| Spark plug replacement (4-cylinder) | $135 | flat | ~1.5 h | CONFIRMADO |
+| Belt / hose replacement (basics) | $125 | flat | ~1.5 h | CONFIRMADO |
+| Spark plug replacement (4-cylinder) | $125 | flat | ~1.5 h | CONFIRMADO |
 | Headlight / bulb replacement | $75 | flat | ~45 min | CONFIRMADO |
 
 ## Ayuda general / por hora
@@ -432,12 +443,15 @@ Yard Cleanup — Founding Member" (`prod_VU4Ka0gTJEae5I`), pero quedó
 reemplazado por esta decisión — **NO USAR ESE LINK**. Para vender Plus
 se usan los Payment Links normales de $135/$199 de arriba.
 
-**Descuento HomeCare en trabajos despachados — RESUELTO (Gabriel,
-2026-10-22):** el −20% de miembro SÍ cubre los trabajos del menú
-despachados a trabajadores; quedan FUERA junk removal y hauling /
-green waste, cuyos precios se arman sobre costos duros (viaje de
-$120 + dump). El margen se vigila por servicio: en los de $135 el
-miembro paga $108 y el margen aguanta en trabajos de 1–1.5 h.
+**Descuento HomeCare en trabajos despachados — ACTUALIZADO (Gabriel,
+2026-10-23):** el −20% de miembro cubre TODO el menú, incluidos los
+trabajos despachados a trabajadores, los servicios de $75, junk
+removal y hauling / green waste (decisión "fuck it" del 2026-10-23,
+que revierte la exclusión del 2026-10-22). Con la bajada del mismo
+día, los servicios que estaban a $135 quedaron en $125 y el miembro
+paga $100. En green waste el miembro paga $180 contra ~$169 de costos
+duros (viaje de $120 + dump) — decisión de Gabriel con los números
+vistos. El margen se vigila por servicio al despachar.
 
 **Pendiente:**
 - ~~Corregir o aprobar cada PROPUESTA~~ — HECHO: revisión completa
