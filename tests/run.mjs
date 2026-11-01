@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-9', swSrc.includes("const CACHE = 'ghs-app-v80-9'"));
+t('static: SW cache is ghs-app-v80-10', swSrc.includes("const CACHE = 'ghs-app-v80-10'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4092,7 +4092,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
 }
 
 // ---------------- v80 CONVERSIÓN: targets, claim, honest states, locale, ASAP fee, recovery plumbing, Stripe loader ----------------
-t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout card + the server — the card now states the deposit law', !htmlSrc.includes('You pay the full total today') && !serverSrc.includes('You pay the full total today') && htmlSrc.includes('You pay only the <b>booking deposit</b> today') && htmlSrc.includes('$50 flat</b> on totals up to $300'));
+t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout card + the server — the card now states the deposit law (v80.10: the spaces ride inside the <b> runs so text extraction cannot fuse the words)', !htmlSrc.includes('You pay the full total today') && !serverSrc.includes('You pay the full total today') && htmlSrc.includes('You pay only the<b> booking deposit </b>today') && htmlSrc.includes('<b> $50 flat </b>on totals up to $300'));
 t('static v80-1: notifications carry structured targets end to end (server stores + returns target, push payload url = target, SPA rows tappable with the role guard)', serverSrc.includes('function notify(userId, type, text, target)') && serverSrc.includes("target: typeof target === 'string' ? target.slice(0, 200) : ''") && serverSrc.includes("url: (typeof target === 'string' && target) ? target : '/'") && htmlSrc.includes('function notifGo(') && htmlSrc.includes('function routeNotifHash()') && htmlSrc.includes('function notifTargetFor(') && htmlSrc.includes("me.role === 'worker'") && htmlSrc.includes('id="reqcard-') && htmlSrc.includes('id="wjobcard-'));
 t('static v80-2: the orphan claim is email-exact, audited and hooked at signup + login + cart-checkout account birth', serverSrc.includes('function claimOrphanRecords(u)') && serverSrc.includes("audit(u, 'account.claim_orphans'") && serverSrc.includes('claimOrphanRecords(u);') && serverSrc.includes('guest history under this email becomes theirs at signup') && serverSrc.includes('also at login — covers accounts created before the claim existed') && serverSrc.includes('an account born at checkout claims the guest history'));
 t('static v80-3: honest async states — the shared loading/error pattern serves requests, jobs, invoices, proposals and the worker job list', htmlSrc.includes('function listLoadingHtml(') && htmlSrc.includes('function listErrorHtml(') && htmlSrc.includes("listErrorHtml('loadRequests()'") && htmlSrc.includes("listErrorHtml('loadMyJobs()'") && htmlSrc.includes("listErrorHtml('loadMyInvoices()'") && htmlSrc.includes("listErrorHtml('loadProposals()'") && htmlSrc.includes("listErrorHtml('loadJobs()'") && (() => { const s = htmlSrc.indexOf('async function loadRequests()'); const seg = htmlSrc.slice(s, s + 1200); return seg.includes('listLoadingHtml(') && !seg.includes('.catch('); })());
@@ -4277,7 +4277,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.9: ghs-app-v80-9)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-9'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10: ghs-app-v80-10)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5006,8 +5006,8 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
 
 // ---------------- v80.9 FUSIÓN (merged homepage + gated host redirect) ----------------
 {
-  t('static v80.9 FUSION: hero H1 + deposit-law sub in EN and ES on the app home',
-    htmlSrc.includes('Home repairs, ordered like food.') && htmlSrc.includes('a deposit books it, the balance is due when the work is done') &&
+  t('static v80.9 FUSION: hero H1 + deposit-law sub in EN and ES on the app home (v80.10: the EN hero is now the restored old page\u2019s; the ES pair still backs the painted footer/compare blocks)',
+    htmlSrc.includes('Home repairs,<br><span>ordered like food.</span>') && htmlSrc.includes('Book in a minute — a deposit books it, the balance is due when the work is done') &&
     htmlSrc.includes('Reparaciones del hogar, ordenadas como comida.') && htmlSrc.includes('un anticipo lo agenda, el resto se paga cuando el trabajo está terminado'));
   const BANNED809 = ['you pay in full when you order', 'You pay in full when you order', 'Paid in full when you order', 'pay in full today', 'Pay in full today', 'pagas completo al ordenar', 'Pagas completo al ordenar', 'pagas completo hoy', 'paid in full when you order'];
   t('static v80.9 FUSION: NONE of the website\u2019s banned pay-in-full lines (audit §2a, EN+ES) exists in the app',
@@ -5039,14 +5039,32 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('id="homeSearch"') && htmlSrc.includes('What do you need today?') && htmlSrc.includes('id="globLangEn"') && htmlSrc.includes('id="globLangEs"') &&
     htmlSrc.includes('id="installNavLink"') && htmlSrc.includes('href="/instalar"') &&
     !htmlSrc.includes('555-0123') && !htmlSrc.includes('555-1234') && htmlSrc.includes('707-___-____'));
-  t('static v80.9 FUSION: hero carousel uses the live-tracking slide; the new images exist and are routed',
-    htmlSrc.includes('id="heroTrack"') && htmlSrc.includes('/hero-tracking.png') && htmlSrc.includes('/hero-tech.jpg') &&
+  t('static v80.10 LA ORIGINAL: restored homepage hero photo inside #oldhome; the v80.9 assets still exist and stay routed; the /old/ photos are routed too',
+    htmlSrc.includes('id="oldhome"') && htmlSrc.includes('/old/old-01.jpg') &&
     fs.existsSync(path.join(APP_DIR, 'public', 'hero-tracking.png')) && fs.existsSync(path.join(APP_DIR, 'public', 'hero-tech.jpg')) &&
     fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'before.jpg')) && fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'after.jpg')) &&
-    serverSrc.includes("'/hero-tracking.png'") && serverSrc.includes("p === '/hero-tech.jpg'") && serverSrc.includes("p.startsWith('/ba/')"));
+    fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-01.jpg')) && fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-40.jpg')) &&
+    serverSrc.includes("'/hero-tracking.png'") && serverSrc.includes("p === '/hero-tech.jpg'") && serverSrc.includes("p.startsWith('/ba/')") && serverSrc.includes("p.startsWith('/old/')"));
   t('static v80.9 FUSION: host redirect is env-gated (MERGED_DOMAIN_LIVE=1) with the Stripe webhook exempt',
     serverSrc.includes("process.env.MERGED_DOMAIN_LIVE === '1'") && serverSrc.includes("reqHost === 'app.generalhandymans.app'") &&
     serverSrc.includes("p !== '/api/stripe/webhook'") && serverSrc.includes("'https://generalhandymans.app' + req.url") && serverSrc.includes('308'));
+  // ---------------- v80.10 LA ORIGINAL: the old standalone homepage restored as the storefront ----------------
+  t('static v80.10 LA ORIGINAL: #oldhome sits in the customer home path (inside customerBox, before the wizard) carrying the old page\u2019s sections',
+    htmlSrc.indexOf('id="oldhome"') > htmlSrc.indexOf('id="customerBox"') && htmlSrc.indexOf('id="oldhome"') < htmlSrc.indexOf('id="wizardCard"') &&
+    htmlSrc.includes('Meet your technician') && htmlSrc.includes('Compare the plans') && htmlSrc.includes('Neighbors approve') &&
+    htmlSrc.includes('Serving all of Solano County') && htmlSrc.includes('/old/old-40.jpg') && htmlSrc.includes('id="ghsMemberships"'));
+  t('static v80.10 LA ORIGINAL: the fragment\u2019s own topbar is gone (the app header rules) and the compact v80.9 home blocks are retired',
+    !htmlSrc.includes('<div class="topbar">') && !htmlSrc.includes('id="homeHero"') && !htmlSrc.includes('id="homePromos"') && !htmlSrc.includes('id="homeCities"'));
+  t('static v80.10 LA ORIGINAL: in-page anchors inside #oldhome are scroll-intercepted, never routed',
+    htmlSrc.includes("closest('#oldhome a[href^=\"#\"]')") && htmlSrc.includes("h.indexOf('#sec-') === 0") && htmlSrc.includes("h === '#ghsMemberships'") && htmlSrc.includes("h === '#home'"));
+  t('static v80.10 LA ORIGINAL: the restored before/after slider is wired (baRange -> baBefore)',
+    htmlSrc.includes("e.target.id === 'baRange'") && htmlSrc.includes("getElementById('baBefore')"));
+  t('static v80.10 audit: the global Log out row renders only with a session (like bellBtn)',
+    htmlSrc.includes('id="globalLogoutRow" style="display:none"') && htmlSrc.includes("glo.style.display = me ? '' : 'none'"));
+  t('static v80.10 audit: footer bottom padding clears the fixed contact pill',
+    htmlSrc.includes('#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 118px'));
+  t('static v80.10 audit: join notes keep their spaces inside the <b> runs (no fused words in extraction)',
+    htmlSrc.includes("'Joining<b> ' + info.name + ' </b>— your card will be charged<b> $'") && htmlSrc.includes("'/mo total. </b>Your card will be charged<b> $'"));
 
   const raw809 = (port, method, pth, hostHdr, body) => new Promise((resolve, reject) => {
     const r = http.request({ host: '127.0.0.1', port, path: pth, method, setHost: false, headers: { Host: hostHdr, 'Content-Type': 'application/json' } }, (res) => {
@@ -5064,6 +5082,8 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.9 FUSION: before/after photo served (200 image/jpeg)', ba809.status === 200 && String(ba809.headers['content-type']).includes('image/jpeg') && ba809.body.length > 1000);
   const tech809 = await raw809(APP_PORT, 'GET', '/hero-tech.jpg', 'generalhandymans.app');
   t('v80.9 FUSION: hero technician photo served (200 image/jpeg)', tech809.status === 200 && String(tech809.headers['content-type']).includes('image/jpeg') && tech809.body.length > 1000);
+  const old8010 = await raw809(APP_PORT, 'GET', '/old/old-01.jpg', 'generalhandymans.app');
+  t('v80.10 LA ORIGINAL: restored homepage photo served (200 image/jpeg)', old8010.status === 200 && String(old8010.headers['content-type']).includes('image/jpeg') && old8010.body.length > 1000);
 
   try { fs.unlinkSync('/tmp/ghs-v17-test/data-gate.json'); } catch (e) {}
   const child809 = spawn('node', ['server.js'], {
