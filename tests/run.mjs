@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-10', swSrc.includes("const CACHE = 'ghs-app-v80-10'"));
+t('static: SW cache is ghs-app-v80-10-1', swSrc.includes("const CACHE = 'ghs-app-v80-10-1'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -3575,9 +3575,9 @@ t('static v61: admin attach endpoint + SPA controls exist', serverSrc.includes('
 // cart-join). The guard is Gabriel's one-per-account-EVER rule: a
 // used free month OR any past HomeCare subscription closes the door.
 // Plus and Yard NEVER trial.
-t('static v74: every hosted HomeCare join passes the eligibility-gated trial (SPA checkout, estimate join-checkout, cart-join, invite checkout) and the offer shows on the customer surfaces — SPA HomeCare card, join-form perks, website HomeCare box',
+t('static v74: every hosted HomeCare join passes the eligibility-gated trial (SPA checkout, estimate join-checkout, cart-join, invite checkout) and the offer shows on the customer surfaces — SPA HomeCare card, join-form perks, website HomeCare box (v80.10.1: the SPA card line is one text node — its old <b> boundary extracted as the fused "First month FREE— for everyone"; wording unchanged)',
   (serverSrc.match(/homeCareTrialEligible\(user\)/g) || []).length >= 4 && serverSrc.includes('trialDays: homeCareTrialEligible(user) ? INVITE_TRIAL_DAYS : 0') &&
-  htmlSrc.includes('First month FREE</b> — for everyone (one per account)') && htmlSrc.includes("perks: 'First month FREE • 20% off any job") &&
+  htmlSrc.includes('First month FREE — for everyone (one per account)') && htmlSrc.includes("perks: 'First month FREE • 20% off any job") &&
   fs.readFileSync('/home/hatch/workspace/ghs-app/index.html', 'utf8').includes('First month FREE — for everyone (one per account)'));
 {
   const adm74 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
@@ -4092,7 +4092,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
 }
 
 // ---------------- v80 CONVERSIÓN: targets, claim, honest states, locale, ASAP fee, recovery plumbing, Stripe loader ----------------
-t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout card + the server — the card now states the deposit law (v80.10: the spaces ride inside the <b> runs so text extraction cannot fuse the words)', !htmlSrc.includes('You pay the full total today') && !serverSrc.includes('You pay the full total today') && htmlSrc.includes('You pay only the<b> booking deposit </b>today') && htmlSrc.includes('<b> $50 flat </b>on totals up to $300'));
+t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout card + the server — the card now states the deposit law (v80.10.1: the note is ONE text node — the v80.10 inside-<b> spaces still extracted fused, so the inline tags are gone and the words carry their own spaces)', !htmlSrc.includes('You pay the full total today') && !serverSrc.includes('You pay the full total today') && htmlSrc.includes('You pay only the booking deposit today') && htmlSrc.includes('$50 flat on totals up to $300, 40% on totals over $300'));
 t('static v80-1: notifications carry structured targets end to end (server stores + returns target, push payload url = target, SPA rows tappable with the role guard)', serverSrc.includes('function notify(userId, type, text, target)') && serverSrc.includes("target: typeof target === 'string' ? target.slice(0, 200) : ''") && serverSrc.includes("url: (typeof target === 'string' && target) ? target : '/'") && htmlSrc.includes('function notifGo(') && htmlSrc.includes('function routeNotifHash()') && htmlSrc.includes('function notifTargetFor(') && htmlSrc.includes("me.role === 'worker'") && htmlSrc.includes('id="reqcard-') && htmlSrc.includes('id="wjobcard-'));
 t('static v80-2: the orphan claim is email-exact, audited and hooked at signup + login + cart-checkout account birth', serverSrc.includes('function claimOrphanRecords(u)') && serverSrc.includes("audit(u, 'account.claim_orphans'") && serverSrc.includes('claimOrphanRecords(u);') && serverSrc.includes('guest history under this email becomes theirs at signup') && serverSrc.includes('also at login — covers accounts created before the claim existed') && serverSrc.includes('an account born at checkout claims the guest history'));
 t('static v80-3: honest async states — the shared loading/error pattern serves requests, jobs, invoices, proposals and the worker job list', htmlSrc.includes('function listLoadingHtml(') && htmlSrc.includes('function listErrorHtml(') && htmlSrc.includes("listErrorHtml('loadRequests()'") && htmlSrc.includes("listErrorHtml('loadMyJobs()'") && htmlSrc.includes("listErrorHtml('loadMyInvoices()'") && htmlSrc.includes("listErrorHtml('loadProposals()'") && htmlSrc.includes("listErrorHtml('loadJobs()'") && (() => { const s = htmlSrc.indexOf('async function loadRequests()'); const seg = htmlSrc.slice(s, s + 1200); return seg.includes('listLoadingHtml(') && !seg.includes('.catch('); })());
@@ -4277,7 +4277,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10: ghs-app-v80-10)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10.1: ghs-app-v80-10-1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10-1'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5063,8 +5063,24 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('id="globalLogoutRow" style="display:none"') && htmlSrc.includes("glo.style.display = me ? '' : 'none'"));
   t('static v80.10 audit: footer bottom padding clears the fixed contact pill',
     htmlSrc.includes('#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 118px'));
-  t('static v80.10 audit: join notes keep their spaces inside the <b> runs (no fused words in extraction)',
-    htmlSrc.includes("'Joining<b> ' + info.name + ' </b>— your card will be charged<b> $'") && htmlSrc.includes("'/mo total. </b>Your card will be charged<b> $'"));
+  t('static v80.10.1: join/auth notes are single text nodes (the v80.10 inside-<b> spacing still extracted fused — "JoiningHomeCare Plus… charged$100" in the live bug-check — so the templates dropped their inline tags; wording unchanged)',
+    htmlSrc.includes("'Joining ' + info.name + ' — your card will be charged $'") && htmlSrc.includes("'/mo total. Your card will be charged $'") && !htmlSrc.includes('Joining<b>') && !htmlSrc.includes('charged<b>') && !htmlSrc.includes('is<b> FREE'));
+  t('static v80.10.1 FULL PAGE: #oldhome breaks out of the .wrap shell (100vw + centered negative margin) so the restored page is full-bleed again; the horizontal-overflow guard applies only while the customer home is the shown view',
+    htmlSrc.includes('width:100vw; margin-left:calc(50% - 50vw);') && htmlSrc.includes('body:has(#customerBox[style*="display: block"]){overflow-x:hidden; overflow-x:clip;}'));
+  t('static v80.10.1: the chips bar sticks flush to the viewport top (the app header is NOT sticky; the 118px offset belonged to the fragment\u2019s removed topbar) and anchor targets clear the stuck bar',
+    htmlSrc.includes('#oldhome .chips{position:sticky; top:0;') && !htmlSrc.includes('top:118px') && htmlSrc.includes('#oldhome section{scroll-margin-top:66px;}'));
+  t('static v80.10.1: the restored trade chips are wired in the delegated handler (smooth scroll + .on pill) — Yard lands on the Yard Cleanup card, Estimates on the how-ordering section',
+    htmlSrc.includes("closest('#oldhome .chips .chip')") && htmlSrc.includes("'#yard-card'") && htmlSrc.includes("'#sec-estimates'") && htmlSrc.includes('id="sec-estimates"'));
+  t('static v80.10.1: the restored hero CTA goes to the app menu (goMenu) and the two TV Mounting Order CTAs use the real #order route — no Order button points at #home anymore',
+    htmlSrc.includes('class="bigcta" href="#menu"') && htmlSrc.includes("h === '#menu'") && htmlSrc.includes('href="#order/tv-mounting"') && !htmlSrc.includes('<a class="pedir" href="#home"') && !htmlSrc.includes('<a class="oa-card" href="#home"'));
+  t('static v80.10.1: #join-homecare is a real membership join route (it was missing from MEMBERSHIP_JOIN_HASHES, so the $29 card\u2019s Join only changed the URL) and the visits preselect only runs for yard/plus',
+    htmlSrc.includes("'#join-homecare': { kind: 'homecare', plan: 'homecare'") && htmlSrc.includes("if (cfg.which === 'yard' || cfg.which === 'plus') selectMembershipVisits(cfg.which, cfg.visits);"));
+  t('static v80.10.1: navigating from a membership/join route back to the plain home view dismisses an armed join form (pendingJoin/pendingMembershipPlan/authRevealed cleared, deep-link key reset) — but never the hash transition beginInlineJoin makes itself',
+    htmlSrc.includes('ghsJoinArmNav') && htmlSrc.includes('MEMBERSHIP_JOIN_HASHES[ghsPrevHash]') && htmlSrc.includes("authRevealed = false; membershipDeepLinkKey = '';"));
+  t('static v80.10.1: the sticky technician door follows the SESSION — the boot bounce is marked, loadMe heals a stale flag for a logged-out visitor, the flag arms only on a worker session and clears at logout (a mere #worker visit no longer arms it)',
+    htmlSrc.includes('window.__ghsBootBounce = true') && htmlSrc.includes('function syncEntryFlag()') && htmlSrc.includes('if (!me && window.__ghsBootBounce)') && !htmlSrc.includes("try{ if (w) localStorage.setItem('ghs_entry','worker'); }catch(e){}"));
+  t('static v80.10.1 micro-copy: the city lines are single text nodes (no fused "Today·"), the compare card\u2019s FREE line lost its tag boundary, and the starter price range has no stray space after the dash',
+    htmlSrc.includes('● Today · Home base · from $75') && !htmlSrc.includes('<b>● Today</b>') && htmlSrc.includes('<li>First month FREE — for everyone (one per account)</li>') && htmlSrc.includes('$225<small>–$300</small>'));
 
   const raw809 = (port, method, pth, hostHdr, body) => new Promise((resolve, reject) => {
     const r = http.request({ host: '127.0.0.1', port, path: pth, method, setHost: false, headers: { Host: hostHdr, 'Content-Type': 'application/json' } }, (res) => {
