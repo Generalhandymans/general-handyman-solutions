@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-8', swSrc.includes("const CACHE = 'ghs-app-v80-8'"));
+t('static: SW cache is ghs-app-v80-9', swSrc.includes("const CACHE = 'ghs-app-v80-9'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1174,10 +1174,10 @@ run("location.hash = ''; me = null;"); run('applyWorkerEntry();'); run('render()
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
-t('v42 menu: renders all 98 catalog services as cards (full master list since v43)', (menuHtml42.match(/class="menu-card"/g) || []).length === 98);
+t('v42 menu: renders all 98 catalog services as cards (full master list since v43) + the 6 pinned Popular cards since v80.9 = 104', (menuHtml42.match(/class="menu-card"/g) || []).length === 104);
 t('v42 menu: cards order into the CART (v79: orderNow → #cart; the #order page is retired)', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("orderNow('" + id + "')")));
 t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the v43 cut, water heater $700 / $560)', menuHtml42.includes('$125') && menuHtml42.includes('Members $100') && menuHtml42.includes('$700') && menuHtml42.includes('Members $560'));
-t('v42 menu: EVERY card shows a member price — the discount is universal (98 of 98)', (menuHtml42.match(/Members \$/g) || []).length === 98);
+t('v42 menu: EVERY card shows a member price — the discount is universal (104 of 104 since the v80.9 Popular row)', (menuHtml42.match(/Members \$/g) || []).length === 104);
 // wizard navigation + progress
 run('wzGo(2);');
 t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label Paso 2 de 4', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Paso 2 de 4'));
@@ -2941,7 +2941,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 menu: cards + wizard rows load /menu-img/<id>.jpg with the category photo as fallback', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
   run("location.hash = ''; render(); setMenuLang('en');");
   const menuEn = elById.get('menuGroups').innerHTML;
-  t('v46 menu EN: per-service photos on the cards (98 imgs)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.jpg/g) || []).length === 98 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
+  t('v46 menu EN: per-service photos on the cards (98 catalog + 6 Popular = 104 imgs since v80.9)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.jpg/g) || []).length === 104 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
   // --- menu EN|ES: one language at a time, persisted ---
   t('v46 i18n: MENU_ES covers all 98 services', run('Object.keys(MENU_ES).length') === 98 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
   run("setMenuLang('es');");
@@ -3814,6 +3814,19 @@ t('static v63: /tecnico + /tech redirect to the worker entry; the activation ema
   t('v63: GET /tecnico and /tech 302 to /#worker', r1.status === 302 && (r1.headers.get('location') || '').includes('#worker') && r2.status === 302);
 }
 
+// ---------------- v80.9 FUSIÓN: /plus — the promo's direct door to the $100 Plus join ----------------
+t('static v80.9: /plus + /plus2 doors exist in server.js, landing on the Plus join fragments',
+  serverSrc.includes("p === '/plus'") && serverSrc.includes("'#join-plus1'") && serverSrc.includes("'#join-plus2'"));
+{
+  const p1 = await fetch(BASE2 + '/plus', { redirect: 'manual' });
+  const p2 = await fetch(BASE2 + '/plus?src=PROMO1', { redirect: 'manual' });
+  const p3 = await fetch(BASE2 + '/plus2', { redirect: 'manual' });
+  t('v80.9: GET /plus 302 to /#join-plus1; ?src moves inside the fragment; /plus2 to /#join-plus2',
+    p1.status === 302 && (p1.headers.get('location') || '') === '/#join-plus1' &&
+    p2.status === 302 && (p2.headers.get('location') || '') === '/#join-plus1?src=PROMO1' &&
+    p3.status === 302 && (p3.headers.get('location') || '') === '/#join-plus2');
+}
+
 // ---------------- v72: approved cleanup (29 proposals + ideas) ----------------
 t('static v72 L-1/L-2/L-3: the application form no longer asks skills 3x — self-rate, tools-level and transport fields are gone (stored data + admin skill display untouched)',
   !htmlSrc.includes('id="wSelfRate"') && !htmlSrc.includes('renderSelfRate(') && !htmlSrc.includes('id="wTools"') && !htmlSrc.includes('id="wTransport"') && htmlSrc.includes('skillRankHtml(w)'));
@@ -4264,7 +4277,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.8: ghs-app-v80-8)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-8'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.9: ghs-app-v80-9)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-9'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4989,6 +5002,96 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.8 purge: a LIVE (open) cart is never deleted — skipped with the reason', purgeLive808.status === 200 && purgeLive808.j.cartDeleted === false && /not cancelled/.test(purgeLive808.j.cartSkipped || ''));
   const purgeForbidden808 = await req2('POST', '/api/admin/purge-test-residue', { token: keepLogin808.j.token, body: { emails: ['keep808@t.local'] } });
   t('v80.8 purge: the route is admin-only (a customer gets 403)', purgeForbidden808.status === 403);
+}
+
+// ---------------- v80.9 FUSIÓN (merged homepage + gated host redirect) ----------------
+{
+  t('static v80.9 FUSION: hero H1 + deposit-law sub in EN and ES on the app home',
+    htmlSrc.includes('Home repairs, ordered like food.') && htmlSrc.includes('a deposit books it, the balance is due when the work is done') &&
+    htmlSrc.includes('Reparaciones del hogar, ordenadas como comida.') && htmlSrc.includes('un anticipo lo agenda, el resto se paga cuando el trabajo está terminado'));
+  const BANNED809 = ['you pay in full when you order', 'You pay in full when you order', 'Paid in full when you order', 'pay in full today', 'Pay in full today', 'pagas completo al ordenar', 'Pagas completo al ordenar', 'pagas completo hoy', 'paid in full when you order'];
+  t('static v80.9 FUSION: NONE of the website\u2019s banned pay-in-full lines (audit §2a, EN+ES) exists in the app',
+    BANNED809.every(s => !htmlSrc.includes(s)));
+  t('static v80.9 FUSION: Popular group pinned with the 6 verified services at catalog prices',
+    htmlSrc.includes("const POPULAR_IDS = ['tv-mounting', 'gutter-cleaning', 'toilet-replacement', 'oil-change', 'yard-cleanup', 'water-heater']") &&
+    htmlSrc.includes('Popular right now') && htmlSrc.includes('popularAvail') &&
+    htmlSrc.includes("'tv-mounting': { name: 'TV Mounting (up to 65\")', meta: '~2 h · Mount & level', price: 125, member: 100") &&
+    htmlSrc.includes("'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 }") &&
+    htmlSrc.includes("'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140") &&
+    htmlSrc.includes("'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: 60") &&
+    htmlSrc.includes("'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 }") &&
+    htmlSrc.includes("'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 }"));
+  t('static v80.9 FUSION: 3 promo boxes present (holiday lights / save 20% / haul from $225), EN+ES',
+    htmlSrc.includes('Holiday lights, handled') && htmlSrc.includes('Save 20% on services') && htmlSrc.includes('We haul it, from $225') &&
+    htmlSrc.includes("orderNow(\\'holiday-lights\\')") && htmlSrc.includes('Luces navideñas, resueltas') && htmlSrc.includes('Lo recogemos, desde $225'));
+  t('static v80.9 FUSION: footer present with Team phone, Stripe deposit line and master-list fine print',
+    htmlSrc.includes('id="appFooter"') && htmlSrc.includes('Call the Team · (707) 862-3773') &&
+    htmlSrc.includes('Secure payment by Stripe — deposit books it, balance at completion') &&
+    htmlSrc.includes('confirmed master service list (Oct 22, 2026)') &&
+    htmlSrc.includes('20% off every menu service — including junk removal, hauling and $75 services') &&
+    htmlSrc.includes('Materials are customer-supplied unless noted') && htmlSrc.includes("href=\"#terms\">' + ui.footTerms") && htmlSrc.includes("href=\"#privacy\">' + ui.footPrivacy"));
+  t('static v80.9 FUSION: plan comparison table + cities grid + corrected trust band + before/after slider wired',
+    htmlSrc.includes('id="planCompare"') && htmlSrc.includes('Compare the plans') && htmlSrc.includes('First in-person estimate FREE, then $50') &&
+    htmlSrc.includes('HOME_CITIES') && htmlSrc.includes('Serving all of Solano County') &&
+    htmlSrc.includes('Fixed price, agreed first') && htmlSrc.includes('30-day workmanship guarantee') && htmlSrc.includes('Local Solano County technicians') &&
+    htmlSrc.includes('★ 4.5 on Google · 20 reviews') && htmlSrc.includes('/ba/before.jpg') && htmlSrc.includes('/ba/after.jpg') && htmlSrc.includes('function baSlide('));
+  t('static v80.9 FUSION: header carries search + global EN|ES toggle + Install app link; 555 placeholders replaced',
+    htmlSrc.includes('id="homeSearch"') && htmlSrc.includes('What do you need today?') && htmlSrc.includes('id="globLangEn"') && htmlSrc.includes('id="globLangEs"') &&
+    htmlSrc.includes('id="installNavLink"') && htmlSrc.includes('href="/instalar"') &&
+    !htmlSrc.includes('555-0123') && !htmlSrc.includes('555-1234') && htmlSrc.includes('707-___-____'));
+  t('static v80.9 FUSION: hero carousel uses the live-tracking slide; the new images exist and are routed',
+    htmlSrc.includes('id="heroTrack"') && htmlSrc.includes('/hero-tracking.png') && htmlSrc.includes('/hero-tech.jpg') &&
+    fs.existsSync(path.join(APP_DIR, 'public', 'hero-tracking.png')) && fs.existsSync(path.join(APP_DIR, 'public', 'hero-tech.jpg')) &&
+    fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'before.jpg')) && fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'after.jpg')) &&
+    serverSrc.includes("'/hero-tracking.png'") && serverSrc.includes("p === '/hero-tech.jpg'") && serverSrc.includes("p.startsWith('/ba/')"));
+  t('static v80.9 FUSION: host redirect is env-gated (MERGED_DOMAIN_LIVE=1) with the Stripe webhook exempt',
+    serverSrc.includes("process.env.MERGED_DOMAIN_LIVE === '1'") && serverSrc.includes("reqHost === 'app.generalhandymans.app'") &&
+    serverSrc.includes("p !== '/api/stripe/webhook'") && serverSrc.includes("'https://generalhandymans.app' + req.url") && serverSrc.includes('308'));
+
+  const raw809 = (port, method, pth, hostHdr, body) => new Promise((resolve, reject) => {
+    const r = http.request({ host: '127.0.0.1', port, path: pth, method, setHost: false, headers: { Host: hostHdr, 'Content-Type': 'application/json' } }, (res) => {
+      const chunks = []; res.on('data', c => chunks.push(c)); res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    r.on('error', reject);
+    if (body) r.write(body);
+    r.end();
+  });
+  const off809 = await raw809(APP_PORT, 'GET', '/', 'app.generalhandymans.app');
+  t('v80.9 FUSION: gate OFF (default) — the app host still serves the app (200)', off809.status === 200);
+  const slide809 = await raw809(APP_PORT, 'GET', '/hero-tracking.png', 'generalhandymans.app');
+  t('v80.9 FUSION: tracking slide asset served (200 image/png)', slide809.status === 200 && String(slide809.headers['content-type']).includes('image/png') && slide809.body.length > 1000);
+  const ba809 = await raw809(APP_PORT, 'GET', '/ba/before.jpg', 'generalhandymans.app');
+  t('v80.9 FUSION: before/after photo served (200 image/jpeg)', ba809.status === 200 && String(ba809.headers['content-type']).includes('image/jpeg') && ba809.body.length > 1000);
+  const tech809 = await raw809(APP_PORT, 'GET', '/hero-tech.jpg', 'generalhandymans.app');
+  t('v80.9 FUSION: hero technician photo served (200 image/jpeg)', tech809.status === 200 && String(tech809.headers['content-type']).includes('image/jpeg') && tech809.body.length > 1000);
+
+  try { fs.unlinkSync('/tmp/ghs-v17-test/data-gate.json'); } catch (e) {}
+  const child809 = spawn('node', ['server.js'], {
+    cwd: APP_DIR,
+    env: Object.assign({}, process.env, {
+      PORT: '8990', DATA_FILE: '/tmp/ghs-v17-test/data-gate.json', NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT,
+      SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
+      STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
+      RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981',
+      MERGED_DOMAIN_LIVE: '1'
+    }),
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  child809.stderr.on('data', d => process.stderr.write('[gate] ' + d));
+  let up809 = false;
+  for (let i = 0; i < 60 && !up809; i++) { try { const h = await raw809(8990, 'GET', '/api/health', '127.0.0.1'); up809 = h.status === 200; } catch (e) {} if (!up809) await sleep(250); }
+  t('v80.9 FUSION: gate instance boots with MERGED_DOMAIN_LIVE=1', up809);
+  const red1809 = await raw809(8990, 'GET', '/', 'app.generalhandymans.app');
+  t('v80.9 FUSION: gate ON — app host root 308-redirects to the apex', red1809.status === 308 && red1809.headers.location === 'https://generalhandymans.app/');
+  const red2809 = await raw809(8990, 'GET', '/cart/CRT-TEST809?src=ig&x=1', 'app.generalhandymans.app');
+  t('v80.9 FUSION: gate ON — redirect preserves path + query', red2809.status === 308 && red2809.headers.location === 'https://generalhandymans.app/cart/CRT-TEST809?src=ig&x=1');
+  const wh809 = await raw809(8990, 'POST', '/api/stripe/webhook', 'app.generalhandymans.app', '{"id":"evt_gate_test"}');
+  t('v80.9 FUSION: gate ON — /api/stripe/webhook is EXEMPT (served, never redirected)', wh809.status !== 308 && wh809.status !== 301 && wh809.status !== 302 && wh809.status !== 303 && wh809.status !== 307);
+  const apex809 = await raw809(8990, 'GET', '/', 'generalhandymans.app');
+  t('v80.9 FUSION: gate ON — the apex host itself serves normally (200)', apex809.status === 200);
+  const onr809 = await raw809(8990, 'GET', '/', 'general-handyman-solutions-app.onrender.com');
+  t('v80.9 FUSION: gate ON — the onrender host is untouched (200)', onr809.status === 200);
+  try { child809.kill('SIGTERM'); } catch (e) {}
 }
 
 try { child2.kill('SIGTERM'); } catch (e) {}
