@@ -371,7 +371,7 @@ table.cmp button{white-space:nowrap}
 .ba-tag.l{left:10px}.ba-tag.r{right:10px}
 .ba-range{width:100%;max-width:640px;margin-top:10px;accent-color:var(--red)}
 #menuNoResults .btn-link{display:inline-block;background:var(--red);color:#fff;font-weight:800;padding:11px 18px;border-radius:999px;text-decoration:none}
-#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 22px;border-top:3px solid var(--red)}
+#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 118px;border-top:3px solid var(--red)}/* v80.10: the 118px bottom padding clears the fixed #teamContactPill (bottom:12px, ~64px tall) so the pill never covers footer content */
 .foot-grid{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
 #appFooter h4{color:#fff;margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
 #appFooter a{display:block;color:#cfc9c2;text-decoration:none;font-size:14px;padding:3px 0}
@@ -379,6 +379,10 @@ table.cmp button{white-space:nowrap}
 .foot-cities{display:block;font-size:13.5px;line-height:1.55}
 .foot-stripe{display:block;margin-top:10px;font-size:13.5px;color:#e8e4dd}
 .foot-fine{max-width:1080px;margin:18px auto 0;font-size:12.5px;line-height:1.55;color:#8f8a81}
+</style>
+<style>
+/* v80.10 LA ORIGINAL — the restored homepage’s CSS (old standalone site), every selector scoped to #oldhome */
+#oldhome, #oldhome *{margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}#oldhome{background:#0a0a0c; color:#f2f2f2; padding-bottom:86px;}#oldhome .topbar{position:sticky; top:0; z-index:20; background:rgba(10,10,12,.96); border-bottom:1px solid #26262b; padding:12px 16px 11px;}#oldhome .trow{display:flex; align-items:center; gap:12px;}#oldhome .logo{width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,#f02b3f,#a8121f); display:flex; align-items:center; justify-content:center; font-size:21px; flex:none; box-shadow:0 4px 14px rgba(228,37,53,.35);}#oldhome .brand{font-weight:800; font-size:15px; line-height:1.1; margin-right:auto;}#oldhome .brand small{color:#9a9aa2; font-weight:600; font-size:11px;}#oldhome .search{width:100%; outline:none; color:#f2f2f2; margin-top:11px; background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:11px 16px; color:#9a9aa2; font-size:13.5px; display:flex; align-items:center; gap:8px;}#oldhome .lang{background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:8px 11px; font-size:12px; font-weight:800; color:#e8e8ea; flex:none;}#oldhome .lang b{color:#e42535;}#oldhome .acct{background:#e42535; color:#fff; border-radius:999px; padding:9px 14px; font-weight:700; font-size:13px; flex:none;}#oldhome .hero{padding:24px 16px 4px; background:radial-gradient(600px 240px at 15% -40px, rgba(228,37,53,.22), transparent 70%);}#oldhome .pills{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}#oldhome .pill{background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:6px 11px; font-size:12px; font-weight:700; color:#e8e8ea;}#oldhome .pill .dot{color:#2fbf71;}#oldhome .hero h1{font-size:29px; font-weight:900; letter-spacing:-.6px; line-height:1.12;}#oldhome .hero h1 span{color:#e42535;}#oldhome .hero p{color:#c9c9cf; font-size:14.5px; margin-top:7px;}#oldhome .bigcta{display:block; margin-top:14px; background:#e42535; color:#fff; text-align:center; font-weight:900; font-size:16px; padding:14px; border-radius:14px; box-shadow:0 8px 22px rgba(228,37,53,.35);}#oldhome .stars{color:#ffb800; font-size:13px; margin-top:12px; font-weight:700;}#oldhome .stars span{color:#9a9aa2; font-weight:600;}#oldhome .promos{display:flex; gap:12px; overflow-x:auto; padding:18px 16px 2px; scroll-snap-type:x mandatory;}#oldhome .promo{min-width:262px; scroll-snap-align:start; border-radius:18px; padding:16px; position:relative; overflow:hidden;}#oldhome .promo.season{background:linear-gradient(120deg,#5c1119,#2a060a); border:1px solid #8c1a26;}#oldhome .promo.member{background:linear-gradient(120deg,#0f3a22,#071a0f); border:1px solid #2fbf71;}#oldhome .promo.junkp{background:linear-gradient(120deg,#33302a,#171512); border:1px solid #55504a;}#oldhome .promo .tag{font-size:10.5px; font-weight:900; letter-spacing:1px; text-transform:uppercase; color:#ffb800;}#oldhome .promo.member .tag{color:#2fbf71;}#oldhome .promo.junkp .tag{color:#d8d2c4;}#oldhome .promo h3{font-size:19px; font-weight:900; margin:5px 0 3px;}#oldhome .promo p{font-size:12.5px; color:#e6e2da; opacity:.85;}#oldhome .promo .go{display:inline-block; margin-top:10px; background:#fff; color:#111; font-weight:900; font-size:12.5px; padding:7px 13px; border-radius:999px;}#oldhome .members{display:flex; gap:10px; overflow-x:auto; padding:16px;}#oldhome .mbox{min-width:130px; border-radius:14px; padding:12px; background:#17171b; border:1px solid #2a2a31; position:relative;}#oldhome .mbox.free{background:#123324; border-color:#2fbf71;}#oldhome .mbox.pop{border-color:#e42535;}#oldhome .crown{position:absolute; top:-9px; right:10px; background:#e42535; color:#fff; font-size:9.5px; font-weight:900; padding:3px 8px; border-radius:999px; letter-spacing:.4px;}#oldhome .mbox .t{font-size:11px; font-weight:800; letter-spacing:.6px; color:#c9c9cf; text-transform:uppercase;}#oldhome .mbox.free .t{color:#2fbf71;}#oldhome .mbox .p{font-size:22px; font-weight:900; margin:4px 0 2px;}#oldhome .mbox .p small{font-size:11px; color:#9a9aa2; font-weight:700;}#oldhome .mbox .cta{margin-top:8px; display:inline-block; background:#e42535; color:#fff; font-size:11px; font-weight:800; padding:6px 10px; border-radius:999px;}#oldhome .mbox.free .cta{background:#2fbf71; color:#06280f;}#oldhome .chips{position:sticky; top:118px; z-index:15; background:rgba(10,10,12,.97); display:flex; gap:8px; overflow-x:auto; padding:10px 16px; border-bottom:1px solid #26262b;}#oldhome .chip{white-space:nowrap; background:#1b1b1f; border:1px solid #2c2c33; color:#e8e8ea; font-size:13px; font-weight:700; padding:8px 13px; border-radius:999px;}#oldhome .chip.on{background:#e42535; border-color:#e42535; color:#fff;}#oldhome section{padding:20px 16px 4px;}#oldhome .shead{display:flex; align-items:baseline; justify-content:space-between;}#oldhome h2{font-size:20px; font-weight:900; margin-bottom:4px;}#oldhome .seeall{color:#e42535; font-size:12.5px; font-weight:800;}#oldhome .sub{color:#9a9aa2; font-size:12.5px; margin-bottom:12px;}#oldhome .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:12px;}#oldhome .card{background:#17171b; border:1px solid #2a2a31; border-radius:18px; overflow:hidden; display:flex; flex-direction:column;}#oldhome .tile{height:96px; display:flex; align-items:center; justify-content:center; font-size:44px; position:relative; background:linear-gradient(135deg,#26262e,#131316);}#oldhome .tile::after{content:''; position:absolute; inset:0; background:radial-gradient(200px 90px at 50% 0%, rgba(255,255,255,.09), transparent 70%);}#oldhome .tile img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}#oldhome .tile.red{background:linear-gradient(135deg,#6d1420,#1c0508);}#oldhome .tile.grn{background:linear-gradient(135deg,#11452a,#071a0f);}#oldhome .tile.blu{background:linear-gradient(135deg,#173d5e,#081320);}#oldhome .tile.amb{background:linear-gradient(135deg,#5e3f14,#201304);}#oldhome .badge{position:absolute; top:8px; left:8px; z-index:2; background:rgba(0,0,0,.72); color:#ffb800; font-size:10px; font-weight:900; padding:4px 8px; border-radius:999px;}#oldhome .body{padding:11px 12px 12px; display:flex; flex-direction:column; gap:3px; flex:1;}#oldhome .name{font-weight:800; font-size:14.5px; line-height:1.2;}#oldhome .meta{color:#9a9aa2; font-size:11.5px;}#oldhome .rate{font-size:11.5px; color:#e8e8ea; font-weight:700;}#oldhome .rate i{color:#ffb800; font-style:normal;}#oldhome .rate .today{color:#2fbf71;}#oldhome .price{font-size:20px; font-weight:900; color:#fff; margin-top:6px;}#oldhome .price small{font-size:11px; color:#9a9aa2; font-weight:700;}#oldhome .mem{color:#2fbf71; font-size:11.5px; font-weight:800;}#oldhome .pedir{margin-top:auto; background:#e42535; color:#fff; text-align:center; font-weight:800; font-size:14px; padding:10px; border-radius:11px;}#oldhome .wide{background:#17171b; border:1px solid #2a2a31; border-radius:16px; padding:14px; margin-bottom:12px; display:flex; gap:14px; align-items:center;}#oldhome .wide .ic{font-size:36px;}#oldhome .wide .ic img{width:64px; height:64px; border-radius:12px; object-fit:cover; display:block;}#oldhome .wide .name{font-size:16px;}#oldhome .wide .price{margin-left:auto; text-align:right; flex:none;}#oldhome .fill{height:7px; border-radius:99px; background:#26262b; margin-top:7px; width:170px; max-width:44vw; overflow:hidden;}#oldhome .fill div{height:100%; background:linear-gradient(90deg,#e42535,#ff5a3c); border-radius:99px;}#oldhome .order{background:#17171b; border:1px solid #2a2a31; border-radius:16px; padding:16px;}#oldhome .orow{display:flex; justify-content:space-between; font-size:14px; padding:5px 0;}#oldhome .orow.tot{border-top:1px solid #2c2c33; margin-top:8px; padding-top:10px; font-weight:900; font-size:16px;}#oldhome .steps{display:flex; gap:10px;}#oldhome .step{flex:1; background:#17171b; border:1px solid #2a2a31; border-radius:14px; padding:13px; font-size:12.5px; color:#c9c9cf;}#oldhome .step b{display:block; color:#fff; font-size:13.5px; margin-bottom:3px;}#oldhome .step .n{display:inline-flex; width:22px; height:22px; border-radius:50%; background:#e42535; color:#fff; align-items:center; justify-content:center; font-weight:900; font-size:12px; margin-bottom:7px;}#oldhome .quotes{display:flex; gap:10px; overflow-x:auto;}#oldhome .quote{min-width:230px; background:#17171b; border:1px solid #2a2a31; border-radius:14px; padding:14px; font-size:13px; color:#e8e8ea; line-height:1.45;}#oldhome .quote .who{color:#9a9aa2; font-size:11.5px; margin-top:8px; font-weight:700;}#oldhome .quote .st{color:#ffb800; font-size:12px;}#oldhome .trust{display:flex; gap:10px; padding:18px 16px 6px; flex-wrap:wrap;}#oldhome .trust div{flex:1; min-width:100px; background:#17171b; border:1px solid #2a2a31; border-radius:14px; padding:12px; text-align:center; font-size:12px; font-weight:700; color:#c9c9cf;}#oldhome .trust b{display:block; font-size:20px; margin-bottom:4px;}#oldhome .heroimg{position:relative; overflow:hidden;}#oldhome .heroimg > img{width:100%; height:380px; object-fit:cover; object-position:72% 50%; display:block;}#oldhome .heroimg .scrim{position:absolute; inset:0; background:linear-gradient(90deg, rgba(5,5,8,.88) 0%, rgba(5,5,8,.55) 46%, rgba(5,5,8,.05) 75%), linear-gradient(0deg, rgba(10,10,12,.95) 0%, rgba(10,10,12,0) 34%);}#oldhome .heroimg .hcontent{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:18px 16px 16px; max-width:560px;}#oldhome .heroimg h1{font-size:31px; font-weight:900; letter-spacing:-.6px; line-height:1.1; text-shadow:0 2px 14px rgba(0,0,0,.6);}#oldhome .heroimg h1 span{color:#ff4655;}#oldhome .heroimg p{color:#e6e6ea; font-size:14px; margin-top:6px; text-shadow:0 1px 8px rgba(0,0,0,.7);}#oldhome .heroimg .bigcta{max-width:300px;}#oldhome .cats{display:flex; gap:16px; overflow-x:auto; padding:18px 16px 4px;}#oldhome .cat{text-align:center; flex:none; width:74px;}#oldhome .cat img{width:66px; height:66px; border-radius:50%; object-fit:cover; border:2px solid #2c2c33; display:block; margin:0 auto;}#oldhome .cat.on img{border-color:#e42535; box-shadow:0 0 0 3px rgba(228,37,53,.25);}#oldhome .cat .cl{font-size:11.5px; font-weight:800; margin-top:7px; color:#e8e8ea; line-height:1.2;}#oldhome .reveal{opacity:0; transform:translateY(16px); transition:opacity .55s ease, transform .55s ease;}#oldhome .reveal.in{opacity:1; transform:none;}#oldhome .fab{position:fixed; right:14px; bottom:96px; z-index:31; background:#2fbf71; color:#06280f; font-weight:900; font-size:13.5px; padding:12px 16px; border-radius:999px; box-shadow:0 10px 24px rgba(0,0,0,.5); text-decoration:none; display:flex; align-items:center; gap:7px;}#oldhome .cities{display:grid; grid-template-columns:1fr 1fr; gap:11px;}#oldhome .city{position:relative; border-radius:16px; overflow:hidden; height:104px; border:1px solid #2a2a31;}#oldhome .city img{width:100%; height:100%; object-fit:cover; display:block;}#oldhome .city .cov{position:absolute; inset:0; background:linear-gradient(0deg, rgba(5,5,8,.88) 8%, rgba(5,5,8,.15) 55%); display:flex; flex-direction:column; justify-content:flex-end; padding:10px 12px;}#oldhome .city .cn{font-weight:900; font-size:16px;}#oldhome .city .cs{color:#c9c9cf; font-size:11px; font-weight:700;}#oldhome .city .cs b{color:#2fbf71;}#oldhome.searching .heroimg, #oldhome.searching .promos, #oldhome.searching .cats, #oldhome.searching .members, #oldhome.searching .trust, #oldhome.searching footer{display:none;}#oldhome #noresults{display:none; margin:22px 16px; background:#17171b; border:1px solid #2a2a31; border-radius:16px; padding:18px; text-align:center; font-size:14px; color:#c9c9cf; line-height:1.55;}#oldhome #noresults b{color:#fff;}#oldhome .band{position:relative; border-radius:20px; overflow:hidden; margin:20px 16px 4px; border:1px solid #3a2328;}#oldhome .band > img{width:100%; height:290px; object-fit:cover; object-position:78% 22%; display:block;}#oldhome .band .scrim{position:absolute; inset:0; background:linear-gradient(90deg, rgba(5,5,8,.92) 0%, rgba(5,5,8,.68) 52%, rgba(5,5,8,.05) 82%), linear-gradient(0deg, rgba(10,10,12,.9) 0%, rgba(10,10,12,0) 40%);}#oldhome .band .bc{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:16px; max-width:430px;}#oldhome .band .eb{font-size:10.5px; font-weight:900; letter-spacing:1.6px; color:#ff4655; text-transform:uppercase;}#oldhome .band h2{font-size:23px; font-weight:900; margin:5px 0 4px; text-shadow:0 2px 10px rgba(0,0,0,.6);}#oldhome .band p{font-size:13px; color:#e6e6ea; line-height:1.45; text-shadow:0 1px 6px rgba(0,0,0,.7);}#oldhome .band .prom{display:flex; gap:7px; margin-top:11px; flex-wrap:wrap;}#oldhome .band .prom span{background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.22); border-radius:999px; padding:6px 10px; font-size:11.5px; font-weight:800;}#oldhome .band2{display:flex; border-radius:20px; overflow:hidden; margin:20px 16px 4px; border:1px solid #3a2328; background:#121013;}#oldhome .band2 .txt{flex:1; padding:18px 16px; display:flex; flex-direction:column; justify-content:center;}#oldhome .band2 .eb{font-size:10.5px; font-weight:900; letter-spacing:1.6px; color:#ff4655; text-transform:uppercase;}#oldhome .band2 h2{font-size:23px; font-weight:900; margin:5px 0 5px; line-height:1.12;}#oldhome .band2 p{font-size:13px; color:#c9c9cf; line-height:1.5;}#oldhome .band2 .prom{display:flex; flex-direction:column; gap:6px; margin-top:12px;}#oldhome .band2 .prom span{font-size:12.5px; font-weight:800; color:#e8e8ea;}#oldhome .band2 .ph{flex:1.15; min-height:350px;}#oldhome .band2 .ph img{width:100%; height:100%; object-fit:cover; object-position:0% 12%; display:block;}#oldhome footer{color:#66666e; font-size:11px; text-align:center; padding:14px 20px 8px; line-height:1.5;}
 </style>
 </head>
 <body>
@@ -793,7 +797,7 @@ table.cmp button{white-space:nowrap}
       <div id="ccAddList" style="display:none"></div>
       <div id="cartTotalsDue" style="margin:10px 0"></div>
       <h4>Payment</h4>
-      <p class="mut">You pay only the <b>booking deposit</b> today — <b>$50 flat</b> on totals up to $300, <b>40%</b> on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
+      <p class="mut">You pay only the<b> booking deposit </b>today —<b> $50 flat </b>on totals up to $300,<b> 40% </b>on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="cartPayElement"></div>
       <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
       <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%" disabled>Pay</button>
@@ -918,7 +922,303 @@ table.cmp button{white-space:nowrap}
 
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
-    <div id="homeHero"></div>
+    <div id="oldhome">
+
+
+
+
+<div class="heroimg">
+  <img src="/old/old-01.jpg" alt="General Handyman Solutions technician">
+  <div class="scrim"></div>
+  <div class="hcontent">
+    <div class="pills"><span class="pill">📍 Solano County, CA</span><span class="pill"><span class="dot">●</span> Available today</span></div>
+    <h1>Home repairs,<br><span>ordered like food.</span></h1>
+    <p>Fixed prices. Real local technicians. Book in a minute — a deposit books it, the balance is due when the work is done.</p>
+    <a class="bigcta" href="#sec-popular" style="text-decoration:none">🔧 Order a service</a>
+    <div class="stars">★★★★★</div>
+  </div>
+</div>
+
+<div class="promos">
+  <div class="promo season"><div class="tag">🎄 Seasonal</div><h3>Holiday lights, handled</h3><p>Install from $175 · Take-down from $75. Book before the calendar fills.</p><a class="go" href="#order/holiday-lights" style="text-decoration:none">Book install →</a></div>
+  <div class="promo member"><div class="tag">Members</div><h3>Save 20% on services</h3><p>HomeCare members pay member prices on the whole menu. Plans from $29/mo.</p><a class="go" href="#ghsMemberships" style="text-decoration:none">See plans →</a></div>
+  <div class="promo junkp"><div class="tag">Junk removal</div><h3>We haul it, from $225</h3><p>Four flat load sizes. Disposal included — gone today, gone for good.</p><a class="go" href="#sec-junk" style="text-decoration:none">See load sizes →</a></div>
+</div>
+
+
+
+<div class="chips">
+  <div class="chip on">🔥 Popular</div><div class="chip">🪚 Carpentry</div><div class="chip">⚡ Electrical</div><div class="chip">🔧 Plumbing</div><div class="chip">🌿 Yard</div><div class="chip">🚗 Mechanic</div><div class="chip">🗑️ Junk &amp; Hauling</div><div class="chip">📸 Estimates</div>
+</div>
+
+<div id="noresults"><b>No matches for that one.</b><br>But the 📸 <b>free photo estimate</b> covers anything — snap it and we price it.</div>
+
+<section id="sec-popular">
+  <div class="shead"><h2>🔥 Popular right now</h2></div>
+  <div class="sub">The most-ordered services in Solano County this month</div>
+  <div class="grid">
+    <div class="card"><div class="tile red"><span class="badge">🔥 Most ordered</span><img src="/old/old-02.jpg" alt="TV wall mounting"></div><div class="body"><div class="name">TV Mounting (up to 65")</div><div class="meta">~2 h · Mount &amp; level</div><div class="rate"><i>★</i> 4.9 · <span class="today">● Available today</span></div><div class="price">$125</div><div class="mem">Members: $100 · Save $25</div><a class="pedir" href="#home" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile blu"><img src="/old/old-03.jpg" alt="Gutter cleaning"></div><div class="body"><div class="name">Gutter Cleaning</div><div class="meta">~2 h · Single story</div><div class="rate"><i>★</i> 4.8 · <span class="today">● Available today</span></div><div class="price">$150</div><div class="mem">Members: $120 · Save $30</div><a class="pedir" href="#order/gutter-cleaning" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-04.jpg" alt="Toilet installation"></div><div class="body"><div class="name">Toilet Replacement</div><div class="meta">~2.5 h · Full swap</div><div class="rate"><i>★</i> 5.0 · <span class="today">● Available today</span></div><div class="price">$175</div><div class="mem">Members: $140 · Save $35</div><a class="pedir" href="#order/toilet-replacement" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile amb"><img src="/old/old-05.jpg" alt="Oil change"></div><div class="body"><div class="name">Oil Change &amp; Fluids</div><div class="meta">~1 h · At your home</div><div class="rate"><i>★</i> 4.9 · <span class="today">● Available today</span></div><div class="price">$75</div><div class="mem">Members: $60</div><a class="pedir" href="#order/oil-change" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card" id="yard-card"><div class="tile grn"><img src="/old/old-06.jpg" alt="Yard cleanup"></div><div class="body"><div class="name">Yard Cleanup</div><div class="meta">~2 h · One-time rescue</div><div class="rate"><i>★</i> 4.8 · <span class="today">● Available today</span></div><div class="price">$150</div><div class="mem">Members: $120 · Save $30</div><a class="pedir" href="#order/yard-cleanup" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile red"><span class="badge">⭐ Top rated</span><img src="/old/old-07.jpg" alt="Water heater installation"></div><div class="body"><div class="name">Water Heater Install</div><div class="meta">Haul-away included</div><div class="rate"><i>★</i> 5.0 · <span class="today">● Available today</span></div><div class="price">$700</div><div class="mem">Members: $560 · Save $140</div><a class="pedir" href="#order/water-heater" style="text-decoration:none;color:#fff">Order</a></div></div>
+  </div>
+</section>
+
+<div class="band2 reveal in">
+  <div class="txt">
+    <div class="eb">General Handyman Solutions Team</div>
+    <h2>Meet your technician</h2>
+    <p>The same faces from our posts show up at your door — one local team for all of Solano County.</p>
+    <div class="prom"><span>💲 Fixed price, agreed first</span><span>⚡ Same-day available</span><span>🛡️ 30-day guarantee</span></div>
+  </div>
+  <div class="ph"><img src="/old/old-08.jpg" alt="Our GHS hero technician"></div>
+</div>
+
+
+<style>#oldhome .oa-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:6px 0 4px}#oldhome .oa-card{display:flex;gap:12px;align-items:center;background:#141416;border:1px solid #26262a;border-radius:16px;padding:10px 12px;text-decoration:none;color:#fff}#oldhome .oa-card img{width:56px;height:56px;border-radius:12px;object-fit:cover}#oldhome .oa-card b{display:block;font-size:15px}#oldhome .oa-card span{color:#9a968f;font-size:13px}#oldhome .oa-card .oa-go{margin-left:auto;color:#e42535;font-weight:800;white-space:nowrap}#oldhome .ba{position:relative;border-radius:18px;overflow:hidden;aspect-ratio:16/10;background:#111;max-width:640px}#oldhome .ba>img{width:100%;height:100%;object-fit:cover;display:block}#oldhome .ba-before{position:absolute;top:0;left:0;bottom:0;width:50%;background-size:cover;background-position:center;border-right:3px solid #fff}#oldhome .ba-tag{position:absolute;top:10px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;letter-spacing:.06em}#oldhome .ba-tag.l{left:10px}#oldhome .ba-tag.r{right:10px}#oldhome .ba input[type=range]{width:100%;max-width:640px;margin-top:10px;accent-color:#e42535}#oldhome .ba-cap{color:#9a968f;font-size:14px}#oldhome .ba-cap a{color:#9adcff;font-weight:700}#oldhome .cmp-wrap{overflow-x:auto;margin-top:14px}#oldhome table.cmp{border-collapse:collapse;width:100%;min-width:560px;background:#101012;border:1px solid #26262a;border-radius:16px;overflow:hidden}#oldhome table.cmp th, #oldhome table.cmp td{padding:11px 13px;text-align:left;border-bottom:1px solid #222226;font-size:14.5px;color:#e8e6e1}#oldhome table.cmp th{background:#17171a;font-size:15px}#oldhome table.cmp td.y{color:#2fbf71;font-weight:800}#oldhome table.cmp .join{display:inline-block;background:#e42535;color:#fff;border-radius:10px;padding:7px 13px;font-weight:700;text-decoration:none;font-size:13.5px}#oldhome .ft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px;text-align:left;max-width:900px;margin:0 auto 14px}#oldhome .ft-grid h4{margin:0 0 8px;font-size:14px;letter-spacing:.05em;text-transform:uppercase;color:#fff}#oldhome .ft-grid a{display:block;color:#9adcff;text-decoration:none;margin:5px 0;font-size:14px}#oldhome .ft-grid p{color:#9a968f;font-size:14px;margin:5px 0;line-height:1.45}#oldhome .ft-small{color:#77736c;font-size:12.5px;line-height:1.5}</style>
+
+<section>
+  <div class="shead"><h2>⭐ Neighbors' favorites</h2><span class="see">The services Solano orders again and again</span></div>
+  <div class="oa-row">
+    <a class="oa-card" href="#home"><img src="/old/old-09.jpg" alt="TV Mounting"><div><b>TV Mounting</b><span>Booked again &amp; again · $125</span></div><span class="oa-go">Order →</span></a>
+    <a class="oa-card" href="#order/gutter-cleaning"><img src="/old/old-10.jpg" alt="Gutter Cleaning"><div><b>Gutter Cleaning</b><span>Every season · $150</span></div><span class="oa-go">Order →</span></a>
+    <a class="oa-card" href="#order/yard-cleanup"><img src="/old/old-11.jpg" alt="Yard Cleanup"><div><b>Yard Cleanup</b><span>The rescue job · $150</span></div><span class="oa-go">Order →</span></a>
+  </div>
+</section>
+<section id="sec-carpentry">
+  <div class="shead"><h2>🪚 Carpentry</h2></div>
+  <div class="sub">Doors, furniture, drywall &amp; more</div>
+  <div class="grid">
+    <div class="card"><div class="tile"><img src="/old/old-12.jpg" alt="Furniture assembly"></div><div class="body"><div class="name">Furniture Assembly</div><div class="meta">~1.5 h · Standard piece</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/furniture-assembly" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-13.jpg" alt="Door slab installation"></div><div class="body"><div class="name">Door Slab Swap</div><div class="meta">~2 h · + lock install available</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/door-slab-swap" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-14.jpg" alt="Closet organizer install"></div><div class="body"><div class="name">Closet Organizer Install</div><div class="meta">~3 h · Kit systems</div><div class="price">$225</div><div class="mem">Members: $180</div><a class="pedir" href="#order/closet-organizer" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-15.jpg" alt="Drywall patch"></div><div class="body"><div class="name">Drywall Patch — Medium</div><div class="meta">Textured, ready to paint</div><div class="price">$250</div><div class="mem">Members: $200</div><a class="pedir" href="#order/drywall-patch-medium" style="text-decoration:none;color:#fff">Order</a></div></div>
+  </div>
+</section>
+
+<section id="sec-electrical">
+  <div class="shead"><h2>⚡ Electrical</h2></div>
+  <div class="sub">Installs &amp; swaps — no panel work</div>
+  <div class="grid">
+    <div class="card"><div class="tile amb"><img src="/old/old-16.jpg" alt="Ceiling fan install"></div><div class="body"><div class="name">Ceiling Fan Install</div><div class="meta">~1.5 h · Existing box</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/ceiling-fan" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile blu"><img src="/old/old-17.jpg" alt="Video doorbell install"></div><div class="body"><div class="name">Ring Doorbell Install</div><div class="meta">~1 h · Setup included</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/ring-doorbell" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile red"><span class="badge">🎄 Seasonal</span><img src="/old/old-18.jpg" alt="Holiday lights install"></div><div class="body"><div class="name">Holiday Lights Install</div><div class="meta">Single story · Book early</div><div class="price">$175</div><div class="mem">Members: $140</div><a class="pedir" href="#order/holiday-lights" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-19.jpg" alt="Garage door opener"></div><div class="body"><div class="name">Garage Door Opener Swap</div><div class="meta">~3 h · Standard access</div><div class="price">$375</div><div class="mem">Members: $300</div><a class="pedir" href="#order/garage-opener" style="text-decoration:none;color:#fff">Order</a></div></div>
+  </div>
+</section>
+
+<section id="sec-plumbing">
+  <div class="shead"><h2>🔧 Plumbing</h2></div>
+  <div class="sub">Rapid Rooter — drains &amp; fixtures</div>
+  <div class="grid">
+    <div class="card"><div class="tile blu"><img src="/old/old-20.jpg" alt="Drain unclog"></div><div class="body"><div class="name">Drain Unclog — Basic</div><div class="meta">One drain · Machine clean</div><div class="price">$185</div><div class="mem">Members: $148</div><a class="pedir" href="#order/drain-unclog" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-21.jpg" alt="Faucet replacement"></div><div class="body"><div class="name">Faucet Replacement</div><div class="meta">~1.5 h · Kitchen or bath</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/faucet-replacement" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-22.jpg" alt="Dishwasher swap"></div><div class="body"><div class="name">Dishwasher Swap</div><div class="meta">~2 h · Same hookups</div><div class="price">$200</div><div class="mem">Members: $160</div><a class="pedir" href="#order/dishwasher-swap" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-23.jpg" alt="Vanity swap"></div><div class="body"><div class="name">Vanity Swap</div><div class="meta">~3 h · Standard vanity</div><div class="price">$250</div><div class="mem">Members: $200</div><a class="pedir" href="#order/vanity-swap" style="text-decoration:none;color:#fff">Order</a></div></div>
+  </div>
+</section>
+
+<section id="sec-mechanic">
+  <div class="shead"><h2>🚗 Mobile Mechanic</h2></div>
+  <div class="sub">We come to you — no shop, no tow</div>
+  <div class="grid">
+    <div class="card"><div class="tile red"><img src="/old/old-24.jpg" alt="Brake pad replacement"></div><div class="body"><div class="name">Brake Pads — Per Pair</div><div class="meta">~1 h · Front or rear</div><div class="price">$100</div><div class="mem">Members: $80</div><a class="pedir" href="#order/brake-pads" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-25.jpg" alt="Car battery replacement"></div><div class="body"><div class="name">Battery Replacement</div><div class="meta">~1 h · Tested on site</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/battery-replacement" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile amb"><img src="/old/old-26.jpg" alt="Alternator in engine bay"></div><div class="body"><div class="name">Alternator Replacement</div><div class="meta">~2 h · Standard access</div><div class="price">$185</div><div class="mem">Members: $148</div><a class="pedir" href="#order/alternator-replacement" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile blu"><img src="/old/old-27.jpg" alt="Car starter motor"></div><div class="body"><div class="name">Starter Replacement</div><div class="meta">By make &amp; difficulty</div><div class="price">$225<small> – $300</small></div><div class="mem">Members from $180</div><a class="pedir" href="#order/starter-replacement" style="text-decoration:none;color:#fff">Order</a></div></div>
+  </div>
+</section>
+
+<section id="sec-junk">
+  <h2>🗑️ Junk &amp; Hauling</h2>
+  <div class="sub">One flat price — disposal included. Pick your load size:</div>
+  <div class="wide"><div class="ic"><img src="/old/old-28.jpg" alt="Minimum load"></div><div><div class="name">Minimum load</div><div class="meta">One big piece or up to ~5 medium items</div><div class="fill"><div style="width:25%"></div></div></div><div class="price">$225</div><div class="mem">Members: $180</div><a class="pedir" href="#order/junk-minimum" style="text-decoration:none;color:#fff">Order</a></div>
+  <div class="wide"><div class="ic"><img src="/old/old-29.jpg" alt="Medium load"></div><div><div class="name">Medium load</div><div class="meta">One room of furniture or a garage corner — a full pickup</div><div class="fill"><div style="width:50%"></div></div></div><div class="price">$325</div><div class="mem">Members: $260</div><a class="pedir" href="#order/junk-medium" style="text-decoration:none;color:#fff">Order</a></div>
+  <div class="wide"><div class="ic"><img src="/old/old-30.jpg" alt="Large load"></div><div><div class="name">Large load</div><div class="meta">About 2 rooms or half a one-car garage — pickup + part of the trailer</div><div class="fill"><div style="width:75%"></div></div></div><div class="price">$425</div><div class="mem">Members: $340</div><a class="pedir" href="#order/junk-large" style="text-decoration:none;color:#fff">Order</a></div>
+  <div class="wide"><div class="ic"><img src="/old/old-31.jpg" alt="Full load"></div><div><div class="name">Full load — truck &amp; trailer</div><div class="meta">The big one: full garage or house cleanout, both filled</div><div class="fill"><div style="width:100%"></div></div></div><div class="price">$650</div><div class="mem">Members: $520</div><a class="pedir" href="#order/junk-full" style="text-decoration:none;color:#fff">Order</a></div>
+  <div class="wide"><div class="ic"><img src="/old/old-32.jpg" alt="Green waste load"></div><div><div class="name">Green waste hauling</div><div class="meta">Branches, brush &amp; yard debris — per load</div></div><div class="price">$225</div><div class="mem">Members: $180</div><a class="pedir" href="#order/green-waste" style="text-decoration:none;color:#fff">Order</a></div>
+</section>
+
+
+<section>
+  <div class="shead"><h2>📸 Before &amp; after</h2><span class="see">Yard rescue — slide it</span></div>
+  <div class="ba">
+    <img src="/old/old-33.jpg" alt="After — a clean, rescued yard">
+    <div class="ba-before" id="baBefore" style="background-image:url('/old/old-34.jpg')"></div>
+    <span class="ba-tag l">BEFORE</span><span class="ba-tag r">AFTER</span>
+  </div>
+  <input type="range" id="baRange" min="0" max="100" value="50" aria-label="Before and after — slide to reveal the after photo" style="width:100%;max-width:640px;margin-top:10px;accent-color:#e42535">
+  <p class="ba-cap">Yard Cleanup is $150 one-time — or let the route keep it clean: Yard Care from $75/mo. <a href="#order/yard-cleanup">See yard services →</a></p>
+  
+</section>
+<section>
+  <h2>🧾 How ordering works</h2>
+  <div class="sub">Add extras with one tap — the total updates live, like it should</div>
+  <div class="order">
+    <div class="orow"><span>📺 TV Mounting (up to 65")</span><b>$125</b></div>
+    <div class="orow"><span>☑ Hide the cables (surface raceway)</span><b>+$50</b></div>
+    <div class="orow"><span>☑ Mount my soundbar too</span><b>+$75</b></div>
+    <div class="orow"><span>☐ ASAP — rush visit (+25%)</span><b>—</b></div>
+    <div class="orow tot"><span>Total — a deposit books it, balance at completion</span><span>$250</span></div>
+    <div class="meta" style="margin-top:8px">A deposit books your order — cancel before a technician is dispatched for a full refund; after dispatch, $75 is non-refundable.</div>
+  </div>
+  <div class="steps" style="margin-top:12px">
+    <div class="step"><span class="n">1</span><b>You order</b>Pick a service, a time, add your extras.</div>
+    <div class="step"><span class="n">2</span><b>We confirm</b>A technician is assigned and heads your way.</div>
+    <div class="step"><span class="n">3</span><b>A deposit books it</b>Menu orders: $50 flat on totals up to $300, 40% on totals over $300 — the balance is due when the work is done.</div>
+  </div>
+</section>
+
+<section style="display:none" data-v72="hidden-until-real-reviews">
+  <h2>⭐ Neighbors approve</h2>
+  <div class="sub">Real jobs, real reviews — shown on every service</div>
+  <div class="quotes">
+    <div class="quote"><span class="st">★★★★★</span><br>"Booked at lunch, TV was on the wall by dinner. Price never changed."<div class="who">— Fairfield · TV Mounting</div></div>
+    <div class="quote"><span class="st">★★★★★</span><br>"They took the whole garage pile in one trip. Flat price, no surprises."<div class="who">— Vacaville · Junk, full load</div></div>
+    <div class="quote"><span class="st">★★★★★</span><br>"The member price is real — my drain cost less than the quote I got elsewhere."<div class="who">— Suisun City · Drain unclog</div></div>
+  </div>
+</section>
+
+<section id="ghsMemberships" aria-label="Memberships">
+        <style>#oldhome #ghsMemberships{background:#0b0b0b;border-radius:20px;padding:30px 22px 22px;margin:26px 0 0;color:#fff}#oldhome #ghsMemberships *, #oldhome #ghsMemberships *::before, #oldhome #ghsMemberships *::after{box-sizing:border-box}#oldhome #ghsMemberships .ghs-mem-title{text-align:center;font-size:38px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;margin:0;color:#fff;line-height:1.1}#oldhome #ghsMemberships .ghs-mem-sub{text-align:center;color:#b3aca2;font-size:16.5px;margin:8px 0 2px}#oldhome #ghsMemberships .ghs-mem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0 4px}@media(max-width:800px){#oldhome #ghsMemberships .ghs-mem-grid{grid-template-columns:1fr}}#oldhome #ghsMemberships .ghs-mem-card{background:#141414;border:2px solid #e42535;border-radius:16px;padding:22px 18px 18px;display:flex;flex-direction:column;text-align:center}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free{border-color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-card h3{margin:0;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:#fff}#oldhome #ghsMemberships .ghs-mem-price{font-size:37px;font-weight:900;margin:10px 0 6px;color:#e42535;line-height:1.1}#oldhome #ghsMemberships .ghs-mem-price span{font-size:.6em;font-weight:800}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-price{color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-subline{color:#a49d93;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}#oldhome #ghsMemberships .ghs-mem-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;line-height:1.5;font-size:14.5px;color:#f2f0ec}#oldhome #ghsMemberships .ghs-mem-card ul li{padding:4px 0 4px 26px;position:relative}#oldhome #ghsMemberships .ghs-mem-card ul li::before{content:"✓";position:absolute;left:2px;top:4px;font-weight:900;color:#e42535}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free ul li::before{color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-grow{flex:1}#oldhome #ghsMemberships .ghs-mem-btn{display:block;width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;font-weight:800;background:#e42535;color:#fff;text-decoration:none;text-align:center;cursor:pointer}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-btn{background:#2fbf71}</style>
+        <h2 class="ghs-mem-title">Memberships</h2>
+        <p class="ghs-mem-sub">With or without a membership — you choose.</p>
+        <div class="ghs-mem-grid">
+          <div class="ghs-mem-card ghs-mem-free">
+            <h3>FREE</h3>
+            <div class="ghs-mem-price">$0</div>
+            <div class="ghs-mem-subline">No membership</div>
+            <ul>
+              <li>Free photo estimate</li>
+              <li>Pay per job</li>
+              <li>In-person estimate $75</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener">Get my free estimate</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare Plus</h3>
+            <div class="ghs-mem-price">$100<span>/mo</span></div>
+            <div class="ghs-mem-subline">1 yard visit / month</div>
+            <ul>
+              <li>1 yard visit every month</li>
+              <li>Everything in HomeCare</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#join-plus1">Join Plus</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare Plus</h3>
+            <div class="ghs-mem-price">$175<span>/mo</span></div>
+            <div class="ghs-mem-subline">2 yard visits / month</div>
+            <ul>
+              <li>2 yard visits every month</li>
+              <li>Everything in HomeCare</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#join-plus2">Join Plus</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>HomeCare</h3>
+            <div class="ghs-mem-price">$29<span>/mo</span></div>
+            <div class="ghs-mem-subline">No yard</div>
+            <ul>
+              <li>First month FREE — for everyone (one per account)</li>
+              <li>20% off labor (jobs under $1,000)</li>
+              <li>First in-person estimate FREE, then $50</li>
+              <li>Priority scheduling</li>
+              <li>Cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#join-homecare">Join HomeCare</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>Yard Care</h3>
+            <div class="ghs-mem-price">$75<span>/mo</span></div>
+            <div class="ghs-mem-subline">1 visit / month</div>
+            <ul>
+              <li>1 yard visit every month</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+              <li>One monthly charge · cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#join-yard1">Join Yard Care</a>
+          </div>
+          <div class="ghs-mem-card">
+            <h3>Yard Care</h3>
+            <div class="ghs-mem-price">$150<span>/mo</span></div>
+            <div class="ghs-mem-subline">2 visits / month</div>
+            <ul>
+              <li>2 yard visits every month</li>
+              <li>Mowing · edging · blowing · light weeding</li>
+              <li>One monthly charge · cancel anytime</li>
+            </ul>
+            <div class="ghs-mem-grow"></div>
+            <a class="ghs-mem-btn" href="#join-yard2">Join Yard Care</a>
+          </div>
+        </div>
+      </section>
+
+<section>
+  <div class="shead"><h2>🧾 Compare the plans</h2><span class="see">Side by side</span></div>
+  <div class="cmp-wrap"><table class="cmp">
+    <tr><th></th><th>HomeCare<br>$29/mo</th><th>HomeCare Plus<br>$100–$175/mo</th><th>Yard Care<br>$75–$150/mo</th></tr>
+    <tr><td>Yard visits every month</td><td>—</td><td class="y">1 or 2</td><td class="y">1 or 2</td></tr>
+    <tr><td>20% off menu services</td><td class="y">✓</td><td class="y">✓</td><td>—</td></tr>
+    <tr><td>First in-person estimate FREE, then $50</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+    <tr><td>Priority scheduling</td><td class="y">✓</td><td class="y">✓</td><td>—</td></tr>
+    <tr><td>Cancel anytime</td><td class="y">✓</td><td class="y">✓</td><td class="y">✓</td></tr>
+    <tr><td></td><td><a class="join" href="#join-homecare">Join</a></td><td><a class="join" href="#join-plus1">Join Plus</a></td><td><a class="join" href="#join-yard1">Join Yard</a></td></tr>
+  </table></div>
+</section>
+<section>
+  <div class="shead"><h2>📍 Serving all of Solano County</h2></div>
+  <div class="sub">One team, the whole county — pick your city</div>
+  <div class="cities">
+    <div class="city"><img src="/old/old-35.jpg" alt="Fairfield"><div class="cov"><div class="cn">Fairfield</div><div class="cs"><b>● Today</b> · Home base · from $75</div></div></div>
+    <div class="city"><img src="/old/old-36.jpg" alt="Vacaville"><div class="cov"><div class="cn">Vacaville</div><div class="cs"><b>● Today</b> · All 5 trades · from $75</div></div></div>
+    <div class="city"><img src="/old/old-37.jpg" alt="Vallejo"><div class="cov"><div class="cn">Vallejo</div><div class="cs"><b>● Today</b> · Mechanic strong · from $75</div></div></div>
+    <div class="city"><img src="/old/old-38.jpg" alt="Suisun City"><div class="cov"><div class="cn">Suisun City</div><div class="cs"><b>● Today</b> · Yard routes · from $75</div></div></div>
+    <div class="city"><img src="/old/old-39.jpg" alt="Dixon"><div class="cov"><div class="cn">Dixon</div><div class="cs"><b>● Today</b> · Junk &amp; hauling · from $75</div></div></div>
+    <div class="city"><img src="/old/old-40.jpg" alt="Benicia"><div class="cov"><div class="cn">Benicia</div><div class="cs"><b>● Today</b> · Installs &amp; repairs · from $75</div></div></div>
+  </div>
+</section>
+
+<div class="trust">
+  <div><b>🛡️</b>30-day workmanship guarantee</div>
+  <div><b>💳</b>$50 or 40% books it — balance at completion</div>
+  <div><b>📍</b>Local Solano County technicians</div>
+  <div><b>⭐</b>Rated by your neighbors</div>
+</div>
+
+<footer>
+  <div class="ft-grid">
+    <div><h4>Order</h4>
+      <a href="#sec-popular">Service menu</a>
+      <a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener">Free photo estimate</a></div>
+    <div><h4>Company</h4>
+      <a href="#home">Request form</a>
+      <a href="#worker">Work with us — technicians</a>
+      <a href="#home">Log in / My jobs</a>
+      <a href="#ghsMemberships">Membership details</a></div>
+    <div><h4>Support</h4>
+      <a href="#terms">Terms &amp; Conditions</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#privacy">Privacy Policy</a>
+      <a href="tel:+17078623773">Call the Team · (707) 862-3773</a></div>
+    <div><h4>Solano County</h4>
+      <p>Fairfield · Vacaville · Vallejo · Suisun City · Dixon · Benicia</p>
+      <p>💳 Secure payment by Stripe — deposit books it, balance at completion.</p></div>
+  </div>
+  <p class="ft-small">All prices from the confirmed master service list (Oct 22, 2026). Member pricing: 20% off every menu service — including junk removal, hauling and $75 services.<br>Materials are customer-supplied unless noted.</p>
+</footer>
+
+
+    </div>
     <h2>Request a handyman — pide tu servicio</h2>
     <p class="mut">Step by step, no account needed — pick what you need, add pictures, choose when. Free photo estimate, or an in-person estimate for $75 flat (members of any plan: first estimate free, then $50). Labor-only — you buy materials/parts.</p>
     <div class="card" id="wizardCard">
@@ -994,14 +1294,12 @@ table.cmp button{white-space:nowrap}
         <button type="button" id="wzNext" onclick="wzNextFn()">Continuar · Continue →</button>
       </div>
     </div>
-    <div id="homePromos"></div>
     <div id="menuBox">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 id="menuTitle" style="margin:0">Menu — order &amp; pay right here</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="menuLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="menuLangEs" onclick="setMenuLang('es')">ES</button></span></div>
       <p class="mut" id="menuIntro">Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
       <div id="menuGroups"></div>
       <div id="menuNoResults" style="display:none"></div>
     </div>
-    <div id="homeCities"></div>
     <div id="membershipSummary" class="custAccountOnly"></div>
     <div id="homeDetailsBox" class="custAccountOnly" style="display:none">
       <div class="card">
@@ -1168,7 +1466,7 @@ table.cmp button{white-space:nowrap}
     </div>
   </div>
 
-  <p><button class="ghost" onclick="logout()">Log out</button></p>
+  <p id="globalLogoutRow" style="display:none"><button class="ghost" onclick="logout()">Log out</button></p>
 </div>
 
 <footer id="appFooter"></footer>
@@ -1217,8 +1515,8 @@ function syncAuthPriceTexts(m){
   const info = (m === 'join' || m === 'homecare') ? JOIN_PLAN_INFO[memberFormPlan()] : null;
   const hc = document.getElementById('hcChargeNote');
   if (hc && info) hc.innerHTML = info.kind === 'homecare'
-    ? '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your first month is <b>FREE</b> — <b>$0 charged today</b>, then $' + info.monthly + '/mo (one free month per account). ' + info.perks
-    : '<b>' + info.name + ' — $' + info.monthly + '/mo total.</b> Your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
+    ? '<b>' + info.name + ' — $' + info.monthly + '/mo total. </b>Your first month is<b> FREE </b>—<b> $0 charged today</b>, then $' + info.monthly + '/mo (one free month per account). ' + info.perks
+    : '<b>' + info.name + ' — $' + info.monthly + '/mo total. </b>Your card will be charged<b> $' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. ' + info.perks;
   const lbl = document.getElementById('cardChargeLabel');
   if (lbl && info) lbl.textContent = info.kind === 'homecare' ? 'Card — $0 charged today, then $' + info.monthly + '/mo' : 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
   const promo = document.getElementById('hcPromo');
@@ -1253,8 +1551,8 @@ function paintOptPlanNote(){
   if (!info) { note.style.display = 'none'; note.innerHTML = ''; return; }
   note.style.display = 'block';
   note.innerHTML = info.kind === 'homecare'
-    ? '<b>' + info.name + ' — your first month is FREE.</b> $0 at checkout today, then $' + info.monthly + '/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.'
-    : '<b>' + info.name + ' — $' + info.monthly + '/mo.</b> Tap Create account and we take you straight to secure checkout to start it — $' + info.monthly + ' charged today, then $' + info.monthly + '/mo. Cancel anytime.';
+    ? '<b>' + info.name + ' — your first month is FREE. </b>$0 at checkout today, then $' + info.monthly + '/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.'
+    : '<b>' + info.name + ' — $' + info.monthly + '/mo. </b>Tap Create account and we take you straight to secure checkout to start it — $' + info.monthly + ' charged today, then $' + info.monthly + '/mo. Cancel anytime.';
 }
 function mode(m){ curMode=m;
   // The member tab IS the join form now (v17): landing on it — via the tab
@@ -1567,8 +1865,8 @@ function renderJoinTexts(){
   if (sel && sel.value !== plan) sel.value = plan;
   const note = document.getElementById('joinChargeNote');
   if (note && info) note.innerHTML = info.kind === 'homecare'
-    ? 'Joining <b>' + info.name + '</b> — your first month is <b>FREE</b>: <b>$0 charged today</b>, then $' + info.monthly + '/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.'
-    : 'Joining <b>' + info.name + '</b> — your card will be charged <b>$' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, service address and payment together. Cancel anytime.';
+    ? 'Joining<b> ' + info.name + ' </b>— your first month is<b> FREE</b>:<b> $0 charged today</b>, then $' + info.monthly + '/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.'
+    : 'Joining<b> ' + info.name + ' </b>— your card will be charged<b> $' + info.monthly + ' today</b>, then $' + info.monthly + '/mo. One form, one submit: account, service address and payment together. Cancel anytime.';
   const btn = document.getElementById('authBtn');
   if (btn && info) btn.textContent = 'Create account & join — $' + info.monthly + '/mo';
 }
@@ -1618,7 +1916,7 @@ function renderMemberFallback(){
   const sel = document.getElementById('aPlanSel');
   if (sel) sel.value = pending.plan;
   const note = document.getElementById('joinChargeNote');
-  if (note) note.innerHTML = 'Joining <b>' + info.name + '</b> — <b>$' + info.monthly + '/mo</b>. Create your account and we will take you straight to secure checkout for this plan.' + (info.kind === 'homecare' ? ' Your first month is <b>FREE</b> — $0 at checkout today, then $' + info.monthly + '/mo (one free month per account).' : ' Your service address is required for Yard Care and HomeCare Plus.');
+  if (note) note.innerHTML = 'Joining<b> ' + info.name + ' </b>—<b> $' + info.monthly + '/mo</b>. Create your account and we will take you straight to secure checkout for this plan.' + (info.kind === 'homecare' ? ' Your first month is<b> FREE </b>— $0 at checkout today, then $' + info.monthly + '/mo (one free month per account).' : ' Your service address is required for Yard Care and HomeCare Plus.');
   hideErr();
 }
 async function beginInlineJoin(kind, plan){
@@ -2439,6 +2737,7 @@ function render(){
   paintDeleteAccount();
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
   document.getElementById('bellBtn').style.display = me ? 'inline-block':'none'; if(me) loadNotifs();
+  const glo = document.getElementById('globalLogoutRow'); if (glo) glo.style.display = me ? '' : 'none'; // v80.10: no Log out button while logged out (audit)
   paintSoundBtn();
   if (me) esStart(); else esClose(); // v23: live event stream follows the session
   paintMemberLoginBtn();
@@ -6462,6 +6761,28 @@ function scrollWizard() {
   setTimeout(function () { const el = document.getElementById('wizardCard'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
 }
 function baSlide(inp) { const b = document.getElementById('ghsBaBefore'); if (b && inp) b.style.width = (100 - inp.value) + '%'; }
+// v80.10 LA ORIGINAL: in-page anchors inside the restored homepage
+// (#oldhome) are scroll targets, NOT app routes — intercept them
+// (delegated, so the fragment's footer links are covered too) and
+// smooth-scroll instead of letting the hash router treat them as
+// routes. Real app routes (#join-*, #order/*, #memberships, #cart,
+// #worker, #terms...) are never intercepted.
+document.addEventListener('click', function (e) {
+  const a = e.target && e.target.closest ? e.target.closest('#oldhome a[href^="#"]') : null;
+  if (!a) return;
+  const h = a.getAttribute('href') || '';
+  if (h === '#home') { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+  if (h.indexOf('#sec-') === 0 || h === '#ghsMemberships') {
+    const tgt = document.querySelector('#oldhome ' + h);
+    if (tgt) { e.preventDefault(); tgt.scrollIntoView({ behavior: 'smooth' }); }
+  }
+});
+// v80.10: the restored homepage's before/after slider (the old page's
+// own JS is not carried over) — dragging moves the BEFORE overlay,
+// same formula as baSlide above.
+document.addEventListener('input', function (e) {
+  if (e.target && e.target.id === 'baRange') { const b = document.getElementById('baBefore'); if (b) b.style.width = (100 - e.target.value) + '%'; }
+});
 // Paints every v80.9 merged-home block from HOME_UI in the current menu
 // language. Called by applyMenuLang (init + every EN/ES toggle).
 function paintHomeBlocks() {
