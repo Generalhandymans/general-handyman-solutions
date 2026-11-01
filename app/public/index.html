@@ -319,12 +319,76 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
 #techLinkRow a{color:var(--muted);font-weight:700;text-decoration:none}
 #techLinkRow a:hover{color:var(--red)}
 </style>
+<style>
+/* v80.9 FUSIÓN — merged-homepage components (hero carousel, promo boxes,
+   trust band, cities grid, plan comparison table, footer, before/after).
+   Copy lives in HOME_UI (EN/ES); markup is painted by paintHomeBlocks(). */
+#homeSearch{background:#1a1a1a;border:1px solid #333;color:#fff;font-size:14.5px}
+#homeSearch::placeholder{color:#9a968f}
+.hero-car{position:relative;border-radius:18px;overflow:hidden;background:#0b0b0b;margin:14px 0 0}
+.hero-track{display:flex;width:200%;transition:transform .55s ease}
+.hero-slide{width:50%;flex:0 0 50%;position:relative;min-height:252px;display:flex;flex-direction:column;justify-content:center;padding:26px 24px;box-sizing:border-box}
+.hero-slide-1{background:linear-gradient(90deg,rgba(5,5,8,.88) 30%,rgba(5,5,8,.35) 78%),url('/hero-tech.jpg') center/cover no-repeat;color:#fff}
+.hero-slide-2{padding:0;background:#000}
+.hero-slide-2 img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.hero-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.hero-badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:999px;backdrop-filter:blur(3px)}
+.hero-badge.avail{color:#8df0a4}
+.hero-slide-1 h1{margin:0 0 10px;font-size:clamp(27px,5.4vw,42px);line-height:1.08;color:#fff}
+.hero-sub{margin:0 0 16px;font-size:15.5px;line-height:1.45;color:#e8e4dd;max-width:560px}
+.hero-cta{align-self:flex-start;background:var(--red);color:#fff;border:0;font-weight:800;font-size:15.5px;padding:12px 20px;border-radius:999px;cursor:pointer}
+.hero-cta-img{position:absolute;left:18px;bottom:16px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.hero-rating{margin-top:12px;font-size:13.5px;font-weight:700;color:#ffd34d}
+.hero-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(10,10,12,.55);color:#fff;border:1px solid rgba(255,255,255,.35);width:36px;height:36px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;z-index:3}
+.hero-arrow.prev{left:10px}.hero-arrow.next{right:10px}
+.hero-dots{position:absolute;right:14px;bottom:12px;display:flex;gap:7px;z-index:3}
+.hero-dots button{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;padding:0;cursor:pointer}
+.hero-dots button.on{background:#fff}
+.trust-band{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+.trust-band span{background:#141414;border:1px solid #2c2c2c;color:#e8e4dd;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px}
+.trust-band .trust-rating{color:#ffd34d}
+.promo-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0 4px}
+.promo-box{background:#111;border:1px solid #2a2a2a;border-top:3px solid var(--red);border-radius:14px;padding:16px;color:#f2f0ec;display:flex;flex-direction:column}
+.promo-box .promo-tag{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#ff8a94}
+.promo-box h3{margin:6px 0 6px;font-size:19px;color:#fff}
+.promo-box p{margin:0 0 12px;font-size:14px;line-height:1.45;color:#c9c4bb;flex:1}
+.pop-avail{color:#3ecf6f;font-weight:700;font-size:13.5px;margin:-4px 0 8px}
+.cities-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:8px}
+.city-card{background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:12px 14px;color:#f2f0ec;display:flex;flex-direction:column;gap:3px}
+.city-card b{color:#fff;font-size:15.5px}
+.city-card span{font-size:12.5px;color:#b8b3aa}
+.cmp-wrap{overflow-x:auto;margin-bottom:10px}
+table.cmp{border-collapse:collapse;width:100%;min-width:520px;background:#111;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden}
+table.cmp th,table.cmp td{border-bottom:1px solid #262626;padding:10px 12px;text-align:center;font-size:14px;color:#e8e4dd}
+table.cmp th{color:#fff;font-size:15px;background:#171717}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left}
+table.cmp td.y{color:#8df0a4;font-weight:800}
+table.cmp button{white-space:nowrap}
+.ghs-ba{position:relative;border-radius:18px;overflow:hidden;aspect-ratio:16/10;background:#111;max-width:640px}
+.ghs-ba>img{width:100%;height:100%;object-fit:cover;display:block}
+.ghs-ba-before{position:absolute;top:0;left:0;bottom:0;width:50%;background-size:cover;background-position:center;border-right:3px solid #fff}
+.ba-tag{position:absolute;top:10px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;letter-spacing:.06em}
+.ba-tag.l{left:10px}.ba-tag.r{right:10px}
+.ba-range{width:100%;max-width:640px;margin-top:10px;accent-color:var(--red)}
+#menuNoResults .btn-link{display:inline-block;background:var(--red);color:#fff;font-weight:800;padding:11px 18px;border-radius:999px;text-decoration:none}
+#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 22px;border-top:3px solid var(--red)}
+.foot-grid{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+#appFooter h4{color:#fff;margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+#appFooter a{display:block;color:#cfc9c2;text-decoration:none;font-size:14px;padding:3px 0}
+#appFooter a:hover{color:#fff;text-decoration:underline}
+.foot-cities{display:block;font-size:13.5px;line-height:1.55}
+.foot-stripe{display:block;margin-top:10px;font-size:13.5px;color:#e8e4dd}
+.foot-fine{max-width:1080px;margin:18px auto 0;font-size:12.5px;line-height:1.55;color:#8f8a81}
+</style>
 </head>
 <body>
 <div style="background:#000;text-align:center;padding:16px 16px 6px"><img src="/logo-header.png" alt="General Handyman Solutions" style="width:min(580px,94%);height:auto"></div>
 <header>
+  <span id="homeSearchWrap" style="flex:1 1 200px;max-width:420px;display:flex;min-width:150px"><input id="homeSearch" type="search" placeholder="What do you need today?" oninput="menuSearch(this.value)" style="width:100%;border-radius:999px;padding:9px 14px" aria-label="Search services"></span>
   <span style="display:flex;align-items:center;gap:10px">
     <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app">Inicio</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menú</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
+    <a href="/instalar" id="installNavLink" style="color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a">📱 Install app</a>
+    <span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="globLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="globLangEs" onclick="setMenuLang('es')">ES</button></span>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
     <button id="cartBtn" onclick="openCart();return false;" title="Your cart" aria-label="Your cart">🛒<span id="cartBadge"></span></button>
     <button id="bellBtn" onclick="toggleNotifs()" style="display:none;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;position:relative">🔔<span id="bellBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#e42535;color:#fff;border-radius:999px;font-size:11px;padding:1px 6px"></span></button>
@@ -364,7 +428,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
     <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
-    <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="(707) 555-0123"></div>
+    <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="707-___-____"></div>
     <!-- v77 (Gabriel, 2026-10-25): membership is an OPTIONAL offer inside
          the plain signup — default is the free account alone. Picking a
          plan reveals the membership fields and, on submit, continues to
@@ -596,6 +660,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     <p class="cg-foot">General Handyman Solutions · v1.0</p>
     <p class="cg-foot"><a href="#terms">Terms &amp; Conditions</a> · <a href="#how-it-works">How it works</a> · <a href="#privacy">Privacy Policy</a></p>
   </div>
+    <div id="planCompare"></div>
     <div class="share-panel" id="shareLinksPanel">
       <h3>Share a signup link</h3>
       <p class="share-sub">Send a customer straight to one exact plan — they join in one step. Tap Copy and paste the link anywhere.</p>
@@ -853,6 +918,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
 
   <!-- CUSTOMER -->
   <div id="customerBox" style="display:none">
+    <div id="homeHero"></div>
     <h2>Request a handyman — pide tu servicio</h2>
     <p class="mut">Step by step, no account needed — pick what you need, add pictures, choose when. Free photo estimate, or an in-person estimate for $75 flat (members of any plan: first estimate free, then $50). Labor-only — you buy materials/parts.</p>
     <div class="card" id="wizardCard">
@@ -906,7 +972,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
         <div id="anonContact" style="display:none;border-bottom:1px dashed #ddd;margin-bottom:10px;padding-bottom:10px">
           <label>Your name</label><input id="rName" placeholder="Full name" style="width:100%;max-width:420px">
           <label>Email (we send your quote here)</label><input id="rEmail" type="email" placeholder="you@email.com" style="width:100%;max-width:420px">
-          <label>Phone</label><input id="rPhone" type="tel" placeholder="(707) 555-1234" style="width:100%;max-width:420px">
+          <label>Phone</label><input id="rPhone" type="tel" placeholder="707-___-____" style="width:100%;max-width:420px">
         </div>
         <label>HomeCare membership — $29/mo</label>
         <div class="pick" id="cMember">
@@ -928,11 +994,14 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
         <button type="button" id="wzNext" onclick="wzNextFn()">Continuar · Continue →</button>
       </div>
     </div>
+    <div id="homePromos"></div>
     <div id="menuBox">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 id="menuTitle" style="margin:0">Menu — order &amp; pay right here</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="menuLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="menuLangEs" onclick="setMenuLang('es')">ES</button></span></div>
       <p class="mut" id="menuIntro">Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
       <div id="menuGroups"></div>
+      <div id="menuNoResults" style="display:none"></div>
     </div>
+    <div id="homeCities"></div>
     <div id="membershipSummary" class="custAccountOnly"></div>
     <div id="homeDetailsBox" class="custAccountOnly" style="display:none">
       <div class="card">
@@ -1017,7 +1086,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
         <p class="mut" style="margin:6px 0 0">“Labor — $75/hr” is one tap: it drops in a Labor line at $75 — set its qty to the hours. The other two buttons use the name / price / qty above.</p>
       </div>
       <div class="est-summary" id="cartSummary">Cart is empty — add services above.</div>
-      <div class="row"><div><label>Customer name (optional)</label><input id="cartCustName" placeholder="Prefill for the customer"></div><div><label>Customer phone (optional)</label><input id="cartCustPhone" placeholder="(707) 555-0123"></div></div>
+      <div class="row"><div><label>Customer name (optional)</label><input id="cartCustName" placeholder="Prefill for the customer"></div><div><label>Customer phone (optional)</label><input id="cartCustPhone" placeholder="707-___-____"></div></div>
       <label>Customer email (optional — the proposal also appears inside their account)<input id="cartCustEmail" type="email" placeholder="customer@email.com"></label>
       <label>Team note (optional)<input id="cartNote" placeholder="Anything about this quote — the customer sees it in the order"></label>
       <label>Cart page language<select id="cartLang"><option value="en">English</option><option value="es">Español</option></select></label>
@@ -1028,7 +1097,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     <div class="card">
       <h3 style="margin-top:0">🎟️ Invite a member — first month FREE</h3>
       <p class="mut">A personal invitation from you: the customer joins HomeCare with the <b>first month free</b> (card on file, $0 charged today, then $29/mo — cancel anytime). One link per person, good for 7 days. If you add their email, only that email can claim it. <b>Cart ID:</b> if you paste the customer's cart ID, the free month shows inside HIS OWN cart link — on the HomeCare $29 option — so he only ever gets one link.</p>
-      <div class="row"><div><label>Customer name</label><input id="invName" placeholder="e.g. Brijesh"></div><div><label>Phone (optional)</label><input id="invPhone" placeholder="(707) 555-0123"></div></div>
+      <div class="row"><div><label>Customer name</label><input id="invName" placeholder="e.g. Brijesh"></div><div><label>Phone (optional)</label><input id="invPhone" placeholder="707-___-____"></div></div>
       <div class="row"><div><label>Email (optional)<input id="invEmail" placeholder="customer@email.com"></label></div><div><label>Cart ID (optional)<input id="invCartId" placeholder="CRT-…"></label></div></div>
       <button class="black" onclick="createInvite()">Create invitation link</button>
       <div id="inviteLinkOut" style="margin-top:8px"></div>
@@ -1068,7 +1137,7 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
     <div id="stripeHealth" class="mut" style="margin-bottom:8px">Checking payment connection…</div>
     <div class="card">
       <div class="row"><div><label>Customer name</label><input id="iName" placeholder="Customer full name"></div><div><label>Customer email</label><input id="iEmail" placeholder="customer@email.com"></div></div>
-      <div class="row"><div><label>Customer phone (optional)</label><input id="iPhone" placeholder="(707) 555-0123"></div><div><label>Job ID (optional)</label><input id="iJob" placeholder="JOB-XXXXXX"></div><div><label>Due date (optional)</label><input id="iDue" type="date"></div></div>
+      <div class="row"><div><label>Customer phone (optional)</label><input id="iPhone" placeholder="707-___-____"></div><div><label>Job ID (optional)</label><input id="iJob" placeholder="JOB-XXXXXX"></div><div><label>Due date (optional)</label><input id="iDue" type="date"></div></div>
       <div id="invRows"></div>
       <button type="button" class="ghost" onclick="addInvoiceItem()">+ Add line</button>
       <div class="est-grid" style="margin-top:10px"><label>Discount $<input type="number" min="0" step="0.01" id="iDiscount" value="0" oninput="updateInvoiceSummary()"></label><label>Notes for the invoice<input id="iNotes" placeholder="Thank-you note, payment terms..."></label></div>
@@ -1101,6 +1170,8 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
 
   <p><button class="ghost" onclick="logout()">Log out</button></p>
 </div>
+
+<footer id="appFooter"></footer>
 
 <script>
 let me=null, curMode='login';
@@ -2388,6 +2459,12 @@ function render(){
   // exempt — their isolation stands.
   const mnl = document.getElementById('menuNavLink');
   if (mnl) mnl.style.display = (me && me.role !== 'customer') ? 'none' : '';
+  // v80.9: the global menu search + the footer belong to the customer
+  // storefront only — worker/admin zones keep their isolation.
+  const hsw = document.getElementById('homeSearchWrap');
+  if (hsw) hsw.style.display = (me && me.role !== 'customer') ? 'none' : '';
+  const ftEl = document.getElementById('appFooter');
+  if (ftEl) ftEl.style.display = (me && me.role !== 'customer') ? 'none' : '';
   // Public info pages (#terms, #how-it-works) are standalone public views:
   // while one is the route, it replaces every other box — no login needed.
   const tb = document.getElementById('termsBox');
@@ -6293,9 +6370,159 @@ const MENU_ES = {
   'heavy-furniture-move': ['Mover mueble pesado (2 técnicos)', '~1 h · Por trabajo']
 };
 const MENU_UI = {
-  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.' },
-  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.' }
+  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.', popular: '🔥 Popular right now', popularAvail: '● Available today' },
+  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.', popular: '🔥 Popular ahora', popularAvail: '● Disponible hoy' }
 };
+// v80.9 FUSIÓN — the merged homepage's copy (EN/ES, one language at a time,
+// swapped with the same toggle as the menu). Every price/claim here is
+// deposit-law copy: a deposit books the job, the balance lands at
+// completion. The website's seven "pay in full" lines are banned (audit §2a).
+const HOME_UI = {
+  en: {
+    searchPh: 'What do you need today?', install: '📱 Install app',
+    badgeLoc: '📍 Solano County, CA', badgeAvail: '● Available today',
+    heroH1: 'Home repairs, ordered like food.',
+    heroSub: 'Fixed prices. Real local technicians. Book in a minute — a deposit books it, the balance is due when the work is done.',
+    heroCta: '🔧 Order a service', trackCta: 'See how it works →',
+    trust: ['💲 Fixed price, agreed first', '🛡️ 30-day workmanship guarantee', '📍 Local Solano County technicians', '💳 $50 or 40% books it — balance when it\u2019s done'],
+    rating: '★ 4.5 on Google · 20 reviews',
+    promo1Tag: '🎄 Seasonal', promo1H: 'Holiday lights, handled', promo1P: 'Install from $175 · Take-down from $75. Book before the calendar fills.', promo1B: 'Book install →',
+    promo2Tag: '⭐ Members', promo2H: 'Save 20% on services', promo2P: 'HomeCare members pay member prices on the whole menu. Plans from $29/mo.', promo2B: 'See memberships →',
+    promo3Tag: '🗑️ Junk removal', promo3H: 'We haul it, from $225', promo3P: 'Four flat load sizes. Disposal included — gone today, gone for good.', promo3B: 'See junk & hauling →',
+    noResH: 'No menu service matches that — yet.', noResP: 'Send us a photo instead: the photo estimate is always FREE and the Team prices it for you.', noResB: '📸 Get my free photo estimate',
+    citiesH: '📍 Serving all of Solano County', citiesSub: 'One team, the whole county — pick your city', today: '● Today', fromTxt: 'from $75',
+    cmpH: '🧾 Compare the plans', cmpSub: 'Side by side',
+    cmpCols: ['HomeCare<br>$29/mo', 'HomeCare Plus<br>$100–$175/mo', 'Yard Care<br>$75–$150/mo'],
+    cmpRows: [['Yard visits every month', '—', '1 or 2', '1 or 2'], ['20% off menu services', '✓', '✓', '—'], ['First in-person estimate FREE, then $50', '✓', '✓', '✓'], ['Priority scheduling', '✓', '✓', '—'], ['Cancel anytime', '✓', '✓', '✓']],
+    cmpJoin: 'Join', cmpJoinPlus: 'Join Plus', cmpJoinYard: 'Join Yard',
+    baH: '📸 Before & after', baSee: 'Yard rescue — slide it', baBefore: 'BEFORE', baAfter: 'AFTER',
+    baCap: 'Yard Cleanup is $150 one-time — or let the route keep it clean: Yard Care from $75/mo.', baB: 'See yard plans →',
+    footOrder: 'Order', footMenu: 'Service menu', footPhoto: 'Free photo estimate',
+    footCompany: 'Company', footRequest: 'Request form', footWork: 'Work with us — technicians', footLogin: 'Log in / My jobs', footPlans: 'Membership details',
+    footSupport: 'Support', footTerms: 'Terms & Conditions', footHow: 'How it works', footPrivacy: 'Privacy Policy', footCall: 'Call the Team · (707) 862-3773',
+    footCounty: 'Solano County',
+    footStripe: '💳 Secure payment by Stripe — deposit books it, balance at completion',
+    footFine: 'All prices from the confirmed master service list (Oct 22, 2026). Member pricing: 20% off every menu service — including junk removal, hauling and $75 services. Materials are customer-supplied unless noted.'
+  },
+  es: {
+    searchPh: '¿Qué necesitas hoy?', install: '📱 Instalar app',
+    badgeLoc: '📍 Condado de Solano, CA', badgeAvail: '● Disponible hoy',
+    heroH1: 'Reparaciones del hogar, ordenadas como comida.',
+    heroSub: 'Precios fijos. Técnicos locales de verdad. Agenda en un minuto — un anticipo lo agenda, el resto se paga cuando el trabajo está terminado.',
+    heroCta: '🔧 Ordenar un servicio', trackCta: 'Mira cómo funciona →',
+    trust: ['💲 Precio fijo, acordado primero', '🛡️ Garantía de mano de obra de 30 días', '📍 Técnicos locales del condado de Solano', '💳 $50 o 40% lo agenda — el resto al terminar'],
+    rating: '★ 4.5 en Google · 20 reseñas',
+    promo1Tag: '🎄 Temporada', promo1H: 'Luces navideñas, resueltas', promo1P: 'Instalación desde $175 · Retiro desde $75. Agenda antes de que se llene el calendario.', promo1B: 'Agendar instalación →',
+    promo2Tag: '⭐ Miembros', promo2H: 'Ahorra 20% en servicios', promo2P: 'Los miembros HomeCare pagan precio de miembro en todo el menú. Planes desde $29/mes.', promo2B: 'Ver membresías →',
+    promo3Tag: '🗑️ Retiro de escombros', promo3H: 'Lo recogemos, desde $225', promo3P: 'Cuatro tamaños de carga con precio fijo. Desecho incluido — hoy se va, para siempre.', promo3B: 'Ver retiro y carga →',
+    noResH: 'Ningún servicio del menú coincide — todavía.', noResP: 'Mándanos una foto: el estimado por foto siempre es GRATIS y el Team te da el precio.', noResB: '📸 Quiero mi estimado por foto gratis',
+    citiesH: '📍 Servimos todo el condado de Solano', citiesSub: 'Un solo equipo, todo el condado — escoge tu ciudad', today: '● Hoy', fromTxt: 'desde $75',
+    cmpH: '🧾 Compara los planes', cmpSub: 'Lado a lado',
+    cmpCols: ['HomeCare<br>$29/mes', 'HomeCare Plus<br>$100–$175/mes', 'Yard Care<br>$75–$150/mes'],
+    cmpRows: [['Visitas de yarda cada mes', '—', '1 o 2', '1 o 2'], ['20% menos en servicios del menú', '✓', '✓', '—'], ['Primer estimado en persona GRATIS, luego $50', '✓', '✓', '✓'], ['Agenda prioritaria', '✓', '✓', '—'], ['Cancela cuando quieras', '✓', '✓', '✓']],
+    cmpJoin: 'Unirme', cmpJoinPlus: 'Unirme a Plus', cmpJoinYard: 'Unirme a Yard',
+    baH: '📸 Antes y después', baSee: 'Rescate de yarda — desliza', baBefore: 'ANTES', baAfter: 'DESPUÉS',
+    baCap: 'La limpieza de yarda cuesta $150 una vez — o deja que la ruta la mantenga limpia: Yard Care desde $75/mes.', baB: 'Ver planes de yarda →',
+    footOrder: 'Ordenar', footMenu: 'Menú de servicios', footPhoto: 'Estimado por foto gratis',
+    footCompany: 'Compañía', footRequest: 'Formulario de solicitud', footWork: 'Trabaja con nosotros — técnicos', footLogin: 'Entrar / Mis trabajos', footPlans: 'Detalles de membresías',
+    footSupport: 'Soporte', footTerms: 'Términos y condiciones', footHow: 'Cómo funciona', footPrivacy: 'Política de privacidad', footCall: 'Llama al Team · (707) 862-3773',
+    footCounty: 'Condado de Solano',
+    footStripe: '💳 Pago seguro con Stripe — un anticipo lo agenda, el resto al terminar',
+    footFine: 'Todos los precios salen de la lista maestra de servicios confirmada (22 de octubre de 2026). Precio de miembro: 20% menos en cada servicio del menú — incluyendo retiro de escombros, carga y servicios de $75. Los materiales los pone el cliente, salvo que se indique otra cosa.'
+  }
+};
+const HOME_CITIES = [
+  ['Fairfield', 'Home base', 'Base central'], ['Vacaville', 'All 5 trades', 'Los 5 oficios'], ['Vallejo', 'Mechanic strong', 'Mecánica fuerte'],
+  ['Suisun City', 'Yard routes', 'Rutas de yarda'], ['Dixon', 'Junk & hauling', 'Retiro y carga'], ['Benicia', 'Installs & repairs', 'Instalaciones y reparaciones']
+];
+const PHOTO_EST_URL = 'https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8';
+// --- v80.9 hero carousel (2 slides: offer hero + live-tracking promo) ---
+let heroIdx = 0, heroTimer = null;
+function heroGo(n) {
+  heroIdx = n;
+  const tr = document.getElementById('heroTrack');
+  if (tr) tr.style.transform = 'translateX(' + (-n * 50) + '%)';
+  [0, 1].forEach(function (i) { const dEl = document.getElementById('heroDot' + i); if (dEl) dEl.classList.toggle('on', i === n); });
+}
+function heroStep(dir) { heroGo((heroIdx + dir + 2) % 2); heroAuto(); }
+function heroAuto() {
+  if (heroTimer) clearInterval(heroTimer);
+  heroTimer = setInterval(function () {
+    const hh = document.getElementById('homeHero');
+    if (!hh || hh.offsetParent === null) return; // hidden (other views) — don't burn cycles
+    heroGo((heroIdx + 1) % 2);
+  }, 6000);
+}
+function scrollMenuGroup(key) {
+  if (location.hash) location.hash = ''; else render();
+  setTimeout(function () { const el = document.getElementById('mg-' + key); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
+}
+function scrollWizard() {
+  if (location.hash) location.hash = ''; else render();
+  setTimeout(function () { const el = document.getElementById('wizardCard'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
+}
+function baSlide(inp) { const b = document.getElementById('ghsBaBefore'); if (b && inp) b.style.width = (100 - inp.value) + '%'; }
+// Paints every v80.9 merged-home block from HOME_UI in the current menu
+// language. Called by applyMenuLang (init + every EN/ES toggle).
+function paintHomeBlocks() {
+  const L = menuLang(), ui = HOME_UI[L];
+  const hero = document.getElementById('homeHero');
+  if (hero) {
+    hero.innerHTML = '<div class="hero-car"><div class="hero-track" id="heroTrack">'
+      + '<div class="hero-slide hero-slide-1"><div class="hero-badges"><span class="hero-badge">' + ui.badgeLoc + '</span><span class="hero-badge avail">' + ui.badgeAvail + '</span></div><h1>' + ui.heroH1 + '</h1><p class="hero-sub">' + ui.heroSub + '</p><button type="button" class="hero-cta" onclick="goMenu()">' + ui.heroCta + '</button><div class="hero-rating">' + ui.rating + '</div></div>'
+      + '<div class="hero-slide hero-slide-2"><img src="/hero-tracking.png" alt=""><button type="button" class="hero-cta hero-cta-img" onclick="location.hash=\'#how-it-works\'">' + ui.trackCta + '</button></div>'
+      + '</div><button type="button" class="hero-arrow prev" onclick="heroStep(-1)" aria-label="Previous slide">‹</button><button type="button" class="hero-arrow next" onclick="heroStep(1)" aria-label="Next slide">›</button><div class="hero-dots"><button type="button" id="heroDot0" class="on" onclick="heroGo(0);heroAuto()" aria-label="Slide 1"></button><button type="button" id="heroDot1" onclick="heroGo(1);heroAuto()" aria-label="Slide 2"></button></div></div>'
+      + '<div class="trust-band">' + ui.trust.map(function (x) { return '<span>' + x + '</span>'; }).join('') + '<span class="trust-rating">' + ui.rating + '</span></div>';
+    heroGo(heroIdx); heroAuto();
+  }
+  const pr = document.getElementById('homePromos');
+  if (pr) pr.innerHTML = '<div class="promo-row">'
+    + '<div class="promo-box"><div class="promo-tag">' + ui.promo1Tag + '</div><h3>' + ui.promo1H + '</h3><p>' + ui.promo1P + '</p><button type="button" class="ghost" onclick="orderNow(\'holiday-lights\')">' + ui.promo1B + '</button></div>'
+    + '<div class="promo-box"><div class="promo-tag">' + ui.promo2Tag + '</div><h3>' + ui.promo2H + '</h3><p>' + ui.promo2P + '</p><button type="button" class="ghost" onclick="location.hash=\'#memberships\'">' + ui.promo2B + '</button></div>'
+    + '<div class="promo-box"><div class="promo-tag">' + ui.promo3Tag + '</div><h3>' + ui.promo3H + '</h3><p>' + ui.promo3P + '</p><button type="button" class="ghost" onclick="scrollMenuGroup(\'gardening\')">' + ui.promo3B + '</button></div></div>';
+  const ct = document.getElementById('homeCities');
+  if (ct) ct.innerHTML = '<h3 class="menu-group-title">' + ui.citiesH + '</h3><p class="mut" style="margin:2px 0 10px">' + ui.citiesSub + '</p><div class="cities-grid">' + HOME_CITIES.map(function (c) { return '<div class="city-card"><b>' + c[0] + '</b><span>' + ui.today + ' · ' + (L === 'es' ? c[2] : c[1]) + ' · ' + ui.fromTxt + '</span></div>'; }).join('') + '</div>';
+  const pc = document.getElementById('planCompare');
+  if (pc) {
+    let h = '<h3 style="margin:22px 0 4px">' + ui.cmpH + '</h3><p class="mut" style="margin:0 0 10px">' + ui.cmpSub + '</p><div class="cmp-wrap"><table class="cmp"><tr><th></th><th>' + ui.cmpCols[0] + '</th><th>' + ui.cmpCols[1] + '</th><th>' + ui.cmpCols[2] + '</th></tr>';
+    ui.cmpRows.forEach(function (r) { h += '<tr><td>' + r[0] + '</td>' + [r[1], r[2], r[3]].map(function (v) { return '<td class="' + (v === '✓' ? 'y' : '') + '">' + v + '</td>'; }).join('') + '</tr>'; });
+    h += '<tr><td></td><td><button type="button" onclick="joinHomeCare()">' + ui.cmpJoin + '</button></td><td><button type="button" onclick="startMembershipCheckout(\'homecare-plus\',\'plus1\')">' + ui.cmpJoinPlus + '</button></td><td><button type="button" onclick="startMembershipCheckout(\'yardcare\',\'yard1\')">' + ui.cmpJoinYard + '</button></td></tr></table></div>';
+    pc.innerHTML = h;
+  }
+  const ft = document.getElementById('appFooter');
+  if (ft) ft.innerHTML = '<div class="foot-grid">'
+    + '<div><h4>' + ui.footOrder + '</h4><a href="#" onclick="goMenu();return false;">' + ui.footMenu + '</a><a href="' + PHOTO_EST_URL + '" target="_blank" rel="noopener">' + ui.footPhoto + '</a></div>'
+    + '<div><h4>' + ui.footCompany + '</h4><a href="#" onclick="scrollWizard();return false;">' + ui.footRequest + '</a><a href="#worker">' + ui.footWork + '</a><a href="#" onclick="showLogin();return false;">' + ui.footLogin + '</a><a href="#memberships">' + ui.footPlans + '</a></div>'
+    + '<div><h4>' + ui.footSupport + '</h4><a href="#terms">' + ui.footTerms + '</a><a href="#how-it-works">' + ui.footHow + '</a><a href="#privacy">' + ui.footPrivacy + '</a><a href="tel:+17078623773">' + ui.footCall + '</a></div>'
+    + '<div><h4>' + ui.footCounty + '</h4><span class="foot-cities">' + HOME_CITIES.map(function (c) { return c[0]; }).join(' · ') + '</span><span class="foot-stripe">' + ui.footStripe + '</span></div></div>'
+    + '<p class="foot-fine">' + ui.footFine + '</p>';
+}
+// --- v80.9 header search: live-filters the rendered menu cards ---
+function menuSearch(q) {
+  applyMenuFilter();
+  if (q && q.trim().length === 1) { const mb = document.getElementById('menuBox'); if (mb) mb.scrollIntoView({ behavior: 'smooth' }); }
+}
+function applyMenuFilter() {
+  const inp = document.getElementById('homeSearch');
+  const q = inp ? inp.value.trim().toLowerCase() : '';
+  let total = 0;
+  document.querySelectorAll('#menuGroups .menu-group').forEach(function (gr) {
+    let vis = 0;
+    gr.querySelectorAll('.menu-card').forEach(function (card) {
+      const show = !q || card.textContent.toLowerCase().indexOf(q) >= 0;
+      card.style.display = show ? '' : 'none';
+      if (show) vis++;
+    });
+    gr.style.display = (!q || vis > 0) ? '' : 'none';
+    total += vis;
+  });
+  const nr = document.getElementById('menuNoResults');
+  if (nr) {
+    const showNr = !!q && total === 0;
+    nr.style.display = showNr ? 'block' : 'none';
+    if (showNr) { const hui = HOME_UI[menuLang()]; nr.innerHTML = '<div class="card" style="text-align:center"><h3 style="margin-top:0">' + hui.noResH + '</h3><p class="mut">' + hui.noResP + '</p><a class="btn-link" href="' + PHOTO_EST_URL + '" target="_blank" rel="noopener">' + hui.noResB + '</a></div>'; }
+  }
+}
 let _menuLang = null;
 function menuLang() {
   if (_menuLang) return _menuLang;
@@ -6315,6 +6542,13 @@ function applyMenuLang() {
   const intro = document.getElementById('menuIntro'); if (intro) intro.textContent = ui.intro;
   const bE = document.getElementById('menuLangEn'); if (bE) bE.classList.toggle('on', L === 'en');
   const bS = document.getElementById('menuLangEs'); if (bS) bS.classList.toggle('on', L === 'es');
+  // v80.9: the header now carries the same toggle + search + install link;
+  // every merged-home block repaints in the chosen language.
+  const gE = document.getElementById('globLangEn'); if (gE) gE.classList.toggle('on', L === 'en');
+  const gS = document.getElementById('globLangEs'); if (gS) gS.classList.toggle('on', L === 'es');
+  const hs = document.getElementById('homeSearch'); if (hs) hs.placeholder = HOME_UI[L].searchPh;
+  const inl = document.getElementById('installNavLink'); if (inl) inl.textContent = HOME_UI[L].install;
+  paintHomeBlocks();
 }
 function svcName(id) { const s = MENU_CATALOG[id]; if (!s) return id; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][0] : s.name; }
 function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][1] : s.meta; }
@@ -6329,14 +6563,28 @@ function menuPriceHtml(s) {
   if (s.member) h += '<span class="menu-member">' + MENU_UI[menuLang()].members + ' $' + s.member + '</span>';
   return h;
 }
+function menuCardHtml(id, groupKey, ui) {
+  const s = MENU_CATALOG[id]; if (!s) return '';
+  return '<div class="menu-card">' + svcImgHtml(id, groupKey, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>';
+}
+// v80.9: "Popular right now" — the website's six most-ordered services,
+// pinned above the trade groups and rendered as normal orderable cards.
+const POPULAR_IDS = ['tv-mounting', 'gutter-cleaning', 'toilet-replacement', 'oil-change', 'yard-cleanup', 'water-heater'];
+const POPULAR_GRP = { 'tv-mounting': 'carpentry', 'gutter-cleaning': 'gardening', 'toilet-replacement': 'plumbing', 'oil-change': 'mechanic', 'yard-cleanup': 'gardening', 'water-heater': 'plumbing' };
 function renderMenu() {
   const box = document.getElementById('menuGroups');
   if (!box || typeof MENU_CATALOG === 'undefined') return;
-  const L = menuLang(), ui = MENU_UI[L];
-  box.innerHTML = MENU_GROUPS.map(function (g) {
-    const cards = g.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="menu-card">' + svcImgHtml(id, g.key, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>'; }).join('');
-    return '<h3 class="menu-group-title">' + escHtml(L === 'es' ? g.es : g.en) + '</h3><div class="menu-grid">' + cards + '</div>';
-  }).join('');
+  const L = menuLang(), ui = MENU_UI[L], hui = HOME_UI[L];
+  const parts = [];
+  parts.push('<div class="menu-group" data-group="popular"><h3 class="menu-group-title" id="mg-popular">' + ui.popular + '</h3><div class="pop-avail">' + ui.popularAvail + '</div><div class="menu-grid">' + POPULAR_IDS.map(function (id) { return menuCardHtml(id, POPULAR_GRP[id], ui); }).join('') + '</div></div>');
+  MENU_GROUPS.forEach(function (g) {
+    const cards = g.services.map(function (id) { return menuCardHtml(id, g.key, ui); }).join('');
+    parts.push('<div class="menu-group" data-group="' + g.key + '"><h3 class="menu-group-title" id="mg-' + g.key + '">' + escHtml(L === 'es' ? g.es : g.en) + '</h3><div class="menu-grid">' + cards + '</div></div>');
+    // v80.9: the website's before/after yard slider rides under the Yard group.
+    if (g.key === 'gardening') parts.push('<div class="ba-band"><h3 class="menu-group-title">' + hui.baH + '</h3><p class="mut" style="margin:2px 0 8px">' + hui.baSee + '</p><div class="ghs-ba"><img src="/ba/after.jpg" alt=""><div class="ghs-ba-before" id="ghsBaBefore" style="background-image:url(\'/ba/before.jpg\')"></div><span class="ba-tag l">' + hui.baBefore + '</span><span class="ba-tag r">' + hui.baAfter + '</span></div><input class="ba-range" type="range" min="0" max="100" value="50" aria-label="Before and after — slide to reveal" oninput="baSlide(this)"><p class="mut" style="margin-top:8px">' + hui.baCap + ' <a href="#yard-care">' + hui.baB + '</a></p></div>');
+  });
+  box.innerHTML = parts.join('');
+  applyMenuFilter();
 }
 function goMenu() {
   if (location.hash) location.hash = ''; else render();
