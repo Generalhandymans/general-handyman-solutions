@@ -4421,6 +4421,15 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
+  // Restored homepage photos (v80.10 LA ORIGINAL — the old standalone
+  // site's 40 photos): /old/old-NN.jpg — basename only, jpg only, same
+  // pattern as /ba/ above.
+  if (req.method === 'GET' && p.startsWith('/old/') && p.endsWith('.jpg')) {
+    const file = path.join(__dirname, 'public', 'old', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
   // Membership plan card images (added 2026-10-21) + app logo banner (v40)
   // + the v80.9 hero tracking slide — exact filenames only.
   if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png', '/logo-header.png', '/hero-tracking.png'].includes(p)) {
