@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-28', swSrc.includes("const CACHE = 'ghs-app-v80-28'"));
+t('static: SW cache is ghs-app-v81', swSrc.includes("const CACHE = 'ghs-app-v81'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1966,6 +1966,18 @@ const postAssigned = await req2('POST', '/api/admin/yard-visits', { token: A2, b
 t('v25 B1: admin can create a visit already assigned', postAssigned.status === 201 && postAssigned.j.visit.status === 'assigned' && postAssigned.j.visit.assignedWorkerId === wBId);
 
 // ---- C1: ratings (instance 1 — J1 was completed by W1 for C1 earlier) ----
+// v81 fixture: the review gate now ALSO requires a PAID job (no review
+// without real money behind it). J1/JR2 are direct Team jobs with no
+// in-app order, so their payment is recorded the way Gabriel records
+// cash work — an invoice linked to the job, marked paid by hand: the
+// exact trail jobPaidForReview trusts (same shape as the v40 flow).
+async function markJobPaidCash81(jobId, amount) {
+  const inv = await req('POST', '/api/admin/invoices', { token: A, body: { customerName: 'Cust One', customerEmail: 'c1@t.local', jobId, items: [{ description: 'Job ' + jobId + ' — labor', qty: 1, unitPrice: amount }] } });
+  if (inv.status !== 201) return inv;
+  return req('POST', '/api/admin/invoices/' + inv.j.invoice.id + '/mark-paid', { token: A, body: { method: 'cash' } });
+}
+const j1Cash81 = await markJobPaidCash81(J1, 200);
+t('v81 fixture: J1 is a PAID job on the cash trail (invoice linked + marked paid)', j1Cash81.status === 200 && j1Cash81.j.invoice.status === 'paid');
 const openJobR = await mkJob('(707) 555-0101');
 const JR = openJobR.j.job.id;
 const rateEarly = await req('POST', '/api/jobs/' + JR + '/rating', { token: C1, body: { stars: 5 } });
@@ -1984,6 +1996,8 @@ const jobR2 = await mkJob('(707) 555-0101');
 const JR2 = jobR2.j.job.id;
 await req('POST', '/api/jobs/' + JR2 + '/claim', { token: W1 });
 await req('PATCH', '/api/jobs/' + JR2, { token: W1, body: { photosDone: true } });
+const jr2Cash81 = await markJobPaidCash81(JR2, 200);
+t('v81 fixture: JR2 is a PAID job on the cash trail', jr2Cash81.status === 200 && jr2Cash81.j.invoice.status === 'paid');
 const rateBad = await req('POST', '/api/jobs/' + JR2 + '/rating', { token: C1, body: { stars: 7 } });
 t('v25 C1: stars outside 1-5 refused (400)', rateBad.status === 400);
 const rate2 = await req('POST', '/api/jobs/' + JR2 + '/rating', { token: C1, body: { stars: 3, text: 'Decent' } });
@@ -4307,7 +4321,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.28: ghs-app-v80-28)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-28'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v81: ghs-app-v81)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v81'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -7019,6 +7033,161 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   run("cartSave([]); localStorage.removeItem('ghsMenuFavs'); localStorage.removeItem('ghsMenuRecents'); menuFavs = null; menuRecents = null; renderMenu();");
   try { child7.kill('SIGTERM'); } catch (e) {}
 }
+
+// ---------------- v81 CONFIANZA Y CONTROL (sprint board + verified publishable reviews + permanent job timeline) ----------------
+t('static v81: sprint board + public reviews + timeline helpers exist server-side', serverSrc.includes("p === '/api/admin/sprint'") && serverSrc.includes('function buildSprintReport(') && serverSrc.includes('const SPRINT_WEEK_TARGET = 3850') && serverSrc.includes("p === '/api/reviews'") && serverSrc.includes('function jobPaidForReview(') && serverSrc.includes("this job can be reviewed once its payment is confirmed"));
+t('static v81: the timeline is append-only — event helpers exist and NO endpoint reads a client-supplied timeline', serverSrc.includes('function jobEvent(') && serverSrc.includes('function noteJobStatusChange(') && serverSrc.includes('function publicTimeline(') && serverSrc.includes('function jobTimelineMarkPaid(') && !serverSrc.includes('b.timeline'));
+t('static v81: client carries the sprint section, the timeline renderer and the public-reviews loader', htmlSrc.includes('id="adminSprint"') && htmlSrc.includes('function loadAdminSprint(') && htmlSrc.includes('function jobTimelineHtml(') && htmlSrc.includes('id="pubReviewsSec"') && htmlSrc.includes('function loadPublicReviews(') && htmlSrc.includes('function renderPublicReviews('));
+t('static v81: every new customer string lives in BOTH CUST_UI languages (EN/ES parity)', (htmlSrc.match(/tl_created:/g) || []).length === 2 && (htmlSrc.match(/tl_paid:/g) || []).length === 2 && (htmlSrc.match(/ratingWaitPay:/g) || []).length === 2 && (htmlSrc.match(/pubRevAvgTpl:/g) || []).length === 2 && (htmlSrc.match(/pubRevVerified:/g) || []).length === 2);
+t('static v81: the sprint dictionary is in EN/ES parity (ADM821)', (htmlSrc.match(/paceNow:/g) || []).length === 2 && (htmlSrc.match(/firstCharges:/g) || []).length === 2);
+
+const BASE8 = 'http://127.0.0.1:8993';
+const DATA_FILE8 = '/tmp/ghs-v17-test/data-v81.json';
+try { fs.unlinkSync(DATA_FILE8); } catch (e) {}
+const env81 = { PORT: '8993', DATA_FILE: DATA_FILE8, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981' };
+function spawnApp8() { const c = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env81), stdio: ['ignore', 'pipe', 'pipe'] }); c.stderr.on('data', d => process.stderr.write('[app8] ' + d)); return c; }
+let child8 = spawnApp8();
+async function req8(method, p, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+  const r = await fetch(BASE8 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, j };
+}
+async function waitUp8() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE8 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+t('v81 app8: the CONFIANZA instance boots', await waitUp8());
+await req8('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin8@t.local', phone: '(707) 555-1000', password: 'adminpass1' } });
+const A81 = (await req8('POST', '/api/login', { body: { email: 'admin8@t.local', password: 'adminpass1' } })).j.token;
+const suC81 = await req8('POST', '/api/signup', { body: { name: 'Marisol Vega', email: 'marisol81@t.local', phone: '(707) 555-0181', password: 'custpass81', role: 'customer', serviceAddress: '1 Main St, Fairfield, CA' } });
+const C81 = (await req8('POST', '/api/login', { body: { email: 'marisol81@t.local', password: 'custpass81' } })).j.token;
+const suD81 = await req8('POST', '/api/signup', { body: { name: 'Other Person', email: 'other81@t.local', phone: '(707) 555-0182', password: 'custpass81', role: 'customer' } });
+const D81 = (await req8('POST', '/api/login', { body: { email: 'other81@t.local', password: 'custpass81' } })).j.token;
+const suW81 = await req8('POST', '/api/signup', { body: { name: 'Tech Tim', email: 'tim81@t.local', phone: '(707) 555-0281', password: 'workpass81', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Handyman'] } } });
+await req8('PATCH', '/api/workers/' + suW81.j.user.id, { token: A81, body: { status: 'active' } });
+const W81 = (await req8('POST', '/api/login', { body: { email: 'tim81@t.local', password: 'workpass81' } })).j.token;
+t('v81 setup: admin + two customers + one active tech', !!A81 && !!C81 && !!D81 && !!W81);
+async function admJob81(jid) { const d = await req8('GET', '/api/jobs', { token: A81 }); return (d.j.jobs || []).find(x => x.id === jid); }
+async function custJob81(jid) { const d = await req8('GET', '/api/jobs', { token: C81 }); return (d.j.jobs || []).find(x => x.id === jid); }
+const tlTypes81 = (j) => (j && Array.isArray(j.timeline) ? j.timeline.map(e => e.type) : []);
+
+// --- flow 1: the full timeline, the paid gate, the public surface ---
+const mkJ81 = await req8('POST', '/api/jobs', { token: A81, body: { service: 'TV Mounting', city: 'Fairfield', description: 'mount it', when: 'Tomorrow 9am', payOffer: 100, customerPrice: 175, customerName: 'Marisol Vega', customerPhone: '(707) 555-0181', address: '1 Main St, Fairfield, CA' } });
+const J81 = mkJ81.j.job.id;
+t('v81 timeline: a newborn job carries exactly [created]', JSON.stringify(tlTypes81(await admJob81(J81))) === '["created"]');
+await req8('POST', '/api/jobs/' + J81 + '/claim', { token: W81 });
+const cv81a = await custJob81(J81);
+t('v81 timeline: claim appends [assigned] on the customer view — and the view carries NO pay data', JSON.stringify(tlTypes81(cv81a)) === '["created","assigned"]' && !!cv81a && !('payOffer' in cv81a) && !('customerPrice' in cv81a));
+await req8('PATCH', '/api/jobs/' + J81, { token: W81, body: { status: 'On my way' } });
+await req8('PATCH', '/api/jobs/' + J81, { token: W81, body: { status: 'Arrived' } });
+await req8('PATCH', '/api/jobs/' + J81, { token: W81, body: { photosDone: true } });
+const cv81b = await custJob81(J81);
+t('v81 timeline: the steps append IN ORDER (created -> assigned -> enroute -> arrived -> done) with timestamps', JSON.stringify(tlTypes81(cv81b)) === '["created","assigned","enroute","arrived","done"]' && cv81b.timeline.every(e => !!e.at) && cv81b.reviewable === false);
+const rateUnpaid81 = await req8('POST', '/api/jobs/' + J81 + '/rating', { token: C81, body: { stars: 5, text: 'Excellent work' } });
+t('v81 reviews: a DONE but UNPAID job refuses the review (402 — payment not confirmed)', rateUnpaid81.status === 402);
+const rateOther81 = await req8('POST', '/api/jobs/' + J81 + '/rating', { token: D81, body: { stars: 5 } });
+t('v81 reviews: another customer cannot review the job (403)', rateOther81.status === 403);
+const tlForge81 = await req8('PATCH', '/api/jobs/' + J81, { token: A81, body: { timeline: [] } });
+const tlForgeW81 = await req8('PATCH', '/api/jobs/' + J81, { token: W81, body: { timeline: [{ type: 'paid', at: '2020-01-01T00:00:00.000Z' }] } });
+const tlAfter81 = await admJob81(J81);
+t('v81 timeline: events cannot be mutated through any endpoint — admin and worker timeline writes are ignored/refused, history intact', tlForge81.status === 200 && tlForgeW81.status === 403 && JSON.stringify(tlTypes81(tlAfter81)) === '["created","assigned","enroute","arrived","done"]');
+const inv81a = await req8('POST', '/api/admin/invoices', { token: A81, body: { customerName: 'Marisol Vega', customerEmail: 'marisol81@t.local', jobId: J81, items: [{ description: 'TV Mounting — labor', qty: 1, unitPrice: 175 }] } });
+await req8('POST', '/api/admin/invoices/' + inv81a.j.invoice.id + '/mark-paid', { token: A81, body: { method: 'cash' } });
+const cv81c = await custJob81(J81);
+t('v81 timeline + gate: the cash-trail payment appends [paid] and the job becomes reviewable', JSON.stringify(tlTypes81(cv81c)) === '["created","assigned","enroute","arrived","done","paid"]' && cv81c.reviewable === true);
+const rateOk81 = await req8('POST', '/api/jobs/' + J81 + '/rating', { token: C81, body: { stars: 5, text: 'Excellent work' } });
+t('v81 reviews: the owner reviews the completed + PAID job', rateOk81.status === 200 && rateOk81.j.rating === 5);
+const pubAnon81 = await req8('GET', '/api/reviews');
+t('v81 reviews: a fresh review is UNPUBLISHED by default — the public surface shows nothing', pubAnon81.status === 200 && pubAnon81.j.count === 0 && (pubAnon81.j.reviews || []).length === 0);
+await req8('PATCH', '/api/jobs/' + J81, { token: A81, body: { reviewPublished: true } });
+const pub81 = await req8('GET', '/api/reviews');
+const pubStr81 = JSON.stringify(pub81.j);
+t('v81 reviews: once Gabriel publishes, the review is public with the REAL average (5) — first name + city + service only, never email/phone/full name', pub81.j.count === 1 && pub81.j.average === 5 && pub81.j.reviews[0].text === 'Excellent work' && pub81.j.reviews[0].name === 'Marisol' && pub81.j.reviews[0].city === 'Fairfield' && pub81.j.reviews[0].service === 'TV Mounting' && !pubStr81.includes('marisol81@') && !pubStr81.includes('555-0181') && !pubStr81.includes('Vega'));
+await req8('PATCH', '/api/jobs/' + J81, { token: A81, body: { reviewPublished: false } });
+const pubOff81 = await req8('GET', '/api/reviews');
+t('v81 reviews: unpublishing takes it back off the public surface', pubOff81.j.count === 0);
+await req8('PATCH', '/api/jobs/' + J81, { token: A81, body: { reviewPublished: true } });
+
+// --- flow 2: a request-born job — the gate reads the request's own trails ---
+const rq81 = await req8('POST', '/api/requests', { token: C81, body: { service: 'Fence fix', description: 'gate', city: 'Fairfield', estimateType: 'photo' } });
+const cj81 = await req8('POST', '/api/requests/' + rq81.j.request.id + '/create-job', { token: A81, body: { payOffer: 90 } });
+const J81b = cj81.j.job.id;
+await req8('POST', '/api/jobs/' + J81b + '/claim', { token: W81 });
+await req8('PATCH', '/api/jobs/' + J81b, { token: W81, body: { photosDone: true } });
+const rateReqUnpaid81 = await req8('POST', '/api/jobs/' + J81b + '/rating', { token: C81, body: { stars: 4 } });
+t('v81 reviews: a request-born DONE job with no money landed also refuses (402)', rateReqUnpaid81.status === 402 && cj81.status === 201);
+const inv81b = await req8('POST', '/api/admin/invoices', { token: A81, body: { customerName: 'Marisol Vega', customerEmail: 'marisol81@t.local', requestId: rq81.j.request.id, items: [{ description: 'Fence fix — labor', qty: 1, unitPrice: 150 }] } });
+await req8('POST', '/api/admin/invoices/' + inv81b.j.invoice.id + '/mark-paid', { token: A81, body: { method: 'cash' } });
+const rateReqOk81 = await req8('POST', '/api/jobs/' + J81b + '/rating', { token: C81, body: { stars: 4, text: 'Solid fence work' } });
+const cv81d = await custJob81(J81b);
+t('v81 reviews: paying the request (invoice trail) opens the gate — and the timeline gains [paid]', rateReqOk81.status === 200 && tlTypes81(cv81d).includes('paid'));
+
+// --- flow 3: a done job that is never paid stays unreviewable ---
+const mkJ81c = await req8('POST', '/api/jobs', { token: A81, body: { service: 'Drain unclog', city: 'Fairfield', description: 'clog', when: 'Today', payOffer: 80, customerPrice: 175, customerName: 'Marisol Vega', customerPhone: '(707) 555-0181', address: '1 Main St, Fairfield, CA' } });
+const J81c = mkJ81c.j.job.id;
+await req8('POST', '/api/jobs/' + J81c + '/claim', { token: W81 });
+await req8('PATCH', '/api/jobs/' + J81c, { token: W81, body: { photosDone: true } });
+const rateNever81 = await req8('POST', '/api/jobs/' + J81c + '/rating', { token: C81, body: { stars: 5 } });
+t('v81 reviews: no review without a real paid job behind it — a never-paid job refuses (402)', rateNever81.status === 402);
+
+// --- sprint board: live numbers BEFORE seeding (only the two cash invoices landed this week) ---
+const sprAnon81 = await req8('GET', '/api/admin/sprint');
+const sprCust81 = await req8('GET', '/api/admin/sprint', { token: C81 });
+const spr81a = await req8('GET', '/api/admin/sprint', { token: A81 });
+t('v81 sprint: the board is admin-only (anon 401, customer 403)', sprAnon81.status === 401 && sprCust81.status === 403);
+t('v81 sprint: billed reads the REAL db — the two cash invoices ($175 + $150) are this week\'s billed, orders/members honest zeros, 1 active tech', spr81a.status === 200 && spr81a.j.billed.invoices === 325 && spr81a.j.billed.orders === 0 && spr81a.j.billed.memberFirstCharges === 0 && spr81a.j.billed.total === 325 && spr81a.j.members.active === 0 && spr81a.j.techs.active === 1 && spr81a.j.targetWeekly === 3850 && spr81a.j.members.targetMin === 25 && spr81a.j.members.targetMax === 40 && spr81a.j.techs.targetMin === 4 && spr81a.j.techs.targetMax === 6);
+
+// --- sprint math: seed last-week + this-week records, respawn, verify ---
+try { child8.kill('SIGTERM'); } catch (e) {}
+await sleep(400);
+const db81 = JSON.parse(fs.readFileSync(DATA_FILE8, 'utf8'));
+db81.requests = db81.requests || []; db81.invoices = db81.invoices || []; db81.users = db81.users || [];
+const wk81 = new Date(); wk81.setUTCHours(0, 0, 0, 0); wk81.setUTCDate(wk81.getUTCDate() - ((wk81.getUTCDay() + 6) % 7));
+const wkStart81 = wk81.getTime();
+const inWeek81 = new Date(Math.min(Date.now(), wkStart81 + 3600e3)).toISOString();
+const lastWeek81 = new Date(wkStart81 - 3 * 864e5).toISOString();
+const seedReq81 = (idv, payment, at) => ({ id: idv, customerId: '', customerName: 'Seed ' + idv, customerEmail: '', customerPhone: '', service: 'Seed job', description: '', city: 'Fairfield', address: '', when: '', estimateType: 'menu', membership: 'none', estimateDue: 0, status: 'Paid', quote: null, quoteNote: '', estimate: null, source: null, menuOrder: null, photos: [], messages: [], payment, createdAt: at });
+db81.requests.push(seedReq81('GHS-SEED81A', { status: 'paid', kind: 'menu-order', pi: 'pi_seed_a', amountCents: 20000, at: inWeek81 }, inWeek81));
+db81.requests.push(seedReq81('GHS-SEED81B', { status: 'deposit', kind: 'cart-order', pi: 'pi_seed_b', amountCents: 5000, totalCents: 17500, balanceCents: 12500, at: inWeek81 }, inWeek81));
+db81.requests.push(seedReq81('GHS-SEED81C', { status: 'paid', kind: 'cart-order', pi: 'pi_seed_c', balancePi: 'pi_seed_cb', depositCents: 5000, amountCents: 17500, totalCents: 17500, balanceCents: 0, at: lastWeek81, balanceAt: inWeek81 }, lastWeek81));
+db81.requests.push(seedReq81('GHS-SEED81D', { status: 'paid', kind: 'menu-order', pi: 'pi_seed_d', amountCents: 99900, at: lastWeek81 }, lastWeek81));
+db81.invoices.push({ id: 'INV-SEED81X', customerName: 'Seed X', customerEmail: '', customerPhone: '', customerId: '', jobId: '', requestId: 'GHS-SEED81A', items: [], subtotal: 777, discount: 0, total: 777, status: 'paid', notes: '', dueDate: '', createdAt: inWeek81, sentAt: null, paidAt: inWeek81, paidMethod: 'card', paidAmount: 777, stripeSessionId: '' });
+db81.users.push({ id: 'USR-SEED81M', name: 'Seed Member', email: 'seedm81@t.local', phone: '', role: 'customer', status: 'active', membershipPlan: { planKey: 'homecare', status: 'active', subscriptionId: 'sub_seed81' }, firstRealChargeAt: inWeek81, createdAt: inWeek81 });
+db81.users.push({ id: 'USR-SEED81W', name: 'Seed Tech', email: 'seedw81@t.local', phone: '', role: 'worker', status: 'active', createdAt: inWeek81 });
+db81.users.push({ id: 'USR-SEED81W2', name: 'Seed Bench', email: 'seedw281@t.local', phone: '', role: 'worker', status: 'review', createdAt: inWeek81 });
+fs.writeFileSync(DATA_FILE8, JSON.stringify(db81));
+child8 = spawnApp8();
+t('v81 app8: respawned on the seeded file', await waitUp8());
+const A81b = (await req8('POST', '/api/login', { body: { email: 'admin8@t.local', password: 'adminpass1' } })).j.token;
+const spr81b = await req8('GET', '/api/admin/sprint', { token: A81b });
+t('v81 sprint math: orders = paid-in-full $200 + deposit $50 + balance leg $125 (deposit leg last week NOT counted, last-week $999 NOT counted) = $375', spr81b.j.billed.orders === 375);
+t('v81 sprint math: invoices stay $325 — the $777 invoice on an already-paid request is NOT double-counted; first charges = one HomeCare first charge $29; total $729', spr81b.j.billed.invoices === 325 && spr81b.j.billed.memberFirstCharges === 29 && spr81b.j.billed.total === 729 && spr81b.j.pacePct === 18.9);
+t('v81 sprint math: members/techs count the live db (1 active member, 2 active techs — the on-review tech does not count)', spr81b.j.members.active === 1 && spr81b.j.techs.active === 2 && spr81b.j.weekStart === new Date(wkStart81).toISOString().slice(0, 10));
+try { child8.kill('SIGTERM'); } catch (e) {}
+
+// --- VM: the timeline card + the public reviews render, EN + ES ---
+run("setMenuLang('en');");
+const tlFx81 = { timeline: [{ type: 'created', at: '2026-11-02T15:00:00.000Z' }, { type: 'assigned', at: '2026-11-02T15:05:00.000Z' }, { type: 'enroute', at: '2026-11-02T16:00:00.000Z' }, { type: 'arrived', at: '2026-11-02T16:20:00.000Z' }, { type: 'done', at: '2026-11-02T17:00:00.000Z' }, { type: 'paid', at: '2026-11-02T17:05:00.000Z' }] };
+const tlHtmlEn81 = run('jobTimelineHtml(' + JSON.stringify(tlFx81) + ')');
+t('v81 VM timeline EN: every step renders with its label + the paid line', tlHtmlEn81.includes('Job timeline') && tlHtmlEn81.includes('Booked') && tlHtmlEn81.includes('Technician assigned') && tlHtmlEn81.includes('Technician on the way') && tlHtmlEn81.includes('Work done') && tlHtmlEn81.includes('Paid in full'));
+const tlHtmlPart81 = run('jobTimelineHtml(' + JSON.stringify({ timeline: [{ type: 'created', at: '2026-11-02T15:00:00.000Z' }] }) + ')');
+t('v81 VM timeline: unreached steps stay dimmed and NO paid line appears before the money lands', tlHtmlPart81.includes('▢') && !tlHtmlPart81.includes('Paid in full'));
+run("setMenuLang('es');");
+const tlHtmlEs81 = run('jobTimelineHtml(' + JSON.stringify(tlFx81) + ')');
+t('v81 VM timeline ES: the same card renders fully in Spanish', tlHtmlEs81.includes('Línea de tiempo') && tlHtmlEs81.includes('Agendado') && tlHtmlEs81.includes('Técnico en camino') && tlHtmlEs81.includes('Pagado por completo'));
+const rateGateEs81 = run('ratingHtml({ status: "Done — photos sent", reviewable: false })');
+t('v81 VM rating gate ES: an unpaid done job shows the wait-for-payment note, never the star picker', rateGateEs81.includes('Puedes dejar una reseña cuando') && !rateGateEs81.includes('star-'));
+run("setMenuLang('en');");
+const rateGateEn81 = run('ratingHtml({ status: "Done — photos sent", reviewable: false })');
+const rateOpenEn81 = run('ratingHtml({ status: "Done — photos sent", reviewable: true })');
+t('v81 VM rating gate EN: unpaid shows the note; paid opens the picker', rateGateEn81.includes('You can leave a review once') && !rateGateEn81.includes('star-') && rateOpenEn81.includes('star-'));
+run("pubReviewsCache = { count: 0, average: 0, reviews: [] }; renderPublicReviews();");
+t('v81 VM reviews: with zero published reviews the storefront section stays HIDDEN (no rating number without real reviews)', elById.get('pubReviewsSec').style.display === 'none');
+run("pubReviewsCache = { count: 1, average: 5, reviews: [{ stars: 5, text: 'Great work', name: 'Marisol', city: 'Fairfield', service: 'TV Mounting' }] }; renderPublicReviews();");
+t('v81 VM reviews EN: a published review unhides the section with the real average line + the review card', elById.get('pubReviewsSec').style.display !== 'none' && elById.get('pubReviewSummary').textContent.includes('5 ★ average from 1 verified review') && elById.get('pubReviewList').innerHTML.includes('Great work') && elById.get('pubReviewList').innerHTML.includes('Marisol') && elById.get('pubReviewList').innerHTML.includes('Verified job'));
+run("setMenuLang('es');");
+t('v81 VM reviews ES: the average line re-renders in Spanish from the same cache', elById.get('pubReviewSummary').textContent.includes('promedio de 1 reseña verificada') && elById.get('pubReviewList').innerHTML.includes('Trabajo verificado'));
+run("setMenuLang('en'); pubReviewsCache = null;");
+
 try { child5.kill('SIGTERM'); } catch (e) {}
 
 
