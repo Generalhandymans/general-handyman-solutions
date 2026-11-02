@@ -5159,14 +5159,15 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
-  // Per-service menu photos (v46): /menu-img/<serviceId>.jpg — basename
+  // Per-service menu photos (v46): /menu-img/<serviceId>.webp — basename
   // only (no traversal), 404 when a service has no photo yet; the client
   // falls back to the category image on error, so a missing file never
-  // breaks the menu.
-  if (req.method === 'GET' && p.startsWith('/menu-img/') && p.endsWith('.jpg')) {
+  // breaks the menu. (v80.18: WebP — the .jpg originals were retired;
+  // .jpg is still served if a file with that suffix exists.)
+  if (req.method === 'GET' && p.startsWith('/menu-img/') && (p.endsWith('.webp') || p.endsWith('.jpg'))) {
     const file = path.join(__dirname, 'public', 'menu-img', path.basename(p));
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    res.writeHead(200, { 'Content-Type': p.endsWith('.webp') ? 'image/webp' : 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
   // Hero technician photo (v80.9, ported from the website hero) — exact name.
@@ -5177,21 +5178,44 @@ async function handleRequest(req, res) {
     return res.end(fs.readFileSync(file));
   }
   // Before/after yard photos (v80.9, ported from the website slider):
-  // /ba/before.jpg + /ba/after.jpg — basename only, jpg only.
-  if (req.method === 'GET' && p.startsWith('/ba/') && p.endsWith('.jpg')) {
+  // /ba/before.webp + /ba/after.webp — basename only. (v80.18: WebP;
+  // .jpg still served if present.)
+  if (req.method === 'GET' && p.startsWith('/ba/') && (p.endsWith('.webp') || p.endsWith('.jpg'))) {
     const file = path.join(__dirname, 'public', 'ba', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': p.endsWith('.webp') ? 'image/webp' : 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // Restored homepage photos (v80.10 LA ORIGINAL — the old standalone
+  // site's 40 photos): /old/old-NN.webp — basename only, same pattern
+  // as /ba/ above. (v80.18: WebP; .jpg still served if present.)
+  if (req.method === 'GET' && p.startsWith('/old/') && (p.endsWith('.webp') || p.endsWith('.jpg'))) {
+    const file = path.join(__dirname, 'public', 'old', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': p.endsWith('.webp') ? 'image/webp' : 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // Social-share image (v80.18): the og:image derivative of the hero
+  // photo, right-sized at 1200x630 — exact name only.
+  if (req.method === 'GET' && p === '/og-image.jpg') {
+    const file = path.join(__dirname, 'public', 'og-image.jpg');
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
-  // Restored homepage photos (v80.10 LA ORIGINAL — the old standalone
-  // site's 40 photos): /old/old-NN.jpg — basename only, jpg only, same
-  // pattern as /ba/ above.
-  if (req.method === 'GET' && p.startsWith('/old/') && p.endsWith('.jpg')) {
-    const file = path.join(__dirname, 'public', 'old', path.basename(p));
-    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
-    return res.end(fs.readFileSync(file));
+  // SEO doors (v80.18): robots.txt + sitemap.xml at the apex root. The
+  // sitemap lists only the real public customer doors (the homepage and
+  // the four membership join doors the server 302s onto their fragments).
+  if (req.method === 'GET' && p === '/robots.txt') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n');
+  }
+  if (req.method === 'GET' && p === '/sitemap.xml') {
+    const doors = ['/', '/plus', '/plus2', '/homecare', '/yard'];
+    const body = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      doors.map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n';
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(body);
   }
   // Membership plan card images (added 2026-10-21) + app logo banner (v40)
   // + the v80.9 hero tracking slide — exact filenames only.
