@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-26', swSrc.includes("const CACHE = 'ghs-app-v80-26'"));
+t('static: SW cache is ghs-app-v80-27', swSrc.includes("const CACHE = 'ghs-app-v80-27'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4307,7 +4307,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.26: ghs-app-v80-26)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-26'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.27: ghs-app-v80-27)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-27'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6726,6 +6726,146 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
 
   sandbox.fetch = prevFetch26;
   run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en'); location.hash=''; notifs = [];");
+}
+
+// ---------------- v80.27 TEMPORADA (audit A-4, runtime pins) ----------------
+{
+  // A dedicated instance with the season clock pinned to 2026-11-15
+  // (SEASONAL_NOW_MS — fall: gutter + holiday lights in season,
+  // pressure washing out of season, filters on their 6-month cycle),
+  // so the pins are deterministic in any calendar month.
+  const BASE6 = 'http://127.0.0.1:8991';
+  const DATA_FILE6 = '/tmp/ghs-v17-test/data-v80-27.json';
+  try { fs.unlinkSync(DATA_FILE6); } catch (e) {}
+  const env827 = { PORT: '8991', DATA_FILE: DATA_FILE6, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', SEASONAL_NOW_MS: String(Date.UTC(2026, 10, 15, 12, 0, 0)) };
+  function spawnApp6() { const c = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env827), stdio: ['ignore', 'pipe', 'pipe'] }); c.stderr.on('data', d => process.stderr.write('[app6] ' + d)); return c; }
+  let child6 = spawnApp6();
+  async function req6(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE6 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp6() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE6 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v80.27 app6: the TEMPORADA instance boots (season clock pinned to 2026-11-15)', await waitUp6());
+  await req6('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin6@t.local', phone: '(707) 555-1000', password: 'adminpass1' } });
+  const suA27 = await req6('POST', '/api/signup', { body: { name: 'Seasonal Sara', email: 'sara27@t.local', phone: '(707) 555-0527', password: 'custpass27', role: 'customer', serviceAddress: '1 Main St, Fairfield, CA' } });
+  const suB27 = await req6('POST', '/api/signup', { body: { name: 'New Ned', email: 'ned27@t.local', phone: '(707) 555-0528', password: 'custpass27', role: 'customer', serviceAddress: '2 Main St, Fairfield, CA' } });
+  const suC27 = await req6('POST', '/api/signup', { body: { name: 'Recent Rita', email: 'rita27@t.local', phone: '(707) 555-0529', password: 'custpass27', role: 'customer', serviceAddress: '3 Main St, Fairfield, CA' } });
+  const A27ID = suA27.j.user.id, B27ID = suB27.j.user.id, C27ID = suC27.j.user.id;
+  t('v80.27 setup: three customers sign up', !!A27ID && !!B27ID && !!C27ID);
+
+  // seed the paid history straight into the data file, then reboot on
+  // it (the established seed pattern). Sara: gutter Nov-2025 (due),
+  // pressure washing Apr-2025 (real history, out of season in Nov),
+  // holiday lights Nov-2025 (due), oil+filter May-2026 (due — and her
+  // LATER plain oil change Oct-2026 must NOT overwrite the filter
+  // date: no add-on, no filter history). Rita: gutter 26 days ago
+  // (inside the 150-day gap — not due). Ned: nothing.
+  try { child6.kill('SIGTERM'); } catch (e) {}
+  await sleep(400);
+  const seed27 = JSON.parse(fs.readFileSync(DATA_FILE6, 'utf8'));
+  function seedMenuReq27(id, customerId, name, email, serviceId, createdAt, items) {
+    return { id, customerId, customerName: name, customerEmail: email, customerPhone: '(707) 555-0527', service: serviceId, description: 'seeded seasonal history', city: 'Fairfield', address: '1 Main St, Fairfield, CA', when: '', estimateType: 'menu', membership: 'none', estimateDue: 0, status: 'Done', quote: null, quoteNote: '', estimate: null, source: null, menuOrder: items ? { cart: true, serviceId: items[0].serviceId, items } : { serviceId }, payment: { status: 'paid', amountCents: 10000, pi: 'pi_seed27' }, photos: [], messages: [], createdAt };
+  }
+  seed27.requests.push(seedMenuReq27('GHS-SEA27A', A27ID, 'Seasonal Sara', 'sara27@t.local', 'gutter-cleaning', '2025-11-10T12:00:00.000Z'));
+  seed27.requests.push(seedMenuReq27('GHS-SEA27B', A27ID, 'Seasonal Sara', 'sara27@t.local', 'pressure-washing', '2025-04-10T12:00:00.000Z'));
+  seed27.requests.push(seedMenuReq27('GHS-SEA27C', A27ID, 'Seasonal Sara', 'sara27@t.local', 'holiday-lights', '2025-11-20T12:00:00.000Z'));
+  seed27.requests.push(seedMenuReq27('GHS-SEA27D', A27ID, 'Seasonal Sara', 'sara27@t.local', 'oil-change', '2026-05-01T12:00:00.000Z', [{ serviceId: 'oil-change', name: 'Oil Change & Fluids', qty: 1, price: 85, extras: [{ id: 'filter-swap', name: 'Air / cabin filter swap', price: 50, nodisc: false }] }]));
+  seed27.requests.push(seedMenuReq27('GHS-SEA27E', A27ID, 'Seasonal Sara', 'sara27@t.local', 'oil-change', '2026-10-20T12:00:00.000Z'));
+  seed27.requests.push(seedMenuReq27('GHS-SEA27F', C27ID, 'Recent Rita', 'rita27@t.local', 'gutter-cleaning', '2026-10-20T12:00:00.000Z'));
+  fs.writeFileSync(DATA_FILE6, JSON.stringify(seed27));
+  child6 = spawnApp6();
+  t('v80.27 app6: reboots on the seeded history', await waitUp6());
+  const TOKA27 = (await req6('POST', '/api/login', { body: { email: 'sara27@t.local', password: 'custpass27' } })).j.token;
+  const TOKB27 = (await req6('POST', '/api/login', { body: { email: 'ned27@t.local', password: 'custpass27' } })).j.token;
+  const TOKC27 = (await req6('POST', '/api/login', { body: { email: 'rita27@t.local', password: 'custpass27' } })).j.token;
+
+  // (1) the eligible past customer sees the right services at the CURRENT price
+  const seaA = await req6('GET', '/api/me/seasonal', { token: TOKA27 });
+  const propsA = seaA.j.proposals || [];
+  const gutA = propsA.find(x => x.serviceId === 'gutter-cleaning');
+  const ligA = propsA.find(x => x.serviceId === 'holiday-lights');
+  const oilA = propsA.find(x => x.serviceId === 'oil-change');
+  t('v80.27 (1): the eligible customer sees exactly the due proposals (gutter + lights + filters; pressure washing is out of season in November)',
+    seaA.status === 200 && propsA.length === 3 && !!gutA && !!ligA && !!oilA && !propsA.some(x => x.serviceId === 'pressure-washing'));
+  t('v80.27 (1): prices are the CURRENT catalog — list + the member line (gutter 175/140 fall, lights 215/172, oil+filter 135/108 by catalog math, filter date from the add-on order)',
+    !!gutA && gutA.list === 175 && gutA.member === 140 && gutA.seasonKey === '2026-fall' && !!ligA && ligA.list === 215 && ligA.member === 172 && !!oilA && oilA.list === 135 && oilA.member === 108 && oilA.addonId === 'filter-swap' && String(oilA.lastDoneAt).startsWith('2026-05-01'));
+
+  // (2) no history -> none; too-recent history -> none
+  const seaB = await req6('GET', '/api/me/seasonal', { token: TOKB27 });
+  const seaC = await req6('GET', '/api/me/seasonal', { token: TOKC27 });
+  t('v80.27 (2): a customer without the history sees no proposal — and a job 26 days ago sits inside the 150-day gap (not due)',
+    seaB.status === 200 && (seaB.j.proposals || []).length === 0 && seaC.status === 200 && (seaC.j.proposals || []).length === 0);
+  const anon27 = await req6('GET', '/api/me/seasonal', {});
+  t('v80.27 guards: anonymous is refused (401)', anon27.status === 401);
+
+  // (3) confirm creates the order through the standard flow, deposit law intact
+  const conf27 = await req6('POST', '/api/me/seasonal/confirm', { token: TOKA27, body: { serviceId: 'gutter-cleaning' } });
+  t('v80.27 (3): confirm builds the order through the standard cart flow (201 + the cart link)',
+    conf27.status === 201 && !!conf27.j.link && conf27.j.link.includes('/cart/CRT-'));
+  t('v80.27 (3): the totals carry the standard deposit split ($175 -> $50 flat deposit / $125 balance)',
+    !!conf27.j.totals && conf27.j.totals.list === 175 && conf27.j.totals.deposit === 50 && conf27.j.totals.balance === 125);
+  const disk27a = JSON.parse(fs.readFileSync(DATA_FILE6, 'utf8'));
+  const cart27 = (disk27a.carts || []).find(c => c.id === (conf27.j.cart && conf27.j.cart.id));
+  t('v80.27 (3): the cart on disk is a normal OPEN customer cart at the catalog price, stamped seasonal',
+    !!cart27 && cart27.status === 'open' && cart27.listTotal === 175 && cart27.memberTotal === 140 && cart27.customerEmail === 'sara27@t.local' && !!cart27.seasonal && cart27.seasonal.serviceId === 'gutter-cleaning' && (cart27.items || []).length === 1 && cart27.items[0].serviceId === 'gutter-cleaning');
+  const myProps27 = await req6('GET', '/api/me/proposals', { token: TOKA27 });
+  t('v80.27 (3): the booked seasonal cart also surfaces in the account\'s standard proposals with the same deposit split',
+    (myProps27.j.proposals || []).some(x => cart27 && x.id === cart27.id && x.depositDue === 50));
+
+  // (4) acted on or dismissed: never twice in the same season
+  const seaA2 = await req6('GET', '/api/me/seasonal', { token: TOKA27 });
+  t('v80.27 (4): after booking, the gutter proposal is gone (the other two remain)',
+    !(seaA2.j.proposals || []).some(x => x.serviceId === 'gutter-cleaning') && (seaA2.j.proposals || []).length === 2);
+  const confAgain27 = await req6('POST', '/api/me/seasonal/confirm', { token: TOKA27, body: { serviceId: 'gutter-cleaning' } });
+  t('v80.27 (4): confirming the same service twice in one season is refused (404, no second cart)',
+    confAgain27.status === 404 && (JSON.parse(fs.readFileSync(DATA_FILE6, 'utf8')).carts || []).filter(c => c.seasonal && c.seasonal.serviceId === 'gutter-cleaning').length === 1);
+  const dis27 = await req6('POST', '/api/me/seasonal/dismiss', { token: TOKA27, body: { serviceId: 'holiday-lights' } });
+  const seaA3 = await req6('GET', '/api/me/seasonal', { token: TOKA27 });
+  t('v80.27 (4): a dismissed proposal never fires again that season',
+    dis27.status === 200 && !(seaA3.j.proposals || []).some(x => x.serviceId === 'holiday-lights') && (seaA3.j.proposals || []).length === 1 && (seaA3.j.proposals || [])[0].serviceId === 'oil-change');
+  const disAgain27 = await req6('POST', '/api/me/seasonal/dismiss', { token: TOKA27, body: { serviceId: 'holiday-lights' } });
+  t('v80.27 (4): dismiss is idempotent once recorded (200 already)', disAgain27.status === 200 && disAgain27.j.already === true);
+  const confOut27 = await req6('POST', '/api/me/seasonal/confirm', { token: TOKA27, body: { serviceId: 'pressure-washing' } });
+  t('v80.27 guards: confirming a service with no live proposal is refused (404) — no order can be forced', confOut27.status === 404);
+
+  // statics: the automation boundary + EN/ES parity + wiring
+  const confBlock27 = serverSrc.slice(serverSrc.indexOf("p === '/api/me/seasonal/confirm'"), serverSrc.indexOf("p === '/api/me/seasonal/confirm'") + 2600);
+  t('static v80.27: the seasonal endpoints + season table exist and the confirm path carries NO send machinery (in-app surface only, STOP TOTAL)',
+    serverSrc.includes("p === '/api/me/seasonal'") && serverSrc.includes('const SEASONAL_SERVICES') && serverSrc.includes('function seasonalProposalsFor(')
+    && confBlock27.length > 500 && !confBlock27.includes('sendAutomation') && !confBlock27.includes('sendMail') && !confBlock27.includes('notify('));
+  t('static v80.27: every seasonal string lives in BOTH CUST_UI languages (EN/ES parity) + the card is wired into the customer load chain',
+    ['seasTitle:', 'seasIntro:', 'seasLastDone:', 'seasBook:', 'seasDismiss:', 'seasFilterNote:', 'seasDueNow:'].every(k => (htmlSrc.match(new RegExp(k, 'g')) || []).length === 2)
+    && htmlSrc.includes('id="mySeasonal"') && htmlSrc.includes('function loadSeasonal(') && htmlSrc.includes('loadMyReferrals(); loadSeasonal();'));
+
+  // ---- VM: the account card renders in EN and ES; dismiss empties it ----
+  const prevFetch27 = sandbox.fetch;
+  let seasPayload27 = { proposals: [{ serviceId: 'gutter-cleaning', name: 'Gutter Cleaning', addonId: '', seasonKey: '2026-fall', lastDoneAt: '2025-11-10T12:00:00.000Z', list: 175, member: 140, isMember: false }] };
+  sandbox.fetch = async function (url) {
+    const okj = (obj) => ({ ok: true, status: 200, json: async () => obj });
+    if (url === '/api/me/seasonal') return okj(seasPayload27);
+    if (url === '/api/me/seasonal/dismiss') { seasPayload27 = { proposals: [] }; return okj({ ok: true }); }
+    return okj({});
+  };
+  run("me = { id: 'USR-C27', role: 'customer', name: 'Card Carla' }; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  el('mySeasonal').innerHTML = '';
+  await run('loadSeasonal()');
+  const seasEn27 = el('mySeasonal').innerHTML;
+  t('v80.27 VM EN (1): the card shows the service, the LIST price as the headline, the member price as its own line, last-done + both actions',
+    seasEn27.includes('Gutter Cleaning') && seasEn27.includes('$175') && seasEn27.includes('Members pay $140') && seasEn27.includes('Last done') && seasEn27.includes('2025-11-10') && seasEn27.includes('Book it again') && seasEn27.includes('Not now'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');");
+  el('mySeasonal').innerHTML = '';
+  await run('loadSeasonal()');
+  const seasEs27 = el('mySeasonal').innerHTML;
+  t('v80.27 VM ES (1): the same card renders fully in Spanish (localized service name included)',
+    seasEs27.includes('Limpieza de canales') && seasEs27.includes('Ya toca esta temporada') && seasEs27.includes('Reservarlo de nuevo') && seasEs27.includes('Última vez') && !seasEs27.includes('Book it again'));
+  await run("seasonalDismiss('gutter-cleaning')");
+  t('v80.27 VM (4): dismissing re-renders the card empty — the proposal does not come back', el('mySeasonal').innerHTML === '');
+  sandbox.fetch = prevFetch27;
+  run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  try { child6.kill('SIGTERM'); } catch (e) {}
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
