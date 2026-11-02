@@ -1112,14 +1112,10 @@ table.cmp button{white-space:nowrap}
   </div>
 </section>
 
-<section style="display:none" data-v72="hidden-until-real-reviews">
+<section style="display:none" data-v72="hidden-until-real-reviews" id="pubReviewsSec">
   <h2>⭐ Neighbors approve</h2>
-  <div class="sub">Real jobs, real reviews — shown on every service</div>
-  <div class="quotes">
-    <div class="quote"><span class="st">★★★★★</span><br>"Booked at lunch, TV was on the wall by dinner. Price never changed."<div class="who">— Fairfield · TV Mounting</div></div>
-    <div class="quote"><span class="st">★★★★★</span><br>"They took the whole garage pile in one trip. Flat price, no surprises."<div class="who">— Vacaville · Junk, full load</div></div>
-    <div class="quote"><span class="st">★★★★★</span><br>"The member price is real — my drain cost less than the quote I got elsewhere."<div class="who">— Suisun City · Drain unclog</div></div>
-  </div>
+  <div class="sub" id="pubReviewSummary">Real jobs, real reviews — shown on every service</div>
+  <div class="quotes" id="pubReviewList"></div>
 </section>
 
 <section id="ghsMemberships" aria-label="Memberships">
@@ -1408,7 +1404,7 @@ table.cmp button{white-space:nowrap}
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
     <h2>Team — control center</h2>
-    <p id="admNav" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px"><button type="button" class="ghost" onclick="admGo('admSecRequests')">Requests</button><button type="button" class="ghost" onclick="admGo('admSecCart')">Cart</button><button type="button" class="ghost" onclick="admGo('admSecWorkers')">Workers</button><button type="button" class="ghost" onclick="admGo('admSecCaptains')">Captains</button><button type="button" class="ghost" onclick="admGo('admSecCreateJob')">Create job</button><button type="button" class="ghost" onclick="admGo('admSecJobs')">Jobs</button><button type="button" class="ghost" onclick="admGo('admSecRatings')">Ratings</button><button type="button" class="ghost" onclick="admGo('admSecInvoices')">Invoices</button><button type="button" class="ghost" onclick="admGo('admSecTraffic')">Traffic</button><button type="button" class="ghost" onclick="admGo('admSecMoney')">Money</button><button type="button" class="ghost" onclick="admGo('admSecSystem')">System</button><button type="button" class="ghost" onclick="admGo('admSecCalendar')">Calendar</button></p>
+    <p id="admNav" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px"><button type="button" class="ghost" onclick="admGo('admSecRequests')">Requests</button><button type="button" class="ghost" onclick="admGo('admSecCart')">Cart</button><button type="button" class="ghost" onclick="admGo('admSecWorkers')">Workers</button><button type="button" class="ghost" onclick="admGo('admSecCaptains')">Captains</button><button type="button" class="ghost" onclick="admGo('admSecCreateJob')">Create job</button><button type="button" class="ghost" onclick="admGo('admSecJobs')">Jobs</button><button type="button" class="ghost" onclick="admGo('admSecRatings')">Ratings</button><button type="button" class="ghost" onclick="admGo('admSecInvoices')">Invoices</button><button type="button" class="ghost" onclick="admGo('admSecTraffic')">Traffic</button><button type="button" class="ghost" onclick="admGo('admSecMoney')">Money</button><button type="button" class="ghost" onclick="admGo('admSecSprint')">Sprint</button><button type="button" class="ghost" onclick="admGo('admSecSystem')">System</button><button type="button" class="ghost" onclick="admGo('admSecCalendar')">Calendar</button></p>
     <p><button class="ghost" onclick="location.hash='#yard-calendar'">Yard Calendar — schedule member yard visits</button> <span class="mut">separate from the master calendar below</span></p>
     <h3 id="admSecCalendar">Master calendar</h3>
     <div class="card">
@@ -1503,6 +1499,8 @@ table.cmp button{white-space:nowrap}
     <div id="adminInvoices"></div>
     <h3 id="admSecSources">Sources — where customers come from</h3>
     <div id="adminSources"></div>
+    <h3 id="admSecSprint">Sprint — December pace</h3>
+    <div id="adminSprint"></div>
     <h3 id="admSecTraffic">Traffic — views, funnel &amp; CAC</h3>
     <div id="adminTraffic"></div>
     <h3 id="admSecMoney">Money — where the money is</h3>
@@ -2327,6 +2325,9 @@ en: {
   reqNone: 'No requests yet.', reqLoadErr2: 'We could not load your requests.',
   msgCustomerWord: 'Customer', jobPhotoAlt: 'Job photo', threadNone: 'No messages yet.', threadPhCust: 'Message the customer...', threadPhTeam: 'Message the Team...', sendBtn: 'Send',
   ratingYours: 'Your rating:', ratingTapFirst: 'Tap the stars first.',
+  ratingWaitPay: 'You can leave a review once the payment for this job is confirmed.',
+  tlTitle: 'Job timeline', tl_created: 'Booked', tl_assigned: 'Technician assigned', tl_enroute: 'Technician on the way', tl_arrived: 'Technician arrived', tl_done: 'Work done', tl_paid: 'Paid in full', tl_status: 'Status update',
+  pubRevAvgTpl: '{avg} ★ average from {n} verified review', pubRevAvgTplPl: '{avg} ★ average from {n} verified reviews', pubRevVerified: 'Verified job',
   sumEstimate: 'Estimate', sumPickOne: 'pick one', feeTitlePhoto: 'Free photo estimate', feeTitleInPersonPre: 'In-person estimate — ', feeTitleInPersonPre2: 'In-person — ',
   sendBtnPhoto: 'Request free photo estimate', sendBtnPre: 'Send request — ', sendSecuresTpl: '${amt} secures your appointment — and it goes credited towards your repair when approved the same day.',
   srPickService: 'Pick a service first.', srAddAddress: 'Add the home address.', srChooseWhen: 'Choose when you need it.', srDescribe: 'Describe the job in a sentence or two.',
@@ -2456,6 +2457,9 @@ es: {
   reqNone: 'Todavía no tienes solicitudes.', reqLoadErr2: 'No pudimos cargar tus solicitudes.',
   msgCustomerWord: 'Cliente', jobPhotoAlt: 'Foto del trabajo', threadNone: 'Todavía no hay mensajes.', threadPhCust: 'Mensaje al cliente...', threadPhTeam: 'Mensaje al Team...', sendBtn: 'Enviar',
   ratingYours: 'Tu calificación:', ratingTapFirst: 'Toca las estrellas primero.',
+  ratingWaitPay: 'Puedes dejar una reseña cuando el pago de este trabajo esté confirmado.',
+  tlTitle: 'Línea de tiempo', tl_created: 'Agendado', tl_assigned: 'Técnico asignado', tl_enroute: 'Técnico en camino', tl_arrived: 'El técnico llegó', tl_done: 'Trabajo terminado', tl_paid: 'Pagado por completo', tl_status: 'Actualización de estado',
+  pubRevAvgTpl: '{avg} ★ promedio de {n} reseña verificada', pubRevAvgTplPl: '{avg} ★ promedio de {n} reseñas verificadas', pubRevVerified: 'Trabajo verificado',
   sumEstimate: 'Estimado', sumPickOne: 'elige uno', feeTitlePhoto: 'Estimado por foto gratis', feeTitleInPersonPre: 'Estimado en persona — ', feeTitleInPersonPre2: 'En persona — ',
   sendBtnPhoto: 'Pedir estimado por foto gratis', sendBtnPre: 'Enviar solicitud — ', sendSecuresTpl: '${amt} apartan tu cita — y se descuentan de tu reparación si la apruebas el mismo día.',
   srPickService: 'Elige un servicio primero.', srAddAddress: 'Agrega la dirección de la casa.', srChooseWhen: 'Elige cuándo lo necesitas.', srDescribe: 'Describe el trabajo en una frase o dos.',
@@ -3937,11 +3941,40 @@ async function sendJobMsg(idv){
   try{ await api('/api/jobs/'+idv+'/messages',{method:'POST', body:JSON.stringify({text})}); if(me.role==='admin') loadAdminJobs(); else if(me.role==='worker') loadJobs(); else loadMyJobs(); }
   catch(e){ alert(e.message); }
 }
+// ---------- v81: the permanent job timeline (customer card) ----------
+// Renders the append-only history the server keeps on the job
+// (created -> assigned -> en route -> arrived -> done, + paid when the
+// money lands). It renders ALWAYS — unlike the live map above it, it
+// does not depend on the technician sharing a location (audit P1-3).
+// Steps with no event yet stay dimmed; every reached step carries its
+// timestamp. Generic 'status' events (cancellations, corrections)
+// render as their own rows so the history never has a silent gap.
+const TL_STEPS81 = ['created', 'assigned', 'enroute', 'arrived', 'done'];
+function jobTimelineHtml(j){
+  const tl = (j && Array.isArray(j.timeline)) ? j.timeline : [];
+  if (!tl.length) return '';
+  const atOf = {};
+  tl.forEach(function (e) { if (e && e.type && !(e.type in atOf)) atOf[e.type] = e.at; });
+  let h = '<div class="job-timeline" style="margin-top:10px;border-top:1px dashed var(--line);padding-top:8px"><b>' + CU('tlTitle') + '</b><div style="margin-top:4px">';
+  TL_STEPS81.forEach(function (s) {
+    const at = atOf[s];
+    h += '<div style="display:flex;gap:8px;align-items:baseline;' + (at ? '' : 'opacity:.45') + '"><span>' + (at ? '✅' : '▢') + '</span><span>' + CU('tl_' + s) + '</span>' + (at ? '<span class="mut" style="margin-left:auto">' + escHtml(fmtDateLong(at)) + '</span>' : '') + '</div>';
+  });
+  if (atOf.paid) h += '<div style="display:flex;gap:8px;align-items:baseline"><span>💳</span><span>' + CU('tl_paid') + '</span><span class="mut" style="margin-left:auto">' + escHtml(fmtDateLong(atOf.paid)) + '</span></div>';
+  tl.filter(function (e) { return e && e.type === 'status'; }).forEach(function (e) {
+    h += '<div style="display:flex;gap:8px;align-items:baseline"><span>•</span><span>' + CU('tl_status') + (e.status ? ': ' + escHtml(e.status) : '') + '</span><span class="mut" style="margin-left:auto">' + escHtml(fmtDateLong(e.at)) + '</span></div>';
+  });
+  return h + '</div></div>';
+}
 // ---------- Ratings (v25, C1): the customer rates a completed job once ----------
 const ratePicks = {};
 function ratingHtml(j){
   if (j.status !== 'Done — photos sent') return '';
   if (j.rating) return '<div style="margin-top:8px"><b>' + CU('ratingYours') + '</b> <span style="color:#b26a00;font-size:18px">' + '★'.repeat(j.rating) + '☆'.repeat(5 - j.rating) + '</span>' + (j.reviewText ? '<br><span class="mut">&ldquo;' + escHtml(j.reviewText) + '&rdquo;</span>' : '') + '</div>';
+  // v81: the server only accepts a review once the job's payment is
+  // confirmed — until then the card says so instead of offering a
+  // picker that would be refused.
+  if (j.reviewable === false) return '<div style="margin-top:8px"><span class="mut">⭐ ' + CU('ratingWaitPay') + '</span></div>';
   let stars = '';
   for (let s = 1; s <= 5; s++) stars += '<button type="button" class="ghost" id="star-' + j.id + '-' + s + '" style="font-size:20px;padding:2px 8px" onclick="pickStars(\'' + j.id + '\',' + s + ')">☆</button>';
   return '<div style="margin-top:8px"><b>' + CU('ratingPrompt') + '</b><br>' + stars + '<br><input id="rateText-' + j.id + '" placeholder="' + CU('ratingPlaceholder') + '" style="width:100%"><button class="black" onclick="submitRating(\'' + j.id + '\')">' + CU('ratingSend') + '</button> <span class="mut" id="rateMsg-' + j.id + '"></span></div>';
@@ -3959,12 +3992,36 @@ async function submitRating(idv){
     loadMyJobs();
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
+// ---------- v81: public reviews on the storefront ----------
+// The section above (#pubReviewsSec) stays HIDDEN until the server
+// reports at least one PUBLISHED review — the sample quotes are gone
+// and no average is ever painted from anything but real, verified,
+// published reviews (GET /api/reviews, no login). Rendered in the
+// visitor's current language; applyMenuLang re-renders from the cache
+// on every EN|ES toggle.
+let pubReviewsCache = null;
+async function loadPublicReviews(){
+  try { pubReviewsCache = await api('/api/reviews'); } catch (e) { if (!pubReviewsCache) pubReviewsCache = { count: 0, average: 0, reviews: [] }; }
+  renderPublicReviews();
+}
+function renderPublicReviews(){
+  const sec = document.getElementById('pubReviewsSec'); if (!sec) return;
+  const d = pubReviewsCache;
+  if (!d || !d.count) { sec.style.display = 'none'; return; }
+  const sum = document.getElementById('pubReviewSummary');
+  if (sum) sum.textContent = CU(d.count === 1 ? 'pubRevAvgTpl' : 'pubRevAvgTplPl').replace('{avg}', d.average).replace('{n}', d.count);
+  const list = document.getElementById('pubReviewList');
+  if (list) list.innerHTML = (d.reviews || []).map(function (r) {
+    return '<div class="quote"><span class="st">' + '★'.repeat(r.stars) + '☆'.repeat(5 - r.stars) + '</span><br>' + (r.text ? '&ldquo;' + escHtml(r.text) + '&rdquo;' : '') + '<div class="who">— ' + escHtml(r.name || '') + (r.city ? ' · ' + escHtml(r.city) : '') + (r.service ? ' · ' + escHtml(r.service) : '') + '<br><span style="color:#2fbf71">✓ ' + CU('pubRevVerified') + '</span></div></div>';
+  }).join('');
+  sec.style.display = '';
+}
 async function loadMyJobs(){
   const el=document.getElementById('myJobs'); if(!el) return;
   if(!el.innerHTML) el.innerHTML=listLoadingHtml();
   let d=null;
   try{ d=await api('/api/jobs'); }catch(e){ el.innerHTML=listErrorHtml('loadMyJobs()', CU('jobsLoadErr')); return; }
-  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">' + CU('jobsNoneCust') + '</p></div>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+jobTimelineHtml(j)+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">' + CU('jobsNoneCust') + '</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -5621,7 +5678,7 @@ async function loadAdminWorkers(){
 }
 async function loadAdminJobs(){
   const jb=await api('/api/jobs').catch(()=>({jobs:[]}));
-  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span> • Pay offer $'+escHtml(j.payOffer)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+' • Customer: '+escHtml(j.customerName||'—')+' '+escHtml(j.customerPhone||'')+' • '+escHtml(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
+  document.getElementById('adminJobs').innerHTML = jb.jobs.map(j=>'<div class="card"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span> • Pay offer $'+escHtml(j.payOffer)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+' • Customer: '+escHtml(j.customerName||'—')+' '+escHtml(j.customerPhone||'')+' • '+escHtml(j.address||'')+'</span>'+(j.assignedWorkerId?jobChatHtml(j)+(j.infoReleased?'<div style="margin-top:8px"><span class="pill">Address & time shared with worker</span> <button class="ghost" onclick="releaseInfo(\''+j.id+'\',false)">Hide from worker</button></div>':'<div style="margin-top:8px"><button class="black" onclick="releaseInfo(\''+j.id+'\',true)">Confirm & share address/time with worker</button> <span class="mut">Worker never sees the customer name or phone.</span></div>'):'<br><span class="mut">Job chat opens when a worker claims this job.</span>')+(j.rating?'<div style="margin-top:6px"><b>Customer rating:</b> <span style="color:#b26a00">'+'\u2605'.repeat(j.rating)+'\u2606'.repeat(5-j.rating)+'</span>'+(j.reviewText?' \u2014 &ldquo;'+escHtml(j.reviewText)+'&rdquo;':'')+' <span class="pill">'+(j.reviewPublished?'Published':'Not published')+'</span></div>':'')+jobTimelineHtml(j)+payoutHtml(j)+trackBlockHtml(j,'admin')+(j.status==='Open'?connectOverrideHtml(j):'')+'<div style="margin-top:8px"><button class="ghost" onclick="delJob(\''+j.id+'\')">Cancel job</button></div>'+'</div>').join('') || '<div class="empty"><p class="mut">No jobs yet.</p></div>';
   initTrackMaps(jb.jobs);
   return jb.jobs;
 }
@@ -5646,6 +5703,7 @@ async function loadAdmin(){
   loadAdminSources();
   loadAdminTraffic();
   loadAdminMoney();
+  loadAdminSprint();
   loadAdminSystem();
   loadAdminCarts();
   loadAdminInvites();
@@ -5874,6 +5932,31 @@ async function loadAdminMoney(){
     h += '<div class="card"><b>' + S.captainsDue + ':</b> ' + moneyFmt(cp.accrued || 0) + ' (' + (cp.entries || 0) + ' ' + S.entries + ')' + ((cp.perCaptain || []).length ? '<br>' + cp.perCaptain.map(function (c) { return '<span class="mut">' + escHtml(c.name || c.captainId) + ':</span> ' + moneyFmt(c.amount); }).join(' · ') : '') + '</div>';
     h += '<div class="card"><b>' + S.memFail + ':</b> ' + (mf.count || 0) + ' · ' + moneyFmt(mf.total || 0) + '</div>';
     h += '<div class="card"><b>' + S.stripeBox + ':</b> ' + (st.available ? moneyFmt(st.balanceAvailable || 0) + ' ' + S.avail + ' · ' + moneyFmt(st.balancePending || 0) + ' ' + S.pendingBal + (st.nextPayout ? '<br><span class="mut">' + S.nextPayout + ':</span> ' + moneyFmt(st.nextPayout.amount) + (st.nextPayout.date ? ' · ' + escHtml(st.nextPayout.date) : '') + (st.nextPayout.status ? ' · ' + escHtml(st.nextPayout.status) : '') : '') : '<span class="mut">' + S.noStripe + '</span>') + '</div>';
+    host.innerHTML = h;
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+// ---------- v81: Sprint board (admin) ----------
+// Labels follow the ADM812 pattern (EN/ES by the app language). Every
+// number comes from GET /api/admin/sprint — the server reads the live
+// db; this renderer invents nothing and shows honest zeros.
+const ADM821 = {
+  en: { billed: 'Billed this week', ofTarget: 'of the {target}/week pace', paceNow: 'pace expected by now', orders: 'orders', invoices: 'invoices', firstCharges: 'first membership charges', members: 'Active members', techs: 'Active technicians', target: 'target', couldNot: 'Could not load.' },
+  es: { billed: 'Facturado esta semana', ofTarget: 'del ritmo de {target}/semana', paceNow: 'ritmo esperado a hoy', orders: 'órdenes', invoices: 'facturas', firstCharges: 'primeros cargos de membresía', members: 'Miembros activos', techs: 'Técnicos activos', target: 'meta', couldNot: 'No se pudo cargar.' }
+};
+async function loadAdminSprint(){
+  const host = document.getElementById('adminSprint'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM821[menuLang()] || ADM821.en;
+  try {
+    const d = await api('/api/admin/sprint');
+    const b = d.billed || {};
+    const pct = Math.max(0, Math.min(100, d.targetWeekly ? (100 * (b.total || 0) / d.targetWeekly) : 0));
+    let h = '<div class="card"><b>' + S.billed + ':</b> ' + moneyFmt(b.total || 0)
+      + ' <span class="mut">' + S.ofTarget.replace('{target}', moneyFmt(d.targetWeekly || 0)) + ' · ' + (d.pacePct || 0) + '%</span>'
+      + '<div style="height:9px;border-radius:99px;background:#26262b;margin:8px 0 6px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#e42535,#ff5a3c);border-radius:99px"></div></div>'
+      + '<span class="mut">' + S.paceNow + ': ' + moneyFmt(d.paceExpected || 0) + ' · ' + escHtml(d.weekStart || '') + ' → ' + escHtml(d.weekEnd || '') + '</span>'
+      + '<br><span class="mut">' + S.orders + ' ' + moneyFmt(b.orders || 0) + ' · ' + S.invoices + ' ' + moneyFmt(b.invoices || 0) + ' · ' + S.firstCharges + ' ' + moneyFmt(b.memberFirstCharges || 0) + '</span></div>';
+    h += '<div class="card"><b>' + S.members + ':</b> ' + ((d.members || {}).active || 0) + ' <span class="mut">(' + S.target + ' ' + ((d.members || {}).targetMin || 0) + '–' + ((d.members || {}).targetMax || 0) + ')</span>'
+      + ' · <b>' + S.techs + ':</b> ' + ((d.techs || {}).active || 0) + ' <span class="mut">(' + S.target + ' ' + ((d.techs || {}).targetMin || 0) + '–' + ((d.techs || {}).targetMax || 0) + ')</span></div>';
     host.innerHTML = h;
   } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
 }
@@ -6259,7 +6342,7 @@ async function loadAdminRatings(){
   const el=document.getElementById('adminRatings'); if(!el) return;
   try{
     const d=await api('/api/admin/ratings');
-    el.innerHTML = '<p class="mut">' + (d.count ? ('Average: <b>' + d.average + ' ★</b> across ' + d.count + ' rated job' + (d.count === 1 ? '' : 's') + '. Published reviews are the ones you flag for the future website reviews section.') : 'No ratings yet — they appear here when a customer rates a completed job.') + '</p>' +
+    el.innerHTML = '<p class="mut">' + (d.count ? ('Average: <b>' + d.average + ' ★</b> across ' + d.count + ' rated job' + (d.count === 1 ? '' : 's') + '. Published reviews show on the storefront under "Neighbors approve" — only jobs that are done AND paid can be rated.') : 'No ratings yet — they appear here when a customer rates a completed job.') + '</p>' +
       (d.reviews || []).map(function(rv){
         return '<div class="card"><b>' + '★'.repeat(rv.stars) + '☆'.repeat(5 - rv.stars) + '</b> — ' + escHtml(rv.service) + ' (' + escHtml(rv.city) + ')<br>' +
           (rv.text ? '<span>&ldquo;' + escHtml(rv.text) + '&rdquo;</span><br>' : '') +
@@ -8494,6 +8577,7 @@ function applyMenuLang() {
   // strings live in JOIN_PROMO_UI / JOIN_PROMO_BENEFITS, both languages).
   if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
   if (typeof paintStaticChrome === 'function') paintStaticChrome();
+  if (typeof renderPublicReviews === 'function') renderPublicReviews(); // v81: real reviews re-render in the new language (after the home painters)
 }
 function svcName(id) { const s = MENU_CATALOG[id]; if (!s) return id; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][0] : s.name; }
 function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][1] : s.meta; }
@@ -8571,6 +8655,7 @@ if (location.hash === '#join-homecare') { joinPromo = { plan: 'homecare', kind: 
 window.addEventListener('hashchange', checkResetHash);
 checkResetHash();
 loadMe().then(function(){ try { routeNotifHash(); } catch (e) {} try { cartRecoverFromHash(); } catch (e) {} });
+loadPublicReviews(); // v81: published reviews (public endpoint; the section stays hidden until real ones exist)
 </script>
 <script>
 // v27: keep every visitor on the CURRENT app version. When an updated
