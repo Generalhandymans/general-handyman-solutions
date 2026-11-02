@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-14', swSrc.includes("const CACHE = 'ghs-app-v80-14'"));
+t('static: SW cache is ghs-app-v80-15', swSrc.includes("const CACHE = 'ghs-app-v80-15'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.14: ghs-app-v80-14)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-14'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.15: ghs-app-v80-15)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-15'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5594,7 +5594,7 @@ t('v80.13 non-sold job: a board TV job claimed by another tech pays its STANDARD
 // kills app3 and boots a FRESH instance on the SAME data file.
 t('static v80.14: sessions persist in the db store keyed by token HASH (raw tokens never on disk) with boot + lazy pruning', serverSrc.includes('function sessionStore()') && serverSrc.includes('sha256hex(token)') && serverSrc.includes('function pruneExpiredSessions()') && serverSrc.includes('function dropSession('));
 t('static v80.14: backup + snapshots + system endpoints exist, attachment downloads, bounded snapshot ring of 7', serverSrc.includes("p === '/api/admin/backup'") && serverSrc.includes("p === '/api/admin/snapshots'") && serverSrc.includes("p === '/api/admin/system'") && serverSrc.includes('Content-Disposition') && serverSrc.includes('SNAPSHOT_KEEP = 7'));
-t('static v80.14: the snapshot sweep rides the /api/jobs sweep hub (ordinary activity, no cron)', serverSrc.includes('sweepEstimateReminders(); sweepDailySnapshot();'));
+t('static v80.14: the snapshot sweep rides the /api/jobs sweep hub (ordinary activity, no cron) (v80.15: sweepFollowups rides the same hub)', serverSrc.includes('sweepEstimateReminders(); sweepFollowups(); sweepDailySnapshot();'));
 t('static v80.14: admin UI has the System section, the loader + dictionary, and the backup download wired in loadAdmin', htmlSrc.includes('id="adminSystem"') && htmlSrc.includes('id="admSecSystem"') && htmlSrc.includes('const ADM814') && htmlSrc.includes('loadAdminSystem();') && htmlSrc.includes('/api/admin/backup'));
 async function raw3b(p, token) { const headers = {}; if (token) headers.Authorization = 'Bearer ' + token; const r = await fetch(BASE3 + p, { headers }); const text = await r.text(); let j = null; try { j = JSON.parse(text); } catch (e) {} return { status: r.status, cd: r.headers.get('content-disposition') || '', j }; }
 // --- backup export: gating, content, audit ---
@@ -5672,6 +5672,150 @@ t('v80.14 snapshot: after the restart the sweep takes today\'s snapshot and the 
 const hAfter814 = await req3('GET', '/api/admin/system', { token: A3 });
 const disk814c = JSON.parse(fs.readFileSync(DATA_FILE3, 'utf8'));
 t('v80.14 health: after the restart the health line reports today as the last snapshot and counts still match the file', hAfter814.status === 200 && hAfter814.j.lastSnapshot === todayKey814 && hAfter814.j.counts.users === disk814c.users.length && hAfter814.j.counts.requests === disk814c.requests.length);
+// ---------------- v80.15 SEGUIMIENTO (app4) ----------------
+// One-shot follow-ups on the approved in-server sweep pattern: proposal
+// cart reminder, invoice reminder (stamp shared with the manual
+// remind), trial-ending email, payment-failed customer email, and the
+// Google review ask at Paid in full (settings-driven, never hardcoded).
+t('static v80.15: follow-up sweeps exist — one-shot, stamped, audited, on the approved hubs', serverSrc.includes('function sweepFollowups(') && serverSrc.includes('FOLLOWUP_THROTTLE_MS') && serverSrc.includes("sendAutomation('cart_reminder'") && serverSrc.includes("'cart.reminder'") && serverSrc.includes("'invoice.reminder'") && serverSrc.includes('function trialEndMsFor(') && serverSrc.includes("'trial.reminder'") && serverSrc.includes('sweepFollowups(); sweepDailySnapshot();'));
+t('static v80.15: review ask is settings-driven and hooked ONLY at the two paid-in-full recorders (2 call sites)', serverSrc.includes('function maybeAskGoogleReview(') && serverSrc.includes('db.settings.googleReviewUrl') && (serverSrc.match(/maybeAskGoogleReview\(r\);/g) || []).length === 2 && serverSrc.includes("p === '/api/admin/settings'") && serverSrc.includes('r.reviewAskedAt'));
+t('static v80.15: payment_failed webhook emails the customer once per event, beside the v80.12 failure record', serverSrc.includes("fireAutomation('payment_failed'") && serverSrc.includes("type === 'payment_failed'"));
+t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
+const BASE4 = 'http://127.0.0.1:8987';
+const DATA_FILE4 = '/tmp/ghs-v17-test/data-v80-15.json';
+try { fs.unlinkSync(DATA_FILE4); } catch (e) {}
+const env815 = { PORT: '8987', DATA_FILE: DATA_FILE4, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+let child4 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env815), stdio: ['ignore', 'pipe', 'pipe'] });
+child4.stderr.on('data', d => process.stderr.write('[app4] ' + d));
+async function req4(method, p, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+  const r = await fetch(BASE4 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, j };
+}
+async function wh4(type, object) {
+  const payload = JSON.stringify({ id: 'evt_' + Math.random().toString(36).slice(2, 9), type, data: { object } });
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(ts + '.' + payload, 'utf8').digest('hex');
+  return fetch(BASE4 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: payload });
+}
+async function waitUp4() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE4 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+t('v80.15 app4: the SEGUIMIENTO instance boots', await waitUp4());
+await req4('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin4@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+const A4 = (await req4('POST', '/api/login', { body: { email: 'admin4@t.local', password: 'adminpass1' } })).j.token;
+const ADM4ID = (await req4('GET', '/api/me', { token: A4 })).j.user.id;
+const wsu815 = await req4('POST', '/api/signup', { body: { name: 'Seller 815', email: 'seller815@t.local', phone: '(707) 555-0815', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+const W815ID = wsu815.j.user.id;
+const csu815 = await req4('POST', '/api/signup', { body: { name: 'Review Rita', email: 'v815-review@t.local', phone: '(707) 555-0816', password: 'custpass1', role: 'customer', serviceAddress: '1 Main St, Fairfield, CA' } });
+const CUST815ID = csu815.j.user.id;
+const CUST815TOK = (await req4('POST', '/api/login', { body: { email: 'v815-review@t.local', password: 'custpass1' } })).j.token;
+// --- fixtures through the real API ---
+const mkCart815 = async (email, extra) => (await req4('POST', '/api/admin/carts', { token: A4, body: Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 125 }], customerName: 'Cart ' + email, customerEmail: email }, extra || {}) })).j.cart;
+const cartDue815 = await mkCart815('v815-cartdue@t.local');
+const cartFresh815 = await mkCart815('v815-cartfresh@t.local');
+const cartEs815 = await mkCart815('v815-cartes@t.local', { lang: 'es' });
+const mkInv815 = async (email) => (await req4('POST', '/api/admin/invoices', { token: A4, body: { customerName: 'Inv ' + email, customerEmail: email, items: [{ description: 'Labor', qty: 1, unitPrice: 200 }] } })).j.invoice;
+const invDue815 = await mkInv815('v815-invdue@t.local');
+const invRem815 = await mkInv815('v815-invrem@t.local');
+const invPaid815 = await mkInv815('v815-invpaid@t.local');
+const invDraft815 = await mkInv815('v815-invdraft@t.local');
+for (const inv of [invDue815, invRem815, invPaid815]) await req4('POST', '/api/admin/invoices/' + inv.id + '/send', { token: A4, body: {} });
+await req4('POST', '/api/admin/invoices/' + invRem815.id + '/remind', { token: A4, body: {} }); // the Team's manual remind lands FIRST
+await req4('POST', '/api/admin/invoices/' + invPaid815.id + '/mark-paid', { token: A4, body: { method: 'card' } });
+const invRemMailBefore815 = (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invRem815.id + ' ($200.00) is still unpaid').length;
+t('v80.15 fixtures: carts + invoices built through the real API (manual remind already sent once)', !!cartDue815.id && !!invDue815.id && invRemMailBefore815 === 1);
+// --- kill, backdate + seed the file-only fixtures, respawn ---
+try { child4.kill('SIGTERM'); } catch (e) {}
+await sleep(600);
+const agoH815 = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+const agoD815 = (d) => new Date(Date.now() - d * 24 * 3600 * 1000).toISOString();
+const seed815 = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+for (const c of seed815.carts) { if (c.id === cartDue815.id || c.id === cartEs815.id) c.createdAt = agoH815(49); }
+for (const inv of seed815.invoices) { if (inv.id === invDue815.id || inv.id === invRem815.id) inv.sentAt = agoH815(49); }
+const seedCart815 = (o) => seed815.carts.push(Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 125, lineTotal: 125, memberUnit: 100 }], listTotal: 125, memberTotal: 100, note: '', customerName: 'Seed', customerPhone: '', customerEmail: '', lang: 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: ADM4ID, createdAt: agoH815(49) }, o));
+seedCart815({ id: 'CRT-815W', customerEmail: 'v815-wcart@t.local', createdBy: W815ID, soldByWorkerId: W815ID }); // worker sales cart — NOT the sweep's business
+seedCart815({ id: 'CRT-815P', customerEmail: 'v815-cartpaid@t.local', status: 'paid', requestId: 'REQ-815X', paidAt: agoH815(40) });
+seedCart815({ id: 'CRT-815C', customerEmail: 'v815-cartcancel@t.local', status: 'cancelled' });
+seedCart815({ id: 'CRT-815N', customerEmail: '' });
+seed815.invoices.push({ id: 'INV-815NM', customerName: 'No Mail', customerEmail: '', customerPhone: '', customerId: '', jobId: '', requestId: '', items: [{ description: 'Labor', qty: 1, unitPrice: 100, lineTotal: 100 }], subtotal: 100, discount: 0, total: 100, status: 'sent', notes: '', dueDate: '', createdAt: agoH815(50), sentAt: agoH815(49), paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: '' });
+const seedTrial815 = (o) => seed815.users.push(Object.assign({ name: 'Trial', email: '', phone: '(707) 555-0900', role: 'customer', status: 'active', inviteFreeMonthUsed: true, homeCareStatus: 'active', homeCareSince: agoD815(27.5), homeCareCancelAt: null, membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_815', since: agoD815(27.5), cancelAt: null }, createdAt: agoD815(27.5) }, o));
+seedTrial815({ id: 'USR-815T1', name: 'Trial Due', email: 'v815-trial@t.local' }); // ends in ~2.5 days — inside the window
+seedTrial815({ id: 'USR-815T2', name: 'Trial Early', email: 'v815-trialearly@t.local', homeCareSince: agoD815(20), membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_815b', since: agoD815(20), cancelAt: null } });
+seedTrial815({ id: 'USR-815T3', name: 'Trial Converted', email: 'v815-trialconv@t.local', firstRealChargeAt: agoD815(1) });
+seedTrial815({ id: 'USR-815T4', name: 'Trial Cancelled', email: 'v815-trialcancel@t.local', homeCareStatus: 'cancelled', membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'cancelled', subscriptionId: 'sub_815d', since: agoD815(27.5), cancelAt: agoD815(1) } });
+seedTrial815({ id: 'USR-815T5', name: 'Trial Ending Anyway', email: 'v815-trialend@t.local', membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_815e', since: agoD815(27.5), cancelAt: agoD815(-2) } }); // cancellation already scheduled — no charge lands
+seedTrial815({ id: 'USR-815T6', name: 'Trial No Mail', email: '' });
+seed815.users.push({ id: 'USR-815PF', name: 'Pay Fail', email: 'v815-pf@t.local', phone: '(707) 555-0901', role: 'customer', status: 'active', stripeCustomerId: 'cus_815pf', stripeSubscriptionId: 'sub_815pf', inviteFreeMonthUsed: true, firstRealChargeAt: agoD815(30), homeCareStatus: 'active', homeCareSince: agoD815(60), homeCareCancelAt: null, membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_815pf', since: agoD815(60), cancelAt: null }, createdAt: agoD815(60) });
+const seedReq815 = (o) => seed815.requests.push(Object.assign({ customerId: CUST815ID, customerName: 'Review Rita', customerEmail: 'v815-review@t.local', customerPhone: '(707) 555-0816', service: 'TV Mounting', description: 'v815 review flow', city: 'Fairfield', address: '1 Main St', when: 'Today', estimateType: 'photo', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [], payment: null, createdAt: agoH815(2) }, o));
+seedReq815({ id: 'REQ-815A' }); // paid BEFORE the review link exists — no ask, ever
+seedReq815({ id: 'REQ-815B' }); // paid in full after the link is set — the ask fires
+seedReq815({ id: 'REQ-815C', payment: { status: 'deposit', kind: 'cart-order', pi: 'pi_dep815', amountCents: 5000, totalCents: 12500, balanceCents: 7500, at: agoH815(1) } }); // balance landing = the second paid-in-full door
+fs.writeFileSync(DATA_FILE4, JSON.stringify(seed815));
+child4 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env815), stdio: ['ignore', 'pipe', 'pipe'] });
+child4.stderr.on('data', d => process.stderr.write('[app4] ' + d));
+t('v80.15 app4: respawned on the seeded file', await waitUp4());
+const A4B = (await req4('POST', '/api/login', { body: { email: 'admin4@t.local', password: 'adminpass1' } })).j.token;
+const bySubj815 = async (s) => (await mockEmails()).filter(e => (e.subject || '') === s);
+const byTo815 = async (em) => (await mockEmails()).filter(e => JSON.stringify(e.to || []) === JSON.stringify([em]));
+await req4('GET', '/api/jobs', { token: A4B }); // ordinary admin activity triggers the sweeps
+let cartMail815 = [];
+for (let i = 0; i < 30 && !cartMail815.length; i++) { cartMail815 = await bySubj815('Reminder: your proposal (' + cartDue815.id + ') is still waiting — General Handyman Solutions'); if (!cartMail815.length) await sleep(200); }
+await sleep(600);
+t('v80.15 cart reminder: the 49h-old unpaid proposal cart gets exactly ONE reminder, to its customer, with the cart link', cartMail815.length === 1 && JSON.stringify(cartMail815[0].to) === JSON.stringify(['v815-cartdue@t.local']) && (cartMail815[0].text || '').includes('/cart/' + cartDue815.id));
+t('v80.15 cart reminder: the ES-built cart is reminded in Spanish', (await bySubj815('Recordatorio: tu propuesta (' + cartEs815.id + ') sigue esperando — General Handyman Solutions')).length === 1);
+t('v80.15 cart reminder: fresh / worker-sales / paid / cancelled / no-email carts get NOTHING', (await byTo815('v815-cartfresh@t.local')).filter(e => (e.subject || '').includes('proposal')).length === 0 && (await byTo815('v815-wcart@t.local')).length === 0 && (await byTo815('v815-cartpaid@t.local')).length === 0 && (await byTo815('v815-cartcancel@t.local')).length === 0);
+const invMail815 = await bySubj815('Payment reminder: invoice ' + invDue815.id + ' ($200.00) is still unpaid');
+t('v80.15 invoice reminder: the 49h-old sent invoice gets exactly ONE automatic reminder with the amount due', invMail815.length === 1 && JSON.stringify(invMail815[0].to) === JSON.stringify(['v815-invdue@t.local']));
+t('v80.15 invoice reminder: manual-reminded / paid / draft / no-email invoices get NO automatic reminder', (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invRem815.id + ' ($200.00) is still unpaid').length === invRemMailBefore815 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invPaid815.id + ' ($200.00) is still unpaid').length === 0 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invDraft815.id + ' ($200.00) is still unpaid').length === 0 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice INV-815NM ($100.00) is still unpaid').length === 0);
+const trialMail815 = await bySubj815('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto');
+t('v80.15 trial email: the member inside the 3-day window gets exactly ONE trial-ending email naming the first $29 charge', trialMail815.length === 1 && JSON.stringify(trialMail815[0].to) === JSON.stringify(['v815-trial@t.local']) && (trialMail815[0].text || '').includes('$29'));
+t('v80.15 trial email: too-early / converted / cancelled / cancel-scheduled members get NOTHING', (await byTo815('v815-trialearly@t.local')).length === 0 && (await byTo815('v815-trialconv@t.local')).length === 0 && (await byTo815('v815-trialcancel@t.local')).length === 0 && (await byTo815('v815-trialend@t.local')).length === 0);
+const disk815a = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+t('v80.15 stamps: cart remindedAt, invoice remindedAt + count, and trialEndRemindedAt all landed in the db', !!disk815a.carts.find(c => c.id === cartDue815.id).remindedAt && !!disk815a.invoices.find(i => i.id === invDue815.id).remindedAt && disk815a.invoices.find(i => i.id === invDue815.id).reminderCount === 1 && !!disk815a.users.find(u => u.id === 'USR-815T1').trialEndRemindedAt);
+const aud815a = await req4('GET', '/api/admin/audit', { token: A4B });
+t('v80.15 audit: cart.reminder, invoice.reminder and trial.reminder are all in the log', ['cart.reminder', 'invoice.reminder', 'trial.reminder'].every(a => (aud815a.j.entries || []).some(en => en.action === a)));
+await req4('GET', '/api/jobs', { token: A4B });
+await sleep(1400);
+t('v80.15 one-shot: a second sweep sends NOTHING again (carts, invoices, trials)', (await bySubj815('Reminder: your proposal (' + cartDue815.id + ') is still waiting — General Handyman Solutions')).length === 1 && (await bySubj815('Payment reminder: invoice ' + invDue815.id + ' ($200.00) is still unpaid')).length === 1 && (await bySubj815('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).length === 1);
+// --- payment-failed customer email (one per webhook event) ---
+await wh4('invoice.payment_failed', { id: 'in_815pf', customer: 'cus_815pf', subscription: 'sub_815pf', amount_due: 2900 });
+let pfMail815 = [];
+for (let i = 0; i < 30 && !pfMail815.length; i++) { pfMail815 = await bySubj815('Payment failed — please update your card · Pago fallido — actualiza tu tarjeta'); if (!pfMail815.length) await sleep(200); }
+t('v80.15 payment failed: ONE clear bilingual email to the customer, with the amount and the fix-it route', pfMail815.length === 1 && JSON.stringify(pfMail815[0].to) === JSON.stringify(['v815-pf@t.local']) && (pfMail815[0].text || '').includes('$29.00') && (pfMail815[0].text || '').includes('Manage billing'));
+const disk815b = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+t('v80.15 payment failed: the v80.12 failure record still lands (user + amount)', (disk815b.paymentFailures || []).some(f => f.userId === 'USR-815PF' && f.amountCents === 2900));
+// --- review ask at Paid in full ---
+await wh4('payment_intent.succeeded', { id: 'pi_a815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815A' } });
+await sleep(800);
+const disk815c = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+const rqA815 = disk815c.requests.find(r => r.id === 'REQ-815A');
+t('v80.15 review ask: with NO link configured, a paid-in-full order is silently skipped (paid, unstamped, no email)', !!rqA815 && rqA815.payment && rqA815.payment.status === 'paid' && !rqA815.reviewAskedAt && (await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?')).length === 0);
+const setCust815 = await req4('POST', '/api/admin/settings', { token: CUST815TOK, body: { googleReviewUrl: 'https://g.page/r/TEST815/review' } });
+const setBad815 = await req4('POST', '/api/admin/settings', { token: A4B, body: { googleReviewUrl: 'not-a-url' } });
+const setOk815 = await req4('POST', '/api/admin/settings', { token: A4B, body: { googleReviewUrl: 'https://g.page/r/TEST815/review' } });
+const sys815 = await req4('GET', '/api/admin/system', { token: A4B });
+t('v80.15 settings: review link is admin-only, URL-validated, saved to db.settings and read back by System health', setCust815.status === 403 && setBad815.status === 400 && setOk815.status === 200 && sys815.j.googleReviewUrl === 'https://g.page/r/TEST815/review');
+await wh4('payment_intent.succeeded', { id: 'pi_b815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815B' } });
+let revMail815 = [];
+for (let i = 0; i < 30 && !revMail815.length; i++) { revMail815 = await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?'); if (!revMail815.length) await sleep(200); }
+await sleep(400);
+const disk815d = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+const rqB815 = disk815d.requests.find(r => r.id === 'REQ-815B');
+t('v80.15 review ask: paid in full WITH the link set sends exactly ONE ask — email with the configured URL + in-app note + stamp', revMail815.length === 1 && JSON.stringify(revMail815[0].to) === JSON.stringify(['v815-review@t.local']) && (revMail815[0].text || '').includes('https://g.page/r/TEST815/review') && !!rqB815.reviewAskedAt && (disk815d.notifications || []).some(n => n.userId === CUST815ID && n.type === 'review' && n.text.includes('https://g.page/r/TEST815/review')));
+await wh4('payment_intent.succeeded', { id: 'pi_b815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815B' } }); // the confirm/webhook TWIN — a no-op
+await sleep(800);
+t('v80.15 review ask: the twin webhook does NOT re-ask (still exactly one)', (await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?')).length === 1);
+await wh4('payment_intent.succeeded', { id: 'pi_c815', amount_received: 7500, metadata: { kind: 'menu-order', requestId: 'REQ-815C' } });
+let revMail815c = [];
+for (let i = 0; i < 30; i++) { revMail815c = await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?'); if (revMail815c.length >= 2) break; await sleep(200); }
+const disk815e = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+const rqC815 = disk815e.requests.find(r => r.id === 'REQ-815C');
+t('v80.15 review ask: the BALANCE landing (deposit → paid in full) fires the ask exactly once too', revMail815c.length === 2 && !!rqC815 && rqC815.payment.status === 'paid' && !!rqC815.reviewAskedAt);
+const aud815b = await req4('GET', '/api/admin/audit', { token: A4B });
+t('v80.15 audit: review.ask is logged for both paid-in-full doors', (aud815b.j.entries || []).filter(en => en.action === 'review.ask').length >= 2 && (aud815b.j.entries || []).some(en => en.action === 'admin.settings'));
+try { child4.kill('SIGTERM'); } catch (e) {}
+
 try { child3b.kill('SIGTERM'); } catch (e) {}
 
 try { child3.kill('SIGTERM'); } catch (e) {}
