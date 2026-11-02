@@ -78,7 +78,7 @@ function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUp
 // never throw on shape; handlers additionally reject non-strings.
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
 function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -621,6 +621,10 @@ function publicJob(j, viewer, rangeInfo) {
   if (rangeInfo && viewer && viewer.role === 'worker' && !assigned) {
     if (rangeInfo.miles != null) base.distanceMiles = rangeInfo.miles;
     if (rangeInfo.unmeasured) base.rangeUnmeasured = true;
+    // v80.16: the WORKER-side twin of the flag — his own base could not
+    // be measured (no profile city, no last known position), so this
+    // job reached him fail-open with no distance. Flagged, never hidden.
+    if (rangeInfo.baseUnmeasured) base.rangeBaseUnmeasured = true;
   }
   if (viewer && viewer.role === 'admin') return Object.assign({}, j);
   if (assigned) {
@@ -1526,35 +1530,52 @@ async function jobCoords(j) {
 }
 // Worker base coordinates: geocoded ONCE per base city and cached on
 // the worker record, keyed by the city string — a city edit re-keys it.
+// v80.16 FALLBACK: when the base CITY is missing or cannot be geocoded,
+// the base is the tech's own LAST KNOWN POSITION (u.lastLoc, stamped by
+// the duty feed — see /api/me/location). A home-based tech's phone
+// position IS his base for range purposes. Without this fallback a
+// tech with no measurable profile city silently failed open and was
+// offered EVERY job in the system (the Ri Chen case: an Elk Grove tech
+// shown jobs ~100 miles away with no distance and no flag). Only when
+// NEITHER source exists does the range stay unmeasured for him — the
+// board fails open (never hides everything), now FLAGGED baseUnmeasured.
 async function workerBaseCoords(w) {
   if (!w) return null;
   const city = String((w.profile || {}).city || '').trim();
-  if (!city) return null;
-  const key = city.toLowerCase();
-  if (w.baseGeoFor === key && w.baseLat != null && w.baseLng != null) return { lat: Number(w.baseLat), lng: Number(w.baseLng) };
-  const c = await geocodeQuery(city + ', CA, USA');
-  if (c) { w.baseLat = c.lat; w.baseLng = c.lng; w.baseGeoFor = key; save(); }
-  return c;
+  if (city) {
+    const key = city.toLowerCase();
+    if (w.baseGeoFor === key && w.baseLat != null && w.baseLng != null) return { lat: Number(w.baseLat), lng: Number(w.baseLng) };
+    const c = await geocodeQuery(city + ', CA, USA');
+    if (c) { w.baseLat = c.lat; w.baseLng = c.lng; w.baseGeoFor = key; save(); return c; }
+  }
+  if (w.lastLoc && isFinite(Number(w.lastLoc.lat)) && isFinite(Number(w.lastLoc.lng))) return { lat: Number(w.lastLoc.lat), lng: Number(w.lastLoc.lng) };
+  return null;
 }
-// { miles: number|null, unmeasured: bool } — unmeasured ONLY when the
-// JOB side cannot be measured (the spec's flag). A worker with no
-// measurable base FAILS OPEN (he still sees the job) but the distance
-// is unknown, so miles is null without the job's unmeasured flag.
+// { miles: number|null, unmeasured: bool, baseUnmeasured: bool } —
+// unmeasured ONLY when the JOB side cannot be measured (the spec's
+// flag). baseUnmeasured when the WORKER side cannot be measured by any
+// source (no city, no last known position): he FAILS OPEN (he still
+// sees the job) but the board flags that his distance is unknown.
 async function jobRangeFor(j, w) {
   const jc = await jobCoords(j);
   if (!jc) return { miles: null, unmeasured: true };
   const wc = await workerBaseCoords(w);
-  if (!wc) return { miles: null, unmeasured: false };
+  if (!wc) return { miles: null, unmeasured: false, baseUnmeasured: true };
   return { miles: Math.round(haversineMiles(wc.lat, wc.lng, jc.lat, jc.lng) * 10) / 10, unmeasured: false };
 }
 function jobOutOfRange(range) { return !!(range && range.miles != null && range.miles > JOB_RANGE_MILES); }
 // Synchronous variant for hot paths (SSE): uses ONLY already-cached
 // coordinates — if either side is uncached it fails open and the REST
-// board stays the enforcement point.
+// board stays the enforcement point. v80.16: the worker side uses the
+// same base fallback chain as jobRangeFor (cached base-city coords,
+// else his last known position) so the stream and the board agree.
 function jobOutOfRangeCached(j, w) {
-  if (!j || !w || j.destLat == null || j.destLng == null || w.baseLat == null || w.baseLng == null) return false;
-  if (w.baseGeoFor !== String((w.profile || {}).city || '').trim().toLowerCase()) return false;
-  return haversineMiles(Number(w.baseLat), Number(w.baseLng), Number(j.destLat), Number(j.destLng)) > JOB_RANGE_MILES;
+  if (!j || !w || j.destLat == null || j.destLng == null) return false;
+  let blat = null, blng = null;
+  if (w.baseLat != null && w.baseLng != null && w.baseGeoFor === String((w.profile || {}).city || '').trim().toLowerCase()) { blat = Number(w.baseLat); blng = Number(w.baseLng); }
+  else if (w.lastLoc && isFinite(Number(w.lastLoc.lat)) && isFinite(Number(w.lastLoc.lng))) { blat = Number(w.lastLoc.lat); blng = Number(w.lastLoc.lng); }
+  if (blat == null || blng == null) return false;
+  return haversineMiles(blat, blng, Number(j.destLat), Number(j.destLng)) > JOB_RANGE_MILES;
 }
 // Area-matched workers MINUS the out-of-range ones — the alert list.
 async function alertableWorkersForJob(j) {
@@ -5397,8 +5418,32 @@ async function handleRequest(req, res) {
     const lat = Number(b.lat), lng = Number(b.lng);
     if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return send(res, 400, { error: 'invalid coordinates' });
     user.liveLoc = { lat, lng, updatedAt: new Date().toISOString() };
+    // v80.16: an ACCEPTED post also becomes the account's LAST KNOWN
+    // position (u.lastLoc) and records the location OPT-IN
+    // (u.locOptInAt) — both persist on the user record across logins,
+    // unlike u.liveLoc, which logout still wipes (the v41 rule stands:
+    // the LIVE point dies at logout; the account's memory that this
+    // tech shares location, and where he last was, does not). Ri Chen
+    // had to re-grant location at every login because the only record
+    // was a localStorage flag in one browser. u.lastLoc is also what
+    // lets the 50-mile board filter measure a tech whose profile city
+    // is missing or unmeasurable (see workerBaseCoords).
+    user.lastLoc = { lat, lng, updatedAt: user.liveLoc.updatedAt };
+    if (!user.locOptInAt) user.locOptInAt = user.liveLoc.updatedAt;
     save();
     return send(res, 200, { ok: true, sharing: true });
+  }
+  // v80.16: the permission card's ACTIVATE tap records the opt-in on
+  // the ACCOUNT, server-side — the client flag ('ghsLoc' localStorage)
+  // is wiped by a PWA reinstall / cache clear / new browser, and the
+  // tech had to re-grant at every login. Worker-only, like the feed.
+  if (p === '/api/me/location/opt-in' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const b = await readBody(req);
+    if (b.optedIn === true) { if (!user.locOptInAt) user.locOptInAt = new Date().toISOString(); }
+    else if (b.optedIn === false) { delete user.locOptInAt; }
+    save();
+    return send(res, 200, { ok: true, locOptIn: !!user.locOptInAt, lastLoc: user.lastLoc || null });
   }
   // The 7 trade boxes: partial merge — only the boxes sent change, and the
   // Team's verified levels are never touched by worker input.
@@ -6488,6 +6533,27 @@ async function handleRequest(req, res) {
     events.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (timeKey(a.time) < timeKey(b.time) ? -1 : timeKey(a.time) > timeKey(b.time) ? 1 : 0));
     return send(res, 200, { events });
   }
+  // v80.16: JOB DETAIL for technicians — the fetch behind the tech-zone
+  // detail view. It invents NO new data path: publicJob() is the only
+  // view builder, so the detail can never show more than the board
+  // rules already allow (never the customer name/phone or any customer
+  // total; address + time only as the Team released them). A worker may
+  // open his OWN jobs and the Open in-range jobs on his board; another
+  // tech's job is refused, and an out-of-range Open job gets the exact
+  // refusal the claim gate gives.
+  const jobDetailMatch = p.match(/^\/api\/jobs\/([\w-]+)$/);
+  if (jobDetailMatch && req.method === 'GET') {
+    if (!requireRole(user, ['admin', 'worker'], res)) return;
+    const j = db.jobs.find(x => x.id === jobDetailMatch[1]);
+    if (!j) return send(res, 404, { error: 'job not found' });
+    if (user.role === 'admin') return send(res, 200, { job: publicJob(j, user) });
+    if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    if (j.assignedWorkerId === user.id) return send(res, 200, { job: publicJob(j, user) });
+    if (j.assignedWorkerId || j.status !== 'Open') return send(res, 403, { error: 'not your job' });
+    const range = await jobRangeFor(j, user);
+    if (jobOutOfRange(range)) return send(res, 403, { error: 'this job is outside your 50-mile work area (' + range.miles + ' mi from your base city)' });
+    return send(res, 200, { job: publicJob(j, user, range) });
+  }
   const claimMatch = p.match(/^\/api\/jobs\/([\w-]+)\/claim$/);
   if (claimMatch && req.method === 'POST') {
     if (!requireRole(user, ['worker'], res)) return;
@@ -6575,7 +6641,13 @@ async function handleRequest(req, res) {
     if (!requireRole(user, ['worker'], res)) return;
     await refreshWorkerConnect(user, true);
     if (user.stripePayoutsReady) db.jobs.filter(x => x.assignedWorkerId === user.id && x.payoutStatus === 'awaiting_worker_setup').forEach(jj => { maybePayWorkerForJob(jj); });
-    return send(res, 200, { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted });
+    // v80.16: pay still HELD for this tech, computed from the stored
+    // payout stamps only (no Stripe call) — the tech-zone banner keys
+    // off this as well as the raw Connect state, so a tech whose money
+    // is waiting sees the banner (and the amount) until it releases.
+    const heldJobs816 = db.jobs.filter(x => x.assignedWorkerId === user.id && x.payoutStatus === 'awaiting_worker_setup');
+    const heldPay816 = money(heldJobs816.reduce((s, x) => s + Number(x.payOffer || 0) + jobSalesCommission(x), 0));
+    return send(res, 200, { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted, heldPay: heldPay816, heldJobs: heldJobs816.length });
   }
   const payWorkerMatch = p.match(/^\/api\/admin\/jobs\/([\w-]+)\/pay-worker$/);
   if (payWorkerMatch && req.method === 'POST') {
