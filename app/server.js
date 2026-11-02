@@ -590,20 +590,31 @@ function workerOverlapsArea(u, area) {
   return !!pc && cities.has(pc);
 }
 
-function notifyWorkersForJob(j) {
-  matchedWorkersForJob(j).forEach(w => {
+function notifyWorkersForJob(j, onlyList) {
+  (onlyList || matchedWorkersForJob(j)).forEach(w => {
     notify(w.id, 'job', 'New open job: ' + (j.service || 'Job') + ' in ' + (j.city || 'your area') + ' — pay $' + (j.payOffer || 0) + '. Open the app to claim it.', '#wjob=' + j.id);
   });
 }
-function publicJob(j, viewer) {
+function publicJob(j, viewer, rangeInfo) {
   const assigned = viewer && (viewer.role === 'admin' || j.assignedWorkerId === viewer.id);
   const base = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, payOffer: j.payOffer, createdAt: j.createdAt };
+  // v80.11: the board carries the measured distance for the VIEWING
+  // worker (his own frame only) — or the unmeasured flag when the job
+  // address could not be measured at all.
+  if (rangeInfo && viewer && viewer.role === 'worker' && !assigned) {
+    if (rangeInfo.miles != null) base.distanceMiles = rangeInfo.miles;
+    if (rangeInfo.unmeasured) base.rangeUnmeasured = true;
+  }
   if (viewer && viewer.role === 'admin') return Object.assign({}, j);
   if (assigned) {
     // Gabriel is the only middleman (rule 2026-10-09): the worker NEVER sees
     // the customer's name or phone. Address unlocks only when the Team confirms
     // it (infoReleased). Contact runs through the Team in the job chat.
     const view = Object.assign(base, { mine: true, infoReleased: !!j.infoReleased, notes: j.notes || '', messages: j.messages || [], payoutStatus: j.payoutStatus || null, payoutAt: j.payoutAt || null });
+    // v80.11: his OWN sales commission rides his own job card (it is his
+    // pay breakdown, nobody else's) — never on the open board.
+    const comm = jobSalesCommission(j);
+    if (comm > 0) view.salesCommission = comm;
     if (j.infoReleased) view.address = j.address || '';
     // v22 live tracking: the assigned worker sees their OWN live point (it is
     // their phone sharing it). Destination coords ride along with the address
@@ -706,7 +717,9 @@ function emitJobNew(j, onlyWorkerId) {
   for (const c of sseClients) {
     const u = c.user;
     if (u.role === 'admin') sseWrite(c, 'job.new', payload);
-    else if (u.role === 'worker' && u.status === 'active' && (!onlyWorkerId || u.id === onlyWorkerId)) sseWrite(c, 'job.new', payload);
+    // v80.11: an out-of-range worker (measurable on cached coords) does
+    // not even get the live ping — the board stays the enforcement point.
+    else if (u.role === 'worker' && u.status === 'active' && (!onlyWorkerId || u.id === onlyWorkerId) && !jobOutOfRangeCached(j, u)) sseWrite(c, 'job.new', payload);
   }
 }
 function emitRequestNew(r) {
@@ -733,7 +746,7 @@ function emitYardAssigned(v) {
 const GOOGLE_AUTOMATION_URL = process.env.GOOGLE_AUTOMATION_WEBHOOK_URL || '';
 const GOOGLE_AUTOMATION_SECRET = process.env.GOOGLE_AUTOMATION_SECRET || '';
 const BUSINESS_EMAIL = process.env.BUSINESS_EMAIL || 'generalhandymans@gmail.com';
-const APP_URL = process.env.APP_URL || 'https://app.generalhandymans.app/';
+const APP_URL = process.env.APP_URL || 'https://generalhandymans.app/';
 
 // ---------- Resend email (free sending route Gabriel chose 2026-10-09) ----------
 // Sends from estimates@generalhandymans.app (RESEND_FROM). Gabriel receives
@@ -877,8 +890,8 @@ async function resendAutomation(type, payload) {
   }
   if (type === 'new_request') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'New customer request: ' + (rq.service || 'job') + (rq.city ? ' - ' + rq.city : ''), html: eventEmail('New customer request', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || '') + ' ' + (rq.customerPhone || ''), 'Service: ' + (rq.service || ''), 'City: ' + (rq.city || ''), 'When: ' + (rq.when || ''), 'Details: ' + (rq.description || '')], OWNER_FOOTER), text: 'New request ' + rq.id }); }
   if (type === 'new_worker') { const w = p.worker || {}; return sendMail({ to: owner, subject: 'New worker application: ' + (w.name || ''), html: eventEmail('New worker application', ['Name: ' + (w.name || ''), 'Email: ' + (w.email || ''), 'Phone: ' + (w.phone || ''), 'Status: ' + (w.status || 'review')], OWNER_FOOTER), text: 'New worker: ' + (w.name || '') }); }
-  if (type === 'worker_activated') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions worker account is ACTIVE', html: eventEmail('You are active - welcome to the team', ['Hi ' + (w.name || 'there') + ',', 'Your worker account is now ACTIVE. You can log into the app and see the open jobs in your area.', 'Every job shows exactly what it pays before you claim it, so you only take the ones that work for you. First active worker to claim gets the job.', 'The Team coordinates everything with the customer and confirms the address and time with you in the app. Questions during a job? Message us right in the job chat.', 'HOW TO LOG IN (save this email): 1) Open ' + (p.appUrl || 'https://app.generalhandymans.app') + '/tecnico — it takes you straight to the technician door. 2) Type the email + password from your application. 3) Tap ENTRAR and you will see the open jobs. Forgot your password? On that same screen, type your email and tap the "¿Primera vez o no recuerdas tu contraseña?" button — we email you a link to set a new one.'], WORKER_FOOTER), text: 'Your worker account is ACTIVE. Open the app to see open jobs - every job shows its pay before you claim it. HOW TO LOG IN: open ' + (p.appUrl || 'https://app.generalhandymans.app') + '/tecnico, type the email + password from your application, and tap ENTRAR. Forgot your password? Use the button on that screen and we will email you a link to set a new one.' }); }
-  if (type === 'worker_removed') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; const first = String(w.name || '').trim().split(/\s+/)[0] || ''; const en = "Hi " + (first || 'there') + " — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at app.generalhandymans.app."; const es = "Hola" + (first ? ' ' + first : '') + " — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en app.generalhandymans.app."; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, es, '— The Team'], WORKER_FOOTER), text: en + '\n\n' + es + '\n\n— The Team · (707) 862-3773' }); }
+  if (type === 'worker_activated') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions worker account is ACTIVE', html: eventEmail('You are active - welcome to the team', ['Hi ' + (w.name || 'there') + ',', 'Your worker account is now ACTIVE. You can log into the app and see the open jobs in your area.', 'Every job shows exactly what it pays before you claim it, so you only take the ones that work for you. First active worker to claim gets the job.', 'The Team coordinates everything with the customer and confirms the address and time with you in the app. Questions during a job? Message us right in the job chat.', 'HOW TO LOG IN (save this email): 1) Open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico — it takes you straight to the technician door. 2) Type the email + password from your application. 3) Tap ENTRAR and you will see the open jobs. Forgot your password? On that same screen, type your email and tap the "¿Primera vez o no recuerdas tu contraseña?" button — we email you a link to set a new one.'], WORKER_FOOTER), text: 'Your worker account is ACTIVE. Open the app to see open jobs - every job shows its pay before you claim it. HOW TO LOG IN: open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico, type the email + password from your application, and tap ENTRAR. Forgot your password? Use the button on that screen and we will email you a link to set a new one.' }); }
+  if (type === 'worker_removed') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; const first = String(w.name || '').trim().split(/\s+/)[0] || ''; const en = "Hi " + (first || 'there') + " — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at generalhandymans.app."; const es = "Hola" + (first ? ' ' + first : '') + " — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en generalhandymans.app."; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, es, '— The Team'], WORKER_FOOTER), text: en + '\n\n' + es + '\n\n— The Team · (707) 862-3773' }); }
   if (type === 'job_posted') { const j = p.job || {}; const ws = (p.workers || []).filter(w => w.email); if (!ws.length) return { attempted: true, sent: false, reason: 'no matching worker emails' }; let sentCount = 0; for (const w of ws) { const r = await sendMail({ to: [w.email], subject: 'New job posted: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('New job in your area', ['Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app to claim it - first active worker to claim gets it.'], WORKER_FOOTER), text: 'New job pays ' + usd(j.payOffer) }); if (r.sent) sentCount++; } return { attempted: true, sent: sentCount > 0, via: 'resend', emailed: sentCount }; }
   if (type === 'job_direct_offer') { const j = p.job || {}; const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Direct job offer for you: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('The Team offered you a job directly', ['Hi ' + (w.name || 'there') + ',', 'This job was assigned to YOU — it is not on the open board.', 'Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app — the job is already in your jobs list. The Team confirms the address and time with you there.'], WORKER_FOOTER), text: 'Direct job offer: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pays ' + usd(j.payOffer) + '. It is already in your jobs list in the app.' }); }
   if (type === 'job_claimed') { const j = p.job || {}; const to = owner.slice(); if (p.customer && p.customer.email) to.push(p.customer.email); return sendMail({ to: to, subject: 'Job claimed: ' + (j.service || '') + (j.city ? ' - ' + j.city : ''), html: eventEmail('A worker claimed the job', ['Job: ' + (j.service || '') + ' in ' + (j.city || ''), 'Worker: ' + ((p.worker || {}).name || ''), 'Status: ' + (j.status || 'Claimed'), 'Open the app for the job chat with the Team and your worker.']), text: 'Job claimed.' }); }
@@ -1007,6 +1020,10 @@ function sanitizeSource(v) {
   const s = v.trim();
   return /^[A-Za-z0-9_-]{1,24}$/.test(s) ? s : null;
 }
+// v80.11: the ONE email-shape check (same pattern the account flows
+// use). A stored string that fails it must never reach Stripe as
+// customer_email — Stripe rejects the whole session (the invoice 502).
+function looksLikeEmail(v) { return typeof v === 'string' && /.+@.+\..+/.test(v.trim()); }
 function stashPendingSource(u, raw) {
   const s = sanitizeSource(raw);
   if (u && s) u.pendingSource = s;
@@ -1234,7 +1251,7 @@ async function maybePayWorkerForJob(j, opts) {
       // 'awaiting_worker_setup', the admin is nagged once (below), and
       // the sweep / connect-status retry releases it after setup.
       j.payoutStatus = 'awaiting_worker_setup'; save();
-      if (!j.payoutSetupNagAt) { j.payoutSetupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Job ' + j.id + ' is done but ' + w.name + ' has not finished setting up payouts — their ' + usd(j.payOffer) + ' is waiting.'); save(); }
+      if (!j.payoutSetupNagAt) { j.payoutSetupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Job ' + j.id + ' is done but ' + w.name + ' has not finished setting up payouts — their ' + usd(Number(j.payOffer) + jobSalesCommission(j)) + ' is waiting.'); save(); }
       return;
     }
     const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
@@ -1243,15 +1260,18 @@ async function maybePayWorkerForJob(j, opts) {
     // hold trail). New stamps say 'awaiting_payment'; the legacy
     // 'awaiting_capture' stamp still renders and sweeps for old jobs.
     if (r && !requestIsPaid(r)) { j.payoutStatus = 'awaiting_payment'; save(); return; }
-    const amount = Math.round(Number(j.payOffer) * 100);
+    // v80.11: the sales commission (his own sold job, completed by him)
+    // rides THIS SAME transfer — one payout event, payOffer + $10.
+    const commission811 = jobSalesCommission(j);
+    const amount = Math.round((Number(j.payOffer) + commission811) * 100);
     j.payoutInFlight = Date.now(); save();
     let tr;
     try { tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id }); }
     finally { delete j.payoutInFlight; }
     j.payoutTransferId = tr.id; j.payoutStatus = 'paid'; j.payoutAt = new Date().toISOString(); j.workerPaid = true; delete j.payoutError;
     save();
-    notify(w.id, 'payment', 'Your payout of ' + usd(j.payOffer) + ' for job ' + j.id + ' (' + (j.service || '') + ') was sent via Stripe — it pays out to your bank automatically.', '#worker');
-    notifyAdmins('payment', 'Worker payout sent: ' + usd(j.payOffer) + ' to ' + w.name + ' for job ' + j.id + ' (transfer ' + tr.id + ').');
+    notify(w.id, 'payment', 'Your payout of ' + usd(amount / 100) + ' for job ' + j.id + ' (' + (j.service || '') + ')' + (commission811 > 0 ? ' — including your ' + usd(commission811) + ' sales commission' : '') + ' was sent via Stripe — it pays out to your bank automatically.', '#worker');
+    notifyAdmins('payment', 'Worker payout sent: ' + usd(amount / 100) + ' to ' + w.name + ' for job ' + j.id + (commission811 > 0 ? ' (includes ' + usd(commission811) + ' sales commission)' : '') + ' (transfer ' + tr.id + ').');
   } catch (e) {
     const msg = String((e && e.message) || e);
     j.payoutStatus = /insufficient/i.test(msg) ? 'pending_funds' : 'error';
@@ -1275,6 +1295,219 @@ function sweepPendingPayouts() {
     .slice(0, 10)
     .forEach(j => { maybePayWorkerForJob(j); accrueCaptainOverride(j); });
 }
+// ---------- v80.11 ALCANCE (Gabriel, 2026-11-01, "dale a todo") ----------
+// The growth build, five settled pieces on ONE set of rails:
+//  (1) the 50-MILE RULE — a job whose service address measures more than
+//      50 miles from a worker's base city never reaches that worker
+//      (board, alerts, SSE, claim). Admin sees everything. A job whose
+//      address cannot be measured stays visible, flagged unmeasured.
+//  (2) WORKER REFERRALS — every tech carries a personal code that rides
+//      the EXISTING ?src= stamp (first-touch source on the customer
+//      record). $10 flat when a referred membership pays its FIRST REAL
+//      charge — never at free-trial start — paid through the worker's
+//      own Stripe Connect on the same rails as job pay.
+//  (3) MENÚ DE VENTA — tech-zone-only seller view: customer list price
+//      + the tech's guaranteed take (standard pay + $10 commission).
+//  (4) SALES COMMISSION — $10 on top of payOffer for a job the tech
+//      SOLD in-app and COMPLETES, transferred in the same payout.
+//  (5) CREADOR DE ESTIMADOS — techs send estimates DIRECTLY (Gabriel's
+//      explicit call: no approval step); the system guards the $1,000
+//      guardrail and the 20% margin floor instead, and every tech
+//      estimate is visible in admin from the moment it exists.
+const REFERRAL_BOUNTY = 10;
+const SALES_COMMISSION = 10;
+const JOB_RANGE_MILES = 50;
+const COMPANY_HOURLY = 75, WORKER_HOURLY = 50;
+// The 20% MARGIN FLOOR as pure functions — the exact math the estimate
+// creator (item 5) enforces, factored out so the test suite can pin it
+// DIRECTLY (unit pins) instead of only through the endpoint:
+// margin = (total − techPay − Stripe fee) / total ≥ 0.20, fee = 2.9% + $0.30.
+const MARGIN_FLOOR = 0.20;
+const STRIPE_FEE_PCT = 0.029;
+const STRIPE_FEE_FLAT = 0.30;
+function marginOkAfterFees(total, pay) { const t = Number(total) || 0; const fee = t * STRIPE_FEE_PCT + STRIPE_FEE_FLAT; return t > 0 && ((t - (Number(pay) || 0) - fee) / t) >= MARGIN_FLOOR - 1e-9; }
+function minTotalForMargin(pay) { return ((Number(pay) || 0) + STRIPE_FEE_FLAT) / (1 - MARGIN_FLOOR - STRIPE_FEE_PCT); }
+// Typical hours per catalog service — the SAME hours the prices were
+// built from (menu metas + MASTER-SERVICE-LIST). Standard tech pay for
+// a service is $50/hr × these hours, min $50 (Gabriel's pay model).
+const SERVICE_HOURS = { 'closet-doors': 2.5, 'door-slab-swap': 2, 'door-knob-install': 1, 'deadbolt-install': 0.75, 'deadbolt-knob-combo': 1, 'smart-lock-install': 1.5, 'door-adjustment': 1, 'weatherstripping': 1, 'screen-door-install': 2, 'sliding-door-service': 1.5, 'window-screen-repair': 1, 'pet-door-install': 2, 'furniture-assembly': 1.5, 'furniture-assembly-large': 2.5, 'closet-organizer': 3, 'floating-shelves': 1, 'cabinet-hardware-install': 1, 'baby-gate-install': 1, 'picture-mirror-hanging': 1, 'mirror-cabinet-install': 1, 'curtain-rod-install': 0.75, 'blinds-install': 0.5, 'blinds-install-deal': 0.5, 'baseboard-install': 3, 'baseboard-repair': 1.5, 'laminate-floor-repair': 3, 'carpet-repair': 2.5, 'transition-strip-install': 1, 'drywall-patch-small': 1.5, 'drywall-patch-medium': 3, 'drywall-holes-set': 1, 'paint-room': 4, 'paint-room-large': 6, 'paint-room-large-ceiling': 8, 'accent-wall-painting': 2.5, 'interior-door-painting': 1, 'fence-picket-repair': 2, 'fence-post-replacement': 1.25, 'deck-board-replacement': 2, 'gate-repair': 1.5, 'tv-mounting': 2, 'tv-mounting-large': 2.5, 'soundbar-mounting': 1, 'ceiling-fan': 1.5, 'chandelier-swap': 1.5, 'light-fixture-swap': 1, 'exhaust-fan-swap': 2, 'dimmer-switch-swap': 0.75, 'smoke-co-detector-install': 1, 'ring-doorbell': 1, 'smart-thermostat-install': 1.5, 'security-camera-install': 1, 'garage-opener': 3, 'holiday-lights': 2.5, 'holiday-lights-two-story': 3.5, 'holiday-lights-takedown': 1, 'holiday-lights-takedown-two-story': 3, 'window-ac-install': 1.5, 'faucet-replacement': 1.5, 'toilet-replacement': 2.5, 'toilet-repair': 1, 'garbage-disposal-swap': 2, 'showerhead-swap': 0.75, 'tub-shower-recaulk': 1.5, 'grab-bar-install': 1, 'p-trap-swap': 1.5, 'bidet-seat-install': 1.5, 'dryer-vent-cleaning': 1.5, 'washer-dryer-hookup': 1.5, 'drain-unclog': 1, 'dishwasher-swap': 2, 'vanity-swap': 3, 'bathroom-accessories-install': 1, 'hose-bibb-swap': 1.5, 'water-heater': 3.5, 'gutter-cleaning': 2, 'gutter-cleaning-two-story': 3, 'pressure-washing': 2, 'pressure-washing-large': 3, 'yard-cleanup': 2, 'sprinkler-irrigation': 1.5, 'green-waste': 1.5, 'junk-minimum': 1.5, 'junk-medium': 2, 'junk-large': 2.5, 'junk-full': 3, 'mailbox-install': 1.5, 'fuel-pump-replacement': 4, 'battery-replacement': 1, 'check-engine-diagnostics': 1, 'oil-change': 1, 'brake-pads': 1, 'alternator-replacement': 2, 'starter-replacement': 2.5, 'belt-hose-replacement': 1.5, 'spark-plug-replacement': 1.5, 'headlight-replacement': 0.75, 'heavy-furniture-move': 1 };
+// Documented flat pays that beat the hours model (hauling: the worker
+// is paid per trip — Gabriel's green-waste split, $120/trip).
+const SERVICE_PAY_FLAT = { 'green-waste': 120 };
+function standardServicePay(serviceId) {
+  if (SERVICE_PAY_FLAT[serviceId] != null) return SERVICE_PAY_FLAT[serviceId];
+  const h = Number(SERVICE_HOURS[serviceId]);
+  if (!(h > 0)) return WORKER_HOURLY; // unknown service: the $50 short-job floor
+  return Math.max(50, money(WORKER_HOURLY * h));
+}
+// --- referral codes ---
+// Derived deterministically from the worker id ('T' + id suffix) and
+// persisted on first use, so a code printed today resolves forever.
+// Resolution accepts the derived form even before it is persisted.
+function refCodeOf(w) {
+  if (!w) return '';
+  if (w.referralCode) return w.referralCode;
+  return 'T' + String(w.id || '').split('-').pop().toUpperCase();
+}
+function ensureReferralCode(w) {
+  if (!w || w.role !== 'worker') return '';
+  if (!w.referralCode) { w.referralCode = refCodeOf(w); save(); }
+  return w.referralCode;
+}
+function workerByRefCode(code) {
+  const s = sanitizeSource(code);
+  if (!s) return null;
+  const up = s.toUpperCase();
+  return db.users.find(u => u.role === 'worker' && refCodeOf(u).toUpperCase() === up) || null;
+}
+// --- 50-mile machinery ---
+function haversineMiles(lat1, lng1, lat2, lng2) {
+  const R = 3958.8, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+const geoQueryCache = new Map(); // query string -> { lat, lng } | null (this process)
+async function geocodeQuery(q) {
+  const query = String(q || '').trim();
+  if (!query) return null;
+  if (geoQueryCache.has(query)) return geoQueryCache.get(query);
+  let out = null;
+  try {
+    const url = NOMINATIM_BASE + '/search?format=json&limit=1&q=' + encodeURIComponent(query);
+    const r = await fetch(url, { headers: { 'User-Agent': 'GeneralHandymanSolutions/1.0 (generalhandymans@gmail.com)' }, signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const arr = await r.json().catch(() => null);
+      if (Array.isArray(arr) && arr.length && isFinite(Number(arr[0].lat)) && isFinite(Number(arr[0].lon))) out = { lat: Number(arr[0].lat), lng: Number(arr[0].lon) };
+    }
+  } catch (e) { /* best-effort — never blocks a flow */ }
+  geoQueryCache.set(query, out);
+  return out;
+}
+// Job coordinates: cached on the job itself (j.destLat/j.destLng — the
+// same fields live tracking already uses). Full address first, city
+// as the fallback; null means UNMEASURED (job stays visible, flagged).
+async function jobCoords(j) {
+  if (!j) return null;
+  if (j.destLat != null && j.destLng != null && isFinite(Number(j.destLat)) && isFinite(Number(j.destLng))) return { lat: Number(j.destLat), lng: Number(j.destLng) };
+  const q = (j.address && String(j.address).trim()) || (j.city ? String(j.city).trim() + ', CA, USA' : '');
+  if (!q) return null;
+  const c = await geocodeQuery(q);
+  if (c) { j.destLat = c.lat; j.destLng = c.lng; save(); }
+  return c;
+}
+// Worker base coordinates: geocoded ONCE per base city and cached on
+// the worker record, keyed by the city string — a city edit re-keys it.
+async function workerBaseCoords(w) {
+  if (!w) return null;
+  const city = String((w.profile || {}).city || '').trim();
+  if (!city) return null;
+  const key = city.toLowerCase();
+  if (w.baseGeoFor === key && w.baseLat != null && w.baseLng != null) return { lat: Number(w.baseLat), lng: Number(w.baseLng) };
+  const c = await geocodeQuery(city + ', CA, USA');
+  if (c) { w.baseLat = c.lat; w.baseLng = c.lng; w.baseGeoFor = key; save(); }
+  return c;
+}
+// { miles: number|null, unmeasured: bool } — unmeasured ONLY when the
+// JOB side cannot be measured (the spec's flag). A worker with no
+// measurable base FAILS OPEN (he still sees the job) but the distance
+// is unknown, so miles is null without the job's unmeasured flag.
+async function jobRangeFor(j, w) {
+  const jc = await jobCoords(j);
+  if (!jc) return { miles: null, unmeasured: true };
+  const wc = await workerBaseCoords(w);
+  if (!wc) return { miles: null, unmeasured: false };
+  return { miles: Math.round(haversineMiles(wc.lat, wc.lng, jc.lat, jc.lng) * 10) / 10, unmeasured: false };
+}
+function jobOutOfRange(range) { return !!(range && range.miles != null && range.miles > JOB_RANGE_MILES); }
+// Synchronous variant for hot paths (SSE): uses ONLY already-cached
+// coordinates — if either side is uncached it fails open and the REST
+// board stays the enforcement point.
+function jobOutOfRangeCached(j, w) {
+  if (!j || !w || j.destLat == null || j.destLng == null || w.baseLat == null || w.baseLng == null) return false;
+  if (w.baseGeoFor !== String((w.profile || {}).city || '').trim().toLowerCase()) return false;
+  return haversineMiles(Number(w.baseLat), Number(w.baseLng), Number(j.destLat), Number(j.destLng)) > JOB_RANGE_MILES;
+}
+// Area-matched workers MINUS the out-of-range ones — the alert list.
+async function alertableWorkersForJob(j) {
+  const matched = matchedWorkersForJob(j);
+  const out = [];
+  for (const w of matched) { const r = await jobRangeFor(j, w); if (!jobOutOfRange(r)) out.push(w); }
+  return out;
+}
+// --- sales commission ---
+// Earned ONLY by the seller, ONLY while he is still the assigned
+// worker at payout time: a cancelled or reassigned job pays none.
+function jobSalesCommission(j) {
+  if (!j || !j.soldByWorkerId || j.soldByWorkerId !== j.assignedWorkerId) return 0;
+  return Math.max(0, Number(j.salesCommission) || 0);
+}
+// --- referral bounties ---
+function referralBountiesOf() { if (!Array.isArray(db.referralBounties)) db.referralBounties = []; return db.referralBounties; }
+async function maybePayReferralBounty(e) {
+  try {
+    if (!e || e.transferId) { if (e && e.transferId && e.status !== 'paid') { e.status = 'paid'; save(); } return; }
+    if (e.payoutInFlight && (Date.now() - e.payoutInFlight < 120000)) return;
+    const w = db.users.find(x => x.id === e.workerId);
+    if (!w) { e.status = 'error'; e.payoutError = 'worker record gone'; save(); return; }
+    if (!stripeReady()) { e.status = 'stripe_off'; save(); return; }
+    if (w.stripeAccountId && !w.stripePayoutsReady) await refreshWorkerConnect(w);
+    if (!w.stripeAccountId || !w.stripePayoutsReady) {
+      e.status = 'awaiting_worker_setup'; save();
+      if (!e.setupNagAt) { e.setupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Referral bounty ' + e.id + ' (' + usd(e.amount) + ') is earned by ' + w.name + ' but waits — he has not finished setting up payouts.'); save(); }
+      return;
+    }
+    e.payoutInFlight = Date.now(); save();
+    let tr;
+    try { tr = await stripeApi('/transfers', { amount: Math.round(Number(e.amount) * 100), currency: 'usd', destination: w.stripeAccountId, transfer_group: e.id, description: 'GHS referral bounty ' + e.id, 'metadata[bountyId]': e.id, 'metadata[workerId]': w.id }); }
+    finally { delete e.payoutInFlight; }
+    e.transferId = tr.id; e.status = 'paid'; e.paidAt = new Date().toISOString(); delete e.payoutError;
+    save();
+    notify(w.id, 'payment', 'Your referral bounty of ' + usd(e.amount) + ' was sent via Stripe — it pays out to your bank automatically.', '#worker');
+  } catch (err) {
+    const msg = String((err && err.message) || err);
+    e.status = /insufficient/i.test(msg) ? 'pending_funds' : 'error';
+    e.payoutError = msg.slice(0, 200);
+    save();
+    notifyAdmins('payment', 'Referral bounty ' + e.id + ' did not go out (' + e.status + '): ' + e.payoutError);
+  }
+}
+let lastBountySweep = 0;
+function sweepPendingBounties() {
+  const now = Date.now();
+  if (now - lastBountySweep < 60 * 1000) return;
+  lastBountySweep = now;
+  referralBountiesOf().filter(e => !e.transferId && ['pending', 'pending_funds', 'awaiting_worker_setup', 'stripe_off', 'error'].includes(e.status)).slice(0, 10).forEach(e => { maybePayReferralBounty(e); });
+}
+// The ONE award site. Called ONLY with evidence of a real charge (a
+// paid checkout session with amount > 0, a paid inline confirm that is
+// not a trial, or an invoice.payment_succeeded with amount_paid > 0) —
+// a free-trial START never reaches it. One bounty per customer account,
+// ever (u.referralBountyId), and never to the customer himself.
+function maybeAwardMembershipBounty(u, planKey) {
+  if (!u || u.role !== 'customer' || u.referralBountyId) return null;
+  const w = workerByRefCode(u.source);
+  if (!w) return null;
+  if (w.id === u.id) return null; // anti-self-referral: same account
+  if ((w.email || '').toLowerCase() && (w.email || '').toLowerCase() === (u.email || '').toLowerCase()) return null; // anti-self: same email, second account
+  const e = { id: id('RFB'), workerId: w.id, customerId: u.id, customerName: u.name || '', customerEmail: u.email || '', planKey: planKey || '', amount: REFERRAL_BOUNTY, status: 'pending', transferId: '', createdAt: new Date().toISOString(), paidAt: null };
+  referralBountiesOf().push(e);
+  u.referralBountyId = e.id;
+  notify(w.id, 'payment', 'You earned a ' + usd(REFERRAL_BOUNTY) + ' referral bounty — ' + (u.name || 'a member you referred') + ' just paid their first membership charge. It pays out through your Stripe, like your job pay.', '#worker');
+  notifyAdmins('payment', 'Referral bounty: ' + usd(REFERRAL_BOUNTY) + ' to ' + w.name + ' — referred member ' + (u.name || u.email || '') + ' paid a first real charge (' + (planKey || 'membership') + ').');
+  audit(null, 'referral.bounty', e.id, w.name + ' +' + usd(REFERRAL_BOUNTY) + ' from ' + (u.email || u.id));
+  maybePayReferralBounty(e);
+  save();
+  return e;
+}
+// Seller resolution for a request: an explicit stamp wins; otherwise
+// the request's first-touch source may BE a tech's referral code.
+function sellerWorkerForRequest(r) {
+  if (!r) return null;
+  if (r.soldByWorkerId) { const w = db.users.find(x => x.id === r.soldByWorkerId && x.role === 'worker'); if (w) return w; }
+  return workerByRefCode(r.source);
+}
+
 // ---------- v45: ONE-SHOT 48-hour estimate reminder sweep ----------
 // Gabriel approved this exact automation by name (2026-10-23); his STOP
 // TOTAL stands for everything else. It runs INSIDE the app server on
@@ -1458,7 +1691,11 @@ async function createCheckoutSession(kind, user, opts) {
   const CT = CHECKOUT_TEXTS[coLang];
   // Only send customer_email when we actually have one — Stripe rejects an
   // empty string (e.g. text-message invoices created without an email).
-  if (user.email) params.customer_email = user.email;
+  // v80.11: also reject a NON-email string (an invoice whose
+  // customerEmail holds a name/notes) — Stripe 400s the session and the
+  // customer's pay page dies with a 502. No valid email = no prefill;
+  // Stripe collects the payer's email on the hosted page instead.
+  if (user.email && looksLikeEmail(user.email)) params.customer_email = user.email;
   if (kind === 'homecare') {
     params.mode = 'subscription';
     params['line_items[0][price]'] = await homeCarePriceId();
@@ -1873,9 +2110,16 @@ function planForCheckoutSession(sess) {
 function activateMembershipFromCheckout(u, session) {
   const plan = planForCheckoutSession(session);
   if (!plan) return null;
-  if (plan.key === 'homecare') { activateHomeCareFromCheckout(u, session); return plan; }
-  if (session.customer) u.stripeCustomerId = session.customer;
-  activateMembershipPlan(u, plan.key, { subscriptionId: session.subscription || '', first: true });
+  if (plan.key === 'homecare') { activateHomeCareFromCheckout(u, session); }
+  else {
+    if (session.customer) u.stripeCustomerId = session.customer;
+    activateMembershipPlan(u, plan.key, { subscriptionId: session.subscription || '', first: true });
+  }
+  // v80.11: a PAID session with real money on it is a first-charge
+  // event (Plus/Yard charge at join; a no-trial HomeCare join too) —
+  // the referral bounty may be due. A trialing session totals $0 and
+  // never reaches the award.
+  if (session && session.payment_status === 'paid' && Number(session.amount_total) > 0) maybeAwardMembershipBounty(u, plan.key);
   return plan;
 }
 // ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
@@ -1992,6 +2236,10 @@ function settleCartCheckout(pc, pi) {
   if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
   const itemsTxt = pc.items.map(it => it.name + ' ×' + it.qty).join(', ');
   const r = { id: linkId('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, source: pc.source || null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  // v80.11: a self-serve order born under a tech's referral stamp is
+  // HIS sale — the stamp rides onto the request so create-job lands
+  // the job on the seller with his commission.
+  { const seller811 = workerByRefCode(pc.source); if (seller811) r.soldByWorkerId = seller811.id; }
   db.requests.push(r);
   pc.requestId = r.id;
   pc.settledAt = new Date().toISOString();
@@ -2485,7 +2733,7 @@ function convertCartToRequest(c, payInfo) {
   const itemsTxt = c.items.map(it => it.name + ' ×' + it.qty).join(' + ');
   const isDeposit = Number(payInfo.depositCents) > 0 && Number(payInfo.balanceCents) > 0 && Number(payInfo.totalCents) > 0;
   const totalCents = isDeposit ? Math.round(Number(payInfo.totalCents)) : Math.round(Number(payInfo.amountCents) || 0);
-  const r = { id: linkId('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — booking deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+  const r = { id: linkId('GHS'), customerId, customerName: cust.name || c.customerName || '', customerEmail: email, customerPhone: cust.phone || c.customerPhone || '', service: itemsTxt.slice(0, 120), description: 'Cart order ' + c.id + ' — ' + c.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (c.note ? ' Team note: ' + c.note : ''), city: cust.city || '', address: cust.address || '', when: cust.when || '', estimateType: 'menu', membership: c.memberApplied ? 'member' : 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, soldByWorkerId: c.soldByWorkerId || null, source: c.source || null, menuOrder: { cartId: c.id, items: c.items.map(it => { const o = { serviceId: it.serviceId, name: it.name, qty: it.qty, price: it.unitPrice }; if (it.custom) { o.custom = true; o.kind = it.kind; } return o; }), totals: { list: c.listTotal, member: c.memberTotal, due: totalCents / 100 } }, photos: [], messages: [{ from: 'customer', name: cust.name || 'Customer', text: isDeposit ? 'Ordered from cart ' + c.id + ' — booking deposit paid: ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + '. Balance ' + usd(Number(payInfo.balanceCents) / 100) + ' due at completion.' : 'Ordered from cart ' + c.id + ' and paid in full: ' + usd(totalCents / 100) + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   db.requests.push(r);
   c.status = 'paid'; c.requestId = r.id; c.paidAt = new Date().toISOString();
   if (isDeposit) {
@@ -2882,6 +3130,11 @@ async function handleStripeEvent(event) {
         if (subId) u.stripeSubscriptionId = subId;
         activateHomeCare(u, false);
       }
+      // v80.11: THIS is where a HomeCare free month converts — an
+      // invoice that actually collected money (amount_paid > 0) is the
+      // first REAL charge, so a referred member's bounty may be due.
+      // $0 invoices (trial start) never award.
+      if (Number(obj.amount_paid) > 0) maybeAwardMembershipBounty(u, planKey || current.planKey || '');
     }
   } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
     // v44 pay-in-full PIs (menu orders + admin carts): the confirm
@@ -3116,7 +3369,7 @@ function normalizeInvoice(input) {
 }
 function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
 function publicInvoice(inv) {
-  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, tip: inv.tip || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
+  return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', emailInvalid: !!inv.emailInvalid, customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, tip: inv.tip || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
 }
 function invoiceEmailHtml(inv) {
   let rows = '';
@@ -4123,12 +4376,12 @@ function requestAutomationPayload(r) {
     adminEmails: adminEmails()
   };
 }
-function jobWorkerAutomationPayload(j) {
+function jobWorkerAutomationPayload(j, workerList) {
   return {
     appUrl: APP_URL,
     businessEmail: BUSINESS_EMAIL,
     job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0, createdAt: j.createdAt || '' },
-    workers: matchedWorkersForJob(j).map(w => ({ name: w.name, email: w.email })),
+    workers: (workerList || matchedWorkersForJob(j)).map(w => ({ name: w.name, email: w.email })),
     adminEmails: adminEmails()
   };
 }
@@ -4375,6 +4628,15 @@ async function handleRequest(req, res) {
   // parser reads it (e.g. #join-plus1?src=INSTA1). /plus2 is the 2-visit twin.
   if (req.method === 'GET' && (p === '/plus' || p === '/plus2')) {
     const frag = p === '/plus' ? '#join-plus1' : '#join-plus2';
+    const qs = url.search ? url.search.slice(1) : '';
+    res.writeHead(302, { Location: '/' + frag + (qs ? '?' + qs : '') });
+    return res.end();
+  }
+  // v80.11 ALCANCE: the twin doors for the other two plans Gabriel
+  // promotes — /homecare lands on the $29 join, /yard on the 1-visit
+  // Yard join. Same contract as /plus: query moves inside the fragment.
+  if (req.method === 'GET' && (p === '/homecare' || p === '/yard')) {
+    const frag = p === '/homecare' ? '#join-homecare' : '#join-yard1';
     const qs = url.search ? url.search.slice(1) : '';
     res.writeHead(302, { Location: '/' + frag + (qs ? '?' + qs : '') });
     return res.end();
@@ -4685,13 +4947,129 @@ async function handleRequest(req, res) {
   // the worker's Connect state. No new money mechanics.
   if (p === '/api/worker/money' && req.method === 'GET') {
     if (!requireRole(user, ['worker'], res)) return;
-    sweepPendingPayouts();
+    sweepPendingPayouts(); sweepPendingBounties();
     const mine = db.jobs.filter(j => j.assignedWorkerId === user.id && (j.payoutStatus || j.status === 'Done — photos sent'))
       .slice().sort((a, b) => String(b.payoutAt || b.claimedAt || b.createdAt || '') < String(a.payoutAt || a.claimedAt || a.createdAt || '') ? -1 : 1)
-      .map(j => ({ jobId: j.id, service: j.service || '', city: j.city || '', amount: money(j.payOffer), status: j.payoutStatus || 'pending', payoutAt: j.payoutAt || null, date: j.payoutAt || j.claimedAt || j.createdAt || null }));
+      .map(j => ({ jobId: j.id, service: j.service || '', city: j.city || '', amount: money(Number(j.payOffer) + jobSalesCommission(j)), payOffer: money(j.payOffer), salesCommission: jobSalesCommission(j), status: j.payoutStatus || 'pending', payoutAt: j.payoutAt || null, date: j.payoutAt || j.claimedAt || j.createdAt || null }));
     const paidOut = money(mine.filter(e => e.status === 'paid').reduce((s, e) => s + e.amount, 0));
     const pending = money(mine.filter(e => e.status !== 'paid').reduce((s, e) => s + e.amount, 0));
     return send(res, 200, { ok: true, connect: { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted }, totals: { paidOut, pending, jobs: mine.length }, entries: mine });
+  }
+
+  // ---------- v80.11 ALCANCE: tech zone — referrals, sales menu, sales carts, estimate creator ----------
+  if (p === '/api/worker/referrals' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    sweepPendingBounties();
+    const code = ensureReferralCode(user);
+    const signups = db.users.filter(u => u.role === 'customer' && u.source && u.source.toUpperCase() === code.toUpperCase()).map(u => {
+      const plan = membershipPlanOf(u);
+      return { name: u.name || '', plan: plan.status === 'active' ? (plan.name || plan.planKey || '') : '', memberActive: plan.status === 'active', joinedAt: u.createdAt || null, bountyPaid: !!u.referralBountyId };
+    });
+    const bounties = referralBountiesOf().filter(e => e.workerId === user.id).slice().reverse().map(e => ({ id: e.id, customerName: e.customerName || '', planKey: e.planKey || '', amount: e.amount, status: e.status, createdAt: e.createdAt, paidAt: e.paidAt || null }));
+    const earned = money(bounties.filter(e => e.status === 'paid').reduce((s, e) => s + Number(e.amount || 0), 0));
+    const pendingB = money(bounties.filter(e => e.status !== 'paid').reduce((s, e) => s + Number(e.amount || 0), 0));
+    return send(res, 200, { ok: true, code, link: appBase() + '/?src=' + code, plusLink: appBase() + '/plus?src=' + code, bounty: REFERRAL_BOUNTY, signups, bounties, totals: { earned, pending: pendingB } });
+  }
+  if (p === '/api/worker/sales-menu' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    // TECH ZONE ONLY: the customer LIST price (public) + HIS guaranteed
+    // take (standard pay for the service + the $10 sales commission).
+    // No member prices, no margins, no internal math beyond his own.
+    const items = Object.keys(SERVER_MENU).map(serviceId => {
+      const pay = standardServicePay(serviceId);
+      return { serviceId, price: SERVER_MENU[serviceId].p, pay, commission: SALES_COMMISSION, take: money(pay + SALES_COMMISSION) };
+    });
+    return send(res, 200, { ok: true, commission: SALES_COMMISSION, items });
+  }
+  if (p === '/api/worker/carts' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    const b = await readBody(req);
+    // Prices are NEVER the tech's input: every line is re-priced from
+    // SERVER_MENU here (the admin builder trusts Gabriel; a seller cart
+    // trusts only the catalog). Add-ons ride the customer's own menu
+    // flow — a sales cart is service + quantity, priced by the book.
+    const rawItems = Array.isArray(b.items) ? b.items.slice(0, 20) : [];
+    if (!rawItems.length) return send(res, 400, { error: 'add at least one service to the cart' });
+    const items = [];
+    for (const raw of rawItems) {
+      const sid = cleanText(raw && raw.serviceId, 60);
+      const svc = SERVER_MENU[sid];
+      if (!svc) return send(res, 400, { error: 'unknown service: ' + (sid || '(blank)') });
+      const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
+      items.push({ serviceId: sid, name: cleanText(raw.name, 120) || sid, qty, unitPrice: svc.p, lineTotal: money(qty * svc.p), memberUnit: svc.m });
+    }
+    const totals = cartTotals(items);
+    if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
+    const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, soldByWorkerId: user.id, source: ensureReferralCode(user), createdAt: new Date().toISOString() };
+    cartsOf().push(c);
+    audit(user, 'cart.tech_create', c.id, items.length + ' item(s) · ' + usd(c.listTotal) + ' · sold by ' + user.name);
+    save();
+    return send(res, 201, { cart: publicCart(c), link: cartLink(c) });
+  }
+  if (p === '/api/worker/estimates' && req.method === 'GET') {
+    if (!requireRole(user, ['worker'], res)) return;
+    const mine = db.requests.filter(r => r.createdByWorkerId === user.id).slice().reverse().map(r => ({ id: r.id, customerName: r.customerName || '', service: r.service || '', total: r.quote != null ? r.quote : (r.estimate ? r.estimate.total : null), status: r.status, createdAt: r.createdAt, link: estimatePageLink(r) }));
+    return send(res, 200, { ok: true, estimates: mine });
+  }
+  if (p === '/api/worker/estimates' && req.method === 'POST') {
+    if (!requireRole(user, ['worker'], res)) return;
+    if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    const b = await readBody(req);
+    const email = cleanText(b.customerEmail, 160).toLowerCase();
+    const customerName = cleanText(b.customerName, 80);
+    if (!customerName && !email) return send(res, 400, { error: 'add at least the customer name or email so the estimate can reach them' });
+    const scope = cleanText(b.description, 1000);
+    if (!scope) return send(res, 400, { error: 'describe the work (scope) — the customer approves exactly what you write here' });
+    const hours = Number(b.hours);
+    if (!(hours >= 0.25) || hours > 40) return send(res, 400, { error: 'estimated hours required (0.25 to 40) — your pay and the suggested price both come from the hours' });
+    const suggested = money(hours * COMPANY_HOURLY);
+    let listTotal = suggested;
+    if (b.price != null && b.price !== '') { const bp = Number(b.price); if (!(bp > 0)) return send(res, 400, { error: 'price must be over $0' }); listTotal = clampMoney(bp); }
+    if (listTotal > 1000) return send(res, 400, { error: 'estimates cap at the $1,000 per-job limit — split the work or ask the Team' });
+    // His pay: the standard model — $50/hr × the hours he estimates,
+    // $50 short-job minimum. The margin floor is checked against the
+    // FINAL total the customer pays (after any member discount).
+    const pay = Math.max(50, money(hours * WORKER_HOURLY));
+    const cust = email ? db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email) : null;
+    const r = { id: linkId('GHS'), customerId: cust ? cust.id : '', customerName: customerName || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: scope, city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [], createdAt: new Date().toISOString(),
+      techCreated: true, createdByWorkerId: user.id, createdByWorkerName: user.name || '', soldByWorkerId: user.id, source: ensureReferralCode(user) };
+    const buildEst = (total) => applyMemberDiscount(normalizeEstimate({ items: [{ description: scope, qty: hours, unitPrice: money(total / hours), type: 'labor' }] }, r), r, cust);
+    const marginOk = (total) => marginOkAfterFees(total, pay);
+    let est = buildEst(listTotal);
+    let adjusted = false; const adjustedFrom = est.total;
+    if (!marginOk(est.total)) {
+      // RAISE to the minimum total that clears the 20% floor after his
+      // pay + Stripe fees (the member discount, when it applies, rides
+      // on top of the labor line — solve for the pre-discount total).
+      const need = minTotalForMargin(pay);
+      const discFactor = est.discountPct > 0 ? (1 - est.discountPct / 100) : 1;
+      const raised = money(Math.ceil((need / discFactor) * 100) / 100 + 0.01);
+      if (raised > 1000) return send(res, 400, { error: 'at the hours you estimated, even the minimum price that keeps the company margin passes the $1,000 per-job limit — split the work or ask the Team' });
+      est = buildEst(raised);
+      adjusted = true;
+      if (!marginOk(est.total)) return send(res, 400, { error: 'could not price this estimate inside the margin rules — ask the Team' });
+    }
+    if (est.total > 1000) return send(res, 400, { error: 'estimates cap at the $1,000 per-job limit — split the work or ask the Team' });
+    // Out DIRECTLY — Gabriel's decision: no approval step anywhere in
+    // this path. The protections are the guards above + full admin
+    // visibility from this moment (flag + notification + audit).
+    est.sentAt = new Date().toISOString();
+    if (!est.validUntil) est.validUntil = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    est.remindedAt = null;
+    r.estimate = est; r.quote = est.total; r.status = 'Quoted';
+    r.messages.push({ from: 'team', name: user.name + ' · General Handyman Solutions', text: 'Professional estimate sent: $' + est.total.toFixed(2) + ' total (' + (estimateHasMaterials(est) ? 'materials included in this estimate' : 'labor only — you buy materials/parts') + '). Due to book: $' + est.bookingDue.toFixed(2) + '; balance at completion: $' + est.balanceDue.toFixed(2) + '.', at: new Date().toISOString() });
+    db.requests.unshift(r);
+    if (r.customerId) notify(r.customerId, 'quote', 'You received a professional estimate for request ' + r.id + ': $' + est.total.toFixed(2) + '. Open your request to review it and approve.', '/estimate/' + r.id);
+    notifyAdmins('quote', 'TECH ESTIMATE ' + r.id + ' by ' + user.name + ' for ' + (r.customerName || r.customerEmail || 'customer') + ': $' + est.total.toFixed(2) + (adjusted ? ' (system-raised from $' + adjustedFrom.toFixed(2) + ' to hold the margin)' : '') + ' — sent directly, no approval step.');
+    audit(user, 'estimate.tech_create', r.id, (r.customerName || r.customerEmail || '') + ' · $' + est.total.toFixed(2) + ' · ' + hours + 'h' + (adjusted ? ' · raised from $' + adjustedFrom.toFixed(2) : ''));
+    save();
+    let emailed = false;
+    if (/.+@.+\..+/.test(email)) {
+      try { const au = await sendAutomation('estimate_sent', requestAutomationPayload(r)); if (au && au.sent) { r.estimateEmailSentAt = new Date().toISOString(); emailed = true; save(); } } catch (e) { /* the in-app estimate already landed — email is a bonus */ }
+    }
+    return send(res, 201, { ok: true, requestId: r.id, link: estimatePageLink(r), total: est.total, suggested, adjusted, adjustedFrom: adjusted ? adjustedFrom : null, emailed });
   }
 
   // ---------- Membership self-service (added 2026-10-21, v20) ----------
@@ -5162,16 +5540,32 @@ async function handleRequest(req, res) {
     const cust = db.users.find(u => u.id === r.customerId);
     const payOffer = Number(b.payOffer);
     if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
-    const j = { id: id('JOB'), status: 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
+    // v80.11: a job SOLD by a tech (his stamped cart / his estimate /
+    // his referral source on the order) lands ON THE SELLER — assigned
+    // at creation, never on the open board — and carries his $10 sales
+    // commission, paid with his job pay when HE completes it.
+    const seller811 = sellerWorkerForRequest(r);
+    const soldHere = !!(seller811 && seller811.status === 'active');
+    const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
+    if (soldHere) { j.soldByWorkerId = seller811.id; j.salesCommission = SALES_COMMISSION; j.claimedAt = new Date().toISOString(); }
     db.jobs.push(j);
-    emitJobNew(j);
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
-    r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
-    notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.', '#job=' + j.id);
-    notifyWorkersForJob(j);
-    fireAutomation('job_posted', jobWorkerAutomationPayload(j));
-    audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer);
+    if (soldHere) {
+      emitJobNew(j, seller811.id);
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your job (job ' + j.id + ') is assigned to the technician who helped you book it. We will coordinate the details with you here.', at: new Date().toISOString() });
+      notify(r.customerId, 'job', 'Your job was assigned to your technician (job ' + j.id + '). We\'ll update you here.', '#job=' + j.id);
+      notify(seller811.id, 'job', 'A job you sold is yours: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + ' + $' + SALES_COMMISSION + ' sales commission when you complete it.', '#wjob=' + j.id);
+      audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer + ' · SOLD by ' + seller811.name + ' — assigned to seller');
+    } else {
+      emitJobNew(j);
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'We posted your job to our team (job ' + j.id + '). A worker can now claim it — we will coordinate the details with you here.', at: new Date().toISOString() });
+      notify(r.customerId, 'job', 'Your job was posted to our team (job ' + j.id + '). We\'ll update you here when a worker claims it.', '#job=' + j.id);
+      const inRange = await alertableWorkersForJob(j);
+      notifyWorkersForJob(j, inRange);
+      fireAutomation('job_posted', jobWorkerAutomationPayload(j, inRange));
+      audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer);
+    }
     save(); return send(res, 201, { job: publicJob(j, user), request: r });
   }
 
@@ -5512,12 +5906,15 @@ async function handleRequest(req, res) {
       if (dw) fireAutomation('job_direct_offer', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: dw.name, email: dw.email }, job: { id: j.id, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0 } });
       emitJobNew(j, assignedWorkerId);
     } else {
-      notifyWorkersForJob(j); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j));
+      // v80.11: board alerts (in-app + job_posted email) go ONLY to
+      // area-matched workers inside the 50-mile rule.
+      const inRange = await alertableWorkersForJob(j);
+      notifyWorkersForJob(j, inRange); emitJobNew(j); fireAutomation('job_posted', jobWorkerAutomationPayload(j, inRange));
     }
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepCaptainOverrides(); sweepEstimateReminders();
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
@@ -5547,7 +5944,19 @@ async function handleRequest(req, res) {
       // — never individual customer comments.
       const ratedMine = db.jobs.filter(x => x.assignedWorkerId === user.id && x.rating);
       const workerRating = ratedMine.length ? { average: Math.round((ratedMine.reduce((s, x) => s + Number(x.rating), 0) / ratedMine.length) * 10) / 10, count: ratedMine.length } : { average: 0, count: 0 };
-      return send(res, 200, { jobs: db.jobs.filter(j => j.status === 'Open' || j.assignedWorkerId === user.id).map(j => publicJob(j, user)), workerRating });
+      // v80.11 (50-MILE RULE): an Open job that measures >50 miles from
+      // this worker's base city is NOT on his board at all. His own jobs
+      // always show. Unmeasured jobs stay, flagged. Admin is untouched
+      // (separate branch below) and keeps seeing everything.
+      const visible = [];
+      for (const j of db.jobs) {
+        if (j.assignedWorkerId === user.id) { visible.push(publicJob(j, user)); continue; }
+        if (j.status !== 'Open') continue;
+        const range = await jobRangeFor(j, user);
+        if (jobOutOfRange(range)) continue;
+        visible.push(publicJob(j, user, range));
+      }
+      return send(res, 200, { jobs: visible, workerRating });
     }
     // Admin view: same jobs, plus the assigned tech's profile photo so
     // the live-tracking map can pin his avatar (photo only).
@@ -5591,6 +6000,10 @@ async function handleRequest(req, res) {
     const j = db.jobs.find(x => x.id === claimMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
     if (j.status !== 'Open') return send(res, 409, { error: 'job already claimed' });
+    // v80.11 (50-MILE RULE): the claim is the money gate behind the
+    // board — a job that measures >50 miles from the worker's base
+    // city cannot be claimed by him even with a stale link open.
+    { const range = await jobRangeFor(j, user); if (jobOutOfRange(range)) return send(res, 403, { error: 'this job is outside your 50-mile work area (' + range.miles + ' mi from your base city)' }); }
     // v80.8 (Gabriel, 2026-10-27): the v75 Connect CLAIM GATE IS GONE.
     // Any ACTIVE worker may claim a paid job with or without Stripe
     // Connect (a phone on file is still required to be active at all —
@@ -6102,6 +6515,9 @@ async function handleRequest(req, res) {
       const wasTrial74 = !!(chk.sub && chk.sub.status === 'trialing');
       if (wasTrial74) user.inviteFreeMonthUsed = true; // v74: the trial activation spends the account's one free month
       activateHomeCare(user, true);
+      // v80.11: a NON-trial confirm means a real charge just landed —
+      // a referred member's bounty may be due (a trial start is not).
+      if (!wasTrial74) maybeAwardMembershipBounty(user, 'homecare');
       return send(res, 200, { active: true, trial: wasTrial74 });
     } catch (e) { console.error('homecare confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
@@ -6140,6 +6556,7 @@ async function handleRequest(req, res) {
       if (b.plan && b.plan !== chk.plan.key) return send(res, 400, { error: 'plan mismatch' });
       if (!chk.paid) return send(res, 200, { active: false });
       activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
+      maybeAwardMembershipBounty(user, chk.plan.key); // v80.11: chk.paid = a real charge just landed (Plus/Yard charge at join)
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
@@ -7109,7 +7526,15 @@ async function handleRequest(req, res) {
       if (tipCents < 0) tipCents = 0;
       const maxTip = Math.round(inv.total * 100);
       if (tipCents > maxTip) tipCents = maxTip;
-      const s = await createCheckoutSession('invoice', { email: inv.customerEmail || '', id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: inv.customerEmail || '', lang: body && body.lang });
+      // v80.11: a non-email string in customerEmail (a name typed into
+      // the wrong field, a broker label) used to be forwarded to Stripe
+      // as customer_email and 502 the whole pay page. Sanitize here:
+      // the session is created WITHOUT it and the invoice is flagged
+      // so the Team sees the bad data instead of a dead customer.
+      const rawEmail = String(inv.customerEmail || '');
+      const safeEmail = looksLikeEmail(rawEmail) ? rawEmail : '';
+      if (rawEmail && !safeEmail && !inv.emailInvalid) { inv.emailInvalid = true; audit(null, 'invoice.email_invalid', inv.id, 'stored customerEmail is not an email — pay session created without it'); save(); }
+      const s = await createCheckoutSession('invoice', { email: safeEmail, id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: safeEmail, lang: body && body.lang });
       return send(res, 200, { url: s.url, amount: inv.total + tipCents / 100, tip: tipCents / 100 });
     } catch (e) { console.error('invoice checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
