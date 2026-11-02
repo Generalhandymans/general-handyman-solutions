@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-13', swSrc.includes("const CACHE = 'ghs-app-v80-13'"));
+t('static: SW cache is ghs-app-v80-14', swSrc.includes("const CACHE = 'ghs-app-v80-14'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.13: ghs-app-v80-13)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-13'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.14: ghs-app-v80-14)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-14'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5587,6 +5587,92 @@ await req3('PATCH', '/api/jobs/' + boardTv813.j.job.id, { token: wFar.token, bod
 const farMoney813 = await req3('GET', '/api/worker/money', { token: wFar.token });
 const boardEnt813 = (farMoney813.j.entries || []).find(e => e.jobId === boardTv813.j.job.id);
 t('v80.13 non-sold job: a board TV job claimed by another tech pays its STANDARD offer ($100, no commission, no 68%)', claimTv813.status === 200 && !!boardEnt813 && boardEnt813.amount === 100 && boardEnt813.payOffer === 100 && boardEnt813.salesCommission === 0);
+
+// ---------------- v80.14 RESPALDO Y SESIONES (app3) ----------------
+// Persistent sessions, the admin backup export, the internal daily
+// snapshot and the system health line. The restart dance at the end
+// kills app3 and boots a FRESH instance on the SAME data file.
+t('static v80.14: sessions persist in the db store keyed by token HASH (raw tokens never on disk) with boot + lazy pruning', serverSrc.includes('function sessionStore()') && serverSrc.includes('sha256hex(token)') && serverSrc.includes('function pruneExpiredSessions()') && serverSrc.includes('function dropSession('));
+t('static v80.14: backup + snapshots + system endpoints exist, attachment downloads, bounded snapshot ring of 7', serverSrc.includes("p === '/api/admin/backup'") && serverSrc.includes("p === '/api/admin/snapshots'") && serverSrc.includes("p === '/api/admin/system'") && serverSrc.includes('Content-Disposition') && serverSrc.includes('SNAPSHOT_KEEP = 7'));
+t('static v80.14: the snapshot sweep rides the /api/jobs sweep hub (ordinary activity, no cron)', serverSrc.includes('sweepEstimateReminders(); sweepDailySnapshot();'));
+t('static v80.14: admin UI has the System section, the loader + dictionary, and the backup download wired in loadAdmin', htmlSrc.includes('id="adminSystem"') && htmlSrc.includes('id="admSecSystem"') && htmlSrc.includes('const ADM814') && htmlSrc.includes('loadAdminSystem();') && htmlSrc.includes('/api/admin/backup'));
+async function raw3b(p, token) { const headers = {}; if (token) headers.Authorization = 'Bearer ' + token; const r = await fetch(BASE3 + p, { headers }); const text = await r.text(); let j = null; try { j = JSON.parse(text); } catch (e) {} return { status: r.status, cd: r.headers.get('content-disposition') || '', j }; }
+// --- backup export: gating, content, audit ---
+const bkAnon814 = await raw3b('/api/admin/backup');
+const bkCust814 = await raw3b('/api/admin/backup', CX);
+const bkWork814 = await raw3b('/api/admin/backup', wSeller.token);
+t('v80.14 backup: anonymous 401, customer 403, worker 403', bkAnon814.status === 401 && bkCust814.status === 403 && bkWork814.status === 403);
+const bkAdmin814 = await raw3b('/api/admin/backup', A3);
+t('v80.14 backup: admin downloads the COMPLETE db as a dated attachment (users/requests/jobs/sessions stores inside)', bkAdmin814.status === 200 && /attachment; filename="ghs-backup-\d{4}-\d{2}-\d{2}\.json"/.test(bkAdmin814.cd) && !!bkAdmin814.j && Array.isArray(bkAdmin814.j.users) && Array.isArray(bkAdmin814.j.requests) && Array.isArray(bkAdmin814.j.jobs) && bkAdmin814.j.users.some(u => u.email === 'admin3@t.local') && typeof bkAdmin814.j.sessions === 'object');
+const aud814 = await req3('GET', '/api/admin/audit', { token: A3 });
+t('v80.14 backup: the export is audited', (aud814.j.entries || []).some(e => e.action === 'admin.backup_export'));
+// --- health line: gating + counts against the persisted file ---
+const hAnon814 = await req3('GET', '/api/admin/system');
+const hCust814 = await req3('GET', '/api/admin/system', { token: CX });
+const hAdmin814 = await req3('GET', '/api/admin/system', { token: A3 });
+const disk814a = JSON.parse(fs.readFileSync(DATA_FILE3, 'utf8'));
+t('v80.14 health: admin-only; counts match the persisted db; Stripe flag matches this env (mock key set); uptime + start stamp present', hAnon814.status === 401 && hCust814.status === 403 && hAdmin814.status === 200 && hAdmin814.j.counts.users === disk814a.users.length && hAdmin814.j.counts.requests === disk814a.requests.length && hAdmin814.j.counts.invoices === (disk814a.invoices || []).length && hAdmin814.j.counts.jobs === (disk814a.jobs || []).length && hAdmin814.j.stripeConfigured === true && typeof hAdmin814.j.uptimeSec === 'number' && /^\d{4}-\d{2}-\d{2}T/.test(hAdmin814.j.startedAt || ''));
+// --- snapshots on the live instance: one for today, never two ---
+const todayKey814 = new Date().toISOString().slice(0, 10);
+await req3('GET', '/api/jobs', { token: A3 }); // ordinary activity — the sweep hub
+const snList814a = await req3('GET', '/api/admin/snapshots', { token: A3 });
+t('v80.14 snapshot: exactly one snapshot for today exists after ordinary activity', snList814a.status === 200 && (snList814a.j.snapshots || []).filter(s => s.date === todayKey814).length === 1);
+await req3('GET', '/api/jobs', { token: A3 });
+await req3('GET', '/api/jobs', { token: wSeller.token });
+const snList814b = await req3('GET', '/api/admin/snapshots', { token: A3 });
+t('v80.14 snapshot: more activity does NOT create a second snapshot for the same day', (snList814b.j.snapshots || []).filter(s => s.date === todayKey814).length === 1);
+const snDl814 = await raw3b('/api/admin/snapshots/' + todayKey814, A3);
+t('v80.14 snapshot: admin downloads today\'s snapshot (attachment; full db data, never a nested _snapshots)', snDl814.status === 200 && snDl814.cd.includes('ghs-snapshot-' + todayKey814 + '.json') && !!snDl814.j && Array.isArray(snDl814.j.users) && snDl814.j._snapshots === undefined);
+const snCust814 = await req3('GET', '/api/admin/snapshots', { token: CX });
+const snDlWork814 = await raw3b('/api/admin/snapshots/' + todayKey814, wSeller.token);
+const sn404814 = await req3('GET', '/api/admin/snapshots/1999-01-01', { token: A3 });
+t('v80.14 snapshot: list + download are admin-only; an unknown date 404s', snCust814.status === 403 && snDlWork814.status === 403 && sn404814.status === 404);
+const hSnap814 = await req3('GET', '/api/admin/system', { token: A3 });
+t('v80.14 health: last snapshot date is today', hSnap814.status === 200 && hSnap814.j.lastSnapshot === todayKey814);
+// --- THE RESTART: kill app3, age one session past its TTL in the
+// persisted store, reseed the snapshot ring with 7 previous days, then
+// boot a fresh instance on the SAME data file. ---
+try { child3.kill('SIGTERM'); } catch (e) {}
+await sleep(800);
+const disk814b = JSON.parse(fs.readFileSync(DATA_FILE3, 'utf8'));
+t('v80.14 sessions: the persisted store holds >= 3 sessions keyed by 64-hex HASHES — the raw admin token appears nowhere in it', !!disk814b.sessions && Object.keys(disk814b.sessions).length >= 3 && Object.keys(disk814b.sessions).every(k => /^[0-9a-f]{64}$/.test(k)) && !JSON.stringify(disk814b.sessions).includes(A3));
+const expiredTok814 = 'deadbeef'.repeat(8);
+disk814b.sessions[nodeCrypto.createHash('sha256').update(expiredTok814).digest('hex')] = { uid: custX.id, role: 'customer', createdAt: Date.now() - 31 * 24 * 3600 * 1000, exp: Date.now() - 3600 * 1000 };
+const prevDays814 = [];
+for (let i = 1; i <= 7; i++) { const d = new Date(Date.now() - i * 24 * 3600 * 1000).toISOString().slice(0, 10); prevDays814.push({ date: d, at: d + 'T00:00:00.000Z', data: { users: [], requests: [], carts: [], invoices: [], jobs: [] } }); }
+disk814b._snapshots = prevDays814;
+fs.writeFileSync(DATA_FILE3, JSON.stringify(disk814b, null, 2));
+const child3b = spawn('node', ['server.js'], {
+  cwd: APP_DIR,
+  env: Object.assign({}, process.env, {
+    PORT: '8985', DATA_FILE: DATA_FILE3, NOMINATIM_BASE: 'http://127.0.0.1:8986',
+    SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
+    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1',
+    STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
+    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981'
+  }),
+  stdio: ['ignore', 'pipe', 'pipe']
+});
+child3b.stderr.on('data', d => process.stderr.write('[app3b] ' + d));
+let up3b = false;
+for (let i = 0; i < 60 && !up3b; i++) { try { const r = await fetch(BASE3 + '/api/health'); up3b = r.ok; } catch (e) {} if (!up3b) await sleep(250); }
+t('v80.14 restart: a fresh instance boots on the same data file', up3b);
+const meAdm814 = await req3('GET', '/api/me', { token: A3 });
+const meCust814 = await req3('GET', '/api/me', { token: CX });
+const meWork814 = await req3('GET', '/api/me', { token: wSeller.token });
+t('v80.14 restart: sessions SURVIVE — admin, customer and worker tokens still authenticate with the right roles', meAdm814.status === 200 && meAdm814.j.user.role === 'admin' && meCust814.status === 200 && meCust814.j.user.role === 'customer' && meWork814.status === 200 && meWork814.j.user.role === 'worker');
+const meExp814 = await req3('GET', '/api/me', { token: expiredTok814 });
+t('v80.14 restart: an EXPIRED persisted session does not authenticate', meExp814.status === 401);
+const gate814 = await req3('GET', '/api/admin/system', { token: CX });
+t('v80.14 restart: role gates are unchanged after the restart (customer still refused from the admin surface)', gate814.status === 403);
+await req3('GET', '/api/jobs', { token: A3 }); // ordinary activity on the fresh instance
+const snAfter814 = await req3('GET', '/api/admin/snapshots', { token: A3 });
+const datesAfter814 = (snAfter814.j.snapshots || []).map(s => s.date);
+t('v80.14 snapshot: after the restart the sweep takes today\'s snapshot and the ring keeps ONLY the newest 7 (the oldest seeded day is gone)', datesAfter814.length === 7 && datesAfter814.includes(todayKey814) && !datesAfter814.includes(prevDays814[6].date) && datesAfter814.includes(prevDays814[0].date));
+const hAfter814 = await req3('GET', '/api/admin/system', { token: A3 });
+const disk814c = JSON.parse(fs.readFileSync(DATA_FILE3, 'utf8'));
+t('v80.14 health: after the restart the health line reports today as the last snapshot and counts still match the file', hAfter814.status === 200 && hAfter814.j.lastSnapshot === todayKey814 && hAfter814.j.counts.users === disk814c.users.length && hAfter814.j.counts.requests === disk814c.requests.length);
+try { child3b.kill('SIGTERM'); } catch (e) {}
 
 try { child3.kill('SIGTERM'); } catch (e) {}
 try { geo3.close(); } catch (e) {}
