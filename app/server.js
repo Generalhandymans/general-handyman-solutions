@@ -698,6 +698,81 @@ function applyJobStatus(j, status) {
   j.status = status;
   if (status !== 'On my way') delete j.liveLoc;
 }
+// ---------- v81 CONFIANZA Y CONTROL: the permanent job timeline ----------
+// Every job keeps an APPEND-ONLY event history on the record itself
+// (j.timeline: [{ type, at, status? }]). Events are only ever PUSHED by
+// the helpers below — no endpoint rewrites, edits or deletes an event,
+// and there is deliberately no API that accepts a timeline from a
+// client. The steps mirror the customer's tracking card: created
+// (booked) -> assigned -> enroute -> arrived -> done, plus a 'paid'
+// event the moment real money for the job lands, and a generic
+// 'status' event (carrying the raw status) for any other transition
+// (cancellations, admin corrections), so the history never has a gap.
+// Pre-v81 jobs carry no stored timeline: jobTimelineSeed rebuilds the
+// floor from the stamps the record ALREADY has (createdAt, claimedAt),
+// and publicTimeline() serves that derived floor read-only until the
+// first real append stores it — history is never invented backwards
+// beyond what the record itself proves.
+function jobTimelineSeed(j) {
+  const out = [{ type: 'created', at: j.createdAt || new Date().toISOString() }];
+  if (j.claimedAt) out.push({ type: 'assigned', at: j.claimedAt });
+  return out;
+}
+function jobTimelineOf(j) {
+  return (j && Array.isArray(j.timeline) && j.timeline.length) ? j.timeline : jobTimelineSeed(j || {});
+}
+function jobEvent(j, type, status) {
+  if (!j) return;
+  if (!Array.isArray(j.timeline) || !j.timeline.length) j.timeline = jobTimelineSeed(j);
+  const ev = { type, at: new Date().toISOString() };
+  if (status) ev.status = status;
+  const last = j.timeline[j.timeline.length - 1];
+  if (last && last.type === ev.type && (last.status || '') === (ev.status || '')) return; // a repeat of the last step is not new history
+  j.timeline.push(ev);
+}
+function jobStatusEventType(status) {
+  if (status === 'On my way') return 'enroute';
+  if (status === 'Arrived') return 'arrived';
+  if (status === 'Done — photos sent') return 'done';
+  if (status === 'Claimed') return 'assigned';
+  return 'status';
+}
+function noteJobStatusChange(j, prevStatus) {
+  if (!j || !prevStatus || j.status === prevStatus) return;
+  const t = jobStatusEventType(j.status);
+  jobEvent(j, t, t === 'status' ? j.status : undefined);
+}
+// 'paid' lands exactly once per job, ever — whichever money rail lands
+// first (order paid in full, balance settled, hold captured, linked
+// invoice marked paid) stamps it, later rails are no-ops.
+function jobTimelineMarkPaid(j) {
+  if (!j) return;
+  if (jobTimelineOf(j).some(e => e.type === 'paid')) return;
+  jobEvent(j, 'paid');
+}
+function jobTimelinePaidForRequest(r) {
+  if (!r) return;
+  db.jobs.filter(x => x.requestId === r.id).forEach(j => jobTimelineMarkPaid(j));
+}
+// The public shape of the timeline: type + timestamp (+ the raw status
+// on generic transitions). It NEVER carries money, addresses or
+// customer data — the same events are safe on every role's view.
+function publicTimeline(j) {
+  return jobTimelineOf(j).map(e => ({ type: e.type, at: e.at, status: e.status || '' }));
+}
+// v81: is there REAL money landed behind this job? The review gate
+// reads the same trails the captain override already trusts
+// (captainChargedAmount: captured holds, a paid-in-full order payment,
+// a partially-refunded payment with money kept, or a PAID invoice
+// linked to the job/request — the manual cash/Zelle trail Gabriel
+// records by hand). A deposit alone is NOT paid: the balance is still
+// out, so the order-payment branch only fires on 'paid'.
+function jobPaidForReview(j) {
+  if (!j) return false;
+  if (captainChargedAmount(j) > 0) return true;
+  const r = j.requestId ? db.requests.find(x => x.id === j.requestId) : null;
+  return !!(r && requestIsPaid(r));
+}
 async function geocodeJobDestination(j) {
   if (!j || j.destLat != null || j.destLng != null || !j.address || geoInFlight.has(j.id)) return;
   geoInFlight.add(j.id);
@@ -2698,6 +2773,7 @@ function recordRequestPayment(r, info) {
   notifyAdmins('payment', 'PAID IN FULL: ' + usd(r.payment.amountCents / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: r.payment.amountCents / 100 }));
   maybeAskGoogleReview(r);
+  jobTimelinePaidForRequest(r); // v81: the 'paid' event lands on the job timeline
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
@@ -3278,6 +3354,7 @@ function settleRequestBalance(r, piId, cents) {
   // can never be charged a second time through the other door.
   const lc805 = linkedCartForRequest(r);
   if (lc805) sealCartBalance(lc805, 'app', piId);
+  jobTimelinePaidForRequest(r); // v81: the 'paid' event lands on the job timeline
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
@@ -3768,6 +3845,7 @@ async function handleStripeEvent(event) {
         r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment captured: ' + usd(h.capturedCents / 100) + ' was charged to your card for request ' + r.id + '. Thank you!', at: new Date().toISOString() });
         if (r.customerId) notify(r.customerId, 'payment', 'Payment captured (' + usd(h.capturedCents / 100) + ') on request ' + r.id + '. Thank you!', '#req=' + r.id);
         notifyAdmins('payment', 'Hold CAPTURED on request ' + r.id + ': ' + usd(h.capturedCents / 100) + ' (PI ' + h.pi + ').');
+        jobTimelinePaidForRequest(r); // v81: a captured hold is landed money — the 'paid' event lands too
         db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); }); sweepPendingPayouts();
       }
     } else if (type === 'payment_intent.canceled') {
@@ -5473,6 +5551,77 @@ async function buildMoneyReport() {
     stripe
   };
 }
+// ---------- v81 CONFIANZA Y CONTROL: the sprint dashboard ----------
+// Gabriel's December-sprint frame, computed ONLY from records the app
+// already keeps — no seeds, no estimates, honest zeros:
+//   billed this week  = money that actually LANDED in the current UTC
+//     week (Mon 00:00 UTC -> next Mon): order money on requests (a
+//     deposit counts when it lands, the balance when IT lands, a paid-
+//     in-full order at its stamp), paid invoices at paidAt, and first
+//     real membership charges at the plan's monthly price (the first
+//     charge is exactly the plan price; later renewals are not stamped
+//     per-charge in the db, so they are NOT in this number — the line
+//     items below keep the three sources separate and honest). An
+//     invoice whose request already carries a payment is skipped —
+//     that money is counted once, on the order.
+//   pace              = $3,850/week (the ~$200K/year run rate), with
+//     the expected-by-now figure prorated over the elapsed week.
+//   members / techs   = live counts against the sprint targets
+//     (25–40 active members, 4–6 active technicians).
+const SPRINT_WEEK_TARGET = 3850;
+const SPRINT_MEMBER_TARGET = { min: 25, max: 40 };
+const SPRINT_TECH_TARGET = { min: 4, max: 6 };
+function sprintWeekWindow(nowMs) {
+  const d = new Date(nowMs || Date.now());
+  d.setUTCHours(0, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); // back to Monday
+  const startMs = d.getTime();
+  return { startMs, endMs: startMs + 7 * 864e5, startKey: d.toISOString().slice(0, 10), endKey: new Date(startMs + 6 * 864e5).toISOString().slice(0, 10) };
+}
+function billedBetween(startMs, endMs) {
+  const inWin = (ts) => { const t = ts ? new Date(ts).getTime() : NaN; return Number.isFinite(t) && t >= startMs && t < endMs; };
+  let orders = 0, invoicesAmt = 0, memberFirst = 0;
+  for (const r of db.requests) {
+    const pm = r.payment;
+    if (!pm) continue;
+    if (pm.status === 'paid') {
+      const dep = Number(pm.depositCents) || 0, tot = Number(pm.amountCents) || 0;
+      if (inWin(pm.at)) orders += dep > 0 ? dep / 100 : tot / 100;
+      if (dep > 0 && pm.balanceAt && inWin(pm.balanceAt)) orders += Math.max(0, tot - dep) / 100;
+    } else if (pm.status === 'deposit') {
+      if (inWin(pm.at)) orders += (Number(pm.amountCents) || 0) / 100;
+    } else if (pm.status === 'partially_refunded') {
+      if (inWin(pm.at)) orders += Math.max(0, (Number(pm.amountCents) || 0) - (Number(pm.refundedCents) || 0)) / 100;
+    }
+  }
+  for (const inv of (db.invoices || [])) {
+    if (!inv || inv.status !== 'paid' || !inWin(inv.paidAt)) continue;
+    const linkedReq = inv.requestId ? db.requests.find(x => x.id === inv.requestId) : null;
+    if (linkedReq && linkedReq.payment) continue; // the order rail already counts this money
+    invoicesAmt += Number(inv.paidAmount || inv.total || 0);
+  }
+  for (const u of db.users) {
+    if (u.role !== 'customer' || !inWin(u.firstRealChargeAt)) continue;
+    memberFirst += Number(membershipPlanOf(u).monthly) || 0;
+  }
+  return { orders: money(orders), invoices: money(invoicesAmt), memberFirstCharges: money(memberFirst), total: money(orders + invoicesAmt + memberFirst) };
+}
+function buildSprintReport() {
+  const win = sprintWeekWindow();
+  const billed = billedBetween(win.startMs, win.endMs);
+  const members = db.users.filter(u => u.role === 'customer' && ['active', 'trialing'].includes(membershipPlanOf(u).status)).length;
+  const techs = db.users.filter(u => u.role === 'worker' && u.status === 'active').length;
+  const elapsedDays = Math.min(7, Math.max(0, (Date.now() - win.startMs) / 864e5));
+  return {
+    weekStart: win.startKey, weekEnd: win.endKey,
+    billed,
+    targetWeekly: SPRINT_WEEK_TARGET,
+    paceExpected: money(SPRINT_WEEK_TARGET * elapsedDays / 7),
+    pacePct: billed.total > 0 && SPRINT_WEEK_TARGET > 0 ? Math.round((billed.total / SPRINT_WEEK_TARGET) * 1000) / 10 : 0,
+    members: { active: members, targetMin: SPRINT_MEMBER_TARGET.min, targetMax: SPRINT_MEMBER_TARGET.max },
+    techs: { active: techs, targetMin: SPRINT_TECH_TARGET.min, targetMax: SPRINT_TECH_TARGET.max }
+  };
+}
 
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
 // v80.7 fix #1: last-resort nets — an unexpected rejection or a throw
@@ -6641,6 +6790,7 @@ async function handleRequest(req, res) {
     if (!soldTake && (!payOffer || payOffer <= 0)) return send(res, 400, { error: 'worker pay (payOffer) is required' });
     const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || (soldTake ? soldFinalTotal : null), customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
     if (soldHere) { j.soldByWorkerId = seller811.id; j.salesCommission = soldTake ? soldTake.commission : SALES_COMMISSION; j.claimedAt = new Date().toISOString(); }
+    jobEvent(j, 'created'); if (soldHere) jobEvent(j, 'assigned'); if (jobPaidForReview(j)) jobTimelineMarkPaid(j); // v81: the permanent timeline starts at birth
     db.jobs.push(j);
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
@@ -6788,7 +6938,7 @@ async function handleRequest(req, res) {
     if (idx === -1) return send(res, 404, { error: 'worker not found' });
     const removed = db.users.splice(idx, 1)[0];
     // Free any jobs this worker had claimed so they go back to the open board.
-    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { const prev = j.status; j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; if (prev !== 'Open') emitJobStatus(j, prev); } });
+    db.jobs.forEach(j => { if (j.assignedWorkerId === removed.id) { const prev = j.status; j.assignedWorkerId = null; j.status = 'Open'; delete j.claimedAt; delete j.liveLoc; noteJobStatusChange(j, prev); if (prev !== 'Open') emitJobStatus(j, prev); } });
     // A deleted worker cannot remain a captain — free his area.
     ensureCaptainState();
     db.areas.forEach(a => { if (a.captainId === removed.id) a.captainId = null; });
@@ -6871,7 +7021,7 @@ async function handleRequest(req, res) {
       // purposes — accrue now if its job is already Done (the sweep covers
       // every other ordering).
       const paidJob = (inv.jobId && db.jobs.find(x => x.id === inv.jobId)) || (inv.requestId && db.jobs.find(x => x.requestId === inv.requestId));
-      if (paidJob) accrueCaptainOverride(paidJob);
+      if (paidJob) { accrueCaptainOverride(paidJob); jobTimelineMarkPaid(paidJob); } // v81: the cash/Zelle trail stamps the timeline too
       save();
       fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
       return send(res, 200, { invoice: publicInvoice(inv) });
@@ -6989,6 +7139,7 @@ async function handleRequest(req, res) {
     const silent = !!(b.silent && assignedWorkerId);
     const j = { id: id('JOB'), status: assignedWorkerId ? 'Claimed' : 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId, messages: [], createdAt: new Date().toISOString() };
     if (assignedWorkerId) j.claimedAt = j.createdAt;
+    jobEvent(j, 'created'); if (assignedWorkerId) jobEvent(j, 'assigned'); // v81: the permanent timeline starts at birth
     db.jobs.push(j);
     if (silent) {
       notify(assignedWorkerId, 'job', 'The Team assigned you a job: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + '. It is in your jobs list.', '#wjob=' + j.id);
@@ -7020,6 +7171,14 @@ async function handleRequest(req, res) {
         if (tech) { view.technician = tech.name || ''; const tp = workerPhotoOf(tech); if (tp) view.technicianPhoto = tp; }
         // v25 (C1): the OWNING customer sees their own rating on the job.
         if (j.rating) { view.rating = j.rating; view.reviewText = j.reviewText || ''; view.ratedAt = j.ratedAt || null; }
+        // v81: the permanent timeline rides the customer's own job view
+        // (type + timestamp only — publicTimeline carries no money, no
+        // addresses, no other customer's data; it is their own job).
+        view.timeline = publicTimeline(j);
+        // v81: the review picker shows only when the server would
+        // accept the review (Done + paid) — the gate itself stays
+        // server-side; this flag just keeps the UI honest about it.
+        view.reviewable = j.status === 'Done — photos sent' && jobPaidForReview(j);
         // v22: the customer sees the live technician point ONLY while the
         // worker is sharing it (j.liveLoc exists). It is their own job and
         // their own address, so the destination coords ride along.
@@ -7129,7 +7288,7 @@ async function handleRequest(req, res) {
     // completes (v29 sweep + connect/status retry). The per-job admin
     // release (j.connectOverrideFor) survives as a harmless legacy
     // flag — claims no longer consult it.
-    j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString();
+    j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString(); jobEvent(j, 'assigned'); // v81: timeline
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
     const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
     if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.', '#job=' + j.id);
@@ -7173,6 +7332,7 @@ async function handleRequest(req, res) {
     }
     else return send(res, 403, { error: 'not allowed' });
     if (user && user.role === 'admin') { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.infoReleased !== undefined) parts.push('infoReleased ' + !!b.infoReleased); if (b.reviewPublished !== undefined) parts.push('reviewPublished ' + !!b.reviewPublished); if (parts.length) audit(user, 'job.update', j.id, parts.join(' · ')); }
+    noteJobStatusChange(j, prevJobStatus); // v81: every status move lands on the permanent timeline
     save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') { maybePayWorkerForJob(j); accrueCaptainOverride(j); } return send(res, 200, { job: publicJob(j, user) });
   }
 
@@ -7238,6 +7398,10 @@ async function handleRequest(req, res) {
   // flow (and the job-side billing) keys on: the worker marked the photos
   // sent. Only the job's OWNING customer can rate it, exactly once, and
   // only after completion — all enforced here, never just in the UI.
+  // v81 CONFIANZA: completion alone is no longer enough — the job must
+  // also be PAID, proven from the money trails the app already trusts
+  // (jobPaidForReview below). A review with no real paid job behind it
+  // can never exist, so the public average is always real.
   const JOB_COMPLETED_STATUS = 'Done — photos sent';
   const rateMatch = p.match(/^\/api\/jobs\/([\w-]+)\/rating$/);
   if (rateMatch && req.method === 'POST') {
@@ -7246,6 +7410,7 @@ async function handleRequest(req, res) {
     if (!j) return send(res, 404, { error: 'job not found' });
     if (!sseCustomerOwnsJob(j, user)) return send(res, 403, { error: 'not your job' });
     if (j.status !== JOB_COMPLETED_STATUS) return send(res, 400, { error: 'you can rate this job once it is completed' });
+    if (!jobPaidForReview(j)) return send(res, 402, { error: 'this job can be reviewed once its payment is confirmed' });
     if (j.rating) return send(res, 409, { error: 'this job was already rated' });
     const b = await readBody(req);
     const stars = Number(b.stars);
@@ -7421,6 +7586,25 @@ async function handleRequest(req, res) {
     audit(user, 'proposal.save_later', obj.id, (want ? 'saved' : 'unsaved') + ' · ' + propSaveMatch[1]);
     save();
     return send(res, 200, { ok: true, saved: want });
+  }
+  // ---------- v81: PUBLIC reviews — the storefront surface ----------
+  // The closing half of the audit P1-5 pipeline: only reviews Gabriel
+  // PUBLISHED (j.reviewPublished) on jobs that passed the paid gate
+  // ever reach this public, no-login endpoint — first name + city +
+  // service only, never an email, phone or full name. With zero
+  // published reviews the payload says so (count 0) and the storefront
+  // section stays hidden: no rating number is ever shown without real
+  // reviews behind it.
+  if (p === '/api/reviews' && req.method === 'GET') {
+    const pub = db.jobs.filter(j => j.rating && j.reviewPublished);
+    const count = pub.length;
+    const average = count ? Math.round((pub.reduce((s, j) => s + Number(j.rating), 0) / count) * 10) / 10 : 0;
+    const reviews = pub.slice().sort((a, b) => String(b.ratedAt || '').localeCompare(String(a.ratedAt || ''))).slice(0, 12).map(j => {
+      const cust = jobCustomer(j);
+      const nm = ((cust && cust.name) || j.customerName || '').trim();
+      return { stars: Number(j.rating), text: j.reviewText || '', service: j.service || '', city: j.city || '', ratedAt: j.ratedAt || null, name: nm ? nm.split(/\s+/)[0] : '' };
+    });
+    return send(res, 200, { average, count, reviews });
   }
   if (p === '/api/admin/ratings' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -8199,7 +8383,7 @@ async function handleRequest(req, res) {
     // duplicate-alert path, never in the books.
     const linkedCart805 = cart62 || linkedCartForRequest(r);
     if (linkedCart805) { await expireCartSessions(linkedCart805); disarmCartBalance(linkedCart805, 'order-refunded'); }
-    jobs.forEach(j => { if (j.status !== 'Done — photos sent' && j.status !== 'Cancelled') { j.status = 'Cancelled'; delete j.liveLoc; } });
+    jobs.forEach(j => { if (j.status !== 'Done — photos sent' && j.status !== 'Cancelled') { const prevJ = j.status; j.status = 'Cancelled'; delete j.liveLoc; noteJobStatusChange(j, prevJ); } });
     r.messages = r.messages || [];
     r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'This order was cancelled by the Team. Refund: ' + usd(refundedCents / 100) + ' back to your card.' + (keptCents > 0 ? ' A ' + usd(keptCents / 100) + ' booking fee was kept because a technician had already been dispatched.' : ''), at: new Date().toISOString() });
     if (r.customerId) notify(r.customerId, 'payment', 'Order ' + r.id + ' cancelled — refund of ' + usd(refundedCents / 100) + ' issued' + (keptCents > 0 ? ' (' + usd(keptCents / 100) + ' booking fee kept — already dispatched)' : '') + '.', '#req=' + r.id);
@@ -9234,6 +9418,13 @@ async function handleRequest(req, res) {
   if (p === '/api/admin/money' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, await buildMoneyReport());
+  }
+  // v81 SPRINT: the December pace board (admin only) — billed this
+  // week vs the $3,850/week run-rate target, members and techs vs
+  // their sprint targets, all from the live db (buildSprintReport).
+  if (p === '/api/admin/sprint' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, buildSprintReport());
   }
   // v80.14 RESPALDO: the full-database backup download (admin only,
   // audited). The export is stringified AFTER the audit entry lands, so
