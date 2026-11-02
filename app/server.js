@@ -2119,7 +2119,9 @@ function activateMembershipFromCheckout(u, session) {
   // event (Plus/Yard charge at join; a no-trial HomeCare join too) —
   // the referral bounty may be due. A trialing session totals $0 and
   // never reaches the award.
-  if (session && session.payment_status === 'paid' && Number(session.amount_total) > 0) maybeAwardMembershipBounty(u, plan.key);
+  // v80.12: the same moment stamps the customer's first REAL charge —
+  // the funnel/CAC count of NEW PAYING members reads that stamp.
+  if (session && session.payment_status === 'paid' && Number(session.amount_total) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, plan.key); }
   return plan;
 }
 // ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
@@ -3099,6 +3101,11 @@ async function handleStripeEvent(event) {
     // Stripe is the single source of truth: a failed subscription payment means
     // the customer loses member status until payment succeeds again.
     const u = db.users.find(x => x.stripeCustomerId === obj.customer);
+    // v80.12: bookkeep the failure (when + amount_due) — until now it
+    // was notify-only and vanished, so "membership payment failures
+    // this month" (Dinero) had nothing to count. Records accrue from
+    // this build forward.
+    paymentFailuresOf().push({ id: id('PFL'), at: new Date().toISOString(), userId: u ? u.id : '', email: u ? (u.email || '') : '', amountCents: Math.max(0, Math.round(Number(obj.amount_due) || 0)), invoiceId: obj.id || '', subscriptionId: obj.subscription || '' });
     if (u) {
       const current = membershipPlanOf(u);
       if (current.planKey && current.status === 'active' && current.type !== 'homecare') {
@@ -3134,7 +3141,8 @@ async function handleStripeEvent(event) {
       // invoice that actually collected money (amount_paid > 0) is the
       // first REAL charge, so a referred member's bounty may be due.
       // $0 invoices (trial start) never award.
-      if (Number(obj.amount_paid) > 0) maybeAwardMembershipBounty(u, planKey || current.planKey || '');
+      // v80.12: same moment, the first-real-charge stamp for CAC.
+      if (Number(obj.amount_paid) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, planKey || current.planKey || ''); }
     }
   } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
     // v44 pay-in-full PIs (menu orders + admin carts): the confirm
@@ -4555,6 +4563,182 @@ function serverCartTotals(items, isMember) {
     list += line.lineList; member += line.lineMember;
   }
   return { lines, list, member, due: isMember ? member : list };
+}
+
+// ---------- v80.12 TRÁFICO Y DINERO (Gabriel, 2026-11-01) ----------
+// Two admin-only sections he asked for ("Necesito eso en mi página
+// admin — y tráfico", plus the massive audit's item #10):
+//  (1) TRÁFICO — first-party view counters (aggregate daily buckets in
+//      db.traffic, by day and acquisition source; NEVER per-visitor
+//      records, no fingerprinting, no external analytics, no background
+//      jobs — a counter moves only when a real page view posts the
+//      beacon), the funnel built from records the app already keeps
+//      (link carts, signups, order deposits, first real membership
+//      charges), admin-entered ad spend, and CAC = spend ÷ NEW PAYING
+//      members from that source in the same window — the number his
+//      $36 ad-test kill rule runs on ($20 spent / 0 signups -> off).
+//  (2) DINERO — one view of where the money sits: deposits collected
+//      with a balance still out, everything receivable, tech payouts
+//      waiting by state (awaiting_worker_setup spelled out, per tech),
+//      captain overrides accrued, this month's membership payment
+//      failures, and the live Stripe balance / next payout.
+// "First real charge" gets its own stamp (u.firstRealChargeAt) at the
+// exact four moments a real membership charge lands — the same sites
+// where v80.11 awards the referral bounty — because until now that
+// moment was never recorded on the customer record.
+const TRACK_VIEWS = ['home', 'menu', 'join', 'cart'];
+function trafficOf() { if (!db.traffic || typeof db.traffic !== 'object' || Array.isArray(db.traffic)) db.traffic = {}; return db.traffic; }
+function adSpendOf() { if (!Array.isArray(db.adSpend)) db.adSpend = []; return db.adSpend; }
+function paymentFailuresOf() { if (!Array.isArray(db.paymentFailures)) db.paymentFailures = []; return db.paymentFailures; }
+function dayKeyOf(ts) { const d = ts ? new Date(ts) : new Date(); return isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10); }
+function stampFirstRealCharge(u) { if (u && u.role === 'customer' && !u.firstRealChargeAt) u.firstRealChargeAt = new Date().toISOString(); }
+function recordTrafficView(view, rawSrc) {
+  const t = trafficOf();
+  const day = dayKeyOf();
+  let d = t[day];
+  if (!d || typeof d !== 'object') d = t[day] = { total: { views: 0, home: 0, menu: 0, join: 0, cart: 0 }, bySource: {} };
+  if (!d.bySource || typeof d.bySource !== 'object') d.bySource = {};
+  const sk = sanitizeSource(rawSrc) || 'direct';
+  let s = d.bySource[sk];
+  if (!s) s = d.bySource[sk] = { views: 0, home: 0, menu: 0, join: 0, cart: 0 };
+  d.total.views++; d.total[view]++; s.views++; s[view]++;
+  const keys = Object.keys(t).sort();
+  if (keys.length > 120) keys.slice(0, keys.length - 120).forEach(k => delete t[k]); // ~4 months of daily buckets, then the oldest fall off
+  save();
+}
+function trafficWindow(range) {
+  const days = range === 'today' ? 1 : (range === '30d' ? 30 : 7);
+  const start = new Date(); start.setUTCHours(0, 0, 0, 0); start.setUTCDate(start.getUTCDate() - (days - 1));
+  return { days, startMs: start.getTime(), startKey: start.toISOString().slice(0, 10), endKey: dayKeyOf() };
+}
+function tsInWindow(ts, startMs) { const t = ts ? new Date(ts).getTime() : NaN; return Number.isFinite(t) && t >= startMs; }
+function buildTrafficReport(range) {
+  const win = trafficWindow(range);
+  const rows = {};
+  const rowOf = (k) => rows[k] || (rows[k] = { source: k, views: 0, homeViews: 0, menuViews: 0, joinViews: 0, cartViews: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null, convCarts: null, convJoins: null, convPayments: null, workerCode: false });
+  const keyOf = (raw) => sanitizeSource(raw) || 'direct';
+  const t = trafficOf();
+  for (const day of Object.keys(t)) {
+    if (day < win.startKey || day > win.endKey) continue;
+    const by = (t[day] && t[day].bySource) || {};
+    for (const sk of Object.keys(by)) { const s = by[sk]; const r = rowOf(sk); r.views += Number(s.views) || 0; r.homeViews += Number(s.home) || 0; r.menuViews += Number(s.menu) || 0; r.joinViews += Number(s.join) || 0; r.cartViews += Number(s.cart) || 0; }
+  }
+  for (const c of cartsOf()) { if (tsInWindow(c.createdAt, win.startMs)) rowOf(keyOf(c.source)).carts++; }
+  for (const u of db.users) {
+    if (u.role !== 'customer') continue;
+    const k = keyOf(u.source);
+    if (tsInWindow(u.createdAt, win.startMs)) rowOf(k).joins++;
+    if (tsInWindow(u.firstRealChargeAt, win.startMs)) rowOf(k).newMembers++;
+  }
+  for (const r of db.requests) {
+    const pm = r.payment;
+    if (!pm || (pm.status !== 'deposit' && pm.status !== 'paid')) continue;
+    if (!tsInWindow(pm.at, win.startMs)) continue;
+    const owner = r.customerId ? db.users.find(x => x.id === r.customerId) : null;
+    const row = rowOf(keyOf(r.source || (owner && owner.source)));
+    row.deposits++; row.depositAmount += (Number(pm.amountCents) || 0) / 100;
+  }
+  for (const s of adSpendOf()) { if (s.date >= win.startKey && s.date <= win.endKey) rowOf(keyOf(s.source)).spend += Number(s.amount) || 0; }
+  const pct = (a, b) => b > 0 ? Math.round((a / b) * 1000) / 10 : null;
+  const list = Object.values(rows).map(r => {
+    r.depositAmount = money(r.depositAmount); r.spend = money(r.spend);
+    r.payments = r.deposits + r.newMembers;
+    r.cac = (r.spend > 0 && r.newMembers > 0) ? money(r.spend / r.newMembers) : null;
+    r.convCarts = pct(r.carts, r.views); r.convJoins = pct(r.joins, r.carts); r.convPayments = pct(r.payments, r.joins);
+    r.workerCode = !!workerByRefCode(r.source);
+    return r;
+  }).sort((a, b) => (b.views - a.views) || (b.joins - a.joins) || (b.carts - a.carts) || (b.payments - a.payments));
+  const totals = { views: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null, convCarts: null, convJoins: null, convPayments: null };
+  for (const r of list) { totals.views += r.views; totals.carts += r.carts; totals.joins += r.joins; totals.deposits += r.deposits; totals.depositAmount += r.depositAmount; totals.newMembers += r.newMembers; totals.payments += r.payments; totals.spend += r.spend; }
+  totals.depositAmount = money(totals.depositAmount); totals.spend = money(totals.spend);
+  totals.cac = (totals.spend > 0 && totals.newMembers > 0) ? money(totals.spend / totals.newMembers) : null;
+  totals.convCarts = pct(totals.carts, totals.views); totals.convJoins = pct(totals.joins, totals.carts); totals.convPayments = pct(totals.payments, totals.joins);
+  return { range: ['today', '7d', '30d'].includes(range) ? range : '7d', days: win.days, from: win.startKey, to: win.endKey, totals, rows: list };
+}
+// The Stripe box on the Dinero page reads the LIVE balance + the next
+// payout with the key the server already holds — cached ~60 s like the
+// Stripe health check, because loadAdmin() runs after nearly every
+// admin action. Any failure degrades to { available:false }: the page
+// NEVER breaks over a Stripe read.
+let stripeMoneyCache = { at: 0, body: null };
+async function stripeMoneySnapshot() {
+  const nowMs = Date.now();
+  if (stripeMoneyCache.body && (nowMs - stripeMoneyCache.at) < 60 * 1000) return stripeMoneyCache.body;
+  const bal = await stripeGet('/balance');
+  const sumUsd = (arr) => (Array.isArray(arr) ? arr : []).filter(x => x && (!x.currency || x.currency === 'usd')).reduce((a, x) => a + (Number(x.amount) || 0), 0) / 100;
+  let next = null;
+  try {
+    const po = await stripeGet('/payouts?limit=1');
+    const d0 = po && Array.isArray(po.data) ? po.data[0] : null;
+    if (d0) next = { amount: money((Number(d0.amount) || 0) / 100), date: d0.arrival_date ? new Date(Number(d0.arrival_date) * 1000).toISOString().slice(0, 10) : '', status: d0.status || '' };
+  } catch (e) { /* the balance alone still answers */ }
+  const body = { available: true, balanceAvailable: money(sumUsd(bal && bal.available)), balancePending: money(sumUsd(bal && bal.pending)), nextPayout: next };
+  stripeMoneyCache = { at: nowMs, body };
+  return body;
+}
+async function buildMoneyReport() {
+  // Deposits collected whose balance is still out (the booked pipeline).
+  let depCount = 0, depCollected = 0, depBalance = 0;
+  for (const r of db.requests) {
+    const pm = r.payment;
+    if (pm && pm.status === 'deposit' && Number(pm.balanceCents) > 0) { depCount++; depCollected += (Number(pm.amountCents) || 0) / 100; depBalance += (Number(pm.balanceCents) || 0) / 100; }
+  }
+  // Paid link carts whose balance never converted to a request and is
+  // still collectible on the same link (carts that DID convert carry
+  // their balance on the request — counted above, never twice).
+  let cartBal = 0, cartBalCount = 0;
+  for (const c of cartsOf()) {
+    if (c.status === 'paid' && c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt && !c.payment.balanceVoid && !c.requestId) { cartBal += Number(c.payment.balanceCents) / 100; cartBalCount++; }
+  }
+  let invOpen = 0, invOpenCount = 0;
+  for (const inv of (db.invoices || [])) {
+    if (inv.status === 'sent') { invOpen += Math.max(0, (Number(inv.total) || 0) - (Number(inv.paidAmount) || 0)); invOpenCount++; }
+  }
+  // Tech money earned on completed jobs but not yet transferred — by
+  // payout state, and per tech (his sales commission rides his pay,
+  // exactly like the payout itself computes it). Referral bounties
+  // still waiting ride the same per-tech view.
+  const byState = {}; const perTech = {};
+  const techRow = (wid) => perTech[wid] || (perTech[wid] = { workerId: wid, name: (db.users.find(x => x.id === wid) || {}).name || '', jobs: 0, amount: 0, awaitingSetup: 0, bounties: 0, bountyAmount: 0 });
+  let techJobs = 0, techAmount = 0;
+  for (const j of db.jobs) {
+    if (!j.assignedWorkerId || j.status !== 'Done — photos sent' || j.payoutTransferId || !(Number(j.payOffer) > 0)) continue;
+    const amt = money(Number(j.payOffer) + jobSalesCommission(j));
+    const st = j.payoutStatus || 'pending';
+    const b = byState[st] || (byState[st] = { state: st, jobs: 0, amount: 0 });
+    b.jobs++; b.amount = money(b.amount + amt);
+    const tr = techRow(j.assignedWorkerId); tr.jobs++; tr.amount = money(tr.amount + amt);
+    if (st === 'awaiting_worker_setup') tr.awaitingSetup = money(tr.awaitingSetup + amt);
+    techJobs++; techAmount = money(techAmount + amt);
+  }
+  let bountyCount = 0, bountyAmount = 0;
+  for (const e of referralBountiesOf()) {
+    if (!e || e.status === 'paid') continue;
+    bountyCount++; bountyAmount = money(bountyAmount + (Number(e.amount) || 0));
+    const tr = techRow(e.workerId); tr.bounties++; tr.bountyAmount = money(tr.bountyAmount + (Number(e.amount) || 0));
+  }
+  let capAccrued = 0, capEntries = 0; const capRows = {};
+  for (const e of (db.captainLedger || [])) {
+    if (!e || e.status !== 'accrued') continue;
+    const out = money((Number(e.amount) || 0) - (Number(e.paidAmount) || 0));
+    if (!(out > 0)) continue;
+    capAccrued = money(capAccrued + out); capEntries++;
+    const cr = capRows[e.captainId] || (capRows[e.captainId] = { captainId: e.captainId, name: (db.users.find(x => x.id === e.captainId) || {}).name || '', entries: 0, amount: 0 });
+    cr.entries++; cr.amount = money(cr.amount + out);
+  }
+  const monthKey = dayKeyOf().slice(0, 7);
+  let failCount = 0, failTotal = 0;
+  for (const f of paymentFailuresOf()) { if (f && String(f.at || '').slice(0, 7) === monthKey) { failCount++; failTotal += (Number(f.amountCents) || 0) / 100; } }
+  let stripe = { available: false };
+  if (stripeReady()) { try { stripe = await stripeMoneySnapshot(); } catch (e) { stripe = { available: false }; } }
+  return {
+    depositsWaiting: { count: depCount, collected: money(depCollected), balance: money(depBalance) },
+    receivables: { total: money(depBalance + cartBal + invOpen), orderBalances: money(depBalance), cartBalances: money(cartBal), cartBalancesCount: cartBalCount, invoicesOpen: money(invOpen), invoicesOpenCount: invOpenCount },
+    techPayouts: { byState: Object.values(byState).sort((a, b) => b.amount - a.amount), jobs: techJobs, amount: techAmount, bountiesPending: { count: bountyCount, amount: bountyAmount }, perTech: Object.values(perTech).sort((a, b) => (b.amount + b.bountyAmount) - (a.amount + a.bountyAmount)) },
+    captains: { accrued: capAccrued, entries: capEntries, perCaptain: Object.values(capRows) },
+    membershipFailures: { month: monthKey, count: failCount, total: money(failTotal) },
+    stripe
+  };
 }
 
 const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhandymans.app', 'https://generalhandymans.github.io', 'http://localhost:3123', 'http://localhost:3125', 'http://localhost:3126'];
@@ -6517,7 +6701,8 @@ async function handleRequest(req, res) {
       activateHomeCare(user, true);
       // v80.11: a NON-trial confirm means a real charge just landed —
       // a referred member's bounty may be due (a trial start is not).
-      if (!wasTrial74) maybeAwardMembershipBounty(user, 'homecare');
+      // v80.12: stamp the first real charge at the same moment.
+      if (!wasTrial74) { stampFirstRealCharge(user); maybeAwardMembershipBounty(user, 'homecare'); }
       return send(res, 200, { active: true, trial: wasTrial74 });
     } catch (e) { console.error('homecare confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
@@ -6556,7 +6741,7 @@ async function handleRequest(req, res) {
       if (b.plan && b.plan !== chk.plan.key) return send(res, 400, { error: 'plan mismatch' });
       if (!chk.paid) return send(res, 200, { active: false });
       activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
-      maybeAwardMembershipBounty(user, chk.plan.key); // v80.11: chk.paid = a real charge just landed (Plus/Yard charge at join)
+      stampFirstRealCharge(user); maybeAwardMembershipBounty(user, chk.plan.key); // v80.11: chk.paid = a real charge just landed (Plus/Yard charge at join); v80.12: + the first-charge stamp
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
@@ -7946,6 +8131,72 @@ async function handleRequest(req, res) {
     }
     const rows = Object.values(by).sort((a, b) => (b.customers - a.customers) || (b.orders - a.orders));
     return send(res, 200, { rows });
+  }
+  // v80.12: the storefront view beacon. The SPA posts ONE aggregate
+  // count per major view (home / menu / join / cart). Public on purpose
+  // (most storefront traffic is logged out) — but it records NOTHING
+  // per visitor: the server only bumps a daily counter bucket under
+  // the visitor's session source, and worker/admin sessions never
+  // count (their zones are not storefront traffic).
+  if (p === '/api/track/view' && req.method === 'POST') {
+    const b = await readBody(req);
+    const view = b && TRACK_VIEWS.includes(b.view) ? b.view : null;
+    if (!view) return send(res, 400, { error: 'unknown view' });
+    if (user && (user.role === 'worker' || user.role === 'admin')) return send(res, 200, { ok: true, counted: false });
+    recordTrafficView(view, b.src);
+    return send(res, 200, { ok: true, counted: true });
+  }
+  // v80.12 TRÁFICO: the funnel + CAC report (admin only).
+  if (p === '/api/admin/traffic' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const range = ['today', '7d', '30d'].includes(url.searchParams.get('range') || '') ? url.searchParams.get('range') : '7d';
+    return send(res, 200, buildTrafficReport(range));
+  }
+  // v80.12: ad spend records (admin only) — the CAC numerator. Kept as
+  // plain dated records so Gabriel can enter a test's spend the day it
+  // runs and fix a typo later (PUT), or remove it (DELETE).
+  if (p === '/api/admin/adspend' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, { records: adSpendOf().slice().sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(b.createdAt).localeCompare(String(a.createdAt))) });
+  }
+  if (p === '/api/admin/adspend' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const src = sanitizeSource(b.source);
+    const amount = money(b.amount);
+    const date = cleanDate(b.date);
+    if (!src) return send(res, 400, { error: 'a source code is required (e.g. ig, fb, google)' });
+    if (!(amount > 0)) return send(res, 400, { error: 'amount must be more than $0' });
+    if (!date || dayKeyOf(date + 'T00:00:00Z') !== date) return send(res, 400, { error: 'a valid date is required' });
+    const rec = { id: id('ADS'), source: src, amount, date, createdAt: new Date().toISOString(), by: user.email || '' };
+    adSpendOf().push(rec);
+    audit(user, 'adspend.create', rec.id, usd(amount) + ' · ' + src + ' · ' + date);
+    save(); return send(res, 201, { record: rec });
+  }
+  const adSpendMatch = p.match(/^\/api\/admin\/adspend\/([\w-]+)$/);
+  if (adSpendMatch && req.method === 'PUT') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const rec = adSpendOf().find(x => x.id === adSpendMatch[1]);
+    if (!rec) return send(res, 404, { error: 'spend record not found' });
+    const b = await readBody(req);
+    if (b.source !== undefined) { const s = sanitizeSource(b.source); if (!s) return send(res, 400, { error: 'invalid source' }); rec.source = s; }
+    if (b.amount !== undefined) { const a = money(b.amount); if (!(a > 0)) return send(res, 400, { error: 'amount must be more than $0' }); rec.amount = a; }
+    if (b.date !== undefined) { const d = cleanDate(b.date); if (!d || dayKeyOf(d + 'T00:00:00Z') !== d) return send(res, 400, { error: 'invalid date' }); rec.date = d; }
+    audit(user, 'adspend.update', rec.id, usd(rec.amount) + ' · ' + rec.source + ' · ' + rec.date);
+    save(); return send(res, 200, { record: rec });
+  }
+  if (adSpendMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const idx = adSpendOf().findIndex(x => x.id === adSpendMatch[1]);
+    if (idx === -1) return send(res, 404, { error: 'spend record not found' });
+    const gone = db.adSpend.splice(idx, 1)[0];
+    audit(user, 'adspend.delete', gone.id, usd(gone.amount) + ' · ' + gone.source + ' · ' + gone.date);
+    save(); return send(res, 200, { ok: true, deleted: gone.id });
+  }
+  // v80.12 DINERO: where the money sits (admin only).
+  if (p === '/api/admin/money' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, await buildMoneyReport());
   }
   const custMatch = p.match(/^\/api\/customers\/([\w-]+)$/);
   if (custMatch && req.method === 'PATCH') {
