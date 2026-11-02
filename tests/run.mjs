@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-24', swSrc.includes("const CACHE = 'ghs-app-v80-24'"));
+t('static: SW cache is ghs-app-v80-25', swSrc.includes("const CACHE = 'ghs-app-v80-25'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4307,7 +4307,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.24: ghs-app-v80-24)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-24'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.25: ghs-app-v80-25)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-25'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6490,6 +6490,92 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   t('static v80.23 client: the account card + loader are wired, and every new string lives in BOTH CUST_UI languages + the admin traffic dictionary',
     htmlSrc.includes('id="myReferrals"') && htmlSrc.includes('function loadMyReferrals(') && htmlSrc.includes('function custReferralCardHtml(') && htmlSrc.includes('loadMyReferrals();')
     && (htmlSrc.match(/crefTitle:/g) || []).length === 2 && (htmlSrc.match(/customerCode:/g) || []).length === 2);
+}
+
+// ---------------- v80.25 CUENTA CLARA (audit P1-1 + P1-2, runtime pins) ----------------
+{
+  const A25 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const claimEntriesFor25 = async (uid) => ((await req2('GET', '/api/admin/audit', { token: A25 })).j.entries || []).filter(e => e.action === 'account.claim_orphans' && e.actorId === uid);
+
+  // --- P1-1: the JOB hanging off an anonymous free-photo-estimate request is claimed with it ---
+  const anonPhoto25 = await req2('POST', '/api/requests', { body: { customerName: 'Job Claim Jess', customerEmail: 'jobclaim25@t.local', customerPhone: '(707) 555-0125', service: 'Faucet repair', description: 'photo estimate first', city: 'Fairfield', address: '25 Claim St', when: 'Tomorrow', estimateType: 'photo' } });
+  const cj25 = await req2('POST', '/api/requests/' + anonPhoto25.j.request.id + '/create-job', { token: A25, body: { payOffer: 80, customerPrice: 160 } });
+  t('v80.25 P1-1 setup: the Team posted a job off the still-anonymous photo request (request has NO owner yet)', anonPhoto25.status === 201 && cj25.status === 201 && !!cj25.j.job && cj25.j.request.customerId == null);
+  const suJess25 = await req2('POST', '/api/signup', { body: { name: 'Job Claim Jess', email: 'jobclaim25@t.local', password: 'jesspass25', role: 'customer' } });
+  const jessReqsFirst25 = await req2('GET', '/api/requests', { token: suJess25.j.token });
+  t('v80.25 P1-1: signup claims the anonymous photo-estimate request AND the job hanging off it (the account shows the request with ITS job linked)', jessReqsFirst25.j.requests.some(r => r.id === anonPhoto25.j.request.id && r.jobId === cj25.j.job.id));
+  const jessEntries25 = await claimEntriesFor25(suJess25.j.user.id);
+  t('v80.25 P1-1: the audit entry counts the claim exactly (1 request, 1 job)', jessEntries25.length === 1 && jessEntries25[0].detail.includes('1 request(s), 1 job(s)'));
+
+  // --- P1-1 idempotency: a second login duplicates nothing and re-claims nothing ---
+  const loginJess25 = await req2('POST', '/api/login', { body: { email: 'jobclaim25@t.local', password: 'jesspass25' } });
+  const jessReqs25 = await req2('GET', '/api/requests', { token: loginJess25.j.token });
+  const jessEntriesAfter25 = await claimEntriesFor25(suJess25.j.user.id);
+  t('v80.25 P1-1: a second login is a no-op — the claimed request appears exactly once and NO second claim is audited', loginJess25.status === 200 && jessReqs25.j.requests.filter(r => r.id === anonPhoto25.j.request.id).length === 1 && jessEntriesAfter25.length === 1);
+
+  // --- P1-1 safety: a record OWNED by another account is never claimed, even when its stored email matches the new account ---
+  const ownerOlga25 = await req2('POST', '/api/signup', { body: { name: 'Owner Olga', email: 'owner25@t.local', password: 'olgapass25', role: 'customer' } });
+  const ownedInv25 = await req2('POST', '/api/admin/invoices', { token: A25, body: { customerName: 'Owner Olga', customerEmail: 'second25@t.local', customerId: ownerOlga25.j.user.id, items: [{ description: 'Labor', qty: 1, unitPrice: 120 }] } });
+  const suSam25 = await req2('POST', '/api/signup', { body: { name: 'Second Sam', email: 'second25@t.local', password: 'sampass25', role: 'customer' } });
+  await req2('POST', '/api/login', { body: { email: 'second25@t.local', password: 'sampass25' } });
+  const samEntries25 = await claimEntriesFor25(suSam25.j.user.id);
+  const olgaInvs25 = await req2('GET', '/api/invoices/mine', { token: ownerOlga25.j.token });
+  t('v80.25 P1-1: an invoice OWNED by Olga but addressed to Sam\'s email is NEVER claimed by Sam (zero claim entries for Sam; Olga keeps it)', ownedInv25.status === 201 && samEntries25.length === 0 && olgaInvs25.j.invoices.some(i => i.id === ownedInv25.j.invoice.id));
+
+  // --- P1-2 statics: the last hardcoded/swallowed list states are gone; new copy lives in BOTH dictionaries ---
+  const mjSeg25 = htmlSrc.slice(htmlSrc.indexOf('async function loadMyJobs()'), htmlSrc.indexOf('async function loadJobs()'));
+  const yvSeg25 = htmlSrc.slice(htmlSrc.indexOf('async function loadMyYardVisits()'), htmlSrc.indexOf('// ---------- Worker yard visits'));
+  t('static v80.25 P1-2: loadMyJobs errors through the dictionary (no hardcoded English, no worker-audience loading) and loadMyYardVisits has NO silent catch left', mjSeg25.includes("CU('jobsLoadErr')") && !mjSeg25.includes("listErrorHtml('loadMyJobs()','") && mjSeg25.includes('listLoadingHtml()') && !mjSeg25.includes("listLoadingHtml(null, 'worker')") && yvSeg25.includes("listErrorHtml('loadMyYardVisits()'") && !yvSeg25.includes('catch(e){}'));
+  t('static v80.25 P1-2: jobsLoadErr + propNone + yardLoadErr exist in BOTH CUST_UI languages (EN/ES parity)', (htmlSrc.match(/jobsLoadErr:/g) || []).length === 2 && (htmlSrc.match(/propNone:/g) || []).length === 2 && (htmlSrc.match(/yardLoadErr:/g) || []).length === 2);
+}
+{
+  // --- P1-2 VM: LOADING / truly EMPTY / ERROR+Retry render distinctly, per list, in EN and ES ---
+  const prevFetch25 = sandbox.fetch;
+  let mode25 = 'fail';
+  sandbox.fetch = async function (url) {
+    const okj = (obj) => ({ ok: true, status: 200, json: async () => obj });
+    if (mode25 === 'fail') return { ok: false, status: 500, json: async () => ({ error: 'boom25' }) };
+    if (mode25 === 'hang') return new Promise(() => {});
+    if (url === '/api/requests') return okj({ requests: [] });
+    if (url === '/api/jobs') return okj({ jobs: [] });
+    if (url === '/api/invoices/mine') return okj({ invoices: [] });
+    if (url === '/api/me/proposals') return okj({ proposals: [] });
+    if (url === '/api/me/yard-visits') return okj({ visits: [], lastCompleted: null });
+    return okj({});
+  };
+  const hosts25 = ['myRequests', 'myJobs', 'myInvoices', 'myProposals', 'myYardVisits'];
+  const clearHosts25 = () => run(hosts25.map(h => "document.getElementById('" + h + "').innerHTML='';").join(' '));
+  const loadAll25 = async () => { await run('loadRequests()'); await run('loadMyJobs()'); await run('loadMyInvoices()'); await run('loadProposals()'); await run('loadMyYardVisits()'); };
+  run("me = { id: 'USR-C25', role: 'customer', name: 'State Sue' }; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+
+  // LOADING — a fetch that never resolves leaves the loading card (never a blank, never a false empty)
+  mode25 = 'hang'; clearHosts25(); run('loadRequests();');
+  const loadEn25 = el('myRequests').innerHTML;
+  t('v80.25 P1-2 VM EN: while requests fetch, the list shows LOADING (⏳ Loading…, aria-busy) — distinct from empty and error', loadEn25.includes('Loading…') && loadEn25.includes('aria-busy="true"') && !loadEn25.includes('No requests yet') && !loadEn25.includes('Retry'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');"); clearHosts25(); run('loadRequests();');
+  const loadEs25 = el('myRequests').innerHTML;
+  t('v80.25 P1-2 VM ES: the LOADING state renders in Spanish (Cargando…)', loadEs25.includes('Cargando…'));
+
+  // ERROR — every list paints its OWN message + a Retry button wired to its own loader
+  mode25 = 'fail'; run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');"); clearHosts25(); await loadAll25();
+  t('v80.25 P1-2 VM EN error: requests show their message + Retry wired to loadRequests()', el('myRequests').innerHTML.includes('We could not load your requests.') && el('myRequests').innerHTML.includes('loadRequests()') && el('myRequests').innerHTML.includes('Retry'));
+  t('v80.25 P1-2 VM EN error: jobs show the DICTIONARY message (not the old hardcoded string in the loader) + Retry wired to loadMyJobs()', el('myJobs').innerHTML.includes('We could not load your jobs.') && el('myJobs').innerHTML.includes('loadMyJobs()') && el('myJobs').innerHTML.includes('Retry'));
+  t('v80.25 P1-2 VM EN error: invoices show their message + Retry wired to loadMyInvoices()', el('myInvoices').innerHTML.includes('We could not load your invoices.') && el('myInvoices').innerHTML.includes('loadMyInvoices()'));
+  t('v80.25 P1-2 VM EN error: proposals show their message + Retry wired to loadProposals()', el('myProposals').innerHTML.includes('We could not load your proposals.') && el('myProposals').innerHTML.includes('loadProposals()'));
+  t('v80.25 P1-2 VM EN error: yard visits show their message + Retry wired to loadMyYardVisits() (the old silent catch is gone)', el('myYardVisits').innerHTML.includes('We could not load your yard visits.') && el('myYardVisits').innerHTML.includes('loadMyYardVisits()'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');"); clearHosts25(); await loadAll25();
+  t('v80.25 P1-2 VM ES error: requests + jobs render fully in Spanish with Reintentar', el('myRequests').innerHTML.includes('No pudimos cargar tus solicitudes.') && el('myRequests').innerHTML.includes('Reintentar') && el('myJobs').innerHTML.includes('No pudimos cargar tus trabajos.') && el('myJobs').innerHTML.includes('loadMyJobs()'));
+  t('v80.25 P1-2 VM ES error: invoices + proposals + yard render fully in Spanish', el('myInvoices').innerHTML.includes('No pudimos cargar tus facturas.') && el('myProposals').innerHTML.includes('No pudimos cargar tus propuestas.') && el('myYardVisits').innerHTML.includes('No pudimos cargar tus visitas de yarda.'));
+
+  // TRULY EMPTY — a SUCCESSFUL zero answer paints the empty copy, never the error card, never a spinner
+  mode25 = 'empty'; run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');"); clearHosts25(); await loadAll25();
+  t('v80.25 P1-2 VM EN empty: requests + jobs show their empty copy (no ⚠, no Retry, no spinner)', el('myRequests').innerHTML.includes('No requests yet.') && el('myJobs').innerHTML.includes('No assigned jobs yet.') && !el('myRequests').innerHTML.includes('⚠') && !el('myJobs').innerHTML.includes('Retry') && !el('myJobs').innerHTML.includes('Loading…'));
+  t('v80.25 P1-2 VM EN empty: invoices + proposals + yard show their empty copy', el('myInvoices').innerHTML.includes('No invoices yet.') && el('myProposals').innerHTML.includes('No proposals yet.') && el('myYardVisits').innerHTML.includes('No yard visits scheduled yet'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');"); clearHosts25(); await loadAll25();
+  t('v80.25 P1-2 VM ES empty: all five lists show their Spanish empty copy', el('myRequests').innerHTML.includes('Todavía no tienes solicitudes.') && el('myJobs').innerHTML.includes('Todavía no hay trabajos asignados') && el('myInvoices').innerHTML.includes('Todavía no tienes facturas.') && el('myProposals').innerHTML.includes('Todavía no tienes propuestas.') && el('myYardVisits').innerHTML.includes('Todavía no hay visitas de yarda agendadas'));
+
+  sandbox.fetch = prevFetch25;
+  run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
