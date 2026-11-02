@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-16', swSrc.includes("const CACHE = 'ghs-app-v80-16'"));
+t('static: SW cache is ghs-app-v80-17', swSrc.includes("const CACHE = 'ghs-app-v80-17'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.16: ghs-app-v80-16)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-16'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.17: ghs-app-v80-17)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-17'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5899,6 +5899,58 @@ const rqC815 = disk815e.requests.find(r => r.id === 'REQ-815C');
 t('v80.15 review ask: the BALANCE landing (deposit → paid in full) fires the ask exactly once too', revMail815c.length === 2 && !!rqC815 && rqC815.payment.status === 'paid' && !!rqC815.reviewAskedAt);
 const aud815b = await req4('GET', '/api/admin/audit', { token: A4B });
 t('v80.15 audit: review.ask is logged for both paid-in-full doors', (aud815b.j.entries || []).filter(en => en.action === 'review.ask').length >= 2 && (aud815b.j.entries || []).some(en => en.action === 'admin.settings'));
+
+// ---------------- v80.17 PUERTA PLUS: the promo landing for cold join deep links ----------------
+// The door worked mechanically (302 → hash → plan armed) but a cold guest
+// landed on the generic storefront with no promotion (Gabriel 2026-11-01).
+// Client-side mode, so the pins are statics over the wiring + HTTP checks
+// on the page/doors the server actually serves.
+t('static v80.17: the promo hero box sits directly above the existing join form (authBox) in the DOM',
+  htmlSrc.includes('id="joinPromoBox"') && htmlSrc.indexOf('id="joinPromoBox"') < htmlSrc.indexOf('id="authBox"'));
+t('static v80.17: promo mode is armed generically from the join-hash config, guests only (queueMembershipDeepLink + the #join-homecare boot door)',
+  htmlSrc.includes("if (!me) joinPromo = { plan: cfg.plan, kind: cfg.kind };") &&
+  htmlSrc.includes("joinPromo = { plan: 'homecare', kind: 'homecare' }; openMemberJoin();"));
+t('static v80.17: isJoinPromoActive is guest-only and worker-door-safe (the logged-in path is untouched)',
+  htmlSrc.includes('if (!joinPromo || me) return false;') && htmlSrc.includes('if (isWorkerEntry()) return false;'));
+t('static v80.17: render() carries the focused promo branch (hero + authBox shown; the storefront box hidden behind it)',
+  htmlSrc.includes('const promoOn = isJoinPromoActive();') && htmlSrc.includes('renderJoinPromo();') &&
+  htmlSrc.includes("if (jpBox) jpBox.style.display = promoOn ? 'block' : 'none';"));
+t('static v80.17: the hero sells the plan the form is armed with and reuses the existing plan images (planVariantImg / the HomeCare card image)',
+  htmlSrc.includes('function joinPromoPlanKey(){') && htmlSrc.includes('function joinPromoImgFor(plan){') &&
+  htmlSrc.includes('planVariantImg(which,') && htmlSrc.includes("'#homeCarePlanCard img'"));
+t('static v80.17: promo copy is settled membership copy in BOTH languages (Plus lines from the yard cards; the HomeCare free-month line from the compare grid)',
+  htmlSrc.includes('Everything in HomeCare — 20% off labor (jobs under $1,000)') &&
+  htmlSrc.includes('First month FREE — for everyone (one per account)') &&
+  htmlSrc.includes('Todo HomeCare — 20% menos en mano de obra (trabajos bajo $1,000)') &&
+  htmlSrc.includes('2 visitas de yarda cada mes') &&
+  (htmlSrc.match(/formNote:/g) || []).length === 2);
+t('static v80.17: join scrolls land on the HERO in promo mode, not past the promotion (scrollToJoinDoor at both beginInlineJoin scroll sites)',
+  htmlSrc.includes('function scrollToJoinDoor(){') && (htmlSrc.match(/scrollToJoinDoor\(\);/g) || []).length === 2);
+t('static v80.17: the guest is never trapped — exitJoinPromo disarms, any non-join route leaves promo, the navigate-home dismissal clears it, and Menú exits first',
+  htmlSrc.includes('function exitJoinPromo(){') &&
+  htmlSrc.includes("if (joinPromo && h && !MEMBERSHIP_JOIN_HASHES[h]) { joinPromo = null; membershipDeepLinkKey = ''; }") &&
+  htmlSrc.includes("membershipDeepLinkKey = ''; joinPromo = null;") &&
+  htmlSrc.includes('if (isJoinPromoActive()) exitJoinPromo();'));
+{
+  const home817 = await (await fetch(BASE + '/')).text();
+  t('v80.17 served page: the page the server serves carries the promo door (hero box + renderer + the join-hash config for Plus, Yard and HomeCare)',
+    home817.includes('id="joinPromoBox"') && home817.includes('function renderJoinPromo()') &&
+    home817.includes("'#join-plus1': { kind: 'homecare-plus', plan: 'plus1'") &&
+    home817.includes("'#join-yard1': { kind: 'yardcare', plan: 'yard1'") &&
+    home817.includes("'#join-homecare': { kind: 'homecare', plan: 'homecare'"));
+  const dPlus817 = await fetch(BASE + '/plus', { redirect: 'manual' });
+  const dPlusSrc817 = await fetch(BASE + '/plus?src=PUERTA817', { redirect: 'manual' });
+  const dYard817 = await fetch(BASE + '/yard', { redirect: 'manual' });
+  const dHome817 = await fetch(BASE + '/homecare', { redirect: 'manual' });
+  t('v80.17 doors: /plus, /yard and /homecare still 302 onto their join fragments, and ?src still rides INSIDE the fragment',
+    dPlus817.status === 302 && (dPlus817.headers.get('location') || '') === '/#join-plus1' &&
+    dPlusSrc817.status === 302 && (dPlusSrc817.headers.get('location') || '') === '/#join-plus1?src=PUERTA817' &&
+    dYard817.status === 302 && (dYard817.headers.get('location') || '') === '/#join-yard1' &&
+    dHome817.status === 302 && (dHome817.headers.get('location') || '') === '/#join-homecare');
+  t('v80.17 src: the client still captures the source from inside the hash on the promo door (ghsSrc stash intact)',
+    home817.includes('function captureCampaignSource(){') && home817.includes("sessionStorage.setItem('ghsSrc'"));
+}
+
 try { child4.kill('SIGTERM'); } catch (e) {}
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
