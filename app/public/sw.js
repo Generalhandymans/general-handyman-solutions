@@ -1,6 +1,6 @@
 // GHS app service worker — caches the app shell so it opens fast and installs,
 // while keeping every visitor on the CURRENT version of the page.
-const CACHE = 'ghs-app-v80-25';
+const CACHE = 'ghs-app-v80-26';
 const SHELL = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -17,12 +17,28 @@ self.addEventListener('push', e => {
   try { if (e.data) d = Object.assign(d, e.data.json()); } catch (err) {}
   e.waitUntil(self.registration.showNotification(d.title, {
     body: d.body, icon: '/icons/icon-192.png', badge: '/icons/icon-192.png',
-    data: { url: d.url || '/' }, vibrate: [120, 40, 120], tag: d.tag || 'ghs'
+    // v80.26 P1-4: the structured destination (targetType + targetId)
+    // rides along with the url so a tap can always rebuild the route.
+    data: { url: d.url || '/', targetType: d.targetType || '', targetId: d.targetId || '' }, vibrate: [120, 40, 120], tag: d.tag || 'ghs'
   }));
 });
+// v80.26 P1-4: the ONE route map, mirrored from the server/SPA — a tap
+// lands on the exact object the notice is about, never a dead list. A
+// payload whose url is missing (or the app root) is rebuilt from its
+// structured targetType/targetId; a payload with neither opens the app.
+const SW_NOTIF_ID_ROUTES = { request: '#req=', job: '#job=', workerJob: '#wjob=', yardVisit: '#yard=', workerYardVisit: '#wyard=', invoice: '/invoice/', estimate: '/estimate/', cart: '/cart/' };
+const SW_NOTIF_SECTION_ROUTES = { membership: '#memberships', worker: '#worker', adminYard: '#yard-calendar' };
+function swNotifUrl(data) {
+  let url = (data && data.url) || '/';
+  if (url === '/' && data && data.targetType) {
+    if (SW_NOTIF_ID_ROUTES[data.targetType] && /^[\w-]+$/.test(String(data.targetId || ''))) url = SW_NOTIF_ID_ROUTES[data.targetType] + data.targetId;
+    else if (SW_NOTIF_SECTION_ROUTES[data.targetType]) url = SW_NOTIF_SECTION_ROUTES[data.targetType];
+  }
+  return url;
+}
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
+  const url = swNotifUrl(e.notification.data);
   e.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     for (const c of list) { if ('focus' in c) { try { c.navigate(url); } catch (err) {} return c.focus(); } }
     if (clients.openWindow) return clients.openWindow(url);
