@@ -49,7 +49,22 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
   } catch (e) { console.error('supabase load failed', e.message); }
 }
-const sessions = new Map(); // token -> { uid, exp } — sessions expire server-side too, not just in the browser
+// ---------- v80.14 RESPALDO Y SESIONES: persistent sessions ----------
+// Sessions used to live ONLY in this process's memory — every Render
+// free-tier restart/redeploy logged out EVERY customer, worker and
+// Gabriel himself. The canonical session store is now db.sessions,
+// persisted by the same save() as everything else (local file or
+// Supabase): { [sha256(token)]: { uid, role, createdAt, exp } }. The raw
+// bearer token NEVER touches disk — only its hash, the same discipline
+// as the password-reset tokens below. Expiry semantics are unchanged
+// (30-day server-side TTL, SESSION_TTL_MS); expired records are pruned
+// lazily when presented, and once at boot. Auth gates are untouched:
+// auth() still resolves the live user record and every requireRole
+// check reads the user's CURRENT role from db.users.
+const SERVER_STARTED_MS = Date.now();
+const SERVER_STARTED_AT = new Date(SERVER_STARTED_MS).toISOString();
+function sessionStore() { if (!db.sessions || typeof db.sessions !== 'object' || Array.isArray(db.sessions)) db.sessions = {}; return db.sessions; }
+function pruneExpiredSessions() { const store = sessionStore(); const now = Date.now(); let n = 0; for (const h of Object.keys(store)) { const r = store[h]; if (!r || !(Number(r.exp) > now)) { delete store[h]; n++; } } return n; }
 
 function id(p) { return p + '-' + crypto.randomBytes(3).toString('hex').toUpperCase(); }
 // v80.8 (audit #2): ids that ARE bearer credentials — the public cart /
@@ -72,9 +87,10 @@ function send(res, code, obj, headers) {
 function readBody(req) { return new Promise(r => { let b = ''; let over = false; req.on('data', c => { if (!over) { b += c; if (b.length > MAX_BODY_BYTES) { over = true; b = ''; } } }); req.on('end', () => { if (over) return r({ __tooLarge: true }); try { r(JSON.parse(b || '{}')); } catch (e) { r({}); } }); }); }
 function sessionUserId(token) {
   if (!token) return null;
-  const s = sessions.get(token);
+  const store = sessionStore();
+  const s = store[sha256hex(token)];
   if (!s) return null;
-  if (Date.now() > s.exp) { sessions.delete(token); return null; }
+  if (Date.now() > s.exp) { delete store[sha256hex(token)]; return null; } // lazy prune; the removal persists on the next save()
   return s.uid;
 }
 function auth(req) {
@@ -85,8 +101,9 @@ function auth(req) {
   const uid = sessionUserId(cookie.slice('ghs_session='.length));
   return db.users.find(u => u.id === uid) || null;
 }
-function newSession(u) { const token = crypto.randomBytes(32).toString('hex'); sessions.set(token, { uid: u.id, exp: Date.now() + SESSION_TTL_MS }); return token; }
-function invalidateSessionsFor(userId) { for (const [token, s] of sessions) { if (s && s.uid === userId) sessions.delete(token); } }
+function newSession(u) { const token = crypto.randomBytes(32).toString('hex'); const now = Date.now(); sessionStore()[sha256hex(token)] = { uid: u.id, role: u.role || '', createdAt: now, exp: now + SESSION_TTL_MS }; save(); return token; }
+function invalidateSessionsFor(userId) { const store = sessionStore(); let n = 0; for (const h of Object.keys(store)) { if (store[h] && store[h].uid === userId) { delete store[h]; n++; } } if (n) save(); }
+function dropSession(token) { if (!token) return; const store = sessionStore(); const h = sha256hex(token); if (store[h]) { delete store[h]; save(); } }
 function isHttpsReq(req) { return String((req.headers && req.headers['x-forwarded-proto']) || '').split(',')[0].trim() === 'https'; }
 function sessionCookie(token, req) { return 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' + (isHttpsReq(req) ? '; Secure' : ''); }
 function clientIp(req) { const xff = String((req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim(); return xff || (req.socket && req.socket.remoteAddress) || 'unknown'; }
@@ -1584,6 +1601,46 @@ function sweepEstimateReminders() {
     }
     if (due.length) save();
   })().catch(e => console.error('estimate reminder sweep failed', e.message));
+}
+// ---------- v80.14: internal daily snapshot + system health ----------
+// Gabriel's STOP TOTAL stands: no cron, no external calls. The snapshot
+// rides the SAME approved in-server pattern as the estimate reminder
+// sweep — it runs inside ordinary request handling (the GET /api/jobs
+// sweep hub), throttled, and takes at most ONE snapshot per UTC calendar
+// day. Snapshots live in db._snapshots, a bounded ring (newest
+// SNAPSHOT_KEEP), each a deep copy of the db WITHOUT the _snapshots key
+// itself — the store can never nest or grow unbounded — and save()
+// persists them on both storage backends (local file and Supabase).
+const SNAPSHOT_KEEP = 7;
+function snapshotStore() { if (!Array.isArray(db._snapshots)) db._snapshots = []; return db._snapshots; }
+let lastSnapshotSweep = 0;
+function sweepDailySnapshot() {
+  const now = Date.now();
+  if (now - lastSnapshotSweep < 5 * 60 * 1000) return;
+  lastSnapshotSweep = now;
+  const store = snapshotStore();
+  const today = new Date().toISOString().slice(0, 10); // UTC day, like the traffic buckets
+  if (store.some(s => s && s.date === today)) return;
+  const copy = JSON.parse(JSON.stringify(db));
+  delete copy._snapshots;
+  store.push({ date: today, at: new Date().toISOString(), data: copy });
+  store.sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  while (store.length > SNAPSHOT_KEEP) store.shift();
+  pruneExpiredSessions(); // the once-a-day moment also sweeps dead session records
+  audit(null, 'system.snapshot', today, 'daily snapshot saved (' + store.length + ' kept)');
+  save();
+}
+function buildSystemHealth() {
+  const snaps = snapshotStore();
+  return {
+    startedAt: SERVER_STARTED_AT,
+    uptimeSec: Math.max(0, Math.floor((Date.now() - SERVER_STARTED_MS) / 1000)),
+    counts: { users: (db.users || []).length, requests: (db.requests || []).length, carts: (db.carts || []).length, invoices: (db.invoices || []).length, jobs: (db.jobs || []).length },
+    sessions: Object.keys(sessionStore()).length,
+    lastSnapshot: snaps.reduce((m, s) => (s && s.date && s.date > (m || '')) ? s.date : m, null),
+    snapshots: snaps.length,
+    stripeConfigured: stripeReady()
+  };
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
 async function stripeApi(path, params) {
@@ -5068,7 +5125,7 @@ async function handleRequest(req, res) {
     const bearerOut = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     const cookieOut = (req.headers.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith('ghs_session='));
     const tokOut = bearerOut || (cookieOut ? cookieOut.slice('ghs_session='.length) : '');
-    if (tokOut) sessions.delete(tokOut);
+    if (tokOut) dropSession(tokOut);
     if (user && user.role === 'worker' && user.liveLoc) { delete user.liveLoc; save(); }
     return send(res, 200, { ok: true }, { 'Set-Cookie': 'ghs_session=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0' + (isHttpsReq(req) ? '; Secure' : '') });
   }
@@ -6153,7 +6210,7 @@ async function handleRequest(req, res) {
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders();
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders(); sweepDailySnapshot();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
@@ -8253,6 +8310,35 @@ async function handleRequest(req, res) {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, await buildMoneyReport());
   }
+  // v80.14 RESPALDO: the full-database backup download (admin only,
+  // audited). The export is stringified AFTER the audit entry lands, so
+  // the backup carries the record of its own export.
+  if (p === '/api/admin/backup' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const day = new Date().toISOString().slice(0, 10);
+    audit(user, 'admin.backup_export', '', 'full database backup downloaded');
+    save();
+    return send(res, 200, JSON.stringify(db, null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="ghs-backup-' + day + '.json"' });
+  }
+  // v80.14: the internal daily snapshots — list + download (admin only).
+  if (p === '/api/admin/snapshots' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const list = snapshotStore().slice().sort((a, b) => String(b.date).localeCompare(String(a.date))).map(s => ({ date: s.date, at: s.at || null, users: ((s.data || {}).users || []).length, requests: ((s.data || {}).requests || []).length, bytes: JSON.stringify(s.data || {}).length }));
+    return send(res, 200, { snapshots: list });
+  }
+  const snapDlMatch = p.match(/^\/api\/admin\/snapshots\/(\d{4}-\d{2}-\d{2})$/);
+  if (snapDlMatch && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const snap = snapshotStore().find(s => s && s.date === snapDlMatch[1]);
+    if (!snap) return send(res, 404, { error: 'snapshot not found' });
+    audit(user, 'admin.snapshot_download', snap.date, 'daily snapshot downloaded');
+    return send(res, 200, JSON.stringify(snap.data || {}, null, 2), { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="ghs-snapshot-' + snap.date + '.json"' });
+  }
+  // v80.14: the system health line (admin only).
+  if (p === '/api/admin/system' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    return send(res, 200, buildSystemHealth());
+  }
   const custMatch = p.match(/^\/api\/customers\/([\w-]+)$/);
   if (custMatch && req.method === 'PATCH') {
     if (!requireRole(user, ['admin'], res)) return;
@@ -8495,4 +8581,4 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
   return send(res, 404, { error: 'not found' });
 }
 
-loadFromSupabase().then(() => server.listen(PORT, () => console.log('GHS app running on port ' + PORT)));
+loadFromSupabase().then(() => { if (pruneExpiredSessions()) save(); server.listen(PORT, () => console.log('GHS app running on port ' + PORT)); });
