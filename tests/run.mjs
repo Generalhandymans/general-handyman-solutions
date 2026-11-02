@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-21-1', swSrc.includes("const CACHE = 'ghs-app-v80-21-1'"));
+t('static: SW cache is ghs-app-v80-22', swSrc.includes("const CACHE = 'ghs-app-v80-22'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -3864,8 +3864,8 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const ps = await (await fetch(BASE2 + '/payment/success')).text();
   const psEs = await (await fetch(BASE2 + '/payment/success?lang=es')).text();
   const pc = await (await fetch(BASE2 + '/payment/cancelled')).text();
-  t('v72 P-1: payment result pages are branded + bilingual (EN default, ES via ?lang=, cancelled covered too)',
-    ps.includes('Payment received') && ps.includes('icon-512.png') && psEs.includes('Pago recibido') && pc.includes('Payment cancelled'));
+  t('v72 P-1 + v80.22: payment result pages are branded + bilingual — a bare /payment/success carries NO proof, so it renders the honest confirming page (never "Payment received"); the proven-paid rendering is pinned in the v80.21/v80.22 blocks; cancelled covered too',
+    ps.includes('being confirmed') && !ps.includes('Payment received') && ps.includes('icon-512.png') && psEs.includes('en confirmación') && !psEs.includes('Pago recibido') && pc.includes('Payment cancelled'));
   const instIos = await (await fetch(BASE2 + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15' } })).text();
   const instAnd = await (await fetch(BASE2 + '/instalar')).text();
   t('v72 P-2: /instalar orders the platform cards by visitor UA (iPhone UA → iOS card first, default → Android first)',
@@ -4289,7 +4289,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.21.1: ghs-app-v80-21-1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-21-1'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.22: ghs-app-v80-22)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-22'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6310,6 +6310,64 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   await req2('POST', '/api/stripe/checkout', { token: earlyCust.j.token, body: { kind: 'estimate-hold', requestId: earlyReq.j.request.id } });
   const earlySess = lastSess();
   t('v80.21 hold: a visit hold BEFORE any estimate keeps the success-page return (the estimate page would 404)', !!earlySess && earlySess.successUrl.includes('/payment/success?session_id=') && !earlySess.successUrl.includes('hold=1'));
+}
+// ---------------- v80.22 ORDEN HONESTA (audit P0-4): an unpaid order NEVER reads as placed ----------------
+// Two surfaces lied before this release: (1) the generic /payment/success
+// page proclaimed "Payment received" for ANY arrival — no session, a
+// forged id, or a session Stripe never marked paid; (2) the customer's
+// order card mapped a DEPOSIT payment onto "Payment refunded" (every
+// non-paid status fell into the refunded branch) and offered no way to
+// pay the balance the success panel had promised was payable "right
+// here in the app". The admin card also printed "Paid in full" for a
+// mere deposit. Pins: (1) failed/unpaid returns render NO placed or
+// confirmed wording in EN or ES, (2) the pending/deposit state carries
+// a one-tap retry wired to that same order's payment, (3) a genuinely
+// paid order still renders placed/paid.
+{
+  const bare22 = await (await fetch(BASE2 + '/payment/success')).text();
+  const bare22Es = await (await fetch(BASE2 + '/payment/success?lang=es')).text();
+  const bogus22 = await (await fetch(BASE2 + '/payment/success?session_id=cs_mock_nope')).text();
+  t('v80.22 success gate (1): no session / forged session -> the honest confirming page, never "Payment received" — EN and ES',
+    bare22.includes('being confirmed') && !bare22.includes('Payment received') && !bare22.includes('is on the calendar') &&
+    bare22Es.includes('en confirmación') && !bare22Es.includes('Pago recibido') && !bare22Es.includes('quedó agendado') &&
+    bogus22.includes('being confirmed') && !bogus22.includes('Payment received'));
+  const upInv22 = await req2('POST', '/api/admin/invoices', { token: A2, body: { customerName: 'Unpaid Uma', customerEmail: 'unpaid22@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 175 }] } });
+  await req2('POST', '/api/invoices/' + upInv22.j.invoice.id + '/pay', { body: {} });
+  const upSess22 = Object.values(stripeState.sessions).slice(-1)[0];
+  const unpaidPage22 = await (await fetch(BASE2 + '/payment/success?session_id=' + upSess22.id)).text();
+  t('v80.22 success gate (1): a REAL session Stripe has NOT marked paid renders pending, not received',
+    !!upSess22 && unpaidPage22.includes('being confirmed') && !unpaidPage22.includes('Payment received'));
+  await mockSessionPaid(upSess22.id);
+  const paidPage22 = await (await fetch(BASE2 + '/payment/success?session_id=' + upSess22.id)).text();
+  t('v80.22 success gate (3): a genuinely PAID order still lands on "Payment received" with its personalized detail',
+    paidPage22.includes('Payment received') && paidPage22.includes('Invoice ' + upInv22.j.invoice.id) && paidPage22.includes('$175.00') && paidPage22.includes('View your invoice'));
+
+  // VM: the customer order card speaks the true state, in both languages.
+  run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  const depEn22 = run("reqPayPanelHtml({id:'GHS-T22A', estimateType:'menu', status:'New', payment:{status:'deposit', amountCents:5000, totalCents:17500, balanceCents:12500}})");
+  const paidEn22 = run("reqPayPanelHtml({id:'GHS-T22B', estimateType:'menu', status:'New', payment:{status:'paid', amountCents:17500}})");
+  const refEn22 = run("reqPayPanelHtml({id:'GHS-T22C', estimateType:'menu', status:'Cancelled', payment:{status:'refunded', amountCents:17500}})");
+  t('v80.22 card (2): a DEPOSIT order reads as a deposit — booked, balance due — with its one-tap Pay balance wired to THIS order; never "refunded", never "paid in full"',
+    depEn22.includes('Deposit paid: $50.00 of $175.00') && depEn22.includes('Balance due when the work is done: $125.00') &&
+    depEn22.includes("reqPayBalanceStart('GHS-T22A')") && depEn22.includes('Pay balance $125.00') &&
+    !depEn22.includes('Payment refunded') && !depEn22.includes('Paid in full'));
+  t('v80.22 card (3): a genuinely PAID order still renders "Paid in full" (and carries no balance button)',
+    paidEn22.includes('Paid in full: $175.00') && !paidEn22.includes('reqPayBalanceStart'));
+  t('v80.22 card: only a REAL refund renders the refunded words',
+    refEn22.includes('Payment refunded') && !refEn22.includes('Deposit paid'));
+  t('v80.22 card (1): an order with NO payment renders no payment panel at all — no placed/paid/refunded claim from this surface',
+    run("reqPayPanelHtml({id:'GHS-T22D', estimateType:'menu', status:'New', payment:null})") === '');
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');");
+  const depEs22 = run("reqPayPanelHtml({id:'GHS-T22A', estimateType:'menu', status:'New', payment:{status:'deposit', amountCents:5000, totalCents:17500, balanceCents:12500}})");
+  const paidEs22 = run("reqPayPanelHtml({id:'GHS-T22B', estimateType:'menu', status:'New', payment:{status:'paid', amountCents:17500}})");
+  t('v80.22 card ES (1)+(2): the deposit state renders fully in Spanish (anticipo agendado + Pagar saldo on this order) — no English placed/paid wording leaks',
+    depEs22.includes('Anticipo pagado: $50.00 de $175.00') && depEs22.includes('Saldo al terminar el trabajo: $125.00') && depEs22.includes('Pagar saldo $125.00') &&
+    !depEs22.includes('Deposit paid') && !depEs22.includes('Payment refunded') && paidEs22.includes('Pagado por completo: $175.00'));
+  run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  t('static v80.22: the balance retry rides the EXISTING server-verified rail (/api/orders/pay + /api/orders/pay-confirm for THIS request), the placed panel speaks through the dictionary, and the admin card names deposits honestly',
+    htmlSrc.includes("api('/api/orders/pay'") && htmlSrc.includes("api('/api/orders/pay-confirm'") && htmlSrc.includes("body:JSON.stringify({requestId:idv})") &&
+    htmlSrc.includes("CU('ordPlacedH')") && htmlSrc.includes("payDepositTpl: 'Deposit paid: {dep} of {total}") && htmlSrc.includes("payDepositTpl: 'Anticipo pagado: {dep} de {total}") &&
+    htmlSrc.includes('Deposit: ') && serverSrc.includes("payResultPageHtml(proven ? 'success' : 'pending'"));
 }
 // ---------------- v80.21.1 NIVEL 2H PAREJO: the last five 2h services level at $175 ----------------
 // Gabriel 2026-11-01 (after v80.20 shipped): the door could not cost less than the
