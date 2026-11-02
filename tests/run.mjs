@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-19', swSrc.includes("const CACHE = 'ghs-app-v80-19'"));
+t('static: SW cache is ghs-app-v80-19-1', swSrc.includes("const CACHE = 'ghs-app-v80-19-1'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4283,7 +4283,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.19: ghs-app-v80-19)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-19'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.19.1: ghs-app-v80-19-1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-19-1'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6042,6 +6042,39 @@ t('static v80.19: the account language rail exists — pubUser.lang, POST /api/m
 t('static v80.19: server emails resolve language from the recipient (EST_MAIL / INV_MAIL / lang-aware dispatch branches)', serverSrc.includes('const EST_MAIL = {') && serverSrc.includes('const INV_MAIL = {') && serverSrc.includes('function invoiceMailLang(') && serverSrc.includes('function estMailLang(') && serverSrc.includes('PW_RESET_GENERIC_ES'));
 t('static v80.19: NO bilingual-combined sentinel strings remain on the localized surfaces', !htmlSrc.includes('Loading your invoices… · Cargando tus facturas…') && !htmlSrc.includes('Loading your requests… · Cargando tus solicitudes…') && !htmlSrc.includes('Loading your jobs… · Cargando tus trabajos…') && !htmlSrc.includes("'Tecnico / Technician'") && !htmlSrc.includes('<h3 style="margin-top:0">Notifications</h3>') && !htmlSrc.includes('Tu técnico / Your technician:') && !htmlSrc.includes('⏳ Loading secure payment… · Cargando pago seguro…') && !htmlSrc.includes('Paso 1 de 4 · Step 1 of 4'));
 t('static v80.19: the two toggles are ONE switch — setMenuLang syncs the worker store + account, and login heals from the account', htmlSrc.includes('localStorage.setItem(\'ghsWorkerLang\', _menuLang)') && htmlSrc.includes('function persistLangPref(') && htmlSrc.includes('function healLangFromAccount()') && htmlSrc.includes("fetch('/api/me/lang'"));
+// ---------------- v80.19.1 IDIOMA VITRINA ----------------
+// The restored homepage (#oldhome) never joined the EN|ES system — it
+// stayed English in ES mode; the wizard trade buttons carried BOTH
+// labels (span + a hardcoded English img alt); the request title was a
+// bilingual composite; and three CUST_UI nav values sat in the WRONG
+// language (the v80.19 parity check compares keys, not values, so it
+// could not see them). OH_UI carries the fragment's copy now and
+// paintOldHome() repaints it on the same load + toggle pass.
+const ohUi191 = dictOf819('OH_UI');
+function ohWalk191(x, y) { if (Array.isArray(x)) return Array.isArray(y) && x.length === y.length && x.every(function (v, i) { return ohWalk191(v, y[i]); }); if (x && typeof x === 'object') return !!y && typeof y === 'object' && Object.keys(x).every(function (k) { return ohWalk191(x[k], y[k]); }); return true; }
+t('static v80.19.1: OH_UI (the restored-homepage dictionary) is in full EN|ES parity — every key AND every array length, recursively',
+  !!ohUi191 && !!ohUi191.en && !!ohUi191.es && (function () { const a = flatKeys819(ohUi191.en), b = flatKeys819(ohUi191.es); if (a.size !== b.size) return false; for (const k of a) if (!b.has(k)) return false; return ohWalk191(ohUi191.en, ohUi191.es); })());
+t('static v80.19.1: paintOldHome is wired into the shared language pass and the hero + section headers resolve through OH_UI in both languages',
+  htmlSrc.includes('function paintOldHome()') && htmlSrc.includes("if (typeof paintOldHome === 'function') paintOldHome();") &&
+  !!ohUi191 && ohUi191.en.heroH1Html.includes('Home repairs,') && ohUi191.es.heroH1Html.includes('Reparaciones del hogar,') &&
+  ohUi191.en.popH === '🔥 Popular right now' && ohUi191.es.popH === '🔥 Popular ahora' &&
+  ohUi191.en.meetH === 'Meet your technician' && ohUi191.es.meetH === 'Conoce a tu técnico' &&
+  ohUi191.en.memTitle === 'Memberships' && ohUi191.es.memTitle === 'Membresías' &&
+  ohUi191.en.citiesH === '📍 Serving all of Solano County' && ohUi191.es.citiesH === '📍 Servimos todo el condado de Solano');
+t('static v80.19.1: NO bilingual-combined homepage/wizard strings remain — the request title is split per language and the trade buttons carry one label',
+  !htmlSrc.includes('Request a handyman — pide tu servicio') && !htmlSrc.includes('Carpintería · Carpentry') &&
+  !htmlSrc.includes('Electricidad · Electrical') && !htmlSrc.includes('Plomería · Plumbing') &&
+  !htmlSrc.includes('Jardinería · Gardening') && !htmlSrc.includes('Mecánica · Mechanic') && !htmlSrc.includes('Otro · Other') &&
+  htmlSrc.includes('id="wzReqTitle"') && htmlSrc.includes("wzReqTitle: 'Request a handyman'") && htmlSrc.includes("wzReqTitle: 'Pide tu servicio'"));
+const custUi191 = dictOf819('CUST_UI');
+t('static v80.19.1: the header nav values sit in the RIGHT language per side (key parity alone could not see the v80.19 mix-up)',
+  !!custUi191 && custUi191.en.navHome === 'Home' && custUi191.en.navMenu === 'Menu' && custUi191.en.navMemberships === 'Memberships' && custUi191.en.navYard === 'Yard Care' &&
+  custUi191.es.navHome === 'Inicio' && custUi191.es.navMenu === 'Menú' && custUi191.es.navMemberships === 'Membresías' && custUi191.es.navYard === 'Cuidado de yarda');
+t('static v80.19.1: wizard trade buttons paint span AND img alt from wzCat (exactly one label per button, the active language)',
+  htmlSrc.includes('if (im && v) im.alt = v;') && htmlSrc.includes('<span>Carpentry</span>') && htmlSrc.includes('alt="Gardening"') && !htmlSrc.includes('alt="Gardening and yard"') && !htmlSrc.includes('alt="Mobile mechanic"'));
+t('static v80.19.1: the restored trade chips pick their scroll target by chip POSITION (chipDests), never by matching label text — so they keep working in Spanish',
+  htmlSrc.includes('chipDests') && htmlSrc.includes("'#yard-card'") && htmlSrc.includes("'#sec-estimates'") && !htmlSrc.includes('/Carpentry/.test(label)') && !htmlSrc.includes('/Popular/.test(label)'));
+
 
 const BASE5 = 'http://127.0.0.1:8989';
 const DATA_FILE5 = '/tmp/ghs-v17-test/data-v80-19.json';
