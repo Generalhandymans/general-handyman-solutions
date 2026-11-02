@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-21', swSrc.includes("const CACHE = 'ghs-app-v80-21'"));
+t('static: SW cache is ghs-app-v80-21-1', swSrc.includes("const CACHE = 'ghs-app-v80-21-1'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -2924,11 +2924,11 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const menuPost = (tk, menuOrder) => req2('POST', '/api/requests', { token: tk, body: { service: 'Menu order', description: 'audit', address: '9 Audit Way', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder } });
   const tkG = await mkCust46('audit-guest@t.local');
   const tamp = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 1, member: 1, due: 1 } });
-  t('v46 audit: a $1 tampered total is recomputed to the catalog $165 (v80.20) + flagged', tamp.status === 201 && tamp.j.request.menuOrder.totals.due === 165 && tamp.j.request.menuOrder.totalsCorrected === true && tamp.j.request.menuOrder.clientDue === 1);
+  t('v46 audit: a $1 tampered total is recomputed to the catalog $175 (v80.20 set $165; v80.21.1 leveled the 2h tier at $175) + flagged', tamp.status === 201 && tamp.j.request.menuOrder.totals.due === 175 && tamp.j.request.menuOrder.totalsCorrected === true && tamp.j.request.menuOrder.clientDue === 1);
   const tampPay = await req2('POST', '/api/orders/pay', { token: tkG, body: { requestId: tamp.j.request.id } });
-  t('v46 audit: payment charges the RECOMPUTED $165.00, not the tampered $1', tampPay.status === 200 && stripeState.pis[tampPay.j.paymentIntentId] && stripeState.pis[tampPay.j.paymentIntentId].amount === 16500);
-  const honest = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 165, member: 132, due: 165 } });
-  t('v46 audit: honest totals pass through uncorrected', honest.status === 201 && honest.j.request.menuOrder.totals.due === 165 && !honest.j.request.menuOrder.totalsCorrected);
+  t('v46 audit: payment charges the RECOMPUTED $175.00, not the tampered $1', tampPay.status === 200 && stripeState.pis[tampPay.j.paymentIntentId] && stripeState.pis[tampPay.j.paymentIntentId].amount === 17500);
+  const honest = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 175, member: 140, due: 175 } });
+  t('v46 audit: honest totals pass through uncorrected', honest.status === 201 && honest.j.request.menuOrder.totals.due === 175 && !honest.j.request.menuOrder.totalsCorrected);
   const badSvc = await menuPost(tkG, { serviceId: 'not-a-service', extras: [], asap: false, joinedMembership: false, totals: { list: 1, member: 1, due: 1 } });
   t('v46 audit: unknown service id is rejected (400)', badSvc.status === 400);
   const badAdd = await menuPost(tkG, { serviceId: 'toilet-replacement', extras: [{ id: 'free-stuff', name: 'Free stuff', price: 0 }], asap: false, joinedMembership: false, totals: { list: 250, member: 200, due: 250 } });
@@ -4289,7 +4289,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.21: ghs-app-v80-21)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-21'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.21.1: ghs-app-v80-21-1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-21-1'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6310,6 +6310,23 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   await req2('POST', '/api/stripe/checkout', { token: earlyCust.j.token, body: { kind: 'estimate-hold', requestId: earlyReq.j.request.id } });
   const earlySess = lastSess();
   t('v80.21 hold: a visit hold BEFORE any estimate keeps the success-page return (the estimate page would 404)', !!earlySess && earlySess.successUrl.includes('/payment/success?session_id=') && !earlySess.successUrl.includes('hold=1'));
+}
+// ---------------- v80.21.1 NIVEL 2H PAREJO: the last five 2h services level at $175 ----------------
+// Gabriel 2026-11-01 (after v80.20 shipped): the door could not cost less than the
+// TV when both are 2 h, and leaving the rest at $165 was "$10 on the table" per job —
+// so the whole 2h tier is $175 now. These five were the ONLY 2h services still at
+// $165/$132; battery replacement STAYS $125/$100 (he decided that the same night).
+{
+  const FIVE_2H = ['door-slab-swap', 'screen-door-install', 'pet-door-install', 'fence-picket-repair', 'garbage-disposal-swap'];
+  t('v80.21.1 prices: the five leveled 2h services are $175 / member $140 in the SERVER catalog (and NO service remains at $165/$132 anywhere in it)',
+    FIVE_2H.every(id => serverSrc.includes('"' + id + '":{p:175,m:140')) && !serverSrc.includes('{p:165,m:132'));
+  t('v80.21.1 prices: the five leveled 2h services are $175 / member $140 in the CLIENT catalog (and NO service remains at $165/$132 anywhere in it)',
+    FIVE_2H.every(id => { const i = htmlSrc.indexOf("'" + id + "': {"); return i >= 0 && htmlSrc.slice(i, i + 260).includes('price: 175, member: 140'); }) && !htmlSrc.includes('price: 165, member: 132'));
+  t('v80.21.1 prices: battery replacement STAYS $125 / member $100 in BOTH catalogs (Gabriel, same night — explicitly not leveled)',
+    serverSrc.includes('"battery-replacement":{p:125,m:100') && htmlSrc.includes("'battery-replacement': {") && htmlSrc.slice(htmlSrc.indexOf("'battery-replacement': {"), htmlSrc.indexOf("'battery-replacement': {") + 260).includes('price: 125, member: 100'));
+  t('v80.21.1 prices: the homepage door-slab card + EN/ES home dictionaries carry $175 / Members $140 (no $132 figure survives)',
+    htmlSrc.includes('<div class="name">Door Slab Swap</div><div class="meta">~2 h · + lock install available</div><div class="price">$175</div><div class="mem">Members: $140</div>') &&
+    htmlSrc.includes("mem: 'Members: $140'") && htmlSrc.includes("mem: 'Miembros: $140'") && !htmlSrc.includes('$132'));
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
