@@ -2276,6 +2276,11 @@ en: {
   chgConfirmTitle: 'Confirm your plan change', chgConfirmTpl: 'Switch from {cur} (${curAmt}/mo) to {next} (${nextAmt}/mo)? Stripe prorates the difference — you might see a prorated charge or credit today. Your new plan starts today and renews at ${nextAmt}/mo.', chgYes: 'Yes, change my plan', neverMind: 'Never mind',
   cancelTitle: 'Cancel your membership?', cancelUntilTpl: 'Your {name} stays active until {until}. After that it ends and you won\'t be charged again.', cancelUntilDefault: 'the end of your current paid period', cancelYes: 'Yes, cancel',
   yardNone2: 'No yard visits scheduled yet — the Team schedules your included visits here.', yardNextPre: 'Next yard visit: ', yardAlso: 'Also coming up: ', yardLastDone: 'Last visit done: ', yardPhotoAlt: 'Your yard after the visit', yardLoadErr: 'We could not load your yard visits.',
+  yardStProposed: 'Proposed', yardStScheduled: 'Scheduled', yardStAssigned: 'Technician assigned', yardStOnWay: 'On the way', yardStArrived: 'Arrived', yardStDone: 'Done', yardStCancelled: 'Cancelled',
+  yardTechPre: 'Your technician: ', yardTechNone: 'The Team will assign your technician soon.', yardPrepPre: 'Prep notes: ',
+  yardHelpBtn: 'Reschedule or get help', yardAskDateLbl: 'Move this visit to', yardAskNoteLbl: 'Note for the Team (optional)', yardAskNotePh: 'Gate open, dogs inside…',
+  yardAskNote: 'The Team confirms every change — nothing moves until they confirm it.', yardAskSend: 'Ask the Team', yardAskSent: 'Sent — the Team has your request.', yardAskErr: 'Pick a valid date.',
+  yardAskPendingPre: 'You asked to move this visit to ', yardAskPendingTail: ' — waiting for the Team to confirm.', yardAskCancel: 'Cancel request',
   invDue: 'Due ', invViewPay: 'View & pay invoice', invView: 'View invoice', invNone: 'No invoices yet.', invLoadErr2: 'We could not load your invoices.',
   invSt_draft: 'draft', invSt_sent: 'sent', invSt_paid: 'paid', invSt_overdue: 'overdue', invSt_cancelled: 'cancelled',
   propTitle: '📩 Proposals from the Team', propCartWord: 'Cart ', propEstimateWord: 'Estimate', propTotalWord: ' · Total ', propBookedTag: 'Booked — deposit paid', propSavedTag: ' · 💾 Saved for later',
@@ -2398,6 +2403,11 @@ es: {
   chgConfirmTitle: 'Confirma tu cambio de plan', chgConfirmTpl: '¿Cambiar de {cur} (${curAmt}/mes) a {next} (${nextAmt}/mes)? Stripe prorratea la diferencia — hoy podrías ver un cargo o crédito prorrateado. Tu plan nuevo empieza hoy y se renueva a ${nextAmt}/mes.', chgYes: 'Sí, cambiar mi plan', neverMind: 'Mejor no',
   cancelTitle: '¿Cancelar tu membresía?', cancelUntilTpl: 'Tu {name} sigue activa hasta el {until}. Después termina y no se te cobra más.', cancelUntilDefault: 'el fin de tu periodo pagado actual', cancelYes: 'Sí, cancelar',
   yardNone2: 'Todavía no hay visitas de yarda agendadas — el Team agenda tus visitas incluidas aquí.', yardNextPre: 'Próxima visita de yarda: ', yardAlso: 'También vienen: ', yardLastDone: 'Última visita hecha: ', yardPhotoAlt: 'Tu yarda después de la visita', yardLoadErr: 'No pudimos cargar tus visitas de yarda.',
+  yardStProposed: 'Propuesta', yardStScheduled: 'Agendada', yardStAssigned: 'Técnico asignado', yardStOnWay: 'En camino', yardStArrived: 'Llegó', yardStDone: 'Hecha', yardStCancelled: 'Cancelada',
+  yardTechPre: 'Tu técnico: ', yardTechNone: 'El Team asignará a tu técnico pronto.', yardPrepPre: 'Notas de preparación: ',
+  yardHelpBtn: 'Reagendar o pedir ayuda', yardAskDateLbl: 'Mover esta visita al', yardAskNoteLbl: 'Nota para el Team (opcional)', yardAskNotePh: 'Puerta abierta, perros adentro…',
+  yardAskNote: 'El Team confirma cada cambio — nada se mueve hasta que lo confirmen.', yardAskSend: 'Pedir al Team', yardAskSent: 'Enviado — el Team ya tiene tu petición.', yardAskErr: 'Elige una fecha válida.',
+  yardAskPendingPre: 'Pediste mover esta visita al ', yardAskPendingTail: ' — esperando la confirmación del Team.', yardAskCancel: 'Cancelar petición',
   invDue: 'Vence ', invViewPay: 'Ver y pagar factura', invView: 'Ver factura', invNone: 'Todavía no tienes facturas.', invLoadErr2: 'No pudimos cargar tus facturas.',
   invSt_draft: 'borrador', invSt_sent: 'enviada', invSt_paid: 'pagada', invSt_overdue: 'vencida', invSt_cancelled: 'cancelada',
   propTitle: '📩 Propuestas del Team', propCartWord: 'Carrito ', propEstimateWord: 'Estimado', propTotalWord: ' · Total ', propBookedTag: 'Apartado — depósito pagado', propSavedTag: ' · 💾 Guardada para después',
@@ -3165,7 +3175,7 @@ async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e)
   if (!me && window.__ghsBootBounce) { window.__ghsBootBounce = false; try { localStorage.removeItem('ghs_entry'); } catch (e) {} if (location.hash === '#worker') location.hash = ''; }
   render(); }
 let notifs=[]; let lastUnread=-1;
-async function loadNotifs(){ if(!me) return; refreshPermCard(); maybeSubscribePush(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
+async function loadNotifs(){ if(!me) return; refreshPermCard(); maybeSubscribePush(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ var fn26 = new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png', tag: notifs[0].type || undefined }); fn26.onclick = function(){ try{ window.focus(); }catch(e){} var tg26 = notifTargetFor(notifs[0]); if (tg26) notifGo(tg26); }; }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
 function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">' + CU('notifTitle') + '</h3>'+(notifs.length?notifs.map(function(n){
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
@@ -3180,11 +3190,50 @@ function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerH
 // v80 P1-4: resolve a notification's target for THIS session. Worker
 // sessions are NEVER routed to a customer surface (v79 frontier): a
 // customer-side target in a worker's bell falls back to #worker.
+// v80.26: the destination is STRUCTURED (targetType + targetId, stored
+// server-side from the one route map). Resolution prefers the structured
+// fields, falls back to the stored route string, then to the legacy
+// invoice-link-in-text. An unknown type, a malformed id or a destination
+// for another role resolves to '' — the row renders PLAIN, never a dead
+// tap. The same resolver feeds the bell, the foreground browser
+// Notification and (mirrored in sw.js) the Web Push click.
+var NOTIF_ROUTES = {
+  request: function(id){ return '#req=' + id; }, job: function(id){ return '#job=' + id; },
+  workerJob: function(id){ return '#wjob=' + id; }, yardVisit: function(id){ return '#yard=' + id; },
+  workerYardVisit: function(id){ return '#wyard=' + id; }, invoice: function(id){ return '/invoice/' + id; },
+  estimate: function(id){ return '/estimate/' + id; }, cart: function(id){ return '/cart/' + id; },
+  membership: function(){ return '#memberships'; }, worker: function(){ return '#worker'; },
+  adminYard: function(){ return '#yard-calendar'; }
+};
+var NOTIF_ID_TYPES = { request: 1, job: 1, workerJob: 1, yardVisit: 1, workerYardVisit: 1, invoice: 1, estimate: 1, cart: 1 };
+var NOTIF_CUSTOMER_TYPES = { request: 1, job: 1, invoice: 1, estimate: 1, cart: 1, yardVisit: 1, membership: 1 };
+var NOTIF_WORKER_TYPES = { workerJob: 1, workerYardVisit: 1, worker: 1 };
+function notifTypeOfRoute(t){
+  var m = String(t || '').match(/^#(req|job|wjob|yard|wyard)=/);
+  if (m) return { req: 'request', job: 'job', wjob: 'workerJob', yard: 'yardVisit', wyard: 'workerYardVisit' }[m[1]];
+  if (String(t || '').indexOf('/invoice/') === 0) return 'invoice';
+  if (String(t || '').indexOf('/estimate/') === 0) return 'estimate';
+  if (String(t || '').indexOf('/cart/') === 0) return 'cart';
+  if (t === '#memberships') return 'membership';
+  if (t === '#worker') return 'worker';
+  if (t === '#yard-calendar') return 'adminYard';
+  return '';
+}
 function notifTargetFor(n){
-  var t = (n && n.target) || '';
-  if (!t) { var m = String((n && n.text) || '').match(/\/invoice\/([\w-]+)/); return m ? '/invoice/' + m[1] : ''; }
-  if (me && me.role === 'worker' && (t.indexOf('#req=') === 0 || t.indexOf('#job=') === 0 || t.indexOf('/cart/') === 0 || t.indexOf('/estimate/') === 0 || t === '#memberships')) return '#worker';
-  return t;
+  var route = '', type = '';
+  if (n && n.targetType && NOTIF_ROUTES[n.targetType] && (!NOTIF_ID_TYPES[n.targetType] || /^[\w-]+$/.test(String(n.targetId || '')))) {
+    route = NOTIF_ROUTES[n.targetType](String(n.targetId || '')); type = n.targetType;
+  }
+  if (!route) {
+    var t = (n && n.target) || '';
+    if (t) { route = t; type = notifTypeOfRoute(t); }
+    else { var m = String((n && n.text) || '').match(/\/invoice\/([\w-]+)/); if (m) { route = '/invoice/' + m[1]; type = 'invoice'; } }
+  }
+  if (!route) return '';
+  if (me && me.role === 'worker' && NOTIF_CUSTOMER_TYPES[type]) return '#worker';
+  if (me && me.role === 'customer' && NOTIF_WORKER_TYPES[type]) return '';
+  if (type === 'adminYard' && !(me && me.role === 'admin')) return '';
+  return route;
 }
 function notifGo(t){
   if (!t) return;
@@ -3192,30 +3241,33 @@ function notifGo(t){
   if (t.charAt(0) === '/') { location.href = t; return; }
   if (location.hash === t) { routeNotifHash(); return; }
   location.hash = t; // hashchange -> routeNotifHash (deep hashes) or render (plain routes)
-  if (t === '#worker' || t === '#memberships') render();
+  if (t === '#worker' || t === '#memberships' || t === '#yard-calendar') render();
 }
-// Deep notification hashes (#req= / #job= / #wjob=) are not routes of
-// their own: they land on the owner view and FOCUS the exact card.
+// Deep notification hashes (#req= / #job= / #wjob= / #yard= / #wyard=)
+// are not routes of their own: they land on the owner view and FOCUS
+// the exact card. A card that never renders (the object is gone) just
+// leaves the owner on their view — the focus gives up quietly.
 function routeNotifHash(){
   var h = location.hash || '';
-  var m = h.match(/^#(req|job|wjob)=([\w-]+)$/);
+  var m = h.match(/^#(req|job|wjob|yard|wyard)=([\w-]+)$/);
   if (!m) return false;
-  var elId = (m[1] === 'req' ? 'reqcard-' : m[1] === 'job' ? 'jobcard-' : 'wjobcard-') + m[2];
-  try { history.replaceState(null, '', location.pathname + location.search + (m[1] === 'wjob' ? '#worker' : '')); } catch (e) { if (m[1] === 'wjob') location.hash = '#worker'; }
+  var conf = { req: ['reqcard-', ''], job: ['jobcard-', ''], wjob: ['wjobcard-', '#worker'], yard: ['yardcard-', '#memberships'], wyard: ['wyardcard-', '#worker'] }[m[1]];
+  var elId = conf[0] + m[2];
+  try { history.replaceState(null, '', location.pathname + location.search + conf[1]); } catch (e) { if (conf[1]) location.hash = conf[1]; }
   render();
-  focusCardWhenReady(elId);
+  focusCardWhenReady(elId, m[1] === 'yard' ? 'myYardVisits' : (m[1] === 'wyard' ? 'workerYardVisits' : ''));
   // v80.16: a worker's job notification opens the job DETAIL, not just
   // the board — seeing the card flash was the "cannot open the job"
   // complaint (Ri Chen). The fetch enforces the same access rules.
   if (m[1] === 'wjob' && me && me.role === 'worker') { try { openJobDetail(m[2]); } catch (e) {} }
   return true;
 }
-function focusCardWhenReady(elId){
+function focusCardWhenReady(elId, fallbackId){
   var tries = 0;
   var iv = setInterval(function(){
     var el = document.getElementById(elId);
     if (el) { clearInterval(iv); try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} el.classList.add('flash'); setTimeout(function(){ el.classList.remove('flash'); }, 2600); }
-    else if (++tries > 24) clearInterval(iv);
+    else if (++tries > 24) { clearInterval(iv); if (fallbackId) focusCardWhenReady(fallbackId, ''); }
   }, 250);
 }
 async function toggleNotifs(){ const p=document.getElementById('notifPanel'); const open=p.style.display==='block'; p.style.display=open?'none':'block'; if(!open){ renderNotifs(); try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); setTimeout(loadNotifs,600); }catch(e){} } }
@@ -5228,6 +5280,7 @@ function renderYcDay(){
       '</div>'+
       (v.source==='auto'?'<div class="mut" style="margin-top:4px">Auto-generated from the membership'+(v.planKey?' ('+escHtml(v.planKey)+(v.period?' • '+escHtml(v.period):'')+')':'')+' — confirm the date with the member.</div>':'')+
       (v.plan&&v.plan.status!=='active'?'<div style="margin-top:4px;color:#b26a00"><b>⚠ Membership '+escHtml(v.plan.status)+'</b> — this proposal stays here for your review.</div>':'')+
+      (v.rescheduleAsk?'<div style="margin-top:4px;color:#b26a00"><b>⚠ Member asked to move this visit to '+escHtml(v.rescheduleAsk.date)+'</b>'+(v.rescheduleAsk.note?' — '+escHtml(v.rescheduleAsk.note):'')+' · Reschedule above to answer it.</div>':'')+
       ((v.beforePhoto||v.afterPhoto)?'<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>':'')+
       (v.status==='done'?'<div class="mut" style="margin-top:4px">Completed '+(v.completedAt?escHtml(v.completedAt.slice(0,10)):'')+(v.workerPay?' • Worker pay: $'+v.workerPay+' (internal)':'')+'</div>':'')+
       '</div>';
@@ -5322,18 +5375,77 @@ async function loadMyYardVisits(){
   if(!el.innerHTML) el.innerHTML=listLoadingHtml();
   let d=null;
   try{ d=await api('/api/me/yard-visits'); }catch(e){ el.innerHTML=listErrorHtml('loadMyYardVisits()', CU('yardLoadErr')); return; }
-  {
-    const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
-    const upcoming=(d.visits||[]).filter(function(v){ return ['scheduled','assigned','on_the_way','arrived'].includes(v.status) && v.date>=tkey; });
-    let h='';
-    if(!upcoming.length){ h='<span class="mut">' + CU('yardNone2') + '</span>'; }
-    else { h='<b>' + CU('yardNextPre') + escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">' + CU('yardAlso') + upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':''); }
-    // v25 (B1): proof of service — the last completed visit + its AFTER photo.
-    if (d.lastCompleted) {
-      h+='<div style="margin-top:8px"><b>' + CU('yardLastDone') + escHtml(d.lastCompleted.date)+'</b>'+(d.lastCompleted.afterPhoto?'<div class="photos"><img class="thumb" src="'+d.lastCompleted.afterPhoto+'" alt="' + CU('yardPhotoAlt') + '"></div>':'')+'</div>';
-    }
-    el.innerHTML=h;
+  el.innerHTML = yardCardHtml(d || {});
+}
+// v80.26 (audit P1-13): the yard card as a real route card — the next
+// visit with its date, its status (label + step timeline), the assigned
+// technician when there is one, the visit's prep notes, a one-tap
+// reschedule/help path, and the last completed visit with its AFTER
+// photo as proof. Yard visits carry no time-of-day window in the data
+// (date-only records), so the card leads with the date + status.
+function yardStatusLabel(st){
+  var k = { proposed: 'yardStProposed', scheduled: 'yardStScheduled', assigned: 'yardStAssigned', on_the_way: 'yardStOnWay', arrived: 'yardStArrived', done: 'yardStDone', cancelled: 'yardStCancelled' }[st];
+  return k ? CU(k) : (st || '');
+}
+function yardStepsHtml(st){
+  var order = ['scheduled', 'assigned', 'on_the_way', 'arrived', 'done'];
+  var idx = order.indexOf(st);
+  if (idx < 0) return '';
+  var labels = [CU('yardStScheduled'), CU('yardStAssigned'), CU('yardStOnWay'), CU('yardStArrived'), CU('yardStDone')];
+  return '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:6px">' + labels.map(function(l, i){
+    var sty = i < idx ? 'background:#2fbf71;color:#fff;border-color:#2fbf71' : (i === idx ? 'background:#e42535;color:#fff;border-color:#e42535' : '');
+    return '<span class="pill" style="' + sty + '">' + (i < idx ? '✓ ' : '') + escHtml(l) + '</span>';
+  }).join('<span style="color:#999">→</span>') + '</div>';
+}
+function yardAskHtml(v){
+  var h = '';
+  if (v.rescheduleAsk && v.rescheduleAsk.date) {
+    h += '<div style="margin-top:8px"><span class="pill">📅 ' + CU('yardAskPendingPre') + escHtml(v.rescheduleAsk.date) + CU('yardAskPendingTail') + '</span> <button class="ghost" onclick="yardAskCancel(\'' + v.id + '\')">' + CU('yardAskCancel') + '</button></div>';
   }
+  h += '<div style="margin-top:8px"><button class="ghost" onclick="yardAskToggle(\'' + v.id + '\')">' + CU('yardHelpBtn') + '</button>'
+    + '<div id="yardAsk-' + v.id + '" style="display:none;margin-top:8px">'
+    + '<label>' + CU('yardAskDateLbl') + '</label><input type="date" id="yardAskDate-' + v.id + '" value="' + escHtml(v.date) + '">'
+    + '<label>' + CU('yardAskNoteLbl') + '</label><input id="yardAskNote-' + v.id + '" placeholder="' + CU('yardAskNotePh') + '">'
+    + '<div class="mut" style="margin:4px 0">' + CU('yardAskNote') + '</div>'
+    + '<button onclick="yardAskSend(\'' + v.id + '\')">' + CU('yardAskSend') + '</button> <span id="yardAskMsg-' + v.id + '" class="mut"></span>'
+    + '</div></div>';
+  return h;
+}
+function yardCardHtml(d){
+  const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  const upcoming=(d.visits||[]).filter(function(v){ return ['proposed','scheduled','assigned','on_the_way','arrived'].includes(v.status) && v.date>=tkey; });
+  let h='';
+  if(!upcoming.length){ h='<span class="mut">' + CU('yardNone2') + '</span>'; }
+  else {
+    const v=upcoming[0];
+    h='<div id="yardcard-' + v.id + '"><b>' + CU('yardNextPre') + escHtml(v.date) + '</b> <span class="pill">' + escHtml(yardStatusLabel(v.status)) + '</span>'
+      + yardStepsHtml(v.status)
+      + '<div style="margin-top:6px">' + (v.assignedWorkerName ? CU('yardTechPre') + '<b>' + escHtml(v.assignedWorkerName) + '</b>' : '<span class="mut">' + CU('yardTechNone') + '</span>') + '</div>'
+      + (v.notes ? '<div class="mut" style="margin-top:4px">' + CU('yardPrepPre') + escHtml(v.notes) + '</div>' : '')
+      + yardAskHtml(v)
+      + '</div>'
+      + (upcoming.length>1 ? '<div class="mut" style="margin-top:6px">' + CU('yardAlso') + upcoming.slice(1,4).map(function(x){ return escHtml(x.date) + ' (' + escHtml(yardStatusLabel(x.status)) + ')'; }).join(' • ') + '</div>' : '');
+  }
+  // v25 (B1): proof of service — the last completed visit + its AFTER photo.
+  if (d.lastCompleted) {
+    const lc=d.lastCompleted;
+    h+='<div id="yardcard-' + lc.id + '" style="margin-top:8px"><b>' + CU('yardLastDone') + escHtml(lc.date) + '</b> <span class="pill">' + escHtml(yardStatusLabel('done')) + '</span>'
+      + (lc.assignedWorkerName ? '<div class="mut" style="margin-top:2px">' + CU('yardTechPre') + escHtml(lc.assignedWorkerName) + '</div>' : '')
+      + (lc.afterPhoto ? '<div class="photos"><img class="thumb" src="' + lc.afterPhoto + '" alt="' + CU('yardPhotoAlt') + '"></div>' : '') + '</div>';
+  }
+  return h;
+}
+function yardAskToggle(idv){ const p=document.getElementById('yardAsk-'+idv); if(p) p.style.display = p.style.display==='none' ? 'block' : 'none'; }
+async function yardAskSend(idv){
+  const dateEl=document.getElementById('yardAskDate-'+idv), noteEl=document.getElementById('yardAskNote-'+idv), msg=document.getElementById('yardAskMsg-'+idv);
+  const date=dateEl?dateEl.value:'';
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){ if(msg) msg.textContent=CU('yardAskErr'); return; }
+  try{ await api('/api/me/yard-visits/'+idv+'/reschedule',{method:'POST', body:JSON.stringify({date:date, note:noteEl?noteEl.value:''})}); if(msg) msg.textContent=CU('yardAskSent'); loadMyYardVisits(); }
+  catch(e){ if(msg) msg.textContent=e.message; }
+}
+async function yardAskCancel(idv){
+  try{ await api('/api/me/yard-visits/'+idv+'/reschedule',{method:'POST', body:JSON.stringify({clear:true})}); loadMyYardVisits(); }
+  catch(e){ alert(e.message); }
 }
 // ---------- Worker yard visits (v25, B1) ----------
 // ---------- Captain view: Mi área / My area (v40) ----------
@@ -5372,7 +5484,7 @@ async function loadWorkerYardVisits(){
     if (sndSeen.yardVisits===null) sndSeen.yardVisits=seen;
     el.innerHTML = visits.length ? visits.map(function(v){
       const canPhoto = v.status!=='done';
-      let h='<div class="card"><b>'+escHtml(v.date)+'</b> — '+escHtml(v.planName||'Yard visit')+' <span class="pill">'+escHtml(v.status)+'</span><br>'+
+      let h='<div class="card" id="wyardcard-'+v.id+'"><b>'+escHtml(v.date)+'</b> — '+escHtml(v.planName||'Yard visit')+' <span class="pill">'+escHtml(v.status)+'</span><br>'+
         '<b>'+WT('addressLabel')+'</b> '+escHtml(v.address||'—')+(v.yardSize?'<br><span class="mut">'+WT('yardLabel')+' '+escHtml(v.yardSize)+'</span>':'')+(v.homeNotes?'<br><span class="mut">'+WT('homeNotesLabel')+' '+escHtml(v.homeNotes)+'</span>':'')+(v.notes?'<br><span class="mut">'+WT('teamNotesLabel')+' '+escHtml(v.notes)+'</span>':'');
       if (v.beforePhoto||v.afterPhoto) h+='<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>';
       if (canPhoto) h+='<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:130px">'+WT('beforePhoto')+'<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'beforePhoto\',this)"></label><label style="flex:1;min-width:130px">'+WT('afterPhoto')+'<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'afterPhoto\',this)"></label></div>';
