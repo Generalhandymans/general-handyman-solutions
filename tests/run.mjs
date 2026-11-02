@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-18', swSrc.includes("const CACHE = 'ghs-app-v80-18'"));
+t('static: SW cache is ghs-app-v80-19', swSrc.includes("const CACHE = 'ghs-app-v80-19'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -60,7 +60,7 @@ t('static v24: server sanitizes + stashes campaign source', serverSrc.includes('
 t('static v24: source promoted at activation in both activators + checkout webhook branch', (serverSrc.match(/applySourceAtActivation\(u\)/g) || []).length >= 3);
 t('static v24: admin customers API exposes source', serverSrc.includes('source: u.source || null'));
 t('static v24: subscribe endpoints stash the source', serverSrc.includes('stashPendingSource(user, b.source)') && serverSrc.includes('stashPendingSource(user, b && b.source)'));
-t('static v24: receipt email wired at capture with claim flag', serverSrc.includes('captureReceiptSentAt') && serverSrc.includes("subject: 'Your receipt — General Handyman Solutions'"));
+t('static v24: receipt email wired at capture with claim flag (v80.19: the subject is picked from the request language — ES or EN literal)', serverSrc.includes('captureReceiptSentAt') && serverSrc.includes("? 'Tu recibo — General Handyman Solutions' : 'Your receipt — General Handyman Solutions'"));
 t('static v24: silent jobs gate the broadcast fan-out', serverSrc.includes('const silent = !!(b.silent && assignedWorkerId)') && serverSrc.includes('emitJobNew(j, assignedWorkerId)'));
 t('static v24: contact pill markup with Team tel/sms hrefs', htmlSrc.includes('id="teamContactPill"') && htmlSrc.includes('href="tel:+17078623773"') && htmlSrc.includes('href="sms:+17078623773"'));
 t('static v24: render paints the contact pill (v80.12: the view beacon fires first)', htmlSrc.includes('function render(){\n  trackRouteView812(); // v80.12: aggregate view beacon (no-op off the storefront)\n  updateContactPill();'));
@@ -76,7 +76,7 @@ t('static v80.6 (S-2): the dead sendQuote wrapper (zero callers) is REMOVED', !h
 t('static v24: admin member info shows the source (vía / orgánico)', htmlSrc.includes("'vía '") && htmlSrc.includes('orgánico'));
 
 // ---- v42 statics: Solicitud Profesional wizard + in-app menu ----
-t('static v42: wizard markup present (card, 4 steps, progress bar, done panel)', htmlSrc.includes('id="wizardCard"') && htmlSrc.includes('id="wzStep1"') && htmlSrc.includes('id="wzStep2"') && htmlSrc.includes('id="wzStep3"') && htmlSrc.includes('id="wzStep4"') && htmlSrc.includes('id="wzBarFill"') && htmlSrc.includes('id="wzDone"') && htmlSrc.includes('Paso 1 de 4'));
+t('static v42: wizard markup present (card, 4 steps, progress bar, done panel)', htmlSrc.includes('id="wizardCard"') && htmlSrc.includes('id="wzStep1"') && htmlSrc.includes('id="wzStep2"') && htmlSrc.includes('id="wzStep3"') && htmlSrc.includes('id="wzStep4"') && htmlSrc.includes('id="wzBarFill"') && htmlSrc.includes('id="wzDone"') && htmlSrc.includes('id="wzStepLabel"') && htmlSrc.includes("wzStepOfTpl: 'Step {n} of 4'") && htmlSrc.includes("wzStepOfTpl: 'Paso {n} de 4'")); // v80.19: the label text lives in the dictionary now (was the bilingual static 'Paso 1 de 4 · Step 1 of 4')
 t('static v42: in-app menu section + persistent Menú nav entry present', htmlSrc.includes('id="menuBox"') && htmlSrc.includes('id="menuGroups"') && htmlSrc.includes('id="menuNavLink"') && htmlSrc.includes('onclick="goMenu();return false;"'));
 const custBlock42 = htmlSrc.slice(htmlSrc.indexOf('id="customerBox"'), htmlSrc.indexOf('id="workerBox"'));
 t('static v42: wizard reuses the legacy request fields (exactly one of each in the customer section)', ['cService', 'rDesc', 'rPhotos', 'cEst', 'cCity', 'rAddr', 'cWhen', 'rDate', 'anonContact', 'rName', 'rEmail', 'rPhone', 'cMember', 'cAck', 'cSendBtn'].every(id => (custBlock42.match(new RegExp('id="' + id + '"', 'g')) || []).length === 1));
@@ -1168,9 +1168,12 @@ t('v71 worker i18n: switching to EN re-renders the hint in English + persists gh
 run("setWorkerLang('es');");
 t('v71 worker i18n: switching back restores Spanish everywhere (hint, dict, toggle)', (elById.get('authHint').innerHTML || '').includes('jales abiertos') && run("localStorage.getItem('ghsWorkerLang')") === 'es' && run("WT('tradesTitle')") === 'Mis oficios' && run("WT('moneyTitle')") === 'Mi dinero');
 run("location.hash = '';"); run('applyWorkerEntry();'); run('render();');
+t('v80.19 toggle: ONE switch — flipping the worker toggle flips the menu language too (and back)', run("menuLang()") === 'es' && run("localStorage.getItem('ghsMenuLang')") === 'es' && (run("setWorkerLang('en'); menuLang();") === 'en') && run("localStorage.getItem('ghsMenuLang')") === 'en');
+run("setWorkerLang('es');"); // restore the state the following blocks were written against
 
 // ---------------- v42 client: Solicitud Profesional wizard + in-app menu ----------------
 run("location.hash = ''; me = null;"); run('applyWorkerEntry();'); run('render();');
+run("setMenuLang('en');"); // v80.19: the EN|ES toggle is ONE switch now — the v71 block above leaves the whole app in ES; the v42 assertions below are written for EN mode
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
@@ -1180,7 +1183,7 @@ t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the 
 t('v42 menu: EVERY card shows a member price — the discount is universal (104 of 104 since the v80.9 Popular row)', (menuHtml42.match(/Members \$/g) || []).length === 104);
 // wizard navigation + progress
 run('wzGo(2);');
-t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label Paso 2 de 4', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Paso 2 de 4'));
+t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label shows step 2 of 4 (v80.19: single-language label — EN here; was the bilingual composite)', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Step 2 of 4'));
 run('wzGo(1);');
 // category pick: fixed-price panel + guided hints
 run("wzPickCat('plumbing');");
@@ -1771,7 +1774,7 @@ t('static v28: acabados layer carries the design tokens', htmlSrc.includes('v28 
 t('static v28: plan toggle cards conformed to the dark standard', htmlSrc.includes('.plan-card{background:var(--panel);border:2px solid var(--red)') && htmlSrc.includes('.plan-card .plan-price{font-size:37px;color:var(--red)') && htmlSrc.includes('.plan-card>button{width:100%;border-radius:10px'));
 t('static v28: dark panel utilities + payment panel + designed empty states exist', htmlSrc.includes('.panel-dark{background:var(--panel)') && htmlSrc.includes('.pay-panel{') && htmlSrc.includes('.empty{border:1.5px dashed var(--field-line)'));
 t('static v28: membership status cards use the dark panels', htmlSrc.includes('class="card panel-dark panel-green"') && htmlSrc.includes('class=\"card panel-dark\"'));
-t('static v28: empty states wrapped in .empty blocks, same words', ['No invoices yet.','No requests yet.','No notifications yet.','No workers yet.','No jobs yet.'].every(w => htmlSrc.includes('<div class="empty"><p class="mut">' + w + '</p></div>')) && htmlSrc.includes("'<div class=\"empty\"><p class=\"mut\">'+WT('yardNone')+'</p></div>'"));
+t('static v28: empty states wrapped in .empty blocks, same words (v80.19: the customer words live in CUST_UI — invNone/reqNone/notifEmpty — and the surfaces compose them; workers/jobs literals untouched)', ['invNone','reqNone','notifEmpty'].every(k => htmlSrc.includes(k + ": 'No ")) && htmlSrc.includes("CU('invNone')") && htmlSrc.includes("CU('reqNone')") && htmlSrc.includes("CU('notifEmpty')") && htmlSrc.includes('<div class="empty"><p class="mut">No workers yet.</p></div>') && htmlSrc.includes('<div class="empty"><p class="mut">No jobs yet.</p></div>') && htmlSrc.includes("'<div class=\"empty\"><p class=\"mut\">'+WT('yardNone')+'</p></div>'"));
 t('static v27→v80.11: share panel has one red Copy control for each of the 5 join links (v80.11 item 7: APEX domain — the ONE DOMAIN law)', ['homecare', 'yard1', 'yard2', 'plus1', 'plus2'].every(k => htmlSrc.includes("copyShareLink('https://generalhandymans.app/#join-" + k + "', this)")) && (htmlSrc.match(/class="share-copy"/g) || []).length === 5);
 t('static v27: no raw signup URL sprawled as visible text, no old ghost copy buttons remain', !htmlSrc.includes('>https://app.generalhandymans.app/#join-') && !htmlSrc.includes('class="copy-link"') && !htmlSrc.includes('Copy signup link'));
 t('static v27: share panel rows name the plan + price', htmlSrc.includes('HomeCare — $29/mo') && htmlSrc.includes('Yard Care — 1 visit · $75/mo') && htmlSrc.includes('Yard Care — 2 visits · $150/mo') && htmlSrc.includes('HomeCare Plus — 1 yard visit · $100/mo') && htmlSrc.includes('HomeCare Plus — 2 yard visits · $175/mo'));
@@ -4102,7 +4105,7 @@ t('static v80-3: honest async states — the shared loading/error pattern serves
 t('static v80-4: hosted checkout always carries an explicit locale + localized custom_text (never auto)', serverSrc.includes('function checkoutLang(opts)') && serverSrc.includes('params.locale = coLang') && serverSrc.includes("custom_text[submit][message]") && serverSrc.includes('Tu primer mes es GRATIS') && serverSrc.includes('retención de autorización'));
 t('static v80-5: wzFee has NO ASAP uplift left (no when-read, no 1.25) — the fee is flat 75/50/0', (() => { const s0 = htmlSrc.indexOf('function wzFee()'); const s = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return !s.includes('1.25') && !s.includes('cWhen') && s.includes('due: base'); })());
 t('static v80-6: recovery plumbing exists and the whole recovery section NEVER sends mail or fires automations (STOP TOTAL)', serverSrc.includes("p === '/api/cart/save-recovery'") && serverSrc.includes("p === '/api/me/recoverable-cart'") && serverSrc.includes('function upsertRecoverableCart(') && (() => { const segA = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7: recoverable-cart store'), serverSrc.indexOf('// Recorder for a landed DEPOSIT')); const segB = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7 PLUMBING ONLY'), serverSrc.indexOf('// ---------- v78: guest cart + EMBEDDED checkout')); const seg = segA + segB; return segA.length > 500 && segB.length > 500 && !seg.includes('sendMail(') && !seg.includes('fireAutomation(') && !seg.includes('setInterval('); })());
-t('static v80-7B: the cart loads Stripe.js through the resilient injector and reserves the house message for a genuinely unconfigured server', htmlSrc.includes('function loadStripeJsOnce(') && htmlSrc.includes('https://js.stripe.com/v3/') && htmlSrc.includes("cartStripeState = 'unconfigured'") && htmlSrc.includes('function cartRetryStripe()') && htmlSrc.includes('Loading secure payment… · Cargando pago seguro…'));
+t('static v80-7B: the cart loads Stripe.js through the resilient injector and reserves the house message for a genuinely unconfigured server', htmlSrc.includes('function loadStripeJsOnce(') && htmlSrc.includes('https://js.stripe.com/v3/') && htmlSrc.includes("cartStripeState = 'unconfigured'") && htmlSrc.includes('function cartRetryStripe()') && htmlSrc.includes("cartPayLoading: '⏳ Loading secure payment…'") && htmlSrc.includes("cartPayLoading: '⏳ Cargando pago seguro…'") && htmlSrc.includes("CU('cartPayLoading')"));
 {
   const A80 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
 
@@ -4280,7 +4283,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.18: ghs-app-v80-18)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-18'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.19: ghs-app-v80-19)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-19'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4924,7 +4927,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('static v80.8 admin: permCard + delete-account panel are suppressed for the admin role', htmlSrc.includes("me.role === 'admin') { card.style.display = 'none'; return; }") && htmlSrc.slice(htmlSrc.indexOf('function paintDeleteAccount()'), htmlSrc.indexOf('function showDeleteAccount(')).includes("me.role === 'admin'"));
   const map808 = htmlSrc.slice(htmlSrc.indexOf('async function loadAdminMap('), htmlSrc.indexOf('// ---------- Admin captains (v40) ----------'));
   const shell808 = map808.slice(0, map808.indexOf('adminMapLoading = true;'));
-  t('static v80.8 map: shell paints immediately (heading + loading note, NO map element) + the two reads run in parallel', shell808.includes('Cargando mapa… / Loading map…') && !shell808.includes('id="adminMap"') && map808.includes('Promise.all(['));
+  t('static v80.8 map: shell paints immediately (heading + loading note, NO map element) + the two reads run in parallel', shell808.includes("CU('mapLoading')") && htmlSrc.includes("mapLoading: 'Cargando mapa…'") && htmlSrc.includes("mapLoading: 'Loading map…'") && !shell808.includes('id="adminMap"') && map808.includes('Promise.all(['));
   const trk808 = htmlSrc.slice(htmlSrc.indexOf('function buildTrackMap('), htmlSrc.indexOf('function initTrackMaps('));
   t('static v80.8 map: the per-job tracking map re-measures (invalidateSize now + delayed)', (trk808.match(/invalidateSize\(\)/g) || []).length >= 2 && trk808.includes('}, 400);'));
 
@@ -5067,7 +5070,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('static v80.10 audit: footer bottom padding clears the fixed contact pill',
     htmlSrc.includes('#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 118px'));
   t('static v80.10.1: join/auth notes are single text nodes (the v80.10 inside-<b> spacing still extracted fused — "JoiningHomeCare Plus… charged$100" in the live bug-check — so the templates dropped their inline tags; wording unchanged)',
-    htmlSrc.includes("'Joining ' + info.name + ' — your card will be charged $'") && htmlSrc.includes("'/mo total. Your card will be charged $'") && !htmlSrc.includes('Joining<b>') && !htmlSrc.includes('charged<b>') && !htmlSrc.includes('is<b> FREE'));
+    htmlSrc.includes('— your card will be charged ${amt} today') && htmlSrc.includes("? 'joinNoteFreeTpl' : 'joinNotePaidTpl'") && !htmlSrc.includes('Joining<b>') && !htmlSrc.includes('charged<b>') && !htmlSrc.includes('is<b> FREE'));
   t('static v80.10.1 FULL PAGE: #oldhome breaks out of the .wrap shell (100vw + centered negative margin) so the restored page is full-bleed again; the horizontal-overflow guard applies only while the customer home is the shown view',
     htmlSrc.includes('width:100vw; margin-left:calc(50% - 50vw);') && htmlSrc.includes('body:has(#customerBox[style*="display: block"]){overflow-x:hidden; overflow-x:clip;}'));
   t('static v80.10.1: the chips bar sticks flush to the viewport top (the app header is NOT sticky; the 118px offset belonged to the fragment\u2019s removed topbar) and anchor targets clear the stuck bar',
@@ -6005,6 +6008,130 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     mi818.status === 200 && String(mi818.headers.get('content-type') || '').includes('image/webp') &&
     (await mi818.arrayBuffer()).byteLength < 40000);
 }
+
+
+// ---------------- v80.19 IDIOMA (app5) ----------------
+// One language at a time, everywhere: the EN|ES toggle rules the whole
+// app (CUST_UI joins MENU_UI/HOME_UI/W_I18N/JOIN_PROMO on the client),
+// the choice persists on the account (u.lang via POST /api/me/lang and
+// the signup stamp), and server emails follow the recipient's saved
+// preference — with the bilingual single email kept ONLY when there
+// is no signal at all.
+function dictOf819(name) {
+  const marker = 'const ' + name + ' = {';
+  const i = htmlSrc.indexOf(marker);
+  if (i < 0) return null;
+  let depth = 0, inStr = null, esc = false;
+  const start = i + marker.length - 1;
+  for (let k = start; k < htmlSrc.length; k++) {
+    const c = htmlSrc[k];
+    if (inStr) { if (esc) esc = false; else if (c === '\\') esc = true; else if (c === inStr) inStr = null; continue; }
+    if (c === "'" || c === '"' || c === '`') { inStr = c; continue; }
+    if (c === '{') depth++;
+    else if (c === '}') { depth--; if (depth === 0) { try { return eval('(' + htmlSrc.slice(start, k + 1) + ')'); } catch (e) { return null; } } }
+  }
+  return null;
+}
+function flatKeys819(o, p, out) { out = out || new Set(); for (const k of Object.keys(o || {})) { const v = o[k]; if (v && typeof v === 'object' && !Array.isArray(v)) flatKeys819(v, p + k + '.', out); else out.add(p + k); } return out; }
+const dictParity819 = ['MENU_UI', 'HOME_UI', 'W_I18N', 'JOIN_PROMO_UI', 'CUST_UI', 'ADM812', 'ADM814'].every(function (nm) { const d = dictOf819(nm); if (!d || !d.en || !d.es) return false; const a = flatKeys819(d.en), b = flatKeys819(d.es); if (a.size !== b.size) return false; for (const k of a) if (!b.has(k)) return false; return true; });
+t('static v80.19: EVERY EN|ES dictionary is in full key parity (menu, home, worker, join promo, customer CUST_UI, admin traffic/system)', dictParity819);
+const jpb819 = dictOf819('JOIN_PROMO_BENEFITS');
+t('static v80.19: JOIN_PROMO_BENEFITS carries the same number of benefits per plan in EN and ES', !!jpb819 && Object.keys(jpb819).every(k => Array.isArray(jpb819[k].en) && Array.isArray(jpb819[k].es) && jpb819[k].en.length === jpb819[k].es.length));
+t('static v80.19: all five join plans carry Spanish perks (perksEs) for the auth form notes', (htmlSrc.match(/perksEs:/g) || []).length === 5 && htmlSrc.includes('function CU(k)') && htmlSrc.includes('const CUST_UI = {'));
+t('static v80.19: the account language rail exists — pubUser.lang, POST /api/me/lang, signup + checkout stamps, request stamp', serverSrc.includes("lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null") && serverSrc.includes("p === '/api/me/lang'") && serverSrc.includes('function userLangOf(') && serverSrc.includes('if (cleanLang(b.lang)) u.lang = b.lang;') && serverSrc.includes('lang: cleanLang(b.lang)'));
+t('static v80.19: server emails resolve language from the recipient (EST_MAIL / INV_MAIL / lang-aware dispatch branches)', serverSrc.includes('const EST_MAIL = {') && serverSrc.includes('const INV_MAIL = {') && serverSrc.includes('function invoiceMailLang(') && serverSrc.includes('function estMailLang(') && serverSrc.includes('PW_RESET_GENERIC_ES'));
+t('static v80.19: NO bilingual-combined sentinel strings remain on the localized surfaces', !htmlSrc.includes('Loading your invoices… · Cargando tus facturas…') && !htmlSrc.includes('Loading your requests… · Cargando tus solicitudes…') && !htmlSrc.includes('Loading your jobs… · Cargando tus trabajos…') && !htmlSrc.includes("'Tecnico / Technician'") && !htmlSrc.includes('<h3 style="margin-top:0">Notifications</h3>') && !htmlSrc.includes('Tu técnico / Your technician:') && !htmlSrc.includes('⏳ Loading secure payment… · Cargando pago seguro…') && !htmlSrc.includes('Paso 1 de 4 · Step 1 of 4'));
+t('static v80.19: the two toggles are ONE switch — setMenuLang syncs the worker store + account, and login heals from the account', htmlSrc.includes('localStorage.setItem(\'ghsWorkerLang\', _menuLang)') && htmlSrc.includes('function persistLangPref(') && htmlSrc.includes('function healLangFromAccount()') && htmlSrc.includes("fetch('/api/me/lang'"));
+
+const BASE5 = 'http://127.0.0.1:8989';
+const DATA_FILE5 = '/tmp/ghs-v17-test/data-v80-19.json';
+try { fs.unlinkSync(DATA_FILE5); } catch (e) {}
+const env819 = { PORT: '8989', DATA_FILE: DATA_FILE5, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+let child5 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env819), stdio: ['ignore', 'pipe', 'pipe'] });
+child5.stderr.on('data', d => process.stderr.write('[app5] ' + d));
+async function req5(method, p, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+  const r = await fetch(BASE5 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, j };
+}
+async function wh5(type, object) {
+  const payload = JSON.stringify({ id: 'evt_' + Math.random().toString(36).slice(2, 9), type, data: { object } });
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(ts + '.' + payload, 'utf8').digest('hex');
+  return fetch(BASE5 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: payload });
+}
+async function waitUp5() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE5 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+t('v80.19 app5: the IDIOMA instance boots', await waitUp5());
+await req5('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin5@t.local', phone: '(707) 555-1000', password: 'adminpass1' } });
+const A5 = (await req5('POST', '/api/login', { body: { email: 'admin5@t.local', password: 'adminpass1' } })).j.token;
+// --- signup stamps the UI language; /api/me/lang flips it; junk is refused ---
+const suEs819 = await req5('POST', '/api/signup', { body: { name: 'Elena Español', email: 'v819-es@t.local', phone: '(707) 555-1819', password: 'custpass1', role: 'customer', lang: 'es', serviceAddress: '1 Main St, Fairfield, CA' } });
+t('v80.19 signup: the active UI language is stamped on the account at registration (pubUser.lang)', suEs819.status === 201 && suEs819.j.user.lang === 'es');
+const ES819TOK = (await req5('POST', '/api/login', { body: { email: 'v819-es@t.local', password: 'custpass1' } })).j.token;
+const meEs819 = await req5('GET', '/api/me', { token: ES819TOK });
+t('v80.19 signup: GET /api/me reports the saved preference', meEs819.j.user.lang === 'es');
+const flip819 = await req5('POST', '/api/me/lang', { token: ES819TOK, body: { lang: 'en' } });
+const badLang819 = await req5('POST', '/api/me/lang', { token: ES819TOK, body: { lang: 'fr' } });
+const back819 = await req5('POST', '/api/me/lang', { token: ES819TOK, body: { lang: 'es' } });
+const meEs819b = await req5('GET', '/api/me', { token: ES819TOK });
+t('v80.19 toggle rail: POST /api/me/lang flips the saved preference, junk values are 400, and the flip persists', flip819.status === 200 && flip819.j.user.lang === 'en' && badLang819.status === 400 && back819.status === 200 && meEs819b.j.user.lang === 'es');
+const suPlain819 = await req5('POST', '/api/signup', { body: { name: 'Plain Pat', email: 'v819-plain@t.local', phone: '(707) 555-1820', password: 'custpass1', role: 'customer', serviceAddress: '2 Main St, Fairfield, CA' } });
+t('v80.19 signup: no language in the body -> NO preference saved (null, never guessed)', suPlain819.status === 201 && (suPlain819.j.user.lang === null || suPlain819.j.user.lang === undefined));
+// --- worker activation email follows the worker's saved language ---
+const wsu819 = await req5('POST', '/api/signup', { body: { name: 'Tomás Técnico', email: 'v819-worker@t.local', phone: '(707) 555-1821', password: 'workpass1', role: 'worker', lang: 'es', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+const W819ID = wsu819.j.user.id;
+await req5('PATCH', '/api/workers/' + W819ID, { token: A5, body: { status: 'active' } });
+const bySubj819 = async (s) => (await mockEmails()).filter(e => (e.subject || '') === s);
+let actMail819 = [];
+for (let i = 0; i < 30 && !actMail819.length; i++) { actMail819 = await bySubj819('Tu cuenta de técnico de General Handyman Solutions está ACTIVA'); if (!actMail819.length) await sleep(200); }
+await sleep(400);
+t('v80.19 worker email: an es-preference worker is activated in SPANISH only (one email, Spanish subject + body)', actMail819.length === 1 && JSON.stringify(actMail819[0].to) === JSON.stringify(['v819-worker@t.local']) && (actMail819[0].text || '').includes('CÓMO ENTRAR') && (await bySubj819('Your General Handyman Solutions worker account is ACTIVE')).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-worker@t.local'])).length === 0);
+// --- forgot password: ES generic + ES reset email for the es account ---
+const fg819 = await req5('POST', '/api/auth/forgot', { body: { email: 'v819-es@t.local', lang: 'es' } });
+t('v80.19 forgot: the anti-enumeration generic answer comes back in the request language', fg819.status === 200 && fg819.j.message === 'Si ese correo tiene una cuenta, te mandamos un link para restablecerla');
+let rstMail819 = [];
+for (let i = 0; i < 30 && !rstMail819.length; i++) { rstMail819 = (await mockEmails()).filter(e => (e.subject || '') === 'Restablece tu contraseña — General Handyman Solutions' && JSON.stringify(e.to || []) === JSON.stringify(['v819-es@t.local'])); if (!rstMail819.length) await sleep(200); }
+t('v80.19 forgot: the reset email itself is Spanish for a Spanish-preference account', rstMail819.length === 1 && (rstMail819[0].text || '').includes('restablece tu contraseña'));
+// --- estimate email follows the language stamped on the (account-less) request ---
+const rq819 = await req5('POST', '/api/requests', { body: { service: 'TV Mounting', description: 'v819 estimate language', city: 'Fairfield', address: '3 Main St', when: 'Today', estimateType: 'photo', customerName: 'Elena Español', customerEmail: 'v819-es@t.local', customerPhone: '(707) 555-1819', lang: 'es' } });
+const RQ819ID = rq819.j.request.id;
+await req5('PATCH', '/api/requests/' + RQ819ID, { token: A5, body: { estimate: { items: [{ description: 'TV labor', qty: 1, unitPrice: 125, type: 'labor' }], asap: false, discountPct: 0, credit: 0, bookingDue: null }, sendEmail: true } });
+let estMail819 = [];
+for (let i = 0; i < 30 && !estMail819.length; i++) { estMail819 = await bySubj819('Tu estimado de General Handyman Solutions (' + RQ819ID + ')'); if (!estMail819.length) await sleep(200); }
+t('v80.19 estimate email: a request stamped lang=es gets the Spanish estimate (subject + labels), never the English one', estMail819.length === 1 && (estMail819[0].text || '').includes('Servicio') && (estMail819[0].text || '').includes('Para apartar') && (estMail819[0].html || '').includes('Revisar y aprobar en línea') && (await bySubj819('Your estimate from General Handyman Solutions (' + RQ819ID + ')')).length === 0);
+// --- payment_failed + trial emails: seed stripe ids + a trial user, respawn ---
+try { child5.kill('SIGTERM'); } catch (e) {}
+await sleep(600);
+const agoD819 = (d) => new Date(Date.now() - d * 24 * 3600 * 1000).toISOString();
+const seed819 = JSON.parse(fs.readFileSync(DATA_FILE5, 'utf8'));
+const esUser819 = seed819.users.find(u => u.email === 'v819-es@t.local');
+esUser819.stripeCustomerId = 'cus_819es'; esUser819.stripeSubscriptionId = 'sub_819es';
+const plainUser819 = seed819.users.find(u => u.email === 'v819-plain@t.local');
+plainUser819.stripeCustomerId = 'cus_819plain'; plainUser819.stripeSubscriptionId = 'sub_819plain';
+seed819.users.push({ id: 'USR-819TR', name: 'Trial ES', email: 'v819-trial@t.local', phone: '(707) 555-1822', role: 'customer', status: 'active', lang: 'es', inviteFreeMonthUsed: true, homeCareStatus: 'active', homeCareSince: agoD819(27.5), homeCareCancelAt: null, membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_819tr', since: agoD819(27.5), cancelAt: null }, createdAt: agoD819(27.5) });
+fs.writeFileSync(DATA_FILE5, JSON.stringify(seed819));
+child5 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env819), stdio: ['ignore', 'pipe', 'pipe'] });
+child5.stderr.on('data', d => process.stderr.write('[app5] ' + d));
+t('v80.19 app5: respawned on the seeded file', await waitUp5());
+const A5B = (await req5('POST', '/api/login', { body: { email: 'admin5@t.local', password: 'adminpass1' } })).j.token;
+await wh5('invoice.payment_failed', { id: 'in_819es', customer: 'cus_819es', subscription: 'sub_819es', amount_due: 2900 });
+let pfEs819 = [];
+for (let i = 0; i < 30 && !pfEs819.length; i++) { pfEs819 = await bySubj819('Pago fallido — actualiza tu tarjeta'); if (!pfEs819.length) await sleep(200); }
+await sleep(400);
+t('v80.19 payment failed: the es customer gets ONE Spanish email — Spanish subject (no bilingual ·), Spanish body, no English block', pfEs819.length === 1 && JSON.stringify(pfEs819[0].to) === JSON.stringify(['v819-es@t.local']) && (pfEs819[0].text || '').includes('Manejar facturación') && !(pfEs819[0].text || '').includes('Manage billing'));
+await wh5('invoice.payment_failed', { id: 'in_819plain', customer: 'cus_819plain', subscription: 'sub_819plain', amount_due: 2900 });
+let pfBi819 = [];
+for (let i = 0; i < 60 && !pfBi819.length; i++) { pfBi819 = (await bySubj819('Payment failed — please update your card · Pago fallido — actualiza tu tarjeta')).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-plain@t.local'])); if (!pfBi819.length) await sleep(200); }
+t('v80.19 payment failed: a customer with NO saved preference keeps the bilingual single email exactly as before', pfBi819.length === 1);
+await req5('GET', '/api/jobs', { token: A5B }); // ordinary activity triggers the follow-up sweep
+let trEs819 = [];
+for (let i = 0; i < 30 && !trEs819.length; i++) { trEs819 = await bySubj819('Tu mes gratis de HomeCare termina pronto'); if (!trEs819.length) await sleep(200); }
+await sleep(400);
+t('v80.19 trial email: the es trial member gets the Spanish trial-ending email only (no bilingual twin)', trEs819.length === 1 && JSON.stringify(trEs819[0].to) === JSON.stringify(['v819-trial@t.local']) && (await bySubj819('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-trial@t.local'])).length === 0);
+try { child5.kill('SIGTERM'); } catch (e) {}
+
 
 try { child4.kill('SIGTERM'); } catch (e) {}
 
