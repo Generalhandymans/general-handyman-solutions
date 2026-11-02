@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-25', swSrc.includes("const CACHE = 'ghs-app-v80-25'"));
+t('static: SW cache is ghs-app-v80-26', swSrc.includes("const CACHE = 'ghs-app-v80-26'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4307,7 +4307,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.25: ghs-app-v80-25)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-25'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.26: ghs-app-v80-26)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-26'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6576,6 +6576,156 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
 
   sandbox.fetch = prevFetch25;
   run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+}
+
+// ---------------- v80.26 YARDA Y AVISOS (audit P1-13 + P1-4, runtime pins) ----------------
+{
+  // ---- fixtures: a fresh yard member + a named yard tech ----
+  const m26 = await mkMember('m26@t.local', '(707) 555-0426');
+  const sub26 = await req2('POST', '/api/stripe/membership-subscribe', { token: m26.token, body: { plan: 'yard1' } });
+  await mockActivate(sub26.j.subscriptionId);
+  const conf26 = await req2('POST', '/api/stripe/membership-confirm', { token: m26.token, body: { plan: 'yard1' } });
+  t('v80.26 setup: fresh yard1 member activates', conf26.status === 200 && conf26.j.active === true);
+  const m26Notifs0 = await req2('GET', '/api/notifications', { token: m26.token });
+  t('v80.26 P1-4: a legacy route-string target is stored as structured data too (welcome -> targetType membership, route #memberships)',
+    (m26Notifs0.j.notifications || []).some(n => n.type === 'membership' && n.target === '#memberships' && n.targetType === 'membership' && n.targetId === ''));
+  const wSu26 = await req2('POST', '/api/signup', { body: { name: 'Tomas Yardtech', email: 'tomas26@t.local', phone: '(707) 555-0427', password: 'workpass26', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Landscaping / yard'] } } });
+  const W26ID = wSu26.j.user.id;
+  await req2('PATCH', '/api/workers/' + W26ID, { token: A2, body: { status: 'active' } });
+  const W26 = (await req2('POST', '/api/login', { body: { email: 'tomas26@t.local', password: 'workpass26' } })).j.token;
+  const fut26 = (days) => new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
+  const vDate26 = fut26(5), vAsk26 = fut26(9);
+  const mk26 = await req2('POST', '/api/admin/yard-visits', { token: A2, body: { userId: m26.id, date: vDate26, notes: 'Leave the gate open; dogs inside please' } });
+  t('v80.26 setup: admin creates the visit (scheduled, with prep notes)', mk26.status === 201 && mk26.j.visit.status === 'scheduled');
+  const V26 = mk26.j.visit.id;
+  const asg26 = await req2('PATCH', '/api/admin/yard-visits/' + V26, { token: A2, body: { assignedWorkerId: W26ID } });
+  t('v80.26 setup: assigning the tech flips the visit to assigned', asg26.status === 200 && asg26.j.visit.status === 'assigned');
+
+  // (2) the worker's assignment notification carries the structured destination
+  const wNotifs26 = await req2('GET', '/api/notifications', { token: W26 });
+  t('v80.26 P1-4 (2): the yard assignment notification carries targetType workerYardVisit + the visit id + its #wyard route',
+    (wNotifs26.j.notifications || []).some(n => n.type === 'yard' && n.targetType === 'workerYardVisit' && n.targetId === V26 && n.target === '#wyard=' + V26));
+
+  // (1) the customer payload carries the real visit picture
+  const mine26 = await req2('GET', '/api/me/yard-visits', { token: m26.token });
+  const myV26 = (mine26.j.visits || []).find(v => v.id === V26);
+  t('v80.26 P1-13 (1): /api/me/yard-visits names the assigned technician + carries the prep notes (never workerPay)',
+    !!myV26 && myV26.assignedWorkerName === 'Tomas Yardtech' && myV26.notes === 'Leave the gate open; dogs inside please' && myV26.rescheduleAsk === null && JSON.stringify(mine26.j).indexOf('workerPay') === -1);
+
+  // (1) the reschedule/help path: ask -> member + admin see it, the admin bell is targeted; guards hold
+  const ask26 = await req2('POST', '/api/me/yard-visits/' + V26 + '/reschedule', { token: m26.token, body: { date: vAsk26, note: 'Family trip that week' } });
+  t('v80.26 P1-13 (1): the member can ASK to move the visit (an ask, not a move)', ask26.status === 200 && !!ask26.j.rescheduleAsk && ask26.j.rescheduleAsk.date === vAsk26);
+  const mine26b = await req2('GET', '/api/me/yard-visits', { token: m26.token });
+  const myV26b = (mine26b.j.visits || []).find(v => v.id === V26);
+  t('v80.26 P1-13 (1): the pending ask shows on the member payload — and the visit date did NOT move',
+    !!myV26b && !!myV26b.rescheduleAsk && myV26b.rescheduleAsk.date === vAsk26 && myV26b.date === vDate26);
+  const admYard26 = await req2('GET', '/api/admin/yard-visits?from=2000-01-01&to=2999-12-31', { token: A2 });
+  const admV26 = (admYard26.j.visits || []).find(v => v.id === V26);
+  t('v80.26 P1-13 (1): the admin calendar payload carries the ask (date + note)',
+    !!admV26 && !!admV26.rescheduleAsk && admV26.rescheduleAsk.date === vAsk26 && admV26.rescheduleAsk.note === 'Family trip that week');
+  const admNotifs26 = await req2('GET', '/api/notifications', { token: A2 });
+  t('v80.26 P1-4 (2): the ask lands in the admin bell with a structured target on the Yard Calendar',
+    (admNotifs26.j.notifications || []).some(n => n.type === 'yard' && n.text.includes('asked to move') && n.text.includes(V26) && n.targetType === 'adminYard' && n.target === '#yard-calendar'));
+  const stranger26 = await req2('POST', '/api/me/yard-visits/' + V26 + '/reschedule', { token: W26, body: { date: vAsk26 } });
+  t('v80.26 P1-13: a non-owner cannot ask on someone else\'s visit (404)', stranger26.status === 404);
+  const badDate26 = await req2('POST', '/api/me/yard-visits/' + V26 + '/reschedule', { token: m26.token, body: { date: 'next friday' } });
+  t('v80.26 P1-13: a malformed ask date is refused (400)', badDate26.status === 400);
+  const moved26 = await req2('PATCH', '/api/admin/yard-visits/' + V26, { token: A2, body: { date: vAsk26 } });
+  t('v80.26 P1-13 (1): when the Team reschedules, the ask clears (it was the answer)',
+    moved26.status === 200 && moved26.j.visit.date === vAsk26 && moved26.j.visit.rescheduleAsk === null);
+
+  // run the visit to done -> completion picture + the member's structured notification
+  await req2('PATCH', '/api/worker/yard-visits/' + V26, { token: W26, body: { status: 'on_the_way' } });
+  await req2('PATCH', '/api/worker/yard-visits/' + V26, { token: W26, body: { beforePhoto: 'data:image/jpeg;base64,BEFORE26' } });
+  await req2('PATCH', '/api/worker/yard-visits/' + V26, { token: W26, body: { status: 'arrived' } });
+  await req2('PATCH', '/api/worker/yard-visits/' + V26, { token: W26, body: { afterPhoto: 'data:image/jpeg;base64,AFTER26' } });
+  const done26 = await req2('PATCH', '/api/worker/yard-visits/' + V26, { token: W26, body: { status: 'done' } });
+  t('v80.26 setup: the tech completes the visit', done26.status === 200 && done26.j.visit.status === 'done');
+  const mine26c = await req2('GET', '/api/me/yard-visits', { token: m26.token });
+  t('v80.26 P1-13 (1): after completion the payload shows the visit as lastCompleted WITH its AFTER photo + the tech name (never the BEFORE photo)',
+    !!mine26c.j.lastCompleted && mine26c.j.lastCompleted.id === V26 && mine26c.j.lastCompleted.afterPhoto === 'data:image/jpeg;base64,AFTER26' && mine26c.j.lastCompleted.assignedWorkerName === 'Tomas Yardtech' && JSON.stringify(mine26c.j).indexOf('BEFORE26') === -1);
+  const mNotifs26 = await req2('GET', '/api/notifications', { token: m26.token });
+  t('v80.26 P1-4 (2): the member\'s "visit done" notification carries targetType yardVisit + the visit id + its #yard route',
+    (mNotifs26.j.notifications || []).some(n => n.type === 'yard' && n.targetType === 'yardVisit' && n.targetId === V26 && n.target === '#yard=' + V26));
+  const askLate26 = await req2('POST', '/api/me/yard-visits/' + V26 + '/reschedule', { token: m26.token, body: { date: fut26(12) } });
+  t('v80.26 P1-13: a done visit refuses a reschedule ask (409)', askLate26.status === 409);
+
+  // statics: the three surfaces share the structured destination
+  t('static v80.26 P1-4: server stores targetType/targetId from ONE route map, the push payload carries them, the SW rebuilds the route from them, the SPA resolves + focuses yard cards',
+    serverSrc.includes('const NOTIF_ID_ROUTES') && serverSrc.includes('function parseNotifTarget(') && serverSrc.includes('targetType: dest.targetType') && serverSrc.includes("targetType: String(note.targetType || '')")
+    && swSrc.includes('data.targetType') && swSrc.includes('function swNotifUrl(')
+    && htmlSrc.includes('var NOTIF_ROUTES = {') && htmlSrc.includes('id="yardcard-') && htmlSrc.includes('wyardcard-'));
+  t('static v80.26 P1-13/P1-4: every new yard-card string lives in BOTH CUST_UI languages (EN/ES parity)',
+    ['yardStProposed:', 'yardStOnWay:', 'yardTechPre:', 'yardPrepPre:', 'yardHelpBtn:', 'yardAskSend:', 'yardAskPendingPre:'].every(k => (htmlSrc.match(new RegExp(k, 'g')) || []).length === 2));
+
+  // ---- VM: the card render (EN + ES), the resolver, the tap surfaces ----
+  const prevFetch26 = sandbox.fetch;
+  const dayKey26 = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  const futD26 = (days) => dayKey26(new Date(Date.now() + days * 864e5));
+  const pastD26 = dayKey26(new Date(Date.now() - 7 * 864e5));
+  let notifPayload26 = { notifications: [], unread: 0 };
+  sandbox.fetch = async function (url) {
+    const okj = (obj) => ({ ok: true, status: 200, json: async () => obj });
+    if (url === '/api/me/yard-visits') return okj({ visits: [
+      { id: 'YV-T1', date: futD26(3), status: 'assigned', notes: 'Leave the gate open', assignedWorkerName: 'Tomas Yardtech', rescheduleAsk: null },
+      { id: 'YV-T2', date: futD26(17), status: 'scheduled', notes: '', assignedWorkerName: '', rescheduleAsk: null }
+    ], lastCompleted: { id: 'YV-T0', date: pastD26, completedAt: pastD26 + 'T15:00:00.000Z', afterPhoto: 'data:image/jpeg;base64,AFTERVM', assignedWorkerName: 'Tomas Yardtech' } });
+    if (url === '/api/notifications') return okj(notifPayload26);
+    return okj({});
+  };
+  run("me = { id: 'USR-C26', role: 'customer', name: 'Card Carla' }; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  el('myYardVisits').innerHTML = '';
+  await run('loadMyYardVisits()');
+  const cardEn26 = el('myYardVisits').innerHTML;
+  t('v80.26 P1-13 VM EN (1): the card shows next-visit date + status label + step timeline + tech + prep notes + help action + completion photo',
+    cardEn26.includes('id="yardcard-YV-T1"') && cardEn26.includes(futD26(3)) && cardEn26.includes('Technician assigned') && cardEn26.includes('On the way') && cardEn26.includes('Tomas Yardtech') && cardEn26.includes('Prep notes: ') && cardEn26.includes('Leave the gate open') && cardEn26.includes('Reschedule or get help') && cardEn26.includes('AFTERVM') && cardEn26.includes('id="yardcard-YV-T0"'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');");
+  el('myYardVisits').innerHTML = '';
+  await run('loadMyYardVisits()');
+  const cardEs26 = el('myYardVisits').innerHTML;
+  t('v80.26 P1-13 VM ES (1): the same card renders fully in Spanish',
+    cardEs26.includes('Técnico asignado') && cardEs26.includes('En camino') && cardEs26.includes('Notas de preparación: ') && cardEs26.includes('Reagendar o pedir ayuda') && cardEs26.includes('Tu técnico: ') && !cardEs26.includes('Reschedule or get help') && !cardEs26.includes('Your technician'));
+
+  // (2)+(3): the resolver — valid structured destinations resolve; broken ones degrade to a plain row
+  t('v80.26 P1-4 VM (2): structured destinations resolve to the exact object view (and the v79 frontier still guards workers)',
+    run("me={role:'customer'}; notifTargetFor({targetType:'yardVisit', targetId:'YV-9', target:'#yard=YV-9'})") === '#yard=YV-9'
+    && run("me={role:'worker'}; notifTargetFor({targetType:'yardVisit', targetId:'YV-9', target:'#yard=YV-9'})") === '#worker'
+    && run("me={role:'worker'}; notifTargetFor({targetType:'workerYardVisit', targetId:'YV-9'})") === '#wyard=YV-9'
+    && run("me={role:'admin'}; notifTargetFor({targetType:'adminYard'})") === '#yard-calendar'
+    && run("me={role:'customer'}; notifTargetFor({targetType:'invoice', targetId:'INV-9'})") === '/invoice/INV-9');
+  t('v80.26 P1-4 VM (3): broken destinations degrade gracefully — unknown type, malformed id and cross-role targets resolve to NO tap',
+    run("me={role:'customer'}; notifTargetFor({targetType:'bogus', targetId:'X1', target:''})") === ''
+    && run("me={role:'customer'}; notifTargetFor({targetType:'request', targetId:'bad id!', target:''})") === ''
+    && run("me={role:'customer'}; notifTargetFor({targetType:'adminYard', target:'#yard-calendar'})") === ''
+    && run("me={role:'customer'}; notifTargetFor({targetType:'workerYardVisit', targetId:'YV-9'})") === ''
+    && run("me={role:'customer'}; notifTargetFor({})") === '');
+  run("notifs = [ { type:'yard', text:'Your yard visit is done', targetType:'yardVisit', targetId:'YV-T1', target:'#yard=YV-T1', read:false, at:'2026-11-01T00:00:00.000Z' }, { type:'info', text:'Plain legacy note', targetType:'bogus', targetId:'X', target:'', read:false, at:'2026-11-01T00:00:00.000Z' } ]; renderNotifs();");
+  const bell26 = el('notifPanel').innerHTML;
+  t('v80.26 P1-4 VM (2)+(3): the bell makes the valid row tappable onto its object and leaves the broken one PLAIN (no dead tap)',
+    bell26.includes("notifGo('#yard=YV-T1')") && (bell26.match(/notifGo\(/g) || []).length === 1);
+
+  // (2): the foreground browser Notification carries the destination and navigates on tap
+  run("Notification = function(title, opts){ this.title = title; this.opts = opts; window.__ntf26 = this; }; Notification.permission = 'granted'; lastUnread = 0;");
+  notifPayload26 = { notifications: [ { type:'yard', text:'Your yard visit is done', targetType:'yardVisit', targetId:'YV-T1', target:'#yard=YV-T1', read:false, at:'2026-11-01T00:00:00.000Z' } ], unread: 1 };
+  run("location.hash = '';");
+  await run('loadNotifs()');
+  t('v80.26 P1-4 VM (2): the foreground browser Notification is built with a tap handler wired to the destination',
+    !!run('window.__ntf26') && typeof run('window.__ntf26.onclick') === 'function');
+  run('window.__ntf26.onclick();');
+  t('v80.26 P1-4 VM (2): ...and the tap lands on the exact visit (#yard=YV-T1)', run('location.hash') === '#yard=YV-T1');
+
+  // (2): the deep links route and settle on the owner view; (3) garbage does not route
+  run("me = { id: 'USR-C26', role: 'customer', name: 'Card Carla' }; location.hash = '#yard=YV-T1';");
+  t('v80.26 P1-4 VM (2): the #yard= deep link routes (true) and settles on the membership view',
+    run('routeNotifHash()') === true && run('location.hash') === '#memberships');
+  run("me = { id: 'USR-W26', role: 'worker', name: 'Route Rob' }; location.hash = '#wyard=YV-T2';");
+  t('v80.26 P1-4 VM (2): the #wyard= deep link routes (true) and settles on the worker view',
+    run('routeNotifHash()') === true && run('location.hash') === '#worker');
+  t('v80.26 P1-4 VM (3): a garbage hash is NOT a notification route (the caller falls through to render)',
+    run("location.hash = '#yard=bad id!'; routeNotifHash()") === false);
+
+  sandbox.fetch = prevFetch26;
+  run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en'); location.hash=''; notifs = [];");
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
