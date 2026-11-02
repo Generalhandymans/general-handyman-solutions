@@ -2791,6 +2791,83 @@ function settleHostedCartSession(pc, sess) {
 // memberApplied, payPi, payment:{pi,amountCents}, requestId, paidAt,
 // createdBy, createdAt }
 function cartsOf() { if (!Array.isArray(db.carts)) db.carts = []; return db.carts; }
+// ---------- v80.27 TEMPORADA helpers (audit A-4) ----------
+// The seasonal set, straight from A-4: gutter, pressure washing,
+// holiday lights and filters are the services with a natural cycle.
+// Each entry: the catalog service, its season windows (calendar months
+// + the minimum days since the last paid job before it can be due
+// again) and — for filters — the add-on that proves the swap happened
+// (filters ride the oil-change line; the proposal books the oil-change
+// cart line, priced by the same catalog math incl. the add-on).
+// oil-change is the ONE entry whose cart line differs from its history
+// key, so it carries cartServiceId explicitly.
+const SEASONAL_NOW_MS = Number(process.env.SEASONAL_NOW_MS || 0);
+function seasonalNow() { return SEASONAL_NOW_MS > 0 ? new Date(SEASONAL_NOW_MS) : new Date(); }
+const SEASONAL_SERVICES = [
+  { serviceId: 'gutter-cleaning', name: 'Gutter Cleaning', windows: [{ tag: 'spring', months: [3, 4], minGapDays: 150 }, { tag: 'fall', months: [9, 10, 11], minGapDays: 150 }] },
+  { serviceId: 'gutter-cleaning-two-story', name: 'Gutter Cleaning — Two-Story', windows: [{ tag: 'spring', months: [3, 4], minGapDays: 150 }, { tag: 'fall', months: [9, 10, 11], minGapDays: 150 }] },
+  { serviceId: 'pressure-washing', name: 'Pressure Washing — Standard Area', windows: [{ tag: 'spring', months: [3, 4, 5, 6], minGapDays: 300 }] },
+  { serviceId: 'pressure-washing-large', name: 'Pressure Washing — Large Area', windows: [{ tag: 'spring', months: [3, 4, 5, 6], minGapDays: 300 }] },
+  { serviceId: 'holiday-lights', name: 'Holiday Lights Install', windows: [{ tag: 'lights', months: [10, 11, 12], minGapDays: 270 }] },
+  { serviceId: 'holiday-lights-two-story', name: 'Holiday Lights Install — Two-Story', windows: [{ tag: 'lights', months: [10, 11, 12], minGapDays: 270 }] },
+  { serviceId: 'holiday-lights-takedown', name: 'Holiday Light Take-Down & Storage', windows: [{ tag: 'takedown', months: [1, 2], minGapDays: 270 }] },
+  { serviceId: 'holiday-lights-takedown-two-story', name: 'Holiday Light Take-Down & Storage — Two-Story', windows: [{ tag: 'takedown', months: [1, 2], minGapDays: 270 }] },
+  { serviceId: 'oil-change', cartServiceId: 'oil-change', name: 'Oil Change & Fluids + Air / cabin filter swap', addonId: 'filter-swap', windows: [{ tag: 'filters-h1', months: [1, 2, 3, 4, 5, 6], minGapDays: 150 }, { tag: 'filters-h2', months: [7, 8, 9, 10, 11, 12], minGapDays: 150 }] }
+];
+function seasonalActionsOf() { if (!Array.isArray(db.seasonalActions)) db.seasonalActions = []; return db.seasonalActions; }
+// A past order counts as history only when the work really happened:
+// money landed (order payment paid / a captured hold) or the linked
+// job was completed. A merely-quoted or abandoned order proves nothing.
+function seasonalRequestCounts(r) {
+  if (r.payment && (r.payment.status === 'paid' || r.payment.status === 'partially_refunded')) return true;
+  if (Array.isArray(r.holds) && r.holds.some(h => h && h.status === 'captured')) return true;
+  return db.jobs.some(j => j.requestId === r.id && /^Done/.test(j.status || ''));
+}
+function seasonalHistoryOf(userId) {
+  const last = {};
+  for (const r of (db.requests || [])) {
+    if (!r || r.customerId !== userId || !r.menuOrder) continue;
+    if (!seasonalRequestCounts(r)) continue;
+    const at = new Date(r.createdAt || 0);
+    if (isNaN(at.getTime())) continue;
+    const lines = [];
+    if (r.menuOrder.serviceId) lines.push({ serviceId: r.menuOrder.serviceId, extras: [] });
+    for (const it of (Array.isArray(r.menuOrder.items) ? r.menuOrder.items : [])) if (it && it.serviceId) lines.push({ serviceId: it.serviceId, extras: Array.isArray(it.extras) ? it.extras : [] });
+    for (const ln of lines) {
+      const def = SEASONAL_SERVICES.find(s => s.serviceId === ln.serviceId);
+      if (!def) continue;
+      if (def.addonId && !ln.extras.some(x => x && x.id === def.addonId)) continue;
+      if (!last[ln.serviceId] || at > last[ln.serviceId]) last[ln.serviceId] = at;
+    }
+  }
+  return last;
+}
+// The proposals a customer sees TODAY: in an open season window, past
+// the re-due gap, and not already acted on or dismissed this season.
+// Prices are read from the LIVE catalog on every call — the proposal
+// always shows the current price, never the historical one.
+function seasonalProposalsFor(user) {
+  const now = seasonalNow();
+  const month = now.getMonth() + 1;
+  const last = seasonalHistoryOf(user.id);
+  const acted = seasonalActionsOf().filter(a => a.userId === user.id);
+  const out = [];
+  for (const def of SEASONAL_SERVICES) {
+    const svc = SERVER_MENU[def.serviceId];
+    if (!svc) continue;
+    const doneAt = last[def.serviceId];
+    if (!doneAt) continue;
+    const win = def.windows.find(w => w.months.includes(month));
+    if (!win) continue;
+    if ((now - doneAt) / 864e5 < win.minGapDays) continue;
+    const seasonKey = now.getFullYear() + '-' + win.tag;
+    if (acted.some(a => a.serviceId === def.serviceId && a.seasonKey === seasonKey)) continue;
+    let list = svc.p, member = svc.m;
+    if (def.addonId && svc.a && svc.a[def.addonId]) { const a = svc.a[def.addonId]; list += a[0]; member += a[1] ? a[0] : Math.round(a[0] * 0.8); }
+    out.push({ serviceId: def.serviceId, name: def.name, addonId: def.addonId || '', seasonKey, lastDoneAt: doneAt.toISOString(), list, member, isMember: user.homeCareStatus === 'active' });
+  }
+  return out;
+}
 // ---------- v79 P0-2: role frontier on customer money pages ----------
 // Cart and estimate LINKS are the customer's door: a guest with the link
 // (no session) and the customer herself pass freely, and so does the
@@ -5857,6 +5934,59 @@ async function handleRequest(req, res) {
     const earned = money(credits.reduce((s, e) => s + Number(e.amount || 0), 0));
     const balance = money(credits.filter(e => e.status === 'available').reduce((s, e) => s + Number(e.amount || 0), 0));
     return send(res, 200, { ok: true, code, link: appBase() + '/?src=' + code, plusLink: appBase() + '/plus?src=' + code, credit: CUSTOMER_REFERRAL_CREDIT, signups, credits, totals: { earned, balance, count: credits.length } });
+  }
+  // ---------- v80.27 TEMPORADA (audit A-4): seasonal rebooking proposals ----------
+  // Repeatable services run on a natural cycle — gutter cleaning,
+  // pressure washing, holiday lights (+ take-down) and filter swaps.
+  // When a customer's OWN paid history shows one of those services and
+  // its season is open again, the ACCOUNT surfaces a one-tap rebooking
+  // proposal at the CURRENT catalog price (list headline, member price
+  // as its own line — Gabriel's price-presentation law). Confirming
+  // builds a normal customer cart link: the cart page runs the standard
+  // checkout and the ONE depositSplit law — nothing bypasses payment
+  // or pricing, and the proposal then never fires again that season
+  // (nor after a dismissal).
+  // AUTOMATION BOUNDARY (Gabriel's STOP TOTAL, 2026-10-20): this is an
+  // IN-APP surface only — no email, no push, no scheduled send of any
+  // kind leaves this code. The proposal exists only when the customer
+  // visits their account. SEASONAL_NOW_MS is a test-only clock knob
+  // (same family as EST_REMIND_THROTTLE_MS); production never sets it.
+  if (p === '/api/me/seasonal' && req.method === 'GET') {
+    if (!requireRole(user, ['customer'], res)) return;
+    return send(res, 200, { ok: true, proposals: seasonalProposalsFor(user) });
+  }
+  if (p === '/api/me/seasonal/confirm' && req.method === 'POST') {
+    if (!requireRole(user, ['customer'], res)) return;
+    const b = await readBody(req);
+    const sid = cleanText(b.serviceId, 60);
+    const prop = seasonalProposalsFor(user).find(x => x.serviceId === sid);
+    if (!prop) return send(res, 404, { error: 'no seasonal proposal for that service right now' });
+    const def = SEASONAL_SERVICES.find(s => s.serviceId === sid);
+    const items = normalizeCartItems([{ serviceId: def.cartServiceId || sid, name: prop.name, qty: 1, unitPrice: prop.list }]);
+    const totals = cartTotals(items);
+    const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: '', customerName: user.name || '', customerPhone: user.phone || '', customerEmail: (user.email || '').toLowerCase(), lang: userLangOf(user), status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: 'seasonal', seasonal: { serviceId: sid, seasonKey: prop.seasonKey }, source: user.source || null, createdAt: new Date().toISOString() };
+    cartsOf().push(c);
+    seasonalActionsOf().push({ id: id('SEA'), userId: user.id, serviceId: sid, seasonKey: prop.seasonKey, status: 'booked', cartId: c.id, at: new Date().toISOString() });
+    audit(user, 'seasonal.confirm', c.id, sid + ' · ' + prop.seasonKey + ' · ' + usd(totals.listTotal));
+    save();
+    const due = user.homeCareStatus === 'active' ? totals.memberTotal : totals.listTotal;
+    const split = depositSplit(Math.round(due * 100));
+    return send(res, 201, { ok: true, cart: publicCart(c), link: cartLink(c), totals: { list: totals.listTotal, member: totals.memberTotal, due, deposit: split.depositCents / 100, balance: split.balanceCents / 100 } });
+  }
+  if (p === '/api/me/seasonal/dismiss' && req.method === 'POST') {
+    if (!requireRole(user, ['customer'], res)) return;
+    const b = await readBody(req);
+    const sid = cleanText(b.serviceId, 60);
+    const prop = seasonalProposalsFor(user).find(x => x.serviceId === sid);
+    if (!prop) {
+      const already = seasonalActionsOf().some(a => a.userId === user.id && a.serviceId === sid);
+      if (already) return send(res, 200, { ok: true, already: true });
+      return send(res, 404, { error: 'no seasonal proposal for that service right now' });
+    }
+    seasonalActionsOf().push({ id: id('SEA'), userId: user.id, serviceId: sid, seasonKey: prop.seasonKey, status: 'dismissed', cartId: '', at: new Date().toISOString() });
+    audit(user, 'seasonal.dismiss', sid, prop.seasonKey);
+    save();
+    return send(res, 200, { ok: true });
   }
   // ---------- v80.11 ALCANCE: tech zone — referrals, sales menu, sales carts, estimate creator ----------
   if (p === '/api/worker/referrals' && req.method === 'GET') {
