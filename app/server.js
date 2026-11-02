@@ -863,6 +863,69 @@ function estimateReminderEmailText(rq) {
   lines.push('', 'Review & approve online (no account needed): ' + estimatePageLink(rq), '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.');
   return lines.join('\n');
 }
+// ---------- v80.15 SEGUIMIENTO: follow-up email builders ----------
+// Cart reminder: the cart record itself carries the language Gabriel
+// built it in (c.lang), so this one is fully localized per cart — the
+// same per-surface pattern the cart page itself uses.
+function cartReminderEmailHtml(c) {
+  const es = c.lang === 'es';
+  const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
+  const dep = depositSplit(Math.round(total * 100)).depositCents / 100;
+  const items = (c.items || []).map(it => escMail(it.name || '') + ' ×' + (it.qty || 1)).join(' · ');
+  const inner = es
+    ? '<p>Hola ' + escMail(c.customerName || '') + ',</p>'
+      + '<p>Solo un recordatorio amistoso — tu propuesta de <b>General Handyman Solutions</b> sigue esperando. Todavía no recibimos el depósito, así que tu trabajo aún no está apartado.</p>'
+      + (items ? '<p>' + items + '</p>' : '')
+      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · Para apartar hoy: <b>' + usd(dep) + '</b></p>'
+      + '<p><a href="' + c.link + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Revisar y apartar tu trabajo</a></p>'
+      + '<p style="color:#666;font-size:13px">Sin cuenta — revisa y paga desde el mismo link. ¿Ya lo resolviste o cambiaste de idea? Sin problema — ignora este correo; no enviaremos otro.</p>'
+    : '<p>Hi ' + escMail(c.customerName || 'there') + ',</p>'
+      + '<p>Just a friendly nudge — your proposal from <b>General Handyman Solutions</b> is still waiting. We have not received the deposit yet, so your job is not booked yet.</p>'
+      + (items ? '<p>' + items + '</p>' : '')
+      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · Due to book today: <b>' + usd(dep) + '</b></p>'
+      + '<p><a href="' + c.link + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & book your job</a></p>'
+      + '<p style="color:#666;font-size:13px">No account needed — review and pay right from the link. Already taken care of, or changed your mind? No problem at all — just ignore this email; we will not send another one.</p>';
+  return mailShell(es ? 'Tu propuesta sigue aquí — General Handyman Solutions' : 'Your proposal is still here — General Handyman Solutions', inner);
+}
+function cartReminderEmailText(c) {
+  const es = c.lang === 'es';
+  const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
+  const dep = depositSplit(Math.round(total * 100)).depositCents / 100;
+  const head = 'General Handyman Solutions — ';
+  if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; aún no recibimos el depósito y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · Para apartar hoy: ' + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
+  return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; we have not received the deposit yet, so your job is not booked yet.', 'Total: ' + usd(total) + ' · Due to book today: ' + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
+}
+// Trial-ending + payment-failed + review-ask emails: the server stores
+// NO per-account language for users/requests (v80.18 unifies idioma
+// later), so these follow the worker_removed precedent — ONE email,
+// EN block then ES block — never the wrong language, never two sends.
+function trialEndingEmailParts(p) {
+  const usr = p.user || {};
+  const first = String(usr.name || '').trim().split(/\s+/)[0] || '';
+  const endD = p.trialEnd ? new Date(p.trialEnd) : null;
+  const dateEn = endD ? endD.toLocaleDateString('en-US') : '';
+  const dateEs = endD ? endD.toLocaleDateString('es-US') : '';
+  const en = 'Hi ' + (first || 'there') + ' — your free HomeCare month is almost over. Your first $29 charge lands on ' + dateEn + ', and your member benefits (20% off labor, $50 estimates, priority scheduling) continue without a gap. Nothing to do if you are happy — just keep enjoying them. To manage your plan or cancel anytime, open the app → Memberships → Manage billing. No penalties, ever.';
+  const es = 'Hola' + (first ? ' ' + first : '') + ' — tu mes gratis de HomeCare está por terminar. Tu primer cargo de $29 cae el ' + dateEs + ' y tus beneficios de miembro (20% de descuento en mano de obra, estimados a $50, prioridad de agenda) siguen sin interrupción. Si estás contento, no tienes que hacer nada. Para manejar tu plan o cancelar cuando quieras: abre la app → Membresías → Manejar facturación. Sin penalidades, nunca.';
+  return { en, es };
+}
+function paymentFailedEmailParts(p) {
+  const usr = p.user || {};
+  const first = String(usr.name || '').trim().split(/\s+/)[0] || '';
+  const amt = usd((Number(p.amountCents) || 0) / 100);
+  const en = 'Hi ' + (first || 'there') + ' — we tried to charge your card for your membership and the payment failed (' + amt + ' due). Your membership is paused until the payment goes through, so member prices are on hold too. To fix it in under a minute: open the app → Memberships → Manage billing and update your card on Stripe\'s secure page. As soon as it succeeds, your benefits come right back.';
+  const es = 'Hola' + (first ? ' ' + first : '') + ' — intentamos cobrar tu tarjeta de la membresía y el pago falló (' + amt + ' pendiente). Tu membresía queda en pausa hasta que el pago pase, y los precios de miembro también. Para arreglarlo en menos de un minuto: abre la app → Membresías → Manejar facturación y actualiza tu tarjeta en la página segura de Stripe. En cuanto pase, tus beneficios vuelven al instante.';
+  return { en, es };
+}
+function reviewAskEmailParts(p) {
+  const rq = p.request || {};
+  const first = String(rq.customerName || '').trim().split(/\s+/)[0] || '';
+  const svc = rq.service || 'your job';
+  const url = p.reviewUrl || '';
+  const en = 'Hi ' + (first || 'there') + ' — your order ' + rq.id + ' (' + svc + ') is paid in full. Thank you for trusting our small team! If we earned it, a quick Google review means the world to us and helps neighbors find us: ' + url;
+  const es = 'Hola' + (first ? ' ' + first : '') + ' — tu orden ' + rq.id + ' (' + svc + ') está pagada por completo. ¡Gracias por confiar en nuestro equipo! Si nos lo ganamos, una reseña rápida en Google nos ayuda muchísimo y ayuda a que tus vecinos nos encuentren: ' + url;
+  return { en, es };
+}
 function pdfEsc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); }
 function buildEstimatePdf(rq) {
   const e = rq.estimate || {};
@@ -937,6 +1000,31 @@ async function resendAutomation(type, payload) {
     const inv = p.invoice || {};
     if (!inv.customerEmail) return { attempted: true, sent: false, reason: 'invoice has no customer email' };
     return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment reminder: invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is still unpaid', html: invoiceReminderEmailHtml(inv), text: invoiceReminderEmailText(inv) });
+  }
+  if (type === 'cart_reminder') {
+    const c = p.cart || {};
+    if (!c.customerEmail) return { attempted: true, sent: false, reason: 'cart has no customer email' };
+    const es = c.lang === 'es';
+    return sendMail({ to: [c.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: es ? ('Recordatorio: tu propuesta (' + c.id + ') sigue esperando — General Handyman Solutions') : ('Reminder: your proposal (' + c.id + ') is still waiting — General Handyman Solutions'), html: cartReminderEmailHtml(c), text: cartReminderEmailText(c) });
+  }
+  if (type === 'trial_ending') {
+    const usr = p.user || {};
+    if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' };
+    const parts = trialEndingEmailParts(p);
+    return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto', html: eventEmail('Your free month is almost over · Tu mes gratis está por terminar', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
+  }
+  if (type === 'payment_failed') {
+    const usr = p.user || {};
+    if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' };
+    const parts = paymentFailedEmailParts(p);
+    return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment failed — please update your card · Pago fallido — actualiza tu tarjeta', html: eventEmail('Your payment failed · Tu pago falló', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
+  }
+  if (type === 'review_request') {
+    const rq = p.request || {};
+    if (!rq.customerEmail) return { attempted: true, sent: false, reason: 'customer has no email on file' };
+    if (!p.reviewUrl) return { attempted: true, sent: false, reason: 'no google review link configured' };
+    const parts = reviewAskEmailParts(p);
+    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?', html: eventEmail('Thank you! · ¡Gracias!', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
   }
   return { attempted: false, sent: false, reason: 'no email template for ' + type };
 }
@@ -1602,6 +1690,86 @@ function sweepEstimateReminders() {
     if (due.length) save();
   })().catch(e => console.error('estimate reminder sweep failed', e.message));
 }
+// ---------- v80.15 SEGUIMIENTO: one-shot follow-up sweeps ----------
+// Gabriel's queue (approved 2026-11-01): the same approved in-server
+// pattern as the v45 estimate reminder and the v80.14 daily snapshot —
+// NO cron, NO external calls, NO background agent (STOP TOTAL stands).
+// These sweeps ride ordinary request activity beside the estimate
+// sweep, are throttled, and every send is ONE-SHOT per object: the
+// object is stamped + the send is audited, so it can never repeat.
+// (1) Proposal carts built by Gabriel/the Team still open with no
+// deposit ~48h after creation (worker sales carts are the tech's own
+// follow-up — excluded by creator role). (2) Sent invoices still
+// unpaid ~48h after sending — the stamp is SHARED with the Team's
+// manual remind button, so an invoice gets one reminder, period.
+// (3) HomeCare free-month members ~3 days before the trial ends and
+// the first real $29 charge lands (trial end = activation + the same
+// INVITE_TRIAL_DAYS the trial was created with; a member who already
+// converted, cancelled, or scheduled a cancellation is excluded).
+let lastFollowupSweep = 0;
+const FOLLOWUP_REMIND_AFTER_MS = 48 * 3600 * 1000;
+const TRIAL_ENDING_WINDOW_MS = 3 * 24 * 3600 * 1000;
+function trialEndMsFor(u) {
+  if (!u || !u.inviteFreeMonthUsed || u.firstRealChargeAt) return 0;
+  const mp = membershipPlanOf(u);
+  if (mp.planKey !== 'homecare' || mp.status !== 'active' || mp.cancelAt) return 0;
+  const since = mp.since || u.homeCareSince;
+  if (!since) return 0;
+  const t = new Date(since).getTime();
+  return isNaN(t) ? 0 : t + INVITE_TRIAL_DAYS * 24 * 3600 * 1000;
+}
+function sweepFollowups() {
+  const throttle = Number(process.env.FOLLOWUP_THROTTLE_MS) || 5 * 60 * 1000;
+  const now = Date.now();
+  if (now - lastFollowupSweep < throttle) return;
+  lastFollowupSweep = now;
+  (async () => {
+    let dirty = false;
+    const dueCarts = cartsOf().filter(c => {
+      if (!c || c.status !== 'open' || c.remindedAt || c.requestId) return false;
+      if (c.payment && Number(c.payment.depositCents) > 0) return false;
+      const creator = db.users.find(x => x.id === c.createdBy);
+      if (!creator || creator.role !== 'admin') return false;
+      const email = c.customerEmail || (c.customer && c.customer.email) || '';
+      if (!email.includes('@')) return false;
+      if (!c.createdAt || now - new Date(c.createdAt).getTime() < FOLLOWUP_REMIND_AFTER_MS) return false;
+      return true;
+    }).slice(0, 10);
+    for (const c of dueCarts) {
+      try {
+        const res = await sendAutomation('cart_reminder', { cart: publicCart(c) });
+        if (res && res.sent) { c.remindedAt = new Date().toISOString(); audit(null, 'cart.reminder', c.id, 'one-shot 48h reminder emailed to ' + (c.customerEmail || '')); dirty = true; }
+      } catch (err) { console.error('cart reminder failed', c.id, err.message); }
+    }
+    const dueInvs = (db.invoices || []).filter(inv => {
+      if (!inv || (inv.status !== 'sent' && inv.status !== 'overdue') || inv.remindedAt) return false;
+      if (!((Number(inv.total) || 0) - (Number(inv.paidAmount) || 0) > 0)) return false;
+      if (!(inv.customerEmail || '').includes('@')) return false;
+      if (!inv.sentAt || now - new Date(inv.sentAt).getTime() < FOLLOWUP_REMIND_AFTER_MS) return false;
+      return true;
+    }).slice(0, 10);
+    for (const inv of dueInvs) {
+      try {
+        const res = await sendAutomation('invoice_reminder', { invoice: publicInvoice(inv) });
+        if (res && res.sent) { inv.remindedAt = new Date().toISOString(); inv.reminderCount = (inv.reminderCount || 0) + 1; audit(null, 'invoice.reminder', inv.id, 'automatic one-shot 48h reminder emailed to ' + inv.customerEmail); dirty = true; }
+      } catch (err) { console.error('invoice reminder failed', inv.id, err.message); }
+    }
+    const dueTrial = (db.users || []).filter(u => {
+      if (!u || u.role !== 'customer' || u.trialEndRemindedAt) return false;
+      if (!(u.email || '').includes('@')) return false;
+      const end = trialEndMsFor(u);
+      if (!end) return false;
+      return now >= end - TRIAL_ENDING_WINDOW_MS && now < end;
+    }).slice(0, 10);
+    for (const u of dueTrial) {
+      try {
+        const res = await sendAutomation('trial_ending', { user: { name: u.name, email: u.email }, trialEnd: new Date(trialEndMsFor(u)).toISOString(), appUrl: APP_URL });
+        if (res && res.sent) { u.trialEndRemindedAt = new Date().toISOString(); audit(null, 'trial.reminder', u.id, 'trial-ending email sent; first $29 charge lands ' + new Date(trialEndMsFor(u)).toISOString().slice(0, 10)); dirty = true; }
+      } catch (err) { console.error('trial reminder failed', u.id, err.message); }
+    }
+    if (dirty) save();
+  })().catch(e => console.error('followup sweep failed', e.message));
+}
 // ---------- v80.14: internal daily snapshot + system health ----------
 // Gabriel's STOP TOTAL stands: no cron, no external calls. The snapshot
 // rides the SAME approved in-server pattern as the estimate reminder
@@ -1639,7 +1807,8 @@ function buildSystemHealth() {
     sessions: Object.keys(sessionStore()).length,
     lastSnapshot: snaps.reduce((m, s) => (s && s.date && s.date > (m || '')) ? s.date : m, null),
     snapshots: snaps.length,
-    stripeConfigured: stripeReady()
+    stripeConfigured: stripeReady(),
+    googleReviewUrl: googleReviewUrl()
   };
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
@@ -2292,6 +2461,28 @@ function disarmCartBalance(c, reason) {
   c.payment.balanceVoid = reason || 'cancelled';
   return true;
 }
+// ---------- v80.15: Google review ask at Paid in full (one-shot) ----------
+// Fires from the ONLY two places a request first becomes paid in full
+// (recordRequestPayment + settleRequestBalance below) — never a second
+// source of truth for paid status. The review link is Gabriel's to
+// paste in Admin → System (db.settings.googleReviewUrl); while it is
+// empty the ask is silently skipped — no URL is ever invented or
+// hardcoded. The ask stamps r.reviewAskedAt + audits, so it fires
+// exactly once per order, ever.
+function googleReviewUrl() { const v = db.settings && db.settings.googleReviewUrl; return typeof v === 'string' ? v.trim() : ''; }
+function maybeAskGoogleReview(r) {
+  if (!r || r.reviewAskedAt) return false;
+  const url = googleReviewUrl();
+  if (!url) return false;
+  const payload = requestAutomationPayload(r);
+  const email = (payload.request.customerEmail || '').trim();
+  if (!r.customerId && !email.includes('@')) return false;
+  r.reviewAskedAt = new Date().toISOString();
+  if (r.customerId) notify(r.customerId, 'review', 'Thank you for choosing General Handyman Solutions! If we earned it, a quick Google review means the world to our small team: ' + url, '#req=' + r.id);
+  if (email.includes('@')) fireAutomation('review_request', Object.assign(payload, { reviewUrl: url }));
+  audit(null, 'review.ask', r.id, 'one-shot Google review ask sent (order paid in full)');
+  return true;
+}
 // Single recorder for a landed full payment on a request. Idempotent — a
 // payment already recorded (confirm endpoint + webhook can both fire) is
 // never double-counted. Notifies the customer + the Team and fires the
@@ -2316,6 +2507,7 @@ function recordRequestPayment(r, info) {
   if (r.customerId) notify(r.customerId, 'payment', 'Payment received (' + usd(r.payment.amountCents / 100) + ') on order ' + r.id + ' — paid in full.', '#req=' + r.id);
   notifyAdmins('payment', 'PAID IN FULL: ' + usd(r.payment.amountCents / 100) + ' on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: r.payment.amountCents / 100 }));
+  maybeAskGoogleReview(r);
   db.jobs.filter(x => x.requestId === r.id && x.status === 'Done — photos sent').forEach(jj => { maybePayWorkerForJob(jj); accrueCaptainOverride(jj); });
   return true;
 }
@@ -2813,6 +3005,7 @@ function settleRequestBalance(r, piId, cents) {
   if (r.customerId) notify(r.customerId, 'payment', 'Balance received (' + usd(bal / 100) + ') on job ' + r.id + ' — paid in full.', '#req=' + r.id);
   notifyAdmins('payment', 'PAID IN FULL (balance landed): ' + usd(tot / 100) + ' total on order ' + r.id + ' (' + (r.customerName || r.customerEmail || 'customer') + ').');
   fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: bal / 100 }));
+  maybeAskGoogleReview(r);
   // v80.5 GAP-2: seal the CART half in the same state write — a balance
   // paid in the app closes Gabriel's cart link too, so the same balance
   // can never be charged a second time through the other door.
@@ -3218,6 +3411,12 @@ async function handleStripeEvent(event) {
         fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
       }
     }
+    // v80.15: ONE clear email per failure event — what failed, how
+    // much, and where to update the card (the pause above only
+    // notified in-app and, for HomeCare, sent the cancellation
+    // template, which never says "payment failed — fix your card").
+    // Fires exactly where the failure is recorded: once per event.
+    if (u && (u.email || '').includes('@')) fireAutomation('payment_failed', { user: { name: u.name, email: u.email }, amountCents: Math.max(0, Math.round(Number(obj.amount_due) || 0)), appUrl: APP_URL });
   } else if (type === 'invoice.payment_succeeded') {
     // Payment recovered (e.g. after a retry or a rejoin): restore member status.
     // Also the backup activator for the inline "New HomeCare member" card flow.
@@ -5631,7 +5830,7 @@ async function handleRequest(req, res) {
   }
   if (p === '/api/requests' && req.method === 'GET') {
     if (!requireRole(user, ['customer', 'worker', 'admin'], res)) return;
-    if (user.role === 'admin') sweepEstimateReminders();
+    if (user.role === 'admin') { sweepEstimateReminders(); sweepFollowups(); }
     let list = user.role === 'admin' ? db.requests : db.requests.filter(r => r.customerId === user.id);
     if (user.role === 'admin') list = list.map(r => { const c = db.users.find(u => u.id === r.customerId); const ei = (db.invoices || []).find(x => x.requestId === r.id); return Object.assign({}, r, { customerPhone: r.customerPhone || (c ? (c.phone || '') : ''), customerEmail: r.customerEmail || (c ? c.email : ''), customerHomeCare: c ? (c.homeCareStatus || 'none') : 'none', estimateInvoice: ei ? { id: ei.id, status: ei.status } : null }); });
     return send(res, 200, { requests: list });
@@ -6210,7 +6409,7 @@ async function handleRequest(req, res) {
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders(); sweepDailySnapshot();
+  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders(); sweepFollowups(); sweepDailySnapshot();
     if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
     if (user.role === 'customer') {
       const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
@@ -8338,6 +8537,22 @@ async function handleRequest(req, res) {
   if (p === '/api/admin/system' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, buildSystemHealth());
+  }
+  // v80.15: admin settings — today just the Google review link that
+  // powers the one-shot review ask at Paid in full. Empty = ask off.
+  if (p === '/api/admin/settings' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    if (b.googleReviewUrl !== undefined) {
+      const v = cleanText(b.googleReviewUrl, 500).trim();
+      if (v && !/^https?:\/\/[^\s]+$/i.test(v)) return send(res, 400, { error: 'the Google review link must be a full http(s) URL — or empty to turn the review ask off' });
+      db.settings = db.settings || {};
+      db.settings.googleReviewUrl = v;
+      audit(user, 'admin.settings', 'googleReviewUrl', v ? 'google review link set' : 'google review link cleared');
+      save();
+      return send(res, 200, { ok: true, googleReviewUrl: v });
+    }
+    return send(res, 400, { error: 'nothing to save' });
   }
   const custMatch = p.match(/^\/api\/customers\/([\w-]+)$/);
   if (custMatch && req.method === 'PATCH') {
