@@ -271,6 +271,27 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .menu-card-body .mut{color:#c9c4bc}
 .menu-card-body .grow{flex:1}
 .menu-prices{display:flex;gap:10px;align-items:baseline;margin:4px 0 8px}
+/* ---------- v80.28 BÚSQUEDA: sticky menu nav + search/favorites/recents/pairings ---------- */
+.menu-nav{position:sticky;top:0;z-index:60;background:rgba(11,11,13,.97);border:1px solid #2a2a2a;border-radius:14px;padding:10px;margin:12px 0 2px}
+.menu-nav input{width:100%;background:#1a1a1a;border:1px solid #333;color:#fff;border-radius:999px;padding:10px 15px;font-size:15px}
+.menu-nav input::placeholder{color:#9a968f}
+.menu-chips{display:flex;gap:6px;overflow-x:auto;padding-top:9px;scrollbar-width:none}
+.menu-chips::-webkit-scrollbar{display:none}
+.menu-chip{flex:none;background:#1b1b1f;border:1px solid #2c2c33;color:#e8e8ea;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;cursor:pointer;box-shadow:none}
+.menu-chip.on{background:var(--red);border-color:var(--red);color:#fff}
+.menu-card-top{display:flex;align-items:flex-start;gap:6px}
+.menu-card-top b{flex:1}
+.fav-btn{flex:none;background:none;border:0;box-shadow:none;cursor:pointer;font-size:19px;line-height:1;padding:0 2px;color:#6b675f}
+.fav-btn.on{color:#ffb800}
+.menu-pairs{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:2px 0 4px}
+.pairs-lbl{font-size:12px;color:#a8a29e;font-weight:700}
+.pair-chip{background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:12px;font-weight:700;padding:5px 9px;border-radius:999px;cursor:pointer;box-shadow:none}
+.pair-chip:hover{border-color:var(--red)}
+.menu-minis{display:flex;flex-direction:column;gap:6px}
+.menu-mini{display:flex;align-items:center;gap:9px;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:8px 12px;color:#f5f5f4}
+.menu-mini .mm-name{flex:1;font-weight:700;font-size:14.5px;min-width:0}
+.menu-mini .mm-price{font-weight:800;color:#fff;white-space:nowrap}
+.menu-mini .mm-add{flex:none;background:var(--red);color:#fff;border:0;font-size:13px;font-weight:800;padding:7px 12px;border-radius:999px;cursor:pointer;box-shadow:none}
 /* ---------- v78: guest cart (Amazon-style) + embedded checkout ---------- */
 #cartBtn{position:relative;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;border-radius:12px;cursor:pointer}
 #cartBadge{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 6px;display:none}
@@ -1323,6 +1344,10 @@ table.cmp button{white-space:nowrap}
     <div id="menuBox">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap"><h2 id="menuTitle" style="margin:0">Menu — order &amp; pay right here</h2><span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="menuLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="menuLangEs" onclick="setMenuLang('es')">ES</button></span></div>
       <p class="mut" id="menuIntro">Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.</p>
+      <div id="menuNav" class="menu-nav">
+        <input id="menuSearch" type="search" autocomplete="off" placeholder="Search the menu" oninput="menuSearch(this.value)" aria-label="Search services">
+        <div class="menu-chips" id="menuChips"></div>
+      </div>
       <div id="menuGroups"></div>
       <div id="menuNoResults" style="display:none"></div>
     </div>
@@ -3434,7 +3459,7 @@ function render(){
       try { sessionStorage.removeItem('ghsRoleNote'); } catch (e) {}
     } else rn.style.display = 'none';
   }
-  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); loadMyReferrals(); loadSeasonal(); }
+  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); loadMyReferrals(); loadSeasonal(); syncMenuLists(); }
   if(!(me && me.role==='worker' && me.status==='active')) stopDutySharing();
   if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadWorkerSales(); loadWorkerEstimates(); loadWorkerReferrals(); loadCaptainArea(); loadWorkerProfile(); initDutySharing(); }
   if(me && me.role==='admin'){ loadAdmin(); }
@@ -6568,6 +6593,7 @@ function cartAddWithAddons(id, extras){
   if (line) line.q = Math.min(99, (Number(line.q) || 1) + 1);
   else items.push({ id: id, q: 1, x: extras || [] });
   cartSave(items);
+  noteRecent(id);
   paintCartBtn();
   return true;
 }
@@ -6683,6 +6709,7 @@ function cartAdd(id){
   const ex = items.find(function(it){ return it.id === id && !(it.x && it.x.length); });
   if (ex) ex.q = Math.min(10, Math.max(1, Math.round(Number(ex.q) || 1)) + 1); else items.push({ id: id, q: 1 });
   cartSave(items);
+  noteRecent(id);
   cartToast(svcName(id) + ' added to your cart');
   if (isCartRoute()) { cartResetCheckout(); renderCart(); }
 }
@@ -7760,8 +7787,8 @@ const MENU_ES = {
   'heavy-furniture-move': ['Mover mueble pesado (2 técnicos)', '~1 h · Por trabajo']
 };
 const MENU_UI = {
-  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.', popular: '🔥 Popular right now', popularAvail: '● Available today' },
-  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.', popular: '🔥 Popular ahora', popularAvail: '● Disponible hoy' }
+  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.', popular: '🔥 Popular right now', popularAvail: '● Available today', favs: '★ My favorites', recents: '🕘 Recent', all: 'All', goesWell: 'Goes well with:', addShort: '+ Add', menuSearchPh: 'Search the menu — try “toilet”, “montaje”, “plomería”…' },
+  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.', popular: '🔥 Popular ahora', popularAvail: '● Disponible hoy', favs: '★ Mis favoritos', recents: '🕘 Recientes', all: 'Todo', goesWell: 'Va bien con:', addShort: '+ Agregar', menuSearchPh: 'Busca en el menú — prueba “inodoro”, “tv mounting”, “plumbing”…' }
 };
 // v80.9 FUSIÓN — the merged homepage's copy (EN/ES, one language at a time,
 // swapped with the same toggle as the menu). Every price/claim here is
@@ -8245,28 +8272,185 @@ function paintOldHome() {
   const footPs = qa('footer .ft-grid p'); if (footPs[1]) footPs[1].textContent = ui.footStripe;
   setH(q('.ft-small'), ui.footFineHtml);
 }
-// --- v80.9 header search: live-filters the rendered menu cards ---
-function menuSearch(q) {
+// --- v80.28 BÚSQUEDA (audit P1-8 + A-8): a search that actually
+// searches. ONE engine feeds the header search, the sticky menu nav
+// and the category chips: a service matches when EVERY query token
+// hits its normalized index — EN name, ES name, EN meta, ES meta,
+// its trade's EN/ES names and its id — accents folded, so "plomeria"
+// finds Plomería and "montaje" finds TV Mounting in either UI
+// language. Category and query COMBINE (a card must pass both).
+// Favorites/recents live in localStorage for guests and on the
+// account for customers (POST /api/me/favorites + /api/me/recents,
+// validated server-side against SERVER_MENU); syncMenuLists merges
+// them at login. Pairings are the master list's own relationships
+// ONLY: each service's catalog add-ons (the master list's checkbox
+// add-on table) plus SVC_PAIRS — never invented bundles.
+let menuQuery = '';
+let menuCatSel = 'all';
+function menuNorm(s) { return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+const SVC_GROUP_OF = {};
+MENU_GROUPS.forEach(function (g) { g.services.forEach(function (id) { SVC_GROUP_OF[id] = g; }); });
+const SVC_SEARCH = {};
+function svcSearchText(id) {
+  if (SVC_SEARCH[id]) return SVC_SEARCH[id];
+  const s = MENU_CATALOG[id]; if (!s) return '';
+  const es = MENU_ES[id] || ['', ''];
+  const g = SVC_GROUP_OF[id];
+  const txt = menuNorm([id.replace(/-/g, ' '), s.name, es[0], s.meta, es[1], g ? g.en : '', g ? g.es : '', g ? g.key : ''].join(' '));
+  SVC_SEARCH[id] = txt;
+  return txt;
+}
+function menuMatchSvc(id, q) {
+  const toks = menuNorm(q).split(/\s+/).filter(Boolean);
+  if (!toks.length) return true;
+  const txt = svcSearchText(id);
+  return toks.every(function (tk) { return txt.indexOf(tk) >= 0; });
+}
+function menuVisibleIds(q, cat) {
+  const searching = String(q || '').trim().length > 0;
+  const out = [];
+  const push = function (id) { if (out.indexOf(id) < 0 && (!searching || menuMatchSvc(id, q))) out.push(id); };
+  if (cat === 'favorites') { favsLoad().forEach(push); return out; }
+  if (cat === 'recents') { recentsLoad().forEach(push); return out; }
+  MENU_GROUPS.forEach(function (g) {
+    if (cat && cat !== 'all' && g.key !== cat) return;
+    g.services.forEach(push);
+  });
+  return out;
+}
+// ---------- favorites + recents ----------
+const FAV_LS_KEY = 'ghsMenuFavs', REC_LS_KEY = 'ghsMenuRecents';
+let menuFavs = null, menuRecents = null;
+function favsLoad() {
+  if (menuFavs) return menuFavs;
+  try { menuFavs = (JSON.parse(localStorage.getItem(FAV_LS_KEY) || '[]') || []).filter(function (id) { return !!MENU_CATALOG[id]; }).slice(0, 24); } catch (e) { menuFavs = []; }
+  return menuFavs;
+}
+function recentsLoad() {
+  if (menuRecents) return menuRecents;
+  try { menuRecents = (JSON.parse(localStorage.getItem(REC_LS_KEY) || '[]') || []).filter(function (id) { return !!MENU_CATALOG[id]; }).slice(0, 8); } catch (e) { menuRecents = []; }
+  return menuRecents;
+}
+function favsSave() { try { localStorage.setItem(FAV_LS_KEY, JSON.stringify(favsLoad())); } catch (e) {} }
+function recentsSave() { try { localStorage.setItem(REC_LS_KEY, JSON.stringify(recentsLoad())); } catch (e) {} }
+function isFav(id) { return favsLoad().indexOf(id) >= 0; }
+function persistFavs() { if (me && me.role === 'customer') { try { fetch('/api/me/favorites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ favorites: favsLoad() }) }).catch(function () {}); } catch (e) {} } }
+function persistRecents() { if (me && me.role === 'customer') { try { fetch('/api/me/recents', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recents: recentsLoad() }) }).catch(function () {}); } catch (e) {} } }
+function toggleFav(id) {
+  if (!MENU_CATALOG[id]) return;
+  const f = favsLoad();
+  const i = f.indexOf(id);
+  if (i >= 0) f.splice(i, 1); else { f.unshift(id); if (f.length > 24) f.length = 24; }
+  if (!f.length && menuCatSel === 'favorites') menuCatSel = 'all';
+  favsSave();
+  persistFavs();
+  renderMenu();
+}
+function noteRecent(id) {
+  if (!MENU_CATALOG[id]) return;
+  const r = recentsLoad();
+  if (r[0] === id) return;
+  const i = r.indexOf(id);
+  if (i > 0) r.splice(i, 1);
+  r.unshift(id);
+  if (r.length > 8) r.length = 8;
+  recentsSave();
+  persistRecents();
+}
+// At login the account's lists and this device's lists merge (union —
+// nothing a guest picked is lost), the merged favorites go back to
+// the account, and the menu repaints with both strips.
+function syncMenuLists() {
+  if (!me || me.role !== 'customer') return;
+  const acctFavs = (Array.isArray(me.favorites) ? me.favorites : []).join(',');
+  const fBefore = favsLoad().join(','), rBefore = recentsLoad().join(',');
+  const f = favsLoad();
+  (Array.isArray(me.favorites) ? me.favorites : []).forEach(function (id) { if (MENU_CATALOG[id] && f.indexOf(id) < 0) f.push(id); });
+  if (f.length > 24) f.length = 24;
+  const merged = [];
+  (Array.isArray(me.recents) ? me.recents : []).concat(recentsLoad()).forEach(function (id) { if (MENU_CATALOG[id] && merged.indexOf(id) < 0) merged.push(id); });
+  menuRecents = merged.slice(0, 8);
+  if (f.join(',') !== fBefore || menuRecents.join(',') !== rBefore) { favsSave(); recentsSave(); renderMenu(); }
+  if (f.join(',') !== acctFavs) persistFavs();
+}
+// ---------- honest pairings (master list relationships only) ----------
+// Service -> service pairs the master list itself states: "Fence post
+// replacement (add-on to a fence repair visit)". Everything else is a
+// catalog add-on — the master list's checkbox add-on table, priced by
+// the catalog and charged by the server's own math.
+const SVC_PAIRS = { 'fence-picket-repair': ['fence-post-replacement'] };
+function svcPairings(id) {
+  const s = MENU_CATALOG[id]; if (!s) return [];
+  const out = [];
+  (s.addons || []).forEach(function (a) { out.push({ kind: 'addon', id: a.id, name: a.name, price: a.price }); });
+  (SVC_PAIRS[id] || []).forEach(function (pid) { const p = MENU_CATALOG[pid]; if (p) out.push({ kind: 'service', id: pid, name: svcName(pid), price: p.price }); });
+  return out;
+}
+function pairsHtml(id, ui) {
+  const ps = svcPairings(id);
+  if (!ps.length) return '';
+  return '<div class="menu-pairs"><span class="pairs-lbl">' + ui.goesWell + '</span>' + ps.map(function (p) {
+    return p.kind === 'addon'
+      ? '<button type="button" class="pair-chip" onclick="pairAdd(\'' + id + '\',\'' + p.id + '\');return false;">+ ' + escHtml(p.name) + ' · $' + p.price + '</button>'
+      : '<button type="button" class="pair-chip" onclick="cartAdd(\'' + p.id + '\');return false;">+ ' + escHtml(p.name) + ' · $' + p.price + '</button>';
+  }).join('') + '</div>';
+}
+// A paired add-on rides the SAME cart path as everything else: the
+// base service line carrying the add-on (cartAddWithAddons), priced
+// by the catalog client-side and recomputed from SERVER_MENU at
+// quote/checkout — one cart, one price source.
+function pairAdd(id, addonId) {
+  const a = ((MENU_CATALOG[id] || {}).addons || []).find(function (x) { return x.id === addonId; });
+  if (!a) return;
+  if (cartAddWithAddons(id, [addonId])) cartToast(svcName(id) + ' + ' + a.name + ' added to your cart');
+}
+// ---------- sticky nav: search + category chips ----------
+function renderMenuChips() {
+  const box = document.getElementById('menuChips');
+  if (!box) return;
+  const L = menuLang(), ui = MENU_UI[L];
+  if (menuCatSel === 'favorites' && !favsLoad().length) menuCatSel = 'all';
+  const chip = function (key, label) { return '<button type="button" class="menu-chip' + (menuCatSel === key ? ' on' : '') + '" onclick="menuSetCat(\'' + key + '\')">' + escHtml(label) + '</button>'; };
+  let h = chip('all', ui.all);
+  if (favsLoad().length) h += chip('favorites', ui.favs);
+  MENU_GROUPS.forEach(function (g) { h += chip(g.key, L === 'es' ? g.es : g.en); });
+  box.innerHTML = h;
+}
+function menuSetCat(key) {
+  menuCatSel = key || 'all';
+  renderMenuChips();
   applyMenuFilter();
-  if (q && q.trim().length === 1) { const mb = document.getElementById('menuBox'); if (mb) mb.scrollIntoView({ behavior: 'smooth' }); }
+  const nav = document.getElementById('menuNav');
+  if (nav && nav.scrollIntoView) nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function menuSearch(q) {
+  menuQuery = q || '';
+  ['homeSearch', 'menuSearch'].forEach(function (idv) { const el = document.getElementById(idv); if (el && el.value !== menuQuery) el.value = menuQuery; });
+  applyMenuFilter();
+  if (menuQuery.trim().length === 1) { const mb = document.getElementById('menuBox'); if (mb) mb.scrollIntoView({ behavior: 'smooth' }); }
 }
 function applyMenuFilter() {
-  const inp = document.getElementById('homeSearch');
-  const q = inp ? inp.value.trim().toLowerCase() : '';
+  const searching = menuQuery.trim().length > 0;
   let total = 0;
   document.querySelectorAll('#menuGroups .menu-group').forEach(function (gr) {
+    const gk = gr.getAttribute('data-group');
+    let allowed;
+    if (menuCatSel === 'all') allowed = !(searching && (gk === 'popular' || gk === 'favorites' || gk === 'recents'));
+    else allowed = (gk === menuCatSel);
     let vis = 0;
-    gr.querySelectorAll('.menu-card').forEach(function (card) {
-      const show = !q || card.textContent.toLowerCase().indexOf(q) >= 0;
-      card.style.display = show ? '' : 'none';
-      if (show) vis++;
-    });
-    gr.style.display = (!q || vis > 0) ? '' : 'none';
-    total += vis;
+    if (allowed) {
+      gr.querySelectorAll('[data-sid]').forEach(function (card) {
+        const show = !searching || menuMatchSvc(card.getAttribute('data-sid'), menuQuery);
+        card.style.display = show ? '' : 'none';
+        if (show) vis++;
+      });
+    }
+    gr.style.display = (allowed && vis > 0) ? '' : 'none';
+    if (gr.style.display !== 'none') total += vis;
   });
   const nr = document.getElementById('menuNoResults');
   if (nr) {
-    const showNr = !!q && total === 0;
+    const showNr = total === 0 && (searching || menuCatSel !== 'all');
     nr.style.display = showNr ? 'block' : 'none';
     if (showNr) { const hui = HOME_UI[menuLang()]; nr.innerHTML = '<div class="card" style="text-align:center"><h3 style="margin-top:0">' + hui.noResH + '</h3><p class="mut">' + hui.noResP + '</p><a class="btn-link" href="' + PHOTO_EST_URL + '" target="_blank" rel="noopener">' + hui.noResB + '</a></div>'; }
   }
@@ -8301,6 +8485,8 @@ function applyMenuLang() {
   const gE = document.getElementById('globLangEn'); if (gE) gE.classList.toggle('on', L === 'en');
   const gS = document.getElementById('globLangEs'); if (gS) gS.classList.toggle('on', L === 'es');
   const hs = document.getElementById('homeSearch'); if (hs) hs.placeholder = HOME_UI[L].searchPh;
+  const ms = document.getElementById('menuSearch'); if (ms) ms.placeholder = MENU_UI[L].menuSearchPh;
+  if (typeof renderMenuChips === 'function') renderMenuChips();
   const inl = document.getElementById('installNavLink'); if (inl) inl.textContent = HOME_UI[L].install;
   paintHomeBlocks();
   if (typeof paintOldHome === 'function') paintOldHome(); // v80.19.1: the restored homepage repaints from OH_UI on the same pass (load + toggle)
@@ -8324,7 +8510,14 @@ function menuPriceHtml(s) {
 }
 function menuCardHtml(id, groupKey, ui) {
   const s = MENU_CATALOG[id]; if (!s) return '';
-  return '<div class="menu-card">' + svcImgHtml(id, groupKey, '') + '<div class="menu-card-body"><b>' + escHtml(svcName(id)) + '</b><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div><button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>';
+  return '<div class="menu-card" data-sid="' + id + '">' + svcImgHtml(id, groupKey, '') + '<div class="menu-card-body"><div class="menu-card-top"><b>' + escHtml(svcName(id)) + '</b><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button></div><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div>' + pairsHtml(id, ui) + '<button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>';
+}
+// v80.28: favorites/recents render as compact rows (name + list price
+// + one-tap add) — deliberately NOT .menu-card, so the strips stay a
+// shortcut layer over the one catalog, never a second menu.
+function menuMiniHtml(id, ui) {
+  const s = MENU_CATALOG[id]; if (!s) return '';
+  return '<div class="menu-mini" data-sid="' + id + '"><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button><span class="mm-name">' + escHtml(svcName(id)) + '</span><span class="mm-price">$' + s.price + (s.from ? '–$300' : '') + '</span><button type="button" class="mm-add" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addShort + '</button></div>';
 }
 // v80.9: "Popular right now" — the website's six most-ordered services,
 // pinned above the trade groups and rendered as normal orderable cards.
@@ -8335,6 +8528,9 @@ function renderMenu() {
   if (!box || typeof MENU_CATALOG === 'undefined') return;
   const L = menuLang(), ui = MENU_UI[L], hui = HOME_UI[L];
   const parts = [];
+  const recs28 = recentsLoad(), favs28 = favsLoad();
+  if (recs28.length) parts.push('<div class="menu-group" data-group="recents"><h3 class="menu-group-title" id="mg-recents">' + ui.recents + '</h3><div class="menu-minis">' + recs28.map(function (id) { return menuMiniHtml(id, ui); }).join('') + '</div></div>');
+  if (favs28.length) parts.push('<div class="menu-group" data-group="favorites"><h3 class="menu-group-title" id="mg-favorites">' + ui.favs + '</h3><div class="menu-minis">' + favs28.map(function (id) { return menuMiniHtml(id, ui); }).join('') + '</div></div>');
   parts.push('<div class="menu-group" data-group="popular"><h3 class="menu-group-title" id="mg-popular">' + ui.popular + '</h3><div class="pop-avail">' + ui.popularAvail + '</div><div class="menu-grid">' + POPULAR_IDS.map(function (id) { return menuCardHtml(id, POPULAR_GRP[id], ui); }).join('') + '</div></div>');
   MENU_GROUPS.forEach(function (g) {
     const cards = g.services.map(function (id) { return menuCardHtml(id, g.key, ui); }).join('');
@@ -8343,6 +8539,7 @@ function renderMenu() {
     if (g.key === 'gardening') parts.push('<div class="ba-band"><h3 class="menu-group-title">' + hui.baH + '</h3><p class="mut" style="margin:2px 0 8px">' + hui.baSee + '</p><div class="ghs-ba"><img src="/ba/after.webp" alt=""><div class="ghs-ba-before" id="ghsBaBefore" style="background-image:url(\'/ba/before.webp\')"></div><span class="ba-tag l">' + hui.baBefore + '</span><span class="ba-tag r">' + hui.baAfter + '</span></div><input class="ba-range" type="range" min="0" max="100" value="50" aria-label="Before and after — slide to reveal" oninput="baSlide(this)"><p class="mut" style="margin-top:8px">' + hui.baCap + ' <a href="#yard-care">' + hui.baB + '</a></p></div>');
   });
   box.innerHTML = parts.join('');
+  renderMenuChips();
   applyMenuFilter();
 }
 function goMenu() {
