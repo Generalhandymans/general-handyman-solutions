@@ -1363,7 +1363,7 @@ table.cmp button{white-space:nowrap}
   <!-- ADMIN -->
   <div id="adminBox" style="display:none">
     <h2>Team — control center</h2>
-    <p id="admNav" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px"><button type="button" class="ghost" onclick="admGo('admSecRequests')">Requests</button><button type="button" class="ghost" onclick="admGo('admSecCart')">Cart</button><button type="button" class="ghost" onclick="admGo('admSecWorkers')">Workers</button><button type="button" class="ghost" onclick="admGo('admSecCaptains')">Captains</button><button type="button" class="ghost" onclick="admGo('admSecCreateJob')">Create job</button><button type="button" class="ghost" onclick="admGo('admSecJobs')">Jobs</button><button type="button" class="ghost" onclick="admGo('admSecRatings')">Ratings</button><button type="button" class="ghost" onclick="admGo('admSecInvoices')">Invoices</button><button type="button" class="ghost" onclick="admGo('admSecCalendar')">Calendar</button></p>
+    <p id="admNav" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 2px"><button type="button" class="ghost" onclick="admGo('admSecRequests')">Requests</button><button type="button" class="ghost" onclick="admGo('admSecCart')">Cart</button><button type="button" class="ghost" onclick="admGo('admSecWorkers')">Workers</button><button type="button" class="ghost" onclick="admGo('admSecCaptains')">Captains</button><button type="button" class="ghost" onclick="admGo('admSecCreateJob')">Create job</button><button type="button" class="ghost" onclick="admGo('admSecJobs')">Jobs</button><button type="button" class="ghost" onclick="admGo('admSecRatings')">Ratings</button><button type="button" class="ghost" onclick="admGo('admSecInvoices')">Invoices</button><button type="button" class="ghost" onclick="admGo('admSecTraffic')">Traffic</button><button type="button" class="ghost" onclick="admGo('admSecMoney')">Money</button><button type="button" class="ghost" onclick="admGo('admSecCalendar')">Calendar</button></p>
     <p><button class="ghost" onclick="location.hash='#yard-calendar'">Yard Calendar — schedule member yard visits</button> <span class="mut">separate from the master calendar below</span></p>
     <h3 id="admSecCalendar">Master calendar</h3>
     <div class="card">
@@ -1458,6 +1458,10 @@ table.cmp button{white-space:nowrap}
     <div id="adminInvoices"></div>
     <h3 id="admSecSources">Sources — where customers come from</h3>
     <div id="adminSources"></div>
+    <h3 id="admSecTraffic">Traffic — views, funnel &amp; CAC</h3>
+    <div id="adminTraffic"></div>
+    <h3 id="admSecMoney">Money — where the money is</h3>
+    <div id="adminMoney"></div>
     <h3>Security &amp; activity log</h3>
     <p class="mut">Every admin action and money movement is recorded here — quotes, status changes, captures, releases, payouts, worker changes, sign-ins. Only you see this.</p>
     <div id="adminAudit"></div>
@@ -2152,6 +2156,36 @@ function campaignSource(){
 }
 captureCampaignSource();
 
+// ---------- v80.12: view beacon (Tráfico) ----------
+// One fire-and-forget count per major storefront view — the server
+// keeps ONLY aggregate daily counters (by day + source); nothing
+// per-visitor is stored on either end. Worker/admin sessions never
+// count (the server agrees). The same view re-counts only after 20 s,
+// so SPA re-renders don't inflate the funnel's top.
+let _trackedView812 = '', _trackedAt812 = 0;
+function trackView812(view, force){
+  try {
+    if (me && me.role !== 'customer') return;
+    const now = Date.now();
+    if (!force && _trackedView812 === view && (now - _trackedAt812) < 20000) return;
+    _trackedView812 = view; _trackedAt812 = now;
+    fetch('/api/track/view', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ view: view, src: campaignSource() || '' }), keepalive: true }).catch(function () {});
+  } catch (e) {}
+}
+function trackRouteView812(){
+  try {
+    const h = location.hash || '';
+    if (isWorkerEntry() || h.indexOf('#worker') === 0 || h.indexOf('#login-worker') === 0) return;
+    if (isInfoRoute() || isTermsRoute()) return;
+    if (isCartRoute()) { trackView812('cart'); return; }
+    if (membershipJoinHashConfig() || isMembershipRoute()) { trackView812('join'); return; }
+    // 'menu' is a sticky destination (goMenu fires it directly): don't
+    // let the very next render overwrite it as 'home' within the window.
+    if (_trackedView812 === 'menu' && (Date.now() - _trackedAt812) < 20000) return;
+    trackView812('home');
+  } catch (e) {}
+}
+
 // ---------- Per-variant plan images (v24 bug fix) ----------
 // Each paid plan variant maps to its OWN product image whose baked-in
 // price matches the variant. The 1-visit images live in the plan-card
@@ -2783,6 +2817,7 @@ function focusCardWhenReady(elId){
 async function toggleNotifs(){ const p=document.getElementById('notifPanel'); const open=p.style.display==='block'; p.style.display=open?'none':'block'; if(!open){ renderNotifs(); try{ await api('/api/notifications/read',{method:'POST',body:JSON.stringify({})}); setTimeout(loadNotifs,600); }catch(e){} } }
 setInterval(()=>{ if(me) loadNotifs(); }, 20000);
 function render(){
+  trackRouteView812(); // v80.12: aggregate view beacon (no-op off the storefront)
   updateContactPill();
   paintDeleteAccount();
   document.getElementById('who').textContent = me ? (me.name+' • '+me.role+(me.role==='worker'?' • '+me.status:'')) : '';
@@ -4770,6 +4805,8 @@ async function loadAdmin(){
   loadAdminAudit();
   renderCartPicker();
   loadAdminSources();
+  loadAdminTraffic();
+  loadAdminMoney();
   loadAdminCarts();
   loadAdminInvites();
   } finally { _adminLoading = false; if (_adminReloadQueued) { _adminReloadQueued = false; loadAdmin(); }
@@ -4919,6 +4956,86 @@ async function loadAdminSources(){
     if (!rows.length) { host.innerHTML = '<p class="mut">No customers yet.</p>'; return; }
     host.innerHTML = '<table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">Source</th><th>Customers</th><th>Orders</th><th>Members</th></tr>' + rows.map(function (r) { return '<tr><td>' + escHtml(r.source) + '</td><td style="text-align:center">' + r.customers + '</td><td style="text-align:center">' + r.orders + '</td><td style="text-align:center">' + r.members + '</td></tr>'; }).join('') + '</table><p class="mut">Cost per client = ad spend ÷ customers from that source. First-touch: the first source a customer arrives with stays on their account.</p>';
   } catch (e) { host.innerHTML = '<p class="mut">Could not load sources.</p>'; }
+}
+// ---------- v80.12: Tráfico + Dinero (admin) ----------
+// Labels follow the HOME_UI dictionary pattern (EN/ES, keyed by the
+// app language) so the two sections read in the language Gabriel is
+// using, like the rest of the app's painted blocks.
+const ADM812 = {
+  en: { today: 'Today', d7: '7 days', d30: '30 days', funnel: 'Funnel', views: 'views', carts: 'carts', joins: 'signups', payments: 'payments', source: 'Source', deposits: 'Deposits', newMembers: 'New paying members', spend: 'Ad spend', cac: 'CAC', workerCode: 'worker code', addSpend: 'Add ad spend', amount: 'Amount', date: 'Date', save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', noSpend: 'No spend records yet — add the first one above when an ad runs.', couldNot: 'Could not load.', depWaiting: 'Deposits in, balance still out', orders: 'orders', collected: 'collected', balanceOut: 'balance still out', receivable: 'Total receivable', orderBalances: 'order balances', cartBalances: 'unconverted cart balances', invoicesOpen: 'open invoices', techDue: 'Tech payouts waiting', jobs: 'jobs', bounties: 'referral bounties pending', awaitingSetup: 'waiting on Stripe setup', captainsDue: 'Captain overrides accrued', entries: 'entries', memFail: 'Membership payment failures (this month)', stripeBox: 'Stripe', avail: 'available', pendingBal: 'pending', nextPayout: 'next payout', noStripe: 'Balance not available right now — the rest of this page is live from the app.' },
+  es: { today: 'Hoy', d7: '7 días', d30: '30 días', funnel: 'Embudo', views: 'visitas', carts: 'carritos', joins: 'registros', payments: 'pagos', source: 'Fuente', deposits: 'Depósitos', newMembers: 'Miembros nuevos que pagaron', spend: 'Gasto en anuncios', cac: 'CAC', workerCode: 'código de técnico', addSpend: 'Agregar gasto en anuncios', amount: 'Monto', date: 'Fecha', save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Borrar', noSpend: 'Todavía no hay gastos registrados — agrega el primero arriba cuando corra un anuncio.', couldNot: 'No se pudo cargar.', depWaiting: 'Depósitos cobrados, saldo pendiente', orders: 'órdenes', collected: 'cobrados', balanceOut: 'de saldo por cobrar', receivable: 'Total por cobrar', orderBalances: 'saldos de órdenes', cartBalances: 'saldos de carritos sin convertir', invoicesOpen: 'facturas abiertas', techDue: 'Pagos a técnicos en espera', jobs: 'trabajos', bounties: 'bonos de referido pendientes', awaitingSetup: 'esperando su Stripe', captainsDue: 'Overrides de capitán acumulados', entries: 'registros', memFail: 'Pagos de membresía fallidos (este mes)', stripeBox: 'Stripe', avail: 'disponible', pendingBal: 'pendiente', nextPayout: 'próximo payout', noStripe: 'Saldo no disponible ahorita — el resto de la página sí es en vivo desde la app.' }
+};
+let trafficRange812 = '7d';
+function setTrafficRange(r){ trafficRange812 = r; loadAdminTraffic(); }
+async function loadAdminTraffic(){
+  const host = document.getElementById('adminTraffic'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM812[menuLang()] || ADM812.en;
+  try {
+    const d = await api('/api/admin/traffic?range=' + trafficRange812);
+    const sp = await api('/api/admin/adspend');
+    const records = (sp && sp.records) || [];
+    window.__adsRecords812 = records;
+    const t = d.totals || {};
+    const pct = function (v) { return v == null ? '—' : v + '%'; };
+    let h = '<p style="margin:2px 0 8px">'
+      + [['today', S.today], ['7d', S.d7], ['30d', S.d30]].map(function (pr) { return '<button type="button" class="ghost" onclick="setTrafficRange(\'' + pr[0] + '\')"' + (trafficRange812 === pr[0] ? ' style="font-weight:800;text-decoration:underline"' : '') + '>' + pr[1] + '</button>'; }).join(' ')
+      + ' <span class="mut">' + escHtml(d.from || '') + ' → ' + escHtml(d.to || '') + '</span></p>';
+    h += '<p style="margin:0 0 8px"><b>' + S.funnel + ':</b> ' + (t.views || 0) + ' ' + S.views + ' → ' + (t.carts || 0) + ' ' + S.carts + ' (' + pct(t.convCarts) + ') → ' + (t.joins || 0) + ' ' + S.joins + ' (' + pct(t.convJoins) + ') → ' + (t.payments || 0) + ' ' + S.payments + ' (' + pct(t.convPayments) + ')</p>';
+    const rows = d.rows || [];
+    if (rows.length) {
+      h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">' + S.source + '</th><th>' + S.views + '</th><th>' + S.carts + '</th><th>' + S.joins + '</th><th>' + S.deposits + '</th><th>' + S.newMembers + '</th><th>' + S.spend + '</th><th>' + S.cac + '</th></tr>'
+        + rows.map(function (r) { return '<tr><td>' + escHtml(r.source) + (r.workerCode ? ' <span class="mut">(' + S.workerCode + ')</span>' : '') + '</td><td style="text-align:center">' + r.views + '</td><td style="text-align:center">' + r.carts + '</td><td style="text-align:center">' + r.joins + '</td><td style="text-align:center">' + r.deposits + '</td><td style="text-align:center">' + r.newMembers + '</td><td style="text-align:center">' + (r.spend ? moneyFmt(r.spend) : '—') + '</td><td style="text-align:center">' + (r.cac == null ? '—' : moneyFmt(r.cac)) + '</td></tr>'; }).join('') + '</table></div>';
+    }
+    h += '<div style="margin-top:10px"><b>' + S.addSpend + '</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
+      + '<input id="adsSrc" placeholder="' + S.source + ' (ig, fb, google…)" style="flex:1;min-width:120px">'
+      + '<input id="adsAmt" type="number" min="0" step="0.01" placeholder="' + S.amount + ' $" style="width:110px">'
+      + '<input id="adsDate" type="date" style="width:160px">'
+      + '<input id="adsId" type="hidden" value="">'
+      + '<button type="button" onclick="saveAdSpend()">' + S.save + '</button>'
+      + '<button type="button" class="ghost" onclick="resetAdSpendForm()">' + S.cancel + '</button></div></div>';
+    if (records.length) {
+      h += '<div style="margin-top:8px">' + records.map(function (r) { return '<div class="card" style="padding:6px 10px;margin:4px 0"><b>' + escHtml(r.source) + '</b> · ' + moneyFmt(r.amount) + ' · ' + escHtml(r.date) + ' <button type="button" class="ghost" onclick="editAdSpend(\'' + r.id + '\')">' + S.edit + '</button> <button type="button" class="ghost" onclick="deleteAdSpend(\'' + r.id + '\')">' + S.del + '</button></div>'; }).join('') + '</div>';
+    } else h += '<p class="mut">' + S.noSpend + '</p>';
+    host.innerHTML = h;
+    const dateEl = document.getElementById('adsDate'); if (dateEl && !dateEl.value) dateEl.value = d.to || '';
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+async function saveAdSpend(){
+  const idv = (document.getElementById('adsId') || {}).value || '';
+  const body = { source: ((document.getElementById('adsSrc') || {}).value || '').trim(), amount: Number((document.getElementById('adsAmt') || {}).value || 0), date: (document.getElementById('adsDate') || {}).value || '' };
+  try {
+    if (idv) await api('/api/admin/adspend/' + idv, { method: 'PUT', body: JSON.stringify(body) });
+    else await api('/api/admin/adspend', { method: 'POST', body: JSON.stringify(body) });
+    loadAdminTraffic();
+  } catch (e) { alert(e.message); }
+}
+function resetAdSpendForm(){ ['adsSrc', 'adsAmt', 'adsId'].forEach(function (i) { const el = document.getElementById(i); if (el) el.value = ''; }); const d = document.getElementById('adsDate'); if (d) d.value = ''; }
+function editAdSpend(idv){
+  const r = (window.__adsRecords812 || []).find(function (x) { return x.id === idv; }); if (!r) return;
+  const s = document.getElementById('adsSrc'), a = document.getElementById('adsAmt'), d = document.getElementById('adsDate'), i = document.getElementById('adsId');
+  if (s) s.value = r.source; if (a) a.value = r.amount; if (d) d.value = r.date; if (i) i.value = r.id;
+  const sec = document.getElementById('admSecTraffic'); if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+async function deleteAdSpend(idv){ if (!confirm('Delete this spend record?')) return; try { await api('/api/admin/adspend/' + idv, { method: 'DELETE' }); loadAdminTraffic(); } catch (e) { alert(e.message); } }
+async function loadAdminMoney(){
+  const host = document.getElementById('adminMoney'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM812[menuLang()] || ADM812.en;
+  try {
+    const d = await api('/api/admin/money');
+    const dw = d.depositsWaiting || {}, rc = d.receivables || {}, tp = d.techPayouts || {}, cp = d.captains || {}, mf = d.membershipFailures || {}, st = d.stripe || {};
+    let h = '';
+    h += '<div class="card"><b>' + S.depWaiting + ':</b> ' + (dw.count || 0) + ' ' + S.orders + ' · ' + moneyFmt(dw.collected || 0) + ' ' + S.collected + ' · ' + moneyFmt(dw.balance || 0) + ' ' + S.balanceOut + '</div>';
+    h += '<div class="card"><b>' + S.receivable + ':</b> ' + moneyFmt(rc.total || 0) + '<br><span class="mut">' + S.orderBalances + ' ' + moneyFmt(rc.orderBalances || 0) + ' · ' + S.cartBalances + ' ' + moneyFmt(rc.cartBalances || 0) + ' (' + (rc.cartBalancesCount || 0) + ') · ' + S.invoicesOpen + ' ' + moneyFmt(rc.invoicesOpen || 0) + ' (' + (rc.invoicesOpenCount || 0) + ')</span></div>';
+    h += '<div class="card"><b>' + S.techDue + ':</b> ' + moneyFmt(tp.amount || 0) + ' · ' + (tp.jobs || 0) + ' ' + S.jobs
+      + ((tp.byState || []).length ? '<br>' + tp.byState.map(function (b) { return '<span class="mut">' + escHtml(b.state) + ':</span> ' + moneyFmt(b.amount) + ' (' + b.jobs + ')'; }).join(' · ') : '')
+      + ((tp.bountiesPending && tp.bountiesPending.count) ? '<br><span class="mut">' + S.bounties + ':</span> ' + moneyFmt(tp.bountiesPending.amount) + ' (' + tp.bountiesPending.count + ')' : '')
+      + ((tp.perTech || []).length ? '<br>' + tp.perTech.map(function (w) { return '<span class="mut">' + escHtml(w.name || w.workerId) + ':</span> ' + moneyFmt((w.amount || 0) + (w.bountyAmount || 0)) + (w.awaitingSetup ? ' <span class="mut">(' + moneyFmt(w.awaitingSetup) + ' ' + S.awaitingSetup + ')</span>' : ''); }).join('<br>') : '')
+      + '</div>';
+    h += '<div class="card"><b>' + S.captainsDue + ':</b> ' + moneyFmt(cp.accrued || 0) + ' (' + (cp.entries || 0) + ' ' + S.entries + ')' + ((cp.perCaptain || []).length ? '<br>' + cp.perCaptain.map(function (c) { return '<span class="mut">' + escHtml(c.name || c.captainId) + ':</span> ' + moneyFmt(c.amount); }).join(' · ') : '') + '</div>';
+    h += '<div class="card"><b>' + S.memFail + ':</b> ' + (mf.count || 0) + ' · ' + moneyFmt(mf.total || 0) + '</div>';
+    h += '<div class="card"><b>' + S.stripeBox + ':</b> ' + (st.available ? moneyFmt(st.balanceAvailable || 0) + ' ' + S.avail + ' · ' + moneyFmt(st.balancePending || 0) + ' ' + S.pendingBal + (st.nextPayout ? '<br><span class="mut">' + S.nextPayout + ':</span> ' + moneyFmt(st.nextPayout.amount) + (st.nextPayout.date ? ' · ' + escHtml(st.nextPayout.date) : '') + (st.nextPayout.status ? ' · ' + escHtml(st.nextPayout.status) : '') : '') : '<span class="mut">' + S.noStripe + '</span>') + '</div>';
+    host.innerHTML = h;
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
 }
 async function loadAdminCarts(){
   const box=document.getElementById('adminCarts'); if(!box || !me || me.role!=='admin') return;
@@ -7040,6 +7157,7 @@ function renderMenu() {
   applyMenuFilter();
 }
 function goMenu() {
+  trackView812('menu', true); // v80.12: the menu view counts when the customer actually goes to it
   if (location.hash) location.hash = ''; else render();
   setTimeout(function () { const el = document.getElementById('menuBox'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
 }
