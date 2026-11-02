@@ -409,6 +409,14 @@ table.cmp button{white-space:nowrap}
 <div class="wrap">
   <!-- PLAN COMPARISON (added 2026-10-21) — front-page grid: no membership vs membership -->
 
+  <!-- v80.17 PUERTA PLUS — the PROMO hero for a cold guest arriving on a
+       membership join deep link (#join-plus1, the /plus bio/QR door, and
+       its four twins). Filled by renderJoinPromo() and shown only while
+       promo mode is armed (isJoinPromoActive): the plan's own image,
+       name, price and settled benefits, with the EXISTING one-submit
+       join form (authBox, directly below) as the registration. -->
+  <div id="joinPromoBox" class="card" style="display:none;border:2px solid #e42535;background:#141414;color:#fff"></div>
+
   <!-- AUTH -->
   <div id="authBox" class="card">
     <div class="auth-hero"><img src="/icons/icon-192.png" alt="General Handyman Solutions"><div><b><i>General</i> <em>Handyman</em> Solutions</b><span>Handyman · Mobile mechanic · Yard care — Solano County</span></div></div>
@@ -1912,6 +1920,9 @@ function renderJoinTexts(){
     : 'Joining ' + info.name + ' — your card will be charged $' + info.monthly + ' today, then $' + info.monthly + '/mo. One form, one submit: account, service address and payment together. Cancel anytime.';
   const btn = document.getElementById('authBtn');
   if (btn && info) btn.textContent = 'Create account & join — $' + info.monthly + '/mo';
+  // v80.17 PUERTA PLUS: while the promo door is up, its hero follows the
+  // form's plan too (in-form selector switches repaint both).
+  if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
 }
 function enterJoinMode(){
   mode('join');
@@ -1970,7 +1981,7 @@ async function beginInlineJoin(kind, plan){
   // as "visitor navigated back home" and dismiss the form it just opened.
   if (location.hash) { ghsJoinArmNav = true; location.hash = ''; } else render();
   enterJoinMode();
-  document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
+  scrollToJoinDoor();
   const okS = await ensureStripe();
   if (!okS || !cardEl) {
     // The inline form cannot run (Stripe.js or the publishable key is
@@ -1985,7 +1996,7 @@ async function beginInlineJoin(kind, plan){
     pendingMembershipPlan = { kind, plan };
     mode('customer');
     renderMemberFallback();
-    document.getElementById('authBox').scrollIntoView({ behavior: 'smooth' });
+    scrollToJoinDoor();
   } else if (pendingMembershipPlan) {
     // The inline form owns this join now (pendingJoin) — a stale armed
     // fallback must not ALSO fire the post-signup redirect resume later.
@@ -2110,12 +2121,125 @@ function queueMembershipDeepLink(){
   const key = location.hash + '|' + (me ? me.id : 'guest');
   if (membershipDeepLinkKey === key) return;
   membershipDeepLinkKey = key;
+  // v80.17 PUERTA PLUS: a GUEST arriving on this deep link gets the promo
+  // view for the plan (renderJoinPromo) — a logged-in user keeps the
+  // plain membership flow exactly as before.
+  if (!me) joinPromo = { plan: cfg.plan, kind: cfg.kind };
   if (cfg.which === 'yard' || cfg.which === 'plus') selectMembershipVisits(cfg.which, cfg.visits);
   setTimeout(() => { startMembershipCheckout(cfg.kind, cfg.plan); }, 0);
 }
 function exitMemberships(){
   if (location.hash) location.hash = '';
   render();
+}
+// ---------- v80.17 PUERTA PLUS: the promo landing for cold join deep links ----------
+// The door itself already worked mechanically (/plus 302 → #join-plus1 →
+// the deep link arms the plan in the one-submit join form) — but a cold
+// guest landed on the GENERIC storefront: the form sat inside a card
+// headed "Log in / Sign up" with the hero, popular services, every plan
+// and the full menu competing around it, and no promotion anywhere.
+// Gabriel, 2026-11-01: "el link no abre una promoción directamente; que
+// puedan registrarse." So while a guest join is armed FROM A DEEP LINK,
+// the app is one focused promo view (the render() branch below): the
+// plan's hero — its EXISTING plan image, name, price and the settled
+// benefit lines from the membership surfaces — with that same join form
+// directly under it. Generic over the join-hash config: all five doors
+// (#join-plus1/plus2/yard1/yard2/homecare) behave the same, each with
+// its own plan's data. Logged-in users never enter promo mode. The
+// guest is never trapped: the hero links to all plans / the storefront,
+// and any other route (header nav included) leaves promo mode.
+let joinPromo = null; // { plan, kind } — the deep link that armed promo mode
+const JOIN_PROMO_UI = {
+  en: { best: '⭐ BEST — our most complete plan', per: '/mo', formNote: 'Join right below — one form: account, service address and payment together.', compare: 'Compare all plans →', browse: 'Not now — browse all services & prices →' },
+  es: { best: '⭐ EL MEJOR — nuestro plan más completo', per: '/mes', formNote: 'Únete aquí abajo — un solo formulario: cuenta, dirección de servicio y pago juntos.', compare: 'Comparar todos los planes →', browse: 'Ahora no — ver todos los servicios y precios →' }
+};
+// The benefit lines are the SETTLED membership copy, copied line-for-line
+// from the plan cards / compare grid (EN) with their ES twins — no new
+// offers, no new prices; name + price come from JOIN_PLAN_INFO.
+const JOIN_PROMO_BENEFITS = {
+  homecare: {
+    en: ['First month FREE — for everyone (one per account)', '20% off labor (jobs under $1,000)', 'First in-person estimate FREE, then $50', 'Priority scheduling', 'Cancel anytime'],
+    es: ['Primer mes GRATIS — para todos (uno por cuenta)', '20% menos en mano de obra (trabajos bajo $1,000)', 'Primer estimado en persona GRATIS, luego $50', 'Agenda prioritaria', 'Cancela cuando quieras']
+  },
+  yard1: {
+    en: ['1 yard visit every month', 'Mowing · edging · blowing at every visit', 'Light weeding included', 'Free first in-person estimate', 'One total monthly charge — never a per-visit fee', 'Cancel anytime'],
+    es: ['1 visita de yarda cada mes', 'Corte · orilla · soplado en cada visita', 'Deshierbe ligero incluido', 'Primer estimado en persona gratis', 'Un solo cargo mensual — nunca un cargo por visita', 'Cancela cuando quieras']
+  },
+  yard2: {
+    en: ['2 yard visits every month', 'Mowing · edging · blowing at every visit', 'Light weeding included', 'Free first in-person estimate', 'One total monthly charge — never a per-visit fee', 'Cancel anytime'],
+    es: ['2 visitas de yarda cada mes', 'Corte · orilla · soplado en cada visita', 'Deshierbe ligero incluido', 'Primer estimado en persona gratis', 'Un solo cargo mensual — nunca un cargo por visita', 'Cancela cuando quieras']
+  },
+  plus1: {
+    en: ['1 yard visit every month', 'Everything in HomeCare — 20% off labor (jobs under $1,000)', 'First in-person estimate FREE, then $50 member estimates', 'Mowing · edging · blowing at every visit', 'One total monthly charge — never a per-visit fee', 'Priority scheduling · Cancel anytime'],
+    es: ['1 visita de yarda cada mes', 'Todo HomeCare — 20% menos en mano de obra (trabajos bajo $1,000)', 'Primer estimado en persona GRATIS, luego $50 para miembros', 'Corte · orilla · soplado en cada visita', 'Un solo cargo mensual — nunca un cargo por visita', 'Agenda prioritaria · Cancela cuando quieras']
+  },
+  plus2: {
+    en: ['2 yard visits every month', 'Everything in HomeCare — 20% off labor (jobs under $1,000)', 'First in-person estimate FREE, then $50 member estimates', 'Mowing · edging · blowing at every visit', 'One total monthly charge — never a per-visit fee', 'Priority scheduling · Cancel anytime'],
+    es: ['2 visitas de yarda cada mes', 'Todo HomeCare — 20% menos en mano de obra (trabajos bajo $1,000)', 'Primer estimado en persona GRATIS, luego $50 para miembros', 'Corte · orilla · soplado en cada visita', 'Un solo cargo mensual — nunca un cargo por visita', 'Agenda prioritaria · Cancela cuando quieras']
+  }
+};
+// The hero always sells the plan the FORM is armed with (what you see is
+// what submit charges): the live pending join wins, then the armed
+// account-first fallback, then the plan the deep link arrived with.
+function joinPromoPlanKey(){
+  if (!joinPromo) return '';
+  if (pendingJoin && JOIN_PLAN_INFO[pendingJoin.plan]) return pendingJoin.plan;
+  if (pendingMembershipPlan && JOIN_PLAN_INFO[pendingMembershipPlan.plan]) return pendingMembershipPlan.plan;
+  return joinPromo.plan;
+}
+function isJoinPromoActive(){
+  if (!joinPromo || me) return false; // guests only — a session ends promo mode
+  if (isWorkerEntry()) return false; // the technician door keeps its isolation
+  return true;
+}
+function joinPromoImgFor(plan){
+  if (plan === 'homecare') {
+    const card = document.querySelector('#homeCarePlanCard img');
+    return (card && card.src) ? { src: card.src, alt: 'HomeCare membership — $29 per month' } : null;
+  }
+  const which = plan.indexOf('plus') === 0 ? 'plus' : 'yard';
+  return planVariantImg(which, plan.slice(-1) === '2' ? 2 : 1);
+}
+function renderJoinPromo(){
+  const box = document.getElementById('joinPromoBox');
+  if (!box) return;
+  const plan = joinPromoPlanKey();
+  const info = JOIN_PLAN_INFO[plan];
+  if (!info) { box.style.display = 'none'; return; }
+  const lang = menuLang() === 'es' ? 'es' : 'en';
+  const ui = JOIN_PROMO_UI[lang];
+  const bens = (JOIN_PROMO_BENEFITS[plan] || JOIN_PROMO_BENEFITS.homecare)[lang];
+  const img = joinPromoImgFor(plan);
+  const visits = plan === 'homecare' ? 0 : (plan.slice(-1) === '2' ? 2 : 1);
+  const sub = visits
+    ? (lang === 'es' ? (visits + (visits > 1 ? ' visitas' : ' visita') + ' de yarda / mes') : (visits + ' yard visit' + (visits > 1 ? 's' : '') + ' / month'))
+    : '';
+  box.innerHTML =
+    (img && img.src ? '<img src="' + img.src + '" alt="' + img.alt + '" style="width:100%;border-radius:10px;display:block;margin-bottom:12px">' : '')
+    + ((plan === 'plus1' || plan === 'plus2') ? '<div style="display:inline-block;background:#e42535;color:#fff;font-weight:700;font-size:12.5px;border-radius:999px;padding:4px 12px;margin-bottom:8px">' + ui.best + '</div>' : '')
+    + '<h2 style="margin:0 0 2px">' + info.name + '</h2>'
+    + '<div style="font-size:30px;font-weight:800">$' + info.monthly + '<span style="font-size:15px;font-weight:600">' + ui.per + '</span></div>'
+    + (sub ? '<div style="color:#f2f0ec;font-weight:600;margin-top:2px">' + sub + '</div>' : '')
+    + '<ul style="margin:10px 0;padding-left:18px;color:#f2f0ec">' + bens.map(function (b) { return '<li>' + b + '</li>'; }).join('') + '</ul>'
+    + '<p style="margin:0;color:#f2f0ec">' + ui.formNote + '</p>'
+    + '<p style="margin:10px 0 0"><a href="#memberships" style="color:#fff">' + ui.compare + '</a> · <a href="#" onclick="exitJoinPromo();return false;" style="color:#fff">' + ui.browse + '</a></p>';
+  box.style.display = 'block';
+}
+// Leaving the promo door on purpose (the hero's browse link, the Menú
+// nav): same disarm as the v80.10.1 navigate-home dismissal, plus the
+// promo state itself — the plain storefront comes back.
+function exitJoinPromo(){
+  joinPromo = null;
+  pendingJoin = null; pendingMembershipPlan = null; authRevealed = false; membershipDeepLinkKey = '';
+  if (curMode === 'join' || curMode === 'homecare') mode('login');
+  if (location.hash) location.hash = ''; else render();
+}
+// Where a join scroll lands: in promo mode the HERO is the top of the
+// door — scrolling past it to the form would hide the promotion again.
+// Everywhere else the form itself, exactly as before.
+function scrollToJoinDoor(){
+  const t = isJoinPromoActive() ? document.getElementById('joinPromoBox') : document.getElementById('authBox');
+  if (t) t.scrollIntoView({ behavior: 'smooth' });
 }
 // ---------- Campaign source (v24, A5) ----------
 // Join links may carry ?src=CODE in the URL query OR inside the hash
@@ -2929,6 +3053,26 @@ function render(){
     document.getElementById('workerBox').style.display = 'none';
     document.getElementById('adminBox').style.display = 'none';
     loadYardCalendar();
+    return;
+  }
+  // v80.17 PUERTA PLUS: while a cold guest join deep link is armed, the
+  // app is ONE focused promo view — the plan hero (joinPromoBox) with
+  // the existing join form (authBox) directly under it. The storefront,
+  // the memberships page and every other box stay hidden until the
+  // guest leaves the door or signs in (isJoinPromoActive turns off).
+  if (me && joinPromo) joinPromo = null; // a session buries a stale arm
+  const promoOn = isJoinPromoActive();
+  const jpBox = document.getElementById('joinPromoBox');
+  if (jpBox) jpBox.style.display = promoOn ? 'block' : 'none';
+  if (promoOn) {
+    renderJoinPromo();
+    if (cgBox) cgBox.style.display = 'none';
+    const mbP = document.getElementById('membershipsBox'); if (mbP) mbP.style.display = 'none';
+    document.getElementById('authBox').style.display = 'block';
+    document.getElementById('customerBox').style.display = 'none';
+    document.getElementById('workerBox').style.display = 'none';
+    document.getElementById('adminBox').style.display = 'none';
+    const ybP = document.getElementById('yardCalendarBox'); if (ybP) ybP.style.display = 'none';
     return;
   }
   // Logged-out visitors get the public storefront: the auth (login) box is
@@ -5643,9 +5787,14 @@ window.addEventListener('hashchange', function(){
   // form and then clears the hash itself; ghsJoinArmNav keeps that
   // transition from being mistaken for a navigation away.)
   if (!me && !ghsJoinArmNav && h === '' && (ghsPrevHash === '#memberships' || ghsPrevHash === '#yard-care' || !!MEMBERSHIP_JOIN_HASHES[ghsPrevHash])) {
-    pendingJoin = null; pendingMembershipPlan = null; authRevealed = false; membershipDeepLinkKey = '';
+    pendingJoin = null; pendingMembershipPlan = null; authRevealed = false; membershipDeepLinkKey = ''; joinPromo = null;
     if (curMode === 'join' || curMode === 'homecare') mode('login');
   }
+  // v80.17 PUERTA PLUS: navigating to any OTHER route leaves the promo
+  // view — the guest is never trapped in the door. (The arming flow
+  // itself only ever clears the hash to '', and a join hash is the
+  // entry, never an exit, so neither transition can misfire here.)
+  if (joinPromo && h && !MEMBERSHIP_JOIN_HASHES[h]) { joinPromo = null; membershipDeepLinkKey = ''; }
   ghsJoinArmNav = false;
   ghsPrevHash = h;
   if (!routeNotifHash()) render();
@@ -7209,6 +7358,9 @@ function applyMenuLang() {
   const hs = document.getElementById('homeSearch'); if (hs) hs.placeholder = HOME_UI[L].searchPh;
   const inl = document.getElementById('installNavLink'); if (inl) inl.textContent = HOME_UI[L].install;
   paintHomeBlocks();
+  // v80.17 PUERTA PLUS: the promo hero follows the same toggle (its
+  // strings live in JOIN_PROMO_UI / JOIN_PROMO_BENEFITS, both languages).
+  if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
 }
 function svcName(id) { const s = MENU_CATALOG[id]; if (!s) return id; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][0] : s.name; }
 function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][1] : s.meta; }
@@ -7248,6 +7400,7 @@ function renderMenu() {
 }
 function goMenu() {
   trackView812('menu', true); // v80.12: the menu view counts when the customer actually goes to it
+  if (isJoinPromoActive()) exitJoinPromo(); // v80.17: the menu lives on the storefront — leave the promo door first
   if (location.hash) location.hash = ''; else render();
   setTimeout(function () { const el = document.getElementById('menuBox'); if (el) el.scrollIntoView({ behavior: 'smooth' }); }, 60);
 }
@@ -7270,7 +7423,7 @@ WZ_CATS.forEach(function (c) { const img = document.getElementById('wzImg-' + c.
   renderMenu();
 })();
 
-if (location.hash === '#join-homecare') { openMemberJoin(); }
+if (location.hash === '#join-homecare') { joinPromo = { plan: 'homecare', kind: 'homecare' }; openMemberJoin(); }
 window.addEventListener('hashchange', checkResetHash);
 checkResetHash();
 loadMe().then(function(){ try { routeNotifHash(); } catch (e) {} try { cartRecoverFromHash(); } catch (e) {} });
