@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-20', swSrc.includes("const CACHE = 'ghs-app-v80-20'"));
+t('static: SW cache is ghs-app-v80-21', swSrc.includes("const CACHE = 'ghs-app-v80-21'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1590,7 +1590,10 @@ const stripeMock = http.createServer(async (req, res) => {
     const sess = { id: 'cs_mock_' + n, url: 'https://checkout.mock/pay/cs_mock_' + n, mode: form.mode || 'payment', status: 'open', payment_status: 'unpaid', metadata: md, customer_email: form.customer_email || '', customer: form.customer || '', subscription: '', payment_intent: '', amount_total: null,
       // v80 piece 4: capture what the server told Stripe about language
       // + consent copy so tests can pin locale + custom_text.
-      locale: form.locale || '', customText: { submit: form['custom_text[submit][message]'] || '', afterSubmit: form['custom_text[after_submit][message]'] || '' } };
+      // v80.21: also capture the return URLs + line-item images.
+      locale: form.locale || '', customText: { submit: form['custom_text[submit][message]'] || '', afterSubmit: form['custom_text[after_submit][message]'] || '' },
+      successUrl: form.success_url || '', cancelUrl: form.cancel_url || '',
+      images: { line0: form['line_items[0][price_data][product_data][images][0]'] || '', line1: form['line_items[1][price_data][product_data][images][0]'] || '' } };
     if (sess.mode === 'subscription') {
       const sn = ++stripeState.n;
       const cus = sess.customer || ('cus_mock_' + (++stripeState.n));
@@ -4105,7 +4108,7 @@ t('static v80-7A: the stale full-pay sentence is GONE from the SPA cart checkout
 t('static v80-1: notifications carry structured targets end to end (server stores + returns target, push payload url = target, SPA rows tappable with the role guard)', serverSrc.includes('function notify(userId, type, text, target)') && serverSrc.includes("target: typeof target === 'string' ? target.slice(0, 200) : ''") && serverSrc.includes("url: (typeof target === 'string' && target) ? target : '/'") && htmlSrc.includes('function notifGo(') && htmlSrc.includes('function routeNotifHash()') && htmlSrc.includes('function notifTargetFor(') && htmlSrc.includes("me.role === 'worker'") && htmlSrc.includes('id="reqcard-') && htmlSrc.includes('id="wjobcard-'));
 t('static v80-2: the orphan claim is email-exact, audited and hooked at signup + login + cart-checkout account birth', serverSrc.includes('function claimOrphanRecords(u)') && serverSrc.includes("audit(u, 'account.claim_orphans'") && serverSrc.includes('claimOrphanRecords(u);') && serverSrc.includes('guest history under this email becomes theirs at signup') && serverSrc.includes('also at login — covers accounts created before the claim existed') && serverSrc.includes('an account born at checkout claims the guest history'));
 t('static v80-3: honest async states — the shared loading/error pattern serves requests, jobs, invoices, proposals and the worker job list', htmlSrc.includes('function listLoadingHtml(') && htmlSrc.includes('function listErrorHtml(') && htmlSrc.includes("listErrorHtml('loadRequests()'") && htmlSrc.includes("listErrorHtml('loadMyJobs()'") && htmlSrc.includes("listErrorHtml('loadMyInvoices()'") && htmlSrc.includes("listErrorHtml('loadProposals()'") && htmlSrc.includes("listErrorHtml('loadJobs()'") && (() => { const s = htmlSrc.indexOf('async function loadRequests()'); const seg = htmlSrc.slice(s, s + 1200); return seg.includes('listLoadingHtml(') && !seg.includes('.catch('); })());
-t('static v80-4: hosted checkout always carries an explicit locale + localized custom_text (never auto)', serverSrc.includes('function checkoutLang(opts)') && serverSrc.includes('params.locale = coLang') && serverSrc.includes("custom_text[submit][message]") && serverSrc.includes('Tu primer mes es GRATIS') && serverSrc.includes('retención de autorización'));
+t('static v80-4: hosted checkout always carries an explicit locale + localized custom_text (never auto)', serverSrc.includes('function checkoutLang(opts, user)') && serverSrc.includes('params.locale = coLang') && serverSrc.includes("custom_text[submit][message]") && serverSrc.includes('Tu primer mes es GRATIS') && serverSrc.includes('retención de autorización'));
 t('static v80-5: wzFee has NO ASAP uplift left (no when-read, no 1.25) — the fee is flat 75/50/0', (() => { const s0 = htmlSrc.indexOf('function wzFee()'); const s = htmlSrc.slice(s0, htmlSrc.indexOf('\n}', s0)); return !s.includes('1.25') && !s.includes('cWhen') && s.includes('due: base'); })());
 t('static v80-6: recovery plumbing exists and the whole recovery section NEVER sends mail or fires automations (STOP TOTAL)', serverSrc.includes("p === '/api/cart/save-recovery'") && serverSrc.includes("p === '/api/me/recoverable-cart'") && serverSrc.includes('function upsertRecoverableCart(') && (() => { const segA = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7: recoverable-cart store'), serverSrc.indexOf('// Recorder for a landed DEPOSIT')); const segB = serverSrc.slice(serverSrc.indexOf('// ---------- v80 A-7 PLUMBING ONLY'), serverSrc.indexOf('// ---------- v78: guest cart + EMBEDDED checkout')); const seg = segA + segB; return segA.length > 500 && segB.length > 500 && !seg.includes('sendMail(') && !seg.includes('fireAutomation(') && !seg.includes('setInterval('); })());
 t('static v80-7B: the cart loads Stripe.js through the resilient injector and reserves the house message for a genuinely unconfigured server', htmlSrc.includes('function loadStripeJsOnce(') && htmlSrc.includes('https://js.stripe.com/v3/') && htmlSrc.includes("cartStripeState = 'unconfigured'") && htmlSrc.includes('function cartRetryStripe()') && htmlSrc.includes("cartPayLoading: '⏳ Loading secure payment…'") && htmlSrc.includes("cartPayLoading: '⏳ Cargando pago seguro…'") && htmlSrc.includes("CU('cartPayLoading')"));
@@ -4286,7 +4289,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.20: ghs-app-v80-20)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-20'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.21: ghs-app-v80-21)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-21'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6215,6 +6218,98 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   // no repricing: a cart quoted at the OLD price keeps it (bombas keep their quoted price)
   const tOld = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, unitPrice: 125 }], customerName: 'Quoted Quinn', customerEmail: 'quinn@t.local' } });
   t('v80.20 no-repricing: a cart quoted at $125 KEEPS $125 after the catalog moved to $175 (sent quotes are never repriced)', tOld.status === 201 && tOld.j.cart.listTotal === 125 && tOld.j.cart.memberTotal === 100);
+}
+// ---------------- v80.21 CHECKOUT UNO: saved-language locale, line images, return-to-context, personalized success, invoice page language ----------------
+{
+  const lastSess = () => Object.values(stripeState.sessions).slice(-1)[0];
+  t('static v80.21: the shared settles + success detail + image helpers exist', serverSrc.includes('function settleInvoiceFromSession(') && serverSrc.includes('function settleEstimateFromSession(') && serverSrc.includes('function successDetailFor(') && serverSrc.includes('function checkoutImageFor(') && serverSrc.includes("function invoicePageHtml(inv, langOverride, notice)"));
+
+  // --- PIECE 1: the SAVED account language wins the Stripe locale ---
+  const svEs = await req2('POST', '/api/signup', { body: { name: 'Saved Sara', email: 'saved21es@t.local', password: 'password123', role: 'customer', lang: 'es' } });
+  await req2('POST', '/api/stripe/checkout', { token: svEs.j.token, body: { kind: 'homecare' } });
+  const svSess1 = lastSess();
+  t('v80.21 locale: a saved-ES account checks out in ES with NO lang sent (saved preference travels)', svSess1 && svSess1.locale === 'es');
+  await req2('POST', '/api/stripe/checkout', { token: svEs.j.token, body: { kind: 'homecare', lang: 'en' } });
+  const svSess2 = lastSess();
+  t('v80.21 locale: the saved language BEATS a contrary surface toggle (es account, en sent -> es)', svSess2 && svSess2.locale === 'es');
+  const svEn = await req2('POST', '/api/signup', { body: { name: 'Saved Evan', email: 'saved21en@t.local', password: 'password123', role: 'customer', lang: 'en' } });
+  await req2('POST', '/api/stripe/checkout', { token: svEn.j.token, body: { kind: 'homecare', lang: 'es' } });
+  const svSess3 = lastSess();
+  t('v80.21 locale: a saved-EN account stays EN even when the surface sends es', svSess3 && svSess3.locale === 'en');
+
+  // --- PIECES 1+2+4 (invoice): account-by-email locale, brand image, return to the invoice ---
+  const invEs = await req2('POST', '/api/admin/invoices', { token: A2, body: { customerName: 'Saved Sara', customerEmail: 'saved21es@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 200 }] } });
+  const invEsId = invEs.j.invoice.id;
+  const invEsPay = await req2('POST', '/api/invoices/' + invEsId + '/pay', { body: {} });
+  const invEsSess = lastSess();
+  t('v80.21 invoice: the pay session finds the account BY EMAIL — locale es, brand image, success returns to THIS invoice', invEsPay.status === 200 && invEsSess && invEsSess.locale === 'es' && invEsSess.images.line0.endsWith('/og-image.jpg') && invEsSess.successUrl.includes('/invoice/' + invEsId + '?paid=1') && invEsSess.cancelUrl.includes('/invoice/' + invEsId + '?cancelled=1'));
+  const invEsPage = await (await fetch(BASE2 + '/invoice/' + invEsId)).text();
+  t('v80.21 invoice page: an ES-account customer reads the whole page in Spanish (money texts included)', invEsPage.includes('Total a pagar') && invEsPage.includes('Pagar $200.00 ahora') && invEsPage.includes('¿Agregar propina?') && !invEsPage.includes('Total due'));
+  const invEsPageEn = await (await fetch(BASE2 + '/invoice/' + invEsId + '?lang=en')).text();
+  t('v80.21 invoice page: ?lang=en re-renders the same invoice in English', invEsPageEn.includes('Total due') && invEsPageEn.includes('Pay $200.00 now'));
+  const invEsBogus = await (await fetch(BASE2 + '/invoice/' + invEsId + '?paid=1&session_id=cs_mock_nope')).text();
+  t('v80.21 invoice return: a forged session id settles NOTHING (page still unpaid)', invEsBogus.includes('Pagar $200.00 ahora') && !invEsBogus.includes('se pagó por completo'));
+  await mockSessionPaid(invEsSess.id);
+  const invEsPaid = await (await fetch(BASE2 + '/invoice/' + invEsId + '?paid=1&session_id=' + invEsSess.id)).text();
+  t('v80.21 invoice return: the verified return settles the invoice and lands on its paid state (in her language)', invEsPaid.includes('✅ Esta factura se pagó por completo. ¡Gracias!'));
+  const invEsRepay = await req2('POST', '/api/invoices/' + invEsId + '/pay', { body: {} });
+  t('v80.21 invoice return: a second pay attempt is refused (already paid) — the return settle really landed', invEsRepay.status === 400);
+
+  // --- PIECE 5: the personalized success page ---
+  const sucEs = await (await fetch(BASE2 + '/payment/success?session_id=' + invEsSess.id)).text();
+  t('v80.21 success: the success page names WHAT was paid, HOW MUCH, its number, and buttons back to it — in the customer language', sucEs.includes('Factura ' + invEsId) && sucEs.includes('$200.00') && sucEs.includes('href="/invoice/' + invEsId + '"') && sucEs.includes('Ver tu factura'));
+  const invEn = await req2('POST', '/api/admin/invoices', { token: A2, body: { customerName: 'Plain Paul', customerEmail: 'plain21@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 150 }] } });
+  await req2('POST', '/api/invoices/' + invEn.j.invoice.id + '/pay', { body: {} });
+  const invEnSess = lastSess();
+  await mockSessionPaid(invEnSess.id);
+  const sucEn = await (await fetch(BASE2 + '/payment/success?session_id=' + invEnSess.id)).text();
+  t('v80.21 success: the EN success page personalizes the same way (Invoice + amount + View your invoice)', sucEn.includes('Invoice ' + invEn.j.invoice.id) && sucEn.includes('$150.00') && sucEn.includes('href="/invoice/' + invEn.j.invoice.id + '"') && sucEn.includes('View your invoice'));
+  const invCancel = await (await fetch(BASE2 + '/invoice/' + invEn.j.invoice.id + '?cancelled=1')).text();
+  t('v80.21 invoice page: a cancelled return shows the honest nothing-was-charged note', invCancel.includes('Checkout was cancelled — nothing was charged'));
+
+  // --- PIECES 2+4 (cart): the first service photo rides the deposit line ---
+  const imgCart = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Image Ina', customerEmail: 'img21@t.local' } });
+  await req2('POST', '/api/carts/' + imgCart.j.cart.id + '/checkout', { body: { name: 'Image Ina', phone: '7075550211', email: 'img21@t.local', address: '9 Pic St', city: 'Fairfield', when: 'Today' } });
+  const imgSess = sessionForCart(imgCart.j.cart.id, 'payment');
+  t('v80.21 images: the cart deposit line carries the FIRST service menu photo', !!imgSess && imgSess.images.line0.includes('/menu-img/faucet-replacement.webp'));
+  const joinCust = await req2('POST', '/api/signup', { body: { name: 'Join Image', email: 'joinimg21@t.local', password: 'password123', phone: '7075550212', role: 'customer' } });
+  const joinCart = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Join Image', customerEmail: 'joinimg21@t.local' } });
+  await req2('POST', '/api/carts/' + joinCart.j.cart.id + '/checkout', { token: joinCust.j.token, body: { name: 'Join Image', phone: '7075550212', email: 'joinimg21@t.local', address: '10 Pic St', city: 'Fairfield', when: 'Today', join: true, plan: 'homecare' } });
+  const joinSess = sessionForCart(joinCart.j.cart.id, 'subscription');
+  t('v80.21 images: on the single join+deposit session the photo rides the DEPOSIT line (line 1), never the plan price', !!joinSess && joinSess.images.line1.includes('/menu-img/faucet-replacement.webp') && joinSess.images.line0 === '');
+
+  // --- PIECES 2+4 (estimate fee): brand image + return to the estimate ---
+  const feeCust = await req2('POST', '/api/signup', { body: { name: 'Fee Fred', email: 'fee21@t.local', password: 'password123', role: 'customer' } });
+  const feeReq = await req2('POST', '/api/requests', { token: feeCust.j.token, body: { service: 'Deck repair', description: 'boards', city: 'Fairfield', estimateType: 'inperson' } });
+  const feeRid = feeReq.j.request.id;
+  await req2('PATCH', '/api/requests/' + feeRid, { token: A2, body: { estimate: { items: [{ description: 'Deck labor', qty: 1, unitPrice: 125, type: 'labor' }] } } });
+  const feePay = await req2('POST', '/api/stripe/checkout', { token: feeCust.j.token, body: { kind: 'estimate', requestId: feeRid } });
+  const feeSess = lastSess();
+  t('v80.21 estimate: the fee session carries the brand image and returns to THIS estimate', feePay.status === 200 && !!feeSess && feeSess.images.line0.endsWith('/og-image.jpg') && feeSess.successUrl.includes('/estimate/' + feeRid + '?paid=1'));
+  const feeBogus = await (await fetch(BASE2 + '/estimate/' + feeRid + '?paid=1&session_id=cs_mock_nope')).text();
+  t('v80.21 estimate return: a forged session id settles NOTHING (no rendered paid banner — the bare string also lives in the page dictionary JSON)', !feeBogus.includes('data-i18n="paidNote"'));
+  await mockSessionPaid(feeSess.id);
+  const feeBack = await (await fetch(BASE2 + '/estimate/' + feeRid + '?paid=1&session_id=' + feeSess.id)).text();
+  t('v80.21 estimate return: the verified return settles the fee and lands on the estimate with its paid banner', feeBack.includes('data-i18n="paidNote"') && feeBack.includes('your estimate fee is paid and your appointment is secured'));
+  const feeRepay = await req2('POST', '/api/stripe/checkout', { token: feeCust.j.token, body: { kind: 'estimate', requestId: feeRid } });
+  t('v80.21 estimate return: the fee cannot be paid twice (already paid)', feeRepay.status === 400);
+
+  // --- PIECE 4 (holds): the return depends on whether an estimate exists to land on ---
+  const holdCust = await req2('POST', '/api/signup', { body: { name: 'Hold Hana', email: 'hold21@t.local', password: 'password123', role: 'customer' } });
+  const holdReq = await req2('POST', '/api/requests', { token: holdCust.j.token, body: { service: 'Porch repair', description: 'posts', city: 'Fairfield', estimateType: 'inperson' } });
+  const holdRid = holdReq.j.request.id;
+  await req2('PATCH', '/api/requests/' + holdRid, { token: A2, body: { estimate: { items: [{ description: 'Porch labor', qty: 1, unitPrice: 200, type: 'labor' }] } } });
+  const holdPay = await req2('POST', '/api/stripe/checkout', { token: holdCust.j.token, body: { kind: 'estimate-hold', requestId: holdRid } });
+  const holdSess = lastSess();
+  t('v80.21 hold: with an estimate built, the hold session returns to the estimate page (?hold=1) with the brand image', holdPay.status === 200 && !!holdSess && holdSess.successUrl.includes('/estimate/' + holdRid + '?hold=1') && holdSess.images.line0.endsWith('/og-image.jpg'));
+  await mockSessionPaid(holdSess.id);
+  const holdBack = await (await fetch(BASE2 + '/estimate/' + holdRid + '?hold=1&session_id=' + holdSess.id)).text();
+  t('v80.21 hold return: the verified return files the hold and lands on the estimate with its authorized banner', holdBack.includes('data-i18n="holdNote"') && holdBack.includes('Your card was authorized — hold only, not charged'));
+  const earlyCust = await req2('POST', '/api/signup', { body: { name: 'Early Eli', email: 'early21@t.local', password: 'password123', role: 'customer' } });
+  const earlyReq = await req2('POST', '/api/requests', { token: earlyCust.j.token, body: { service: 'Roof look', description: 'leak', city: 'Fairfield', estimateType: 'inperson' } });
+  await req2('POST', '/api/stripe/checkout', { token: earlyCust.j.token, body: { kind: 'estimate-hold', requestId: earlyReq.j.request.id } });
+  const earlySess = lastSess();
+  t('v80.21 hold: a visit hold BEFORE any estimate keeps the success-page return (the estimate page would 404)', !!earlySess && earlySess.successUrl.includes('/payment/success?session_id=') && !earlySess.successUrl.includes('hold=1'));
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
