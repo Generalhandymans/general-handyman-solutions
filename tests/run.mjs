@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-27', swSrc.includes("const CACHE = 'ghs-app-v80-27'"));
+t('static: SW cache is ghs-app-v80-28', swSrc.includes("const CACHE = 'ghs-app-v80-28'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4307,7 +4307,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.27: ghs-app-v80-27)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-27'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.28: ghs-app-v80-28)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-28'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6866,6 +6866,158 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   sandbox.fetch = prevFetch27;
   run("me = null; _menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
   try { child6.kill('SIGTERM'); } catch (e) {}
+}
+
+// ---------------- v80.28 BÚSQUEDA (audit P1-8 + A-8, runtime pins) ----------------
+{
+  // --- statics: sticky nav, engine, dictionaries, account endpoints ---
+  t('static v80.28: the sticky menu nav (search + chips) is in the menu box and the engine replaced the textContent filter',
+    htmlSrc.includes('id="menuNav"') && htmlSrc.includes('id="menuSearch"') && htmlSrc.includes('id="menuChips"') && htmlSrc.includes('.menu-nav{position:sticky')
+    && htmlSrc.includes('function menuMatchSvc(') && htmlSrc.includes('function menuVisibleIds(') && htmlSrc.includes('function svcSearchText(')
+    && !htmlSrc.includes('card.textContent.toLowerCase().indexOf(q)'));
+  t('static v80.28: every new menu string lives in BOTH MENU_UI languages (EN/ES parity)',
+    ['favs: \'', 'recents: \'', ', all: \'', 'goesWell: \'', 'addShort: \'', 'menuSearchPh: \''].every(k => (htmlSrc.match(new RegExp(k.replace(/[:']/g, m => '\\' + m), 'g')) || []).length === 2));
+  t('static v80.28: account endpoints + validation exist server-side, and pubUser exposes both lists cleaned',
+    serverSrc.includes("p === '/api/me/favorites'") && serverSrc.includes("p === '/api/me/recents'") && serverSrc.includes('function cleanMenuIdList(')
+    && serverSrc.includes('favorites: cleanMenuIdList(u.favorites, 24)') && serverSrc.includes('recents: cleanMenuIdList(u.recents, 8)'));
+  t('static v80.28: pairings ride the one cart path (cartAddWithAddons for add-ons, cartAdd for the paired service) and recents hook the same adds',
+    htmlSrc.includes('function svcPairings(') && htmlSrc.includes('function pairsHtml(') && htmlSrc.includes('cartAddWithAddons(id, [addonId])')
+    && htmlSrc.includes("const SVC_PAIRS = { 'fence-picket-repair': ['fence-post-replacement'] }") && (htmlSrc.match(/noteRecent\(id\);/g) || []).length === 2);
+
+  // --- (4a) pairings == the master list's own relationships, both ways ---
+  const masterSrc28 = fs.readFileSync(path.join(APP_DIR, '..', 'MASTER-SERVICE-LIST.md'), 'utf8');
+  const catLine28 = (id) => (htmlSrc.split('\n').find(l => l.includes("'" + id + "': { name:")) || '');
+  const catAddons28 = (id) => { const m = catLine28(id).match(/addons: \[([^\]]*)\]/); const o = {}; if (m) for (const am of m[1].matchAll(/\{ id: '([\w-]+)', name: '[^']*', price: (\d+)/g)) o[am[1]] = Number(am[2]); return o; };
+  const srvAddons28 = (id) => { const m = serverSrc.match(new RegExp('"' + id + '":\\{p:\\d+,m:\\d+(?:,a:\\{([^}]*)\\})?\\}')); const o = {}; if (m && m[1]) for (const am of m[1].matchAll(/"([\w-]+)":\[(\d+),/g)) o[am[1]] = Number(am[2]); return o; };
+  const PAIR_EXP28 = [
+    { row: /\| TV cable raceway[^|]*\| \$50 \| TV mounting \|/, price: 50, map: { 'tv-mounting': ['raceway'], 'tv-mounting-large': ['raceway'] } },
+    { row: /\| Soundbar mounting[^|]*\| \$75 \| TV mounting \|/, price: 75, map: { 'tv-mounting': ['soundbar'], 'tv-mounting-large': ['soundbar'] } },
+    { row: /\| Install knob or deadbolt[^|]*\| \$75 \| Door slab swap \|/, price: 75, map: { 'door-slab-swap': ['knob', 'deadbolt'] } },
+    { row: /\| Additional grab bar[^|]*\| \$75 \| Grab bar install \|/, price: 75, map: { 'grab-bar-install': ['extra-grab-bar'] } },
+    { row: /\| Additional wireless camera[^|]*\| \$75 \| Security camera install \|/, price: 75, map: { 'security-camera-install': ['extra-camera'] } },
+    { row: /\| Additional dimmer \/ switch[^|]*\| \$75 \| Dimmer \/ switch swap \|/, price: 75, map: { 'dimmer-switch-swap': ['extra-dimmer'] } },
+    { row: /\| Primer \/ paint touch-up[^|]*\| \$75 \| Drywall patch \|/, price: 75, map: { 'drywall-patch-small': ['paint-touchup'], 'drywall-patch-medium': ['paint-touchup'], 'drywall-holes-set': ['paint-touchup'] } },
+    { row: /\| Haul-away of old door or old garbage disposal[^|]*\| \$50 \| Door \/ plumbing swap \|/, price: 50, map: { 'door-slab-swap': ['haul-door'], 'garbage-disposal-swap': ['haul-disposal'] } },
+    { row: /\| Haul-away of old vanity[^|]*\| \$50 \| Vanity swap \|/, price: 50, map: { 'vanity-swap': ['haul-vanity'] } },
+    { row: /\| Additional window screen rescreen[^|]*\| \$25 \| Window screen rescreen \|/, price: 25, map: { 'window-screen-repair': ['extra-screen'] } },
+    { row: /\| Rotor replacement[^|]*\| \$85 \| Brake pads \|/, price: 85, map: { 'brake-pads': ['rotors'] } },
+    { row: /\| Additional drain unclog[^|]*\| \$75 \| Drain unclog \|/, price: 75, map: { 'drain-unclog': ['extra-drain'] } },
+    { row: /\| Trash bin cleaning[^|]*\| \$50 \| Pressure washing \|/, price: 50, map: { 'pressure-washing': ['trash-bin-cleaning'], 'pressure-washing-large': ['trash-bin-cleaning'] } },
+    { row: /\| Air \/ cabin filter swap[^|]*\| \$50 \| Oil change & fluid service \|/, price: 50, map: { 'oil-change': ['filter-swap'] } },
+    { row: /\| Old toilet removal \/ haul-away[^|]*\| \$50 \|/, price: 50, map: { 'toilet-replacement': ['haul-toilet'] } }
+  ];
+  t('v80.28 (4): every master-list add-on row is in the source AND its pairing lives in BOTH catalogs at the master price',
+    PAIR_EXP28.every(e => e.row.test(masterSrc28) && Object.keys(e.map).every(sid => e.map[sid].every(aid => catAddons28(sid)[aid] === e.price && srvAddons28(sid)[aid] === e.price))));
+  const covered28 = new Set();
+  PAIR_EXP28.forEach(e => Object.keys(e.map).forEach(sid => e.map[sid].forEach(aid => covered28.add(sid + ':' + aid))));
+  const allCatAddons28 = [];
+  for (const lm of htmlSrc.matchAll(/'([a-z0-9-]+)': \{ name:/g)) { const o = catAddons28(lm[1]); Object.keys(o).forEach(aid => allCatAddons28.push(lm[1] + ':' + aid)); }
+  t('v80.28 (4): NO catalog add-on exists outside the master relationships — pairings are never invented bundles',
+    allCatAddons28.length === 22 && allCatAddons28.every(k => covered28.has(k)));
+  t('v80.28 (4): the one service->service pairing is the master list\'s own wording (fence post = add-on to a fence repair visit)',
+    masterSrc28.includes('Fence post replacement (add-on to a fence repair visit)') && catLine28('fence-post-replacement').includes('price: 125'));
+
+  // --- HTTP: favorites + recents persist on the account (app7) ---
+  const BASE7 = 'http://127.0.0.1:8992';
+  const DATA_FILE7 = '/tmp/ghs-v17-test/data-v80-28.json';
+  try { fs.unlinkSync(DATA_FILE7); } catch (e) {}
+  const env828 = { PORT: '8992', DATA_FILE: DATA_FILE7, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981' };
+  const child7 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env828), stdio: ['ignore', 'pipe', 'pipe'] });
+  child7.stderr.on('data', d => process.stderr.write('[app7] ' + d));
+  async function req7(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE7 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp7() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE7 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v80.28 app7: the BÚSQUEDA instance boots', await waitUp7());
+  await req7('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin7@t.local', phone: '(707) 555-1000', password: 'adminpass1' } });
+  const suF28 = await req7('POST', '/api/signup', { body: { name: 'Finder Fay', email: 'fay28@t.local', phone: '(707) 555-0528', password: 'custpass28', role: 'customer', serviceAddress: '4 Main St, Fairfield, CA' } });
+  const TOKF28 = (await req7('POST', '/api/login', { body: { email: 'fay28@t.local', password: 'custpass28' } })).j.token;
+  t('v80.28 setup: the customer signs up + logs in', !!suF28.j.user && !!TOKF28);
+
+  const anonF28 = await req7('POST', '/api/me/favorites', { body: { favorites: ['tv-mounting'] } });
+  const anonR28 = await req7('POST', '/api/me/recents', { body: { serviceId: 'tv-mounting' } });
+  t('v80.28 guards: anonymous cannot write favorites or recents (401)', anonF28.status === 401 && anonR28.status === 401);
+  const fav1 = await req7('POST', '/api/me/favorites', { token: TOKF28, body: { favorites: ['tv-mounting', 'oil-change', 'tv-mounting', 'no-such-service'] } });
+  t('v80.28 (3): favorites save validated + deduped (invented ids dropped, repeats collapse)',
+    fav1.status === 200 && JSON.stringify(fav1.j.favorites) === '["tv-mounting","oil-change"]');
+  const meF28 = await req7('GET', '/api/me', { token: TOKF28 });
+  const diskF28 = (JSON.parse(fs.readFileSync(DATA_FILE7, 'utf8')).users || []).find(u => u.email === 'fay28@t.local');
+  t('v80.28 (3): the saved favorites are on the account (GET /api/me) and on disk',
+    JSON.stringify((meF28.j.user || {}).favorites) === '["tv-mounting","oil-change"]' && !!diskF28 && JSON.stringify(diskF28.favorites) === '["tv-mounting","oil-change"]');
+  const favCap = await req7('POST', '/api/me/favorites', { token: TOKF28, body: { favorites: ['tv-mounting', 'tv-mounting-large', 'soundbar-mounting', 'ceiling-fan', 'chandelier-swap', 'faucet-replacement', 'toilet-replacement', 'toilet-repair', 'garbage-disposal-swap', 'showerhead-swap', 'gutter-cleaning', 'pressure-washing', 'yard-cleanup', 'oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'starter-replacement', 'water-heater', 'drain-unclog', 'dishwasher-swap', 'vanity-swap', 'door-slab-swap', 'closet-doors', 'paint-room', 'fence-picket-repair', 'gate-repair', 'deck-board-replacement', 'holiday-lights', 'ring-doorbell'] } });
+  t('v80.28 (3): favorites cap at 24', favCap.status === 200 && (favCap.j.favorites || []).length === 24);
+  const rec1 = await req7('POST', '/api/me/recents', { token: TOKF28, body: { serviceId: 'gutter-cleaning' } });
+  const rec2 = await req7('POST', '/api/me/recents', { token: TOKF28, body: { serviceId: 'oil-change' } });
+  const rec3 = await req7('POST', '/api/me/recents', { token: TOKF28, body: { serviceId: 'gutter-cleaning' } });
+  t('v80.28 (3): recents run newest-first and a repeat moves to the front (no duplicates)',
+    JSON.stringify(rec1.j.recents) === '["gutter-cleaning"]' && JSON.stringify(rec2.j.recents) === '["oil-change","gutter-cleaning"]' && JSON.stringify(rec3.j.recents) === '["gutter-cleaning","oil-change"]');
+  const recBad = await req7('POST', '/api/me/recents', { token: TOKF28, body: { serviceId: 'no-such-service' } });
+  t('v80.28 guards: an invented service id is refused (400)', recBad.status === 400);
+  for (const sid of ['brake-pads', 'water-heater', 'yard-cleanup', 'faucet-replacement', 'tv-mounting', 'ceiling-fan', 'drain-unclog', 'paint-room']) await req7('POST', '/api/me/recents', { token: TOKF28, body: { serviceId: sid } });
+  const meR28 = await req7('GET', '/api/me', { token: TOKF28 });
+  t('v80.28 (3): recents cap at 8, newest first, oldest dropped',
+    (meR28.j.user.recents || []).length === 8 && meR28.j.user.recents[0] === 'paint-room' && meR28.j.user.recents[7] === 'brake-pads');
+  const recList = await req7('POST', '/api/me/recents', { token: TOKF28, body: { recents: ['brake-pads', 'no-such-service', 'water-heater'] } });
+  const TOKF28b = (await req7('POST', '/api/login', { body: { email: 'fay28@t.local', password: 'custpass28' } })).j.token;
+  const meRe28 = await req7('GET', '/api/me', { token: TOKF28b });
+  t('v80.28 (3): the list form replaces (validated) and both lists survive a fresh login',
+    JSON.stringify(recList.j.recents) === '["brake-pads","water-heater"]' && (meRe28.j.user.favorites || []).length === 24 && JSON.stringify(meRe28.j.user.recents) === '["brake-pads","water-heater"]');
+
+  // --- VM: search (1), combine (2), favorites/recents render + sync (3), pairings + cart (4) ---
+  run("me = null; location.hash = ''; localStorage.removeItem('ghsMenuFavs'); localStorage.removeItem('ghsMenuRecents'); localStorage.removeItem('ghsCart'); menuFavs = null; menuRecents = null; menuCatSel = 'all'; menuQuery = ''; setMenuLang('en'); renderMenu();");
+  t('v80.28 VM (1): searching the EN name finds the service at the CURRENT catalog price (TV Mounting, $175 in both catalogs)',
+    run("menuVisibleIds('TV Mounting', 'all').includes('tv-mounting')") === true && run("MENU_CATALOG['tv-mounting'].price") === 175 && serverSrc.includes('"tv-mounting":{p:175,m:140'));
+  t('v80.28 VM (1): searching the ES name finds the same service, and the ES category word (accent folded) digs its whole trade',
+    run("menuVisibleIds('montaje de tv', 'all').includes('tv-mounting')") === true && run("menuVisibleIds('limpieza de canales', 'all').includes('gutter-cleaning')") === true
+    && run("menuVisibleIds('plomeria', 'all').includes('faucet-replacement')") === true && run("menuVisibleIds('Plomería', 'all').includes('toilet-replacement')") === true);
+  t('v80.28 VM (1): query tokens AND together (toilet + repair = the repair, not the replacement)',
+    run("menuVisibleIds('toilet repair', 'all').includes('toilet-repair')") === true && run("menuVisibleIds('toilet repair', 'all').includes('toilet-replacement')") === false);
+  t('v80.28 VM (2): category + search combine — plumbing keeps the toilets, carpentry loses them, nothing else moves',
+    run("menuVisibleIds('toilet', 'plumbing').includes('toilet-replacement')") === true && run("menuVisibleIds('toilet', 'plumbing').includes('toilet-repair')") === true
+    && run("menuVisibleIds('toilet', 'carpentry').length") === 0 && run("menuVisibleIds('toilet', 'all').includes('faucet-replacement')") === false);
+  t('v80.28 VM (2): clearing the filters restores the whole catalog (98 ids; per-trade counts intact, prices untouched)',
+    run("menuVisibleIds('', 'all').length") === 98 && run("menuVisibleIds('', 'mechanic').length") === 10 && run("menuVisibleIds('', 'plumbing').length") === 17
+    && run("MENU_CATALOG['water-heater'].price") === 700 && run("MENU_CATALOG['toilet-replacement'].price") === 215);
+  run("toggleFav('oil-change');");
+  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (104)',
+    run("favsLoad().join(',')") === 'oil-change' && (run("localStorage.getItem('ghsMenuFavs')") || '').includes('oil-change')
+    && elById.get('menuGroups').innerHTML.includes('data-group="favorites"') && elById.get('menuGroups').innerHTML.includes('My favorites')
+    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 104);
+  run("noteRecent('gutter-cleaning'); renderMenu();");
+  t('v80.28 VM (3): a noted recent renders its strip (EN), newest first',
+    run("recentsLoad()[0]") === 'gutter-cleaning' && elById.get('menuGroups').innerHTML.includes('data-group="recents"') && elById.get('menuGroups').innerHTML.includes('Gutter Cleaning'));
+  run("setMenuLang('es'); renderMenu();");
+  t('v80.28 VM (3): favorites + recents render fully in Spanish (dictionary titles, localized service names)',
+    elById.get('menuGroups').innerHTML.includes('Mis favoritos') && elById.get('menuGroups').innerHTML.includes('Recientes')
+    && elById.get('menuGroups').innerHTML.includes('Cambio de aceite y fluidos') && elById.get('menuGroups').innerHTML.includes('Limpieza de canales'));
+  run("setMenuLang('en');");
+  const favMark28 = fetchLog.length;
+  run("me = { id: 'USR-F28', role: 'customer', name: 'Fay', favorites: ['brake-pads'], recents: ['water-heater'] }; syncMenuLists();");
+  const favPost28 = fetchLog.slice(favMark28).find(f => f.method === 'POST' && f.url === '/api/me/favorites');
+  t('v80.28 VM (3): at login the account lists MERGE with the device lists and the union is written back to the account',
+    run("favsLoad().includes('brake-pads') && favsLoad().includes('oil-change')") === true && run("recentsLoad()[0]") === 'water-heater'
+    && !!favPost28 && (favPost28.body || '').includes('brake-pads') && (favPost28.body || '').includes('oil-change'));
+  run("me = null;");
+  t('v80.28 VM (4): pairings are exactly the catalog relationships (TV -> raceway $50 + soundbar $75; oil -> filter $50; fence -> the post; water heater -> none invented)',
+    run("JSON.stringify(svcPairings('tv-mounting').map(function(p){ return p.kind + ':' + p.id + ':' + p.price; }))") === '["addon:raceway:50","addon:soundbar:75"]'
+    && run("JSON.stringify(svcPairings('oil-change').map(function(p){ return p.kind + ':' + p.id + ':' + p.price; }))") === '["addon:filter-swap:50"]'
+    && run("JSON.stringify(svcPairings('fence-picket-repair').map(function(p){ return p.kind + ':' + p.id + ':' + p.price; }))") === '["service:fence-post-replacement:125"]'
+    && run("svcPairings('water-heater').length") === 0);
+  run('renderMenu();');
+  t('v80.28 VM (4): the pairing chips render on the card with the dictionary label (EN + ES)',
+    elById.get('menuGroups').innerHTML.includes('Goes well with:') && elById.get('menuGroups').innerHTML.includes("pairAdd('tv-mounting','raceway')"));
+  run("cartSave([]); pairAdd('tv-mounting', 'raceway');");
+  t('v80.28 VM (4): adding a paired add-on from the card lands in the SAME cart as the base line at catalog math ($175 + $50 = $225)',
+    run("cartLoad().length === 1 && cartLoad()[0].id === 'tv-mounting' && (cartLoad()[0].x || []).includes('raceway') && cartCalc().list === 225") === true);
+  run("cartAdd('fence-post-replacement');");
+  t('v80.28 VM (4): the paired service joins the same cart at its catalog price ($225 + $125 = $350)',
+    run("cartLoad().length === 2 && cartCalc().list === 350") === true);
+  run("cartSave([]); localStorage.removeItem('ghsMenuFavs'); localStorage.removeItem('ghsMenuRecents'); menuFavs = null; menuRecents = null; renderMenu();");
+  try { child7.kill('SIGTERM'); } catch (e) {}
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
