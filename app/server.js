@@ -212,15 +212,41 @@ function requireRole(user, roles, res) { if (!user) { send(res, 401, { error: 'l
 // role: a worker only ever receives worker-side targets, so a notice can
 // never route a technician onto a customer surface (the v79 guards stay
 // as the backstop). Legacy rows without a target just open the app.
+// v80.26 P1-4 (completion): the destination is now stored AS DATA —
+// targetType + targetId next to the route string — from ONE route map,
+// so the three surfaces (in-app bell, foreground browser Notification,
+// Web Push) can never disagree about where a tap lands. Callers may
+// pass the destination as { type, id } instead of a route string; the
+// map resolves it, and route strings from older callers are parsed back
+// into the same structured fields. A notice with no valid destination
+// stores empty fields and renders as a plain, untappable row.
+const NOTIF_ID_ROUTES = { request: '#req=', job: '#job=', workerJob: '#wjob=', yardVisit: '#yard=', workerYardVisit: '#wyard=', invoice: '/invoice/', estimate: '/estimate/', cart: '/cart/' };
+const NOTIF_SECTION_ROUTES = { membership: '#memberships', worker: '#worker', adminYard: '#yard-calendar' };
+function notifRouteFor(type, targetId) {
+  if (NOTIF_ID_ROUTES[type] && /^[\w-]+$/.test(String(targetId || ''))) return NOTIF_ID_ROUTES[type] + targetId;
+  if (NOTIF_SECTION_ROUTES[type]) return NOTIF_SECTION_ROUTES[type];
+  return '';
+}
+function parseNotifTarget(target) {
+  const s = typeof target === 'string' ? target : '';
+  let m = s.match(/^#(req|job|wjob|yard|wyard)=([\w-]+)$/);
+  if (m) return { targetType: { req: 'request', job: 'job', wjob: 'workerJob', yard: 'yardVisit', wyard: 'workerYardVisit' }[m[1]], targetId: m[2] };
+  m = s.match(/^\/(invoice|estimate|cart)\/([\w-]+)$/);
+  if (m) return { targetType: m[1], targetId: m[2] };
+  for (const k in NOTIF_SECTION_ROUTES) if (s === NOTIF_SECTION_ROUTES[k]) return { targetType: k, targetId: '' };
+  return { targetType: '', targetId: '' };
+}
 function notify(userId, type, text, target) {
   if (!userId || !text) return;
+  if (target && typeof target === 'object') target = notifRouteFor(target.type, target.id);
+  const dest = parseNotifTarget(target);
   if (!Array.isArray(db.notifications)) db.notifications = [];
-  db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, target: typeof target === 'string' ? target.slice(0, 200) : '', read: false, at: new Date().toISOString() });
+  db.notifications.push({ id: id('NTF'), userId, type: type || 'info', text, target: typeof target === 'string' ? target.slice(0, 200) : '', targetType: dest.targetType, targetId: dest.targetId, read: false, at: new Date().toISOString() });
   if (db.notifications.length > 2000) db.notifications = db.notifications.slice(-2000);
   // v66: the same event also goes out as a real Web Push (phone buzzes
   // with the app closed). Fire-and-forget — a push failure never touches
   // the flow that raised the notification.
-  sendPushToUser(userId, { type: type || 'info', text, url: (typeof target === 'string' && target) ? target : '/' }).catch(() => {});
+  sendPushToUser(userId, { type: type || 'info', text, url: (typeof target === 'string' && target) ? target : '/', targetType: dest.targetType, targetId: dest.targetId }).catch(() => {});
 }
 // ---------- Web Push (v66, Gabriel: alerts must reach them with the app closed) ----------
 // Zero-dependency RFC 8291 (aes128gcm payload encryption) + RFC 8292
@@ -275,7 +301,7 @@ async function sendPushToUser(userId, note) {
   const subs = (db.pushSubs && db.pushSubs[userId]) || [];
   if (!subs.length) return;
   const keys = vapidKeys();
-  const payload = JSON.stringify({ title: 'General Handyman Solutions', body: String(note.text || '').slice(0, 180), url: (typeof note.url === 'string' && note.url) ? note.url : '/', tag: String(note.type || 'ghs').slice(0, 32) });
+  const payload = JSON.stringify({ title: 'General Handyman Solutions', body: String(note.text || '').slice(0, 180), url: (typeof note.url === 'string' && note.url) ? note.url : '/', targetType: String(note.targetType || ''), targetId: String(note.targetId || ''), tag: String(note.type || 'ghs').slice(0, 32) });
   for (const sub of subs.slice()) {
     try {
       const body = encryptPushPayload(sub, payload);
@@ -287,7 +313,7 @@ async function sendPushToUser(userId, note) {
     } catch (e) { /* a dead endpoint must never break the app */ }
   }
 }
-function notifyAdmins(type, text) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text)); }
+function notifyAdmins(type, text, target) { db.users.filter(u => u.role === 'admin').forEach(a => notify(a.id, type, text, target)); }
 // ---------- v80 P1-1: claim orphan history by email ----------
 // Requests/orders a guest created BEFORE having an account carry their
 // email but customerId null — when that person later signs up (or logs
@@ -9117,6 +9143,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
     // ADMIN view (Gabriel only): everything, including the internal $50
     // worker pay — this serializer is only used on admin endpoints.
     return { id: v.id, userId: v.userId, date: v.date, status: v.status, notes: v.notes || '', createdAt: v.createdAt,
+      rescheduleAsk: v.rescheduleAsk ? { date: v.rescheduleAsk.date, note: v.rescheduleAsk.note || '', at: v.rescheduleAsk.at || null } : null,
       source: v.source || 'manual', period: v.period || (v.date ? v.date.slice(0, 7) : ''), planKey: v.planKey || (plan ? plan.planKey : null),
       assignedWorkerId: v.assignedWorkerId || null, assignedWorkerName: w ? (w.name || '') : '',
       beforePhoto: v.beforePhoto || null, afterPhoto: v.afterPhoto || null, completedAt: v.completedAt || null, workerPay: (v.workerPay == null ? null : v.workerPay),
@@ -9172,7 +9199,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
       v.assignedWorkerId = assignTo.id; v.status = 'assigned';
     }
     db.yardVisits.push(v); save();
-    if (assignTo) { notify(assignTo.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', '#worker'); emitYardAssigned(v); }
+    if (assignTo) { notify(assignTo.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', { type: 'workerYardVisit', id: v.id }); emitYardAssigned(v); }
     return send(res, 201, { visit: publicYardVisit(v) });
   }
   const yvMatch = p.match(/^\/api\/admin\/yard-visits\/([\w-]+)$/);
@@ -9185,11 +9212,15 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
       const date = yardDateOk(b.date);
       if (!date) return send(res, 400, { error: 'valid date required as YYYY-MM-DD' });
       v.date = date;
+      // v80.26: the Team moving the date IS the answer to a member's
+      // reschedule ask — the ask is resolved and leaves the record.
+      if (v.rescheduleAsk) v.rescheduleAsk = null;
     }
     if (b.status !== undefined) {
       if (!['proposed', 'scheduled', 'assigned', 'on_the_way', 'arrived', 'done', 'cancelled'].includes(b.status)) return send(res, 400, { error: 'invalid yard visit status' });
       v.status = b.status;
       if (b.status === 'done' && !v.completedAt) { v.completedAt = new Date().toISOString(); if (v.assignedWorkerId && v.workerPay == null) v.workerPay = YARD_WORKER_PAY; }
+      if ((b.status === 'done' || b.status === 'cancelled') && v.rescheduleAsk) v.rescheduleAsk = null;
     }
     if (b.notes !== undefined) v.notes = cleanText(b.notes, 500);
     // v25 (B1): assignment. Assigning IS the address release for yard
@@ -9212,7 +9243,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
       }
     }
     save();
-    if (assignedNow) { notify(assignedNow.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', '#worker'); emitYardAssigned(v); }
+    if (assignedNow) { notify(assignedNow.id, 'yard', 'You were assigned a yard visit on ' + v.date + '. Open the app — "My yard visits" — for the address.', { type: 'workerYardVisit', id: v.id }); emitYardAssigned(v); }
     return send(res, 200, { visit: publicYardVisit(v) });
   }
   if (yvMatch && req.method === 'DELETE') {
@@ -9224,16 +9255,41 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
   }
   if (p === '/api/me/yard-visits' && req.method === 'GET') {
     if (!user) return send(res, 401, { error: 'login required' });
-    // Customer view: dates + statuses only, plus the LAST completed visit
-    // with its AFTER photo as proof of service. The internal worker pay
-    // and the before photo are never part of this payload.
+    // Customer view (v80.26, audit P1-13): the REAL visit picture — date,
+    // status, the assigned technician's NAME (the same name the customer
+    // already sees on their job cards; never a phone or any contact
+    // channel — the Team stays the only middleman), the visit notes and
+    // the member's own pending reschedule ask — plus the LAST completed
+    // visit with its AFTER photo as proof of service. The internal
+    // worker pay and the before photo are never part of this payload.
+    const yardTechName = (v) => { const w = v.assignedWorkerId ? db.users.find(x => x.id === v.assignedWorkerId) : null; return w ? (w.name || '') : ''; };
     const mine = db.yardVisits.filter(v => v.userId === user.id)
       .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt < b.createdAt ? -1 : 1))
-      .map(v => ({ id: v.id, date: v.date, status: v.status, notes: v.notes || '' }));
+      .map(v => ({ id: v.id, date: v.date, status: v.status, notes: v.notes || '', assignedWorkerName: yardTechName(v), rescheduleAsk: v.rescheduleAsk ? { date: v.rescheduleAsk.date, at: v.rescheduleAsk.at || null } : null }));
     const doneList = db.yardVisits.filter(v => v.userId === user.id && v.status === 'done')
       .sort((a, b) => ((a.completedAt || a.date) < (b.completedAt || b.date) ? 1 : -1));
     const last = doneList[0] || null;
-    return send(res, 200, { visits: mine, lastCompleted: last ? { id: last.id, date: last.date, completedAt: last.completedAt || null, afterPhoto: last.afterPhoto || null } : null });
+    return send(res, 200, { visits: mine, lastCompleted: last ? { id: last.id, date: last.date, completedAt: last.completedAt || null, afterPhoto: last.afterPhoto || null, assignedWorkerName: yardTechName(last) } : null });
+  }
+  // v80.26 (P1-13): the yard card's reschedule/help path. The member
+  // ASKS — a date (+ optional note) recorded on the visit itself — and
+  // the Team confirms: nothing moves until Gabriel reschedules from the
+  // Yard Calendar (which clears the ask). The ask also lands in the
+  // admin bell with a structured target on the Yard Calendar route.
+  const yvAskMatch = p.match(/^\/api\/me\/yard-visits\/([\w-]+)\/reschedule$/);
+  if (yvAskMatch && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const v = db.yardVisits.find(x => x.id === yvAskMatch[1]);
+    if (!v || v.userId !== user.id) return send(res, 404, { error: 'yard visit not found' });
+    if (v.status === 'done' || v.status === 'cancelled') return send(res, 409, { error: 'this visit is already ' + v.status });
+    const b = await readBody(req);
+    if (b.clear) { v.rescheduleAsk = null; save(); return send(res, 200, { ok: true, rescheduleAsk: null }); }
+    const date = yardDateOk(b.date);
+    if (!date) return send(res, 400, { error: 'valid date required as YYYY-MM-DD' });
+    v.rescheduleAsk = { date, note: cleanText(b.note, 300), at: new Date().toISOString() };
+    save();
+    notifyAdmins('yard', (user.name || 'A member') + ' asked to move their yard visit ' + v.id + ' from ' + v.date + ' to ' + date + (v.rescheduleAsk.note ? ' — "' + v.rescheduleAsk.note + '"' : '') + '. See the Yard Calendar.', { type: 'adminYard' });
+    return send(res, 200, { ok: true, rescheduleAsk: { date: v.rescheduleAsk.date, at: v.rescheduleAsk.at } });
   }
 
   // ---------- Yard visits: worker flow (v25, B1) ----------
@@ -9272,9 +9328,9 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
         if (!v.beforePhoto || !v.afterPhoto) return send(res, 400, { error: 'a BEFORE photo and an AFTER photo are required to finish a yard visit' });
         v.completedAt = new Date().toISOString();
         v.workerPay = YARD_WORKER_PAY;
-        notifyAdmins('yard', user.name + ' completed yard visit ' + v.id + ' (' + v.date + ') — photos are in the Yard Calendar.');
+        notifyAdmins('yard', user.name + ' completed yard visit ' + v.id + ' (' + v.date + ') — photos are in the Yard Calendar.', { type: 'adminYard' });
         const member = db.users.find(x => x.id === v.userId);
-        if (member) notify(member.id, 'yard', 'Your yard visit on ' + v.date + ' is done — the after photo is in your membership card.', '#memberships');
+        if (member) notify(member.id, 'yard', 'Your yard visit on ' + v.date + ' is done — the after photo is in your membership card.', { type: 'yardVisit', id: v.id });
       }
       v.status = b.status;
     }
