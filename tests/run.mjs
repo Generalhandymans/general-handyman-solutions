@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-11', swSrc.includes("const CACHE = 'ghs-app-v80-11'"));
+t('static: SW cache is ghs-app-v80-12', swSrc.includes("const CACHE = 'ghs-app-v80-12'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -63,7 +63,7 @@ t('static v24: subscribe endpoints stash the source', serverSrc.includes('stashP
 t('static v24: receipt email wired at capture with claim flag', serverSrc.includes('captureReceiptSentAt') && serverSrc.includes("subject: 'Your receipt — General Handyman Solutions'"));
 t('static v24: silent jobs gate the broadcast fan-out', serverSrc.includes('const silent = !!(b.silent && assignedWorkerId)') && serverSrc.includes('emitJobNew(j, assignedWorkerId)'));
 t('static v24: contact pill markup with Team tel/sms hrefs', htmlSrc.includes('id="teamContactPill"') && htmlSrc.includes('href="tel:+17078623773"') && htmlSrc.includes('href="sms:+17078623773"'));
-t('static v24: render paints the contact pill', htmlSrc.includes('function render(){\n  updateContactPill();'));
+t('static v24: render paints the contact pill (v80.12: the view beacon fires first)', htmlSrc.includes('function render(){\n  trackRouteView812(); // v80.12: aggregate view beacon (no-op off the storefront)\n  updateContactPill();'));
 t('static v24: src captured into sessionStorage ghsSrc', htmlSrc.includes("sessionStorage.setItem('ghsSrc'") && htmlSrc.includes('function captureCampaignSource('));
 t('static v24: join calls carry the campaign source', (htmlSrc.match(/source: campaignSource\(\)/g) || []).length >= 3);
 t('static v24: per-variant plan image map + img ids', htmlSrc.includes('PLAN_CARD_IMGS') && htmlSrc.includes('id="yardPlanImg"') && htmlSrc.includes('id="plusPlanImg"') && htmlSrc.includes('$150 per month · 2 visits') && htmlSrc.includes('$175 per month · 2 yard visits'));
@@ -1562,6 +1562,9 @@ const stripeMock = http.createServer(async (req, res) => {
   }
   if (req.method === 'GET' && path.startsWith('/setup_intents/')) { const si = stripeState.setis[path.split('/')[2]]; return si ? send(200, si) : send(404, { error: { message: 'no such setup_intent' } }); }
   if (req.method === 'GET' && path.startsWith('/subscriptions/')) { const sub = stripeState.subs[path.split('/')[2]]; return sub ? send(200, sub) : send(404, { error: { message: 'no such subscription' } }); }
+  // v80.12: the Dinero Stripe box reads the live balance + next payout.
+  if (req.method === 'GET' && path === '/balance') return send(200, { object: 'balance', available: [{ amount: 12345, currency: 'usd' }], pending: [{ amount: 5000, currency: 'usd' }] });
+  if (req.method === 'GET' && path === '/payouts') return send(200, { object: 'list', data: [{ id: 'po_mock_1', amount: 10000, currency: 'usd', arrival_date: 1767312000, status: 'pending' }] });
   const updM = path.match(/^\/subscriptions\/([^/]+)$/);
   if (req.method === 'POST' && updM) {
     const sub = stripeState.subs[updM[1]];
@@ -4277,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.11: ghs-app-v80-11)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-11'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.12: ghs-app-v80-12)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-12'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5147,7 +5150,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
 // ---------------- v80.11 ALCANCE: statics ----------------
 t('static v80.11: 50-mile rule — constant, haversine, range check and the alert filter all exist', serverSrc.includes('const JOB_RANGE_MILES = 50') && serverSrc.includes('function haversineMiles(') && serverSrc.includes('function jobRangeFor(') && serverSrc.includes('function alertableWorkersForJob('));
 t('static v80.11: referral bounty is $10, awarded by ONE function, anti-self guarded both ways', serverSrc.includes('const REFERRAL_BOUNTY = 10') && serverSrc.includes('function maybeAwardMembershipBounty(') && serverSrc.includes('if (w.id === u.id) return null;') && serverSrc.includes('anti-self: same email, second account'));
-t('static v80.11: bounty award sites fire ONLY on real money (paid session with amount_total > 0 / non-trial HomeCare confirm / paid plan confirm / invoice amount_paid > 0)', serverSrc.includes('Number(session.amount_total) > 0) maybeAwardMembershipBounty') && serverSrc.includes('if (!wasTrial74) maybeAwardMembershipBounty') && serverSrc.includes('if (Number(obj.amount_paid) > 0) maybeAwardMembershipBounty'));
+t('static v80.11: bounty award sites fire ONLY on real money (paid session with amount_total > 0 / non-trial HomeCare confirm / paid plan confirm / invoice amount_paid > 0) — v80.12: the first-real-charge stamp fires at the same guarded moments', serverSrc.includes('Number(session.amount_total) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty') && serverSrc.includes('if (!wasTrial74) { stampFirstRealCharge(user); maybeAwardMembershipBounty') && serverSrc.includes('if (Number(obj.amount_paid) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty'));
 t('static v80.11: sales commission is $10 and rides the SAME payout transfer as job pay (payOffer + commission, one event)', serverSrc.includes('const SALES_COMMISSION = 10') && serverSrc.includes('function jobSalesCommission(') && serverSrc.includes('Number(j.payOffer) + commission811'));
 t('static v80.11: tech-zone endpoints exist (referrals / sales-menu / seller carts / estimates)', serverSrc.includes("p === '/api/worker/referrals'") && serverSrc.includes("p === '/api/worker/sales-menu'") && serverSrc.includes("p === '/api/worker/carts'") && serverSrc.includes("p === '/api/worker/estimates'"));
 t('static v80.11: tech estimates are born flagged + seller-stamped and audited (no approval step in the path)', serverSrc.includes('techCreated: true') && serverSrc.includes('soldByWorkerId: user.id') && serverSrc.includes("audit(user, 'estimate.tech_create'"));
@@ -5156,6 +5159,13 @@ t('static v80.11: apex is the APP_URL default and the worker emails print the ap
 t('static v80.11: invoice pay is email-guarded — looksLikeEmail at session creation, sanitize + admin flag in the pay handler', serverSrc.includes('function looksLikeEmail(') && serverSrc.includes('looksLikeEmail(user.email)') && serverSrc.includes('inv.emailInvalid = true') && serverSrc.includes('emailInvalid: !!inv.emailInvalid'));
 t('static v80.11 client: tech zone carries the sales / estimates / referrals sections and their loaders', htmlSrc.includes('id="workerSales"') && htmlSrc.includes('id="workerEstimates"') && htmlSrc.includes('id="workerReferrals"') && htmlSrc.includes('function loadWorkerSales(') && htmlSrc.includes('function loadWorkerEstimates(') && htmlSrc.includes('function loadWorkerReferrals('));
 t('static v80.11 client: You earn / Tú ganas labels, commission + distance job lines, admin tech-estimate badge', htmlSrc.includes("youEarn: 'You earn'") && htmlSrc.includes("youEarn: 'Tú ganas'") && htmlSrc.includes('function workerCommLine(') && htmlSrc.includes('function workerDistLine(') && htmlSrc.includes('Tech estimate · '));
+
+// ---------------- v80.12 TRÁFICO Y DINERO: statics ----------------
+t('static v80.12: server exposes the public view beacon and counts ONLY aggregate daily buckets (db.traffic)', serverSrc.includes("p === '/api/track/view'") && serverSrc.includes('function recordTrafficView(') && serverSrc.includes('function trafficOf()'));
+t('static v80.12: funnel + ad-spend + dinero endpoints exist', serverSrc.includes("p === '/api/admin/traffic'") && serverSrc.includes("p === '/api/admin/adspend'") && serverSrc.includes("p === '/api/admin/money'"));
+t('static v80.12: the first-real-charge stamp is defined and fires beside the bounty award sites', serverSrc.includes('function stampFirstRealCharge(') && (serverSrc.match(/stampFirstRealCharge\(/g) || []).length >= 5);
+t('static v80.12: membership payment failures are bookkept for the Dinero month count', serverSrc.includes("id('PFL')") && serverSrc.includes('function paymentFailuresOf('));
+t('static v80.12 client: Tráfico + Dinero sections, loaders and the view beacon are wired', htmlSrc.includes('id="adminTraffic"') && htmlSrc.includes('id="adminMoney"') && htmlSrc.includes('function loadAdminTraffic(') && htmlSrc.includes('function loadAdminMoney(') && htmlSrc.includes("'/api/track/view'") && htmlSrc.includes('function trackRouteView812(') && htmlSrc.includes("trackView812('menu', true)") && htmlSrc.includes('id="admSecTraffic"'));
 
 // ---------------- v80.11 ALCANCE: DIRECT UNIT PINS ----------------
 // The audit gap: depositSplit() was covered only indirectly and the
@@ -5375,6 +5385,119 @@ const sj = (sellerJobs.j.jobs || []).find(x => x.id === cj811.j.job.id);
 t('v80.11 sold job: the seller sees the job as his own WITH the $10 sales commission in his pay breakdown', !!sj && sj.mine === true && sj.salesCommission === 10);
 const farJobs2 = await req3('GET', '/api/jobs', { token: wFar.token });
 t('v80.11 sold job: the sold job never appears on another worker board', !(farJobs2.j.jobs || []).some(x => x.id === cj811.j.job.id));
+
+// ---------------- v80.12 TRÁFICO Y DINERO (app3) ----------------
+// Gabriel's two admin sections. Assertions run on DELTAS against
+// baselines read at block start: app3 already carries the ALCANCE
+// history (the Bea sold order in deposit state, two $10 bounties
+// waiting on the seller, the converted trial member, ...).
+const tRow812 = (rep, s) => (rep.rows || []).find(r => r.source === s) || { views: 0, homeViews: 0, menuViews: 0, joinViews: 0, cartViews: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null };
+const T0 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+t('v80.12 traffic: the report answers with the funnel shape (range/from/to/totals/rows)', T0.status === 200 && T0.j.range === '7d' && !!T0.j.from && !!T0.j.to && !!T0.j.totals && Array.isArray(T0.j.rows));
+const gateT = await req3('GET', '/api/admin/traffic', { token: CX });
+const gateM = await req3('GET', '/api/admin/money', {});
+const gateW = await req3('GET', '/api/admin/money', { token: wSeller.token });
+const gateS = await req3('POST', '/api/admin/adspend', { token: CX, body: { source: 'ig', amount: 5, date: '2026-01-01' } });
+t('v80.12 gating: Tráfico y Dinero are admin-only (customer 403, anonymous 401, worker 403, spend POST 403)', gateT.status === 403 && gateM.status === 401 && gateW.status === 403 && gateS.status === 403);
+// --- the beacon: aggregate counters only, attributed by session source ---
+const bk1 = await req3('POST', '/api/track/view', { body: { view: 'home', src: 'ig' } });
+const bk2 = await req3('POST', '/api/track/view', { body: { view: 'home', src: 'ig' } });
+const bk3 = await req3('POST', '/api/track/view', { body: { view: 'menu', src: 'ig' } });
+const bk4 = await req3('POST', '/api/track/view', { body: { view: 'cart' } });
+const bkBad = await req3('POST', '/api/track/view', { body: { view: 'checkout', src: 'ig' } });
+const bkWorker = await req3('POST', '/api/track/view', { token: wSeller.token, body: { view: 'home', src: 'ig' } });
+t('v80.12 beacon: storefront views count; an unknown view is refused; a worker session never counts', bk1.j.counted === true && bk2.j.counted === true && bk3.j.counted === true && bk4.j.counted === true && bkBad.status === 400 && bkWorker.j.counted === false);
+const T1 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const ig1 = tRow812(T1.j, 'ig'), ig0 = tRow812(T0.j, 'ig'), dr1 = tRow812(T1.j, 'direct'), dr0 = tRow812(T0.j, 'direct');
+t('v80.12 beacon: counts land in the source buckets (ig: 3 views = 2 home + 1 menu; no-src counts as direct)', ig1.views - ig0.views === 3 && ig1.homeViews - ig0.homeViews === 2 && ig1.menuViews - ig0.menuViews === 1 && dr1.views - dr0.views === 1 && dr1.cartViews - dr0.cartViews === 1 && T1.j.totals.views - T0.j.totals.views === 4);
+// --- a real charge under a source: joins + new PAYING members move ---
+const igCust = await mkCustomer3('igcust@t.local', 'Iggy Cust', '(707) 555-0411');
+const igSub = await req3('POST', '/api/stripe/membership-subscribe', { token: igCust.token, body: { plan: 'plus1', source: 'ig' } });
+await mockActivate(igSub.j.subscriptionId);
+const igConf = await req3('POST', '/api/stripe/membership-confirm', { token: igCust.token, body: { plan: 'plus1' } });
+t('v80.12 setup: the ig-attributed customer joins Plus and pays at join', igSub.status === 200 && igConf.status === 200 && igConf.j.active === true);
+const T2 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const ig2 = tRow812(T2.j, 'ig');
+t('v80.12 funnel: the ig row counts the signup AND the new paying member (first real charge)', ig2.joins - ig0.joins === 1 && ig2.newMembers - ig0.newMembers === 1 && ig2.payments - ig0.payments === 1);
+// --- ad spend + CAC (the $36 test kill-rule math) ---
+const spend1 = await req3('POST', '/api/admin/adspend', { token: A3, body: { source: 'ig', amount: 36, date: T2.j.to } });
+t('v80.12 adspend: admin records a spend (201, stored with source/amount/date)', spend1.status === 201 && spend1.j.record.source === 'ig' && spend1.j.record.amount === 36 && spend1.j.record.date === T2.j.to);
+const T3 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const ig3 = tRow812(T3.j, 'ig');
+t('v80.12 CAC: $36 of ig spend over 1 new paying member reads CAC $36', ig3.spend === 36 && ig3.newMembers === ig0.newMembers + 1 && ig3.cac === 36);
+const fb0 = tRow812(T0.j, 'fb');
+const spend2 = await req3('POST', '/api/admin/adspend', { token: A3, body: { source: 'fb', amount: 20, date: T2.j.to } });
+const T3b = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const fb3 = tRow812(T3b.j, 'fb');
+t('v80.12 CAC: spend with ZERO paying members shows no CAC (the kill rule: $20 spent / 0 signups -> off)', spend2.status === 201 && fb3.spend - fb0.spend === 20 && fb3.newMembers === fb0.newMembers && fb3.cac === null);
+const spendBad1 = await req3('POST', '/api/admin/adspend', { token: A3, body: { source: 'ig', amount: 0, date: T2.j.to } });
+const spendBad2 = await req3('POST', '/api/admin/adspend', { token: A3, body: { amount: 10, date: T2.j.to } });
+const spendBad3 = await req3('POST', '/api/admin/adspend', { token: A3, body: { source: 'ig', amount: 10, date: '2026-13-40' } });
+t('v80.12 adspend: $0, a missing source and an impossible date are all refused 400', spendBad1.status === 400 && spendBad2.status === 400 && spendBad3.status === 400);
+const spendUpd = await req3('PUT', '/api/admin/adspend/' + spend2.j.record.id, { token: A3, body: { amount: 25 } });
+const spendDel = await req3('DELETE', '/api/admin/adspend/' + spend2.j.record.id, { token: A3 });
+const spendList = await req3('GET', '/api/admin/adspend', { token: A3 });
+t('v80.12 adspend: records are editable and deletable', spendUpd.status === 200 && spendUpd.j.record.amount === 25 && spendDel.status === 200 && (spendList.j.records || []).some(r => r.id === spend1.j.record.id) && !(spendList.j.records || []).some(r => r.id === spend2.j.record.id));
+// --- trial discipline: a free month is NOT a paying member until it converts ---
+const fbCust = await mkCustomer3('fbtrial@t.local', 'Eff Bee', '(707) 555-0412');
+const fbSub = await req3('POST', '/api/stripe/homecare-subscribe', { token: fbCust.token, body: { source: 'fb' } });
+const fbWh0 = await wh3('checkout.session.completed', { id: 'cs_fb_812', mode: 'subscription', payment_status: 'paid', amount_total: 0, customer: 'cus_mock_fb812', subscription: fbSub.j.subscriptionId, metadata: { userId: fbCust.id, kind: 'homecare' } });
+const T4 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const fb4 = tRow812(T4.j, 'fb');
+t('v80.12 funnel: a free-trial START does not count as a paying member', fbSub.status === 200 && fbWh0.status === 200 && fb4.newMembers === fb0.newMembers);
+const fbWh1 = await wh3('invoice.payment_succeeded', { id: 'in_fb_812', customer: 'cus_mock_fb812', subscription: fbSub.j.subscriptionId, amount_paid: 2900 });
+const T5 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const fb5 = tRow812(T5.j, 'fb');
+t('v80.12 funnel: the trial CONVERSION (first real $29 invoice) counts the paying member', fbWh1.status === 200 && fb5.newMembers === fb0.newMembers + 1);
+// --- DINERO: shape + the live Stripe box (mock: $123.45 avail / $50 pending / $100 next) ---
+const M0 = await req3('GET', '/api/admin/money', { token: A3 });
+t('v80.12 dinero: the report answers with every money bucket', M0.status === 200 && !!M0.j.depositsWaiting && !!M0.j.receivables && !!M0.j.techPayouts && !!M0.j.captains && !!M0.j.membershipFailures);
+t('v80.12 dinero: the Stripe box reads balance + next payout server-side', M0.j.stripe.available === true && M0.j.stripe.balanceAvailable === 123.45 && M0.j.stripe.balancePending === 50 && !!M0.j.stripe.nextPayout && M0.j.stripe.nextPayout.amount === 100 && M0.j.stripe.nextPayout.date === '2026-01-02');
+t('v80.12 dinero: the two ALCANCE bounties sit in the pending-bounty bucket ($10 + $10)', M0.j.techPayouts.bountiesPending.count === 2 && M0.j.techPayouts.bountiesPending.amount === 20);
+// --- a second sold cart pays its deposit: Dinero + the funnel move together ---
+const cart2 = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
+const co2 = await req3('POST', '/api/carts/' + cart2.j.cart.id + '/checkout', { body: { name: 'Buyer Dos', phone: '7075550131', email: 'dos@t.local', address: '10 Vine St', city: 'Fairfield', when: 'Sunday' } });
+const sess2 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === cart2.j.cart.id && s.mode === 'payment').slice(-1)[0];
+await mockSessionPaid(sess2.id);
+await fetch(BASE3 + '/cart/' + cart2.j.cart.id + '?paid=1&session_id=' + sess2.id);
+const M1 = await req3('GET', '/api/admin/money', { token: A3 });
+t('v80.12 dinero: a paid deposit with its balance out moves deposits-waiting (+1 order, +$50 in, +$75 owed) and receivables', co2.status === 200 && M1.j.depositsWaiting.count === M0.j.depositsWaiting.count + 1 && M1.j.depositsWaiting.collected === M0.j.depositsWaiting.collected + 50 && M1.j.depositsWaiting.balance === M0.j.depositsWaiting.balance + 75 && M1.j.receivables.total === M0.j.receivables.total + 75 && M1.j.receivables.orderBalances === M0.j.receivables.orderBalances + 75);
+const T6 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
+const codeRow6 = tRow812(T6.j, ref0.j.code), codeRow0 = tRow812(T0.j, ref0.j.code);
+t('v80.12 funnel: the deposit attributes to the seller code stamped on the cart', codeRow6.deposits === codeRow0.deposits + 1);
+// --- a sent, unpaid invoice joins receivables ---
+const invOpen = await req3('POST', '/api/admin/invoices', { token: A3, body: { customerName: 'Open Olivia', customerEmail: 'olivia@t.local', items: [{ description: 'Gate repair — labor', qty: 1, unitPrice: 150 }] } });
+const invSend = await req3('POST', '/api/admin/invoices/' + invOpen.j.invoice.id + '/send', { token: A3, body: {} });
+const M2 = await req3('GET', '/api/admin/money', { token: A3 });
+t('v80.12 dinero: a sent unpaid invoice joins receivables (+$150 open)', invSend.status === 200 && M2.j.receivables.invoicesOpen === M1.j.receivables.invoicesOpen + 150 && M2.j.receivables.invoicesOpenCount === M1.j.receivables.invoicesOpenCount + 1 && M2.j.receivables.total === M1.j.receivables.total + 150);
+// --- a completed job: tech payout waits on Stripe setup; the captain override accrues ---
+const area812 = await req3('POST', '/api/admin/captains/areas', { token: A3, body: { name: 'Testville812', cities: ['FAILGEO'] } });
+const assign812 = await req3('POST', '/api/admin/captains/assign', { token: A3, body: { areaId: area812.j.area.id, workerId: wSeller.id } });
+const job812 = await req3('POST', '/api/jobs', { token: A3, body: { service: 'Water heater install', city: 'FAILGEO', description: 'wh swap', when: 'Tomorrow 9am', payOffer: 100, customerPrice: 200, customerName: 'Cap Cust', customerPhone: '(707) 555-0199', address: '' } });
+const claim812 = await req3('POST', '/api/jobs/' + job812.j.job.id + '/claim', { token: wFar.token });
+const done812 = await req3('PATCH', '/api/jobs/' + job812.j.job.id, { token: wFar.token, body: { photosDone: true } });
+const inv812 = await req3('POST', '/api/admin/invoices', { token: A3, body: { customerName: 'Cap Cust', customerEmail: 'capcust@t.local', jobId: job812.j.job.id, items: [{ description: 'Water heater install — labor', qty: 1, unitPrice: 200 }] } });
+await req3('POST', '/api/admin/invoices/' + inv812.j.invoice.id + '/mark-paid', { token: A3, body: { method: 'cash' } });
+const M3 = await req3('GET', '/api/admin/money', { token: A3 });
+const awsBucket = (M3.j.techPayouts.byState || []).find(b => b.state === 'awaiting_worker_setup');
+const awsBucket0 = (M2.j.techPayouts.byState || []).find(b => b.state === 'awaiting_worker_setup');
+const farRow = (M3.j.techPayouts.perTech || []).find(w => w.workerId === wFar.id);
+const farRow0 = (M2.j.techPayouts.perTech || []).find(w => w.workerId === wFar.id);
+t('v80.12 dinero: a completed job with no Connect sits in awaiting_worker_setup, per tech (+$100)', claim812.status === 200 && done812.j.job.status === 'Done — photos sent' && !!awsBucket && awsBucket.amount === (awsBucket0 ? awsBucket0.amount : 0) + 100 && !!farRow && farRow.amount === (farRow0 ? farRow0.amount : 0) + 100 && farRow.awaitingSetup === (farRow0 ? farRow0.awaitingSetup : 0) + 100);
+const capRow3 = (M3.j.captains.perCaptain || []).find(c => c.captainId === wSeller.id);
+const capRow2 = (M2.j.captains.perCaptain || []).find(c => c.captainId === wSeller.id);
+t('v80.12 dinero: the 5% captain override on the paid $200 job accrues to the area captain (+$10)', assign812.status === 200 && !!capRow3 && capRow3.amount === (capRow2 ? capRow2.amount : 0) + 10 && M3.j.captains.accrued === M2.j.captains.accrued + 10);
+// --- a failed membership payment is bookkept for the month ---
+const fbStripeCust = stripeState.subs[fbSub.j.subscriptionId].customer;
+const failWh = await wh3('invoice.payment_failed', { id: 'in_fb_fail_812', customer: fbStripeCust, subscription: fbSub.j.subscriptionId, amount_due: 2900 });
+const M4 = await req3('GET', '/api/admin/money', { token: A3 });
+t('v80.12 dinero: a failed membership payment is bookkept for the month (+1, +$29)', failWh.status === 200 && M4.j.membershipFailures.count === M3.j.membershipFailures.count + 1 && M4.j.membershipFailures.total === M3.j.membershipFailures.total + 29);
+// --- ranges + the no-Stripe instance degrades gracefully ---
+const T30 = await req3('GET', '/api/admin/traffic?range=30d', { token: A3 });
+const TBad = await req3('GET', '/api/admin/traffic?range=year', { token: A3 });
+t('v80.12 traffic: ranges answer hoy/7d/30d and a bogus range falls back to 7d', T30.status === 200 && T30.j.range === '30d' && T30.j.totals.views >= T1.j.totals.views && TBad.j.range === '7d');
+const MInst1 = await req('GET', '/api/admin/money', { token: A });
+t('v80.12 dinero: without a Stripe key the Stripe box degrades to not-available and the page still answers', MInst1.status === 200 && MInst1.j.stripe.available === false && !!MInst1.j.receivables);
 
 try { child3.kill('SIGTERM'); } catch (e) {}
 try { geo3.close(); } catch (e) {}
