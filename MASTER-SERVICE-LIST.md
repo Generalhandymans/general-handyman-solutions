@@ -48,6 +48,17 @@ adelantado — Gabriel decide caso por caso al momento del ÚLTIMO pago
 ajuste de saldo del mismo link del cliente. Sin descuento de miembro
 (es costo de traslado, no labor).
 
+**CORRECCIÓN 2026-11-01 (v80.21.1, NIVEL 2H PAREJO — decisión de Gabriel
+la misma noche del ajuste):** el cluster de 2 h que la auditoría había
+dejado en $165 sube a **$175** (miembro $140): door slab swap, screen
+door install, pet door install, fence picket repair y garbage disposal
+swap. La regla resultante: **todo trabajo de 2 h = $175 en todo el
+menú** — la puerta no podía costar menos que el TV siendo ambos de 2 h,
+y dejar los demás en $165 era "tirar $10 en la mesa" por trabajo. La
+batería (battery replacement) se queda en **$125** — Gabriel lo decidió
+explícitamente la misma noche. Precios nuevos solo en órdenes nuevas,
+como siempre.
+
 **Las cinco categorías oficiales de Gabriel (2026-10-20):**
 **Carpintería, Electricidad, Plomería, Jardinería y Mecánica.**
 Todo servicio vive en UNA sola categoría; si un trabajo podría caer en dos,
@@ -105,23 +116,25 @@ queda en una y la otra solo trae una nota de referencia.
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
 | Closet doors (pair) | $215 | per pair | ~2.5 h | CONFIRMADO |
-| Interior door slab swap | $165 | per door | ~2 h | CONFIRMADO |
+| Interior door slab swap | $175 | per door | ~2 h | CONFIRMADO |
 | Door knob / lever install | $85 | per door | ~1 h | CONFIRMADO |
 | Deadbolt install — single | $85 | flat | ~45 min | CONFIRMADO |
 | Deadbolt + knob combo install | $125 | flat | ~1 h | CONFIRMADO |
 | Smart lock install & setup | $135 | flat | ~1.5 h | CONFIRMADO |
 | Door adjustment (sticks / won't latch) | $85 | per door | ~1 h | CONFIRMADO |
 | Weatherstripping | $85 | per door | ~1 h | CONFIRMADO |
-| Screen door install | $165 | flat | ~2 h | CONFIRMADO |
+| Screen door install | $175 | flat | ~2 h | CONFIRMADO |
 | Sliding door roller / track service | $135 | flat | ~1.5 h | CONFIRMADO |
 | Window screen rescreen / repair | $85 | per visit (up to 2 screens) | ~1 h | CONFIRMADO |
-| Pet door install (in door) | $165 | flat | ~2 h | CONFIRMADO |
+| Pet door install (in door) | $175 | flat | ~2 h | CONFIRMADO |
 
 *Deadbolt single y chapa sola a $85 (Gabriel, 2026-11-01; antes $75): con el
 mínimo del trabajador de $50 por trabajo corto, un servicio de $85
 despachado a miembro deja ~23% de margen — SÍ se puede despachar.*
 
-*Cambio de slab $165 (Gabriel, 2026-11-01; antes $125): NO incluye instalar la
+*Cambio de slab $175 (Gabriel, 2026-11-01; $125 → $165 en el ajuste de la
+auditoría y $165 → $175 la misma noche, parejo con el TV ≤65" — ver la
+corrección v80.21.1 abajo): NO incluye instalar la
 chapa ni el cerrojo en la puerta nueva — esa instalación se cobra
 aparte, $85 por cada uno (su precio single).*
 
@@ -186,7 +199,7 @@ o parcheo extenso va por la ruta de estimado.*
 
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
-| Fence picket repair (up to 5 pickets) | $165 | flat | ~2 h | CONFIRMADO |
+| Fence picket repair (up to 5 pickets) | $175 | flat | ~2 h | CONFIRMADO |
 | Fence post replacement (add-on to a fence repair visit) | $125 | per post | ~1–1.5 h | CONFIRMADO |
 | Deck board replacement (up to 5 boards) | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
 | Gate repair / adjustment | $135 | flat | ~1.5 h | CONFIRMADO |
@@ -225,7 +238,7 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 | Toilet replacement (full swap) | $215 | flat | ~2.5 h | CONFIRMADO |
 | Old toilet removal / haul-away (optional add-on — checkbox) | $50 | add-on | — | CONFIRMADO |
 | Toilet repair (fill valve / flapper) | $125 | flat | ~1 h | CONFIRMADO |
-| Garbage disposal swap | $165 | flat | ~2 h | CONFIRMADO |
+| Garbage disposal swap | $175 | flat | ~2 h | CONFIRMADO |
 | Showerhead swap | $85 | flat | ~45 min | CONFIRMADO |
 | Tub / shower re-caulk | $135 | flat | ~1.5 h | CONFIRMADO |
 | Grab bar install | $125 | each | ~1 h | CONFIRMADO |
