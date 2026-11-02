@@ -1235,7 +1235,7 @@ async function refreshWorkerConnect(u, force) {
 async function maybePayWorkerForJob(j, opts) {
   opts = opts || {};
   try {
-    if (!j || !j.assignedWorkerId || !(Number(j.payOffer) > 0)) return;
+    if (!j || !j.assignedWorkerId || !(Number(j.payOffer) + jobSalesCommission(j) > 0)) return;
     if (j.payoutTransferId) { if (j.payoutStatus !== 'paid') { j.payoutStatus = 'paid'; save(); } return; }
     if (j.payoutInFlight && (Date.now() - j.payoutInFlight < 120000)) return; // a transfer attempt is already running — never double-pay
     j.payoutTriedAt = new Date().toISOString();
@@ -1260,8 +1260,9 @@ async function maybePayWorkerForJob(j, opts) {
     // hold trail). New stamps say 'awaiting_payment'; the legacy
     // 'awaiting_capture' stamp still renders and sweeps for old jobs.
     if (r && !requestIsPaid(r)) { j.payoutStatus = 'awaiting_payment'; save(); return; }
-    // v80.11: the sales commission (his own sold job, completed by him)
-    // rides THIS SAME transfer — one payout event, payOffer + $10.
+    // v80.11/v80.13: the sales commission (his own sold job, completed
+    // by him) rides THIS SAME transfer — one payout event, payOffer +
+    // commission (on a sold job the two lines sum to his 68% take).
     const commission811 = jobSalesCommission(j);
     const amount = Math.round((Number(j.payOffer) + commission811) * 100);
     j.payoutInFlight = Date.now(); save();
@@ -1307,9 +1308,11 @@ function sweepPendingPayouts() {
 //      charge — never at free-trial start — paid through the worker's
 //      own Stripe Connect on the same rails as job pay.
 //  (3) MENÚ DE VENTA — tech-zone-only seller view: customer list price
-//      + the tech's guaranteed take (standard pay + $10 commission).
-//  (4) SALES COMMISSION — $10 on top of payOffer for a job the tech
-//      SOLD in-app and COMPLETES, transferred in the same payout.
+//      + the tech's guaranteed take (v80.13: 68% of the price — the
+//      SOLD-TAKE law below; it was standard pay + $10 in v80.11).
+//  (4) SALES COMMISSION — the $10 line inside that 68% take for a job
+//      the tech SOLD in-app and COMPLETES, transferred in the same
+//      payout as his pay (payOffer + commission = the 68% take).
 //  (5) CREADOR DE ESTIMADOS — techs send estimates DIRECTLY (Gabriel's
 //      explicit call: no approval step); the system guards the $1,000
 //      guardrail and the 20% margin floor instead, and every tech
@@ -1327,6 +1330,26 @@ const STRIPE_FEE_PCT = 0.029;
 const STRIPE_FEE_FLAT = 0.30;
 function marginOkAfterFees(total, pay) { const t = Number(total) || 0; const fee = t * STRIPE_FEE_PCT + STRIPE_FEE_FLAT; return t > 0 && ((t - (Number(pay) || 0) - fee) / t) >= MARGIN_FLOOR - 1e-9; }
 function minTotalForMargin(pay) { return ((Number(pay) || 0) + STRIPE_FEE_FLAT) / (1 - MARGIN_FLOOR - STRIPE_FEE_PCT); }
+// --- v80.13: GABRIEL'S 68% SOLD-TAKE LAW (settled 2026-11-01) ---
+// When a tech SELLS a job through the app (his sales-menu cart link or
+// his own estimate), his guaranteed TOTAL take is 68% of the job's
+// FINAL customer total (post member discount — what the customer
+// actually pays), sales commission INCLUDED: TV Mounting $125 -> $85.
+// The house keeps ~29% after Stripe fees on every sold job. The take
+// keeps the two-line breakdown the money views already show: the $10
+// commission line (clamped to the take itself, so neither line ever
+// goes negative) + payOffer for the rest. Jobs the tech did NOT sell
+// keep the standard pay model, untouched.
+const SOLD_TAKE_PCT = 0.68;
+function soldTakeForTotal(total) {
+  const t = Number(total) || 0;
+  const take = t > 0 ? Math.round(t * SOLD_TAKE_PCT) : 0;
+  const commission = Math.max(0, Math.min(SALES_COMMISSION, take));
+  return { take, commission, pay: take - commission };
+}
+// The smallest FINAL total whose 68% take still clears the margin
+// floor — the tech estimate creator's raise target under the new law.
+function minTotalForSoldMargin() { return STRIPE_FEE_FLAT / (1 - MARGIN_FLOOR - SOLD_TAKE_PCT - STRIPE_FEE_PCT); }
 // Typical hours per catalog service — the SAME hours the prices were
 // built from (menu metas + MASTER-SERVICE-LIST). Standard tech pay for
 // a service is $50/hr × these hours, min $50 (Gabriel's pay model).
@@ -1438,6 +1461,10 @@ async function alertableWorkersForJob(j) {
 // --- sales commission ---
 // Earned ONLY by the seller, ONLY while he is still the assigned
 // worker at payout time: a cancelled or reassigned job pays none.
+// v80.13: j.salesCommission is stamped at create-job as the $10 line
+// INSIDE the seller's 68% take (soldTakeForTotal) — this function keeps
+// returning exactly the commission component the payout transfers, so
+// the payout, the worker money view and the Dinero report never drift.
 function jobSalesCommission(j) {
   if (!j || !j.soldByWorkerId || j.soldByWorkerId !== j.assignedWorkerId) return 0;
   return Math.max(0, Number(j.salesCommission) || 0);
@@ -1506,6 +1533,19 @@ function sellerWorkerForRequest(r) {
   if (!r) return null;
   if (r.soldByWorkerId) { const w = db.users.find(x => x.id === r.soldByWorkerId && x.role === 'worker'); if (w) return w; }
   return workerByRefCode(r.source);
+}
+// The FINAL customer total of a request — what the customer actually
+// pays for the job, post member discount (v80.13: the base of the
+// seller's 68% take). The payment record's total wins once money has
+// moved (it carries balance adjustments); then the menu order's due;
+// then the quote (estimates); then a paid-in-full amount.
+function requestFinalTotal(r) {
+  if (!r) return 0;
+  if (r.payment && Number(r.payment.totalCents) > 0) return Number(r.payment.totalCents) / 100;
+  if (r.menuOrder && r.menuOrder.totals && Number(r.menuOrder.totals.due) > 0) return Number(r.menuOrder.totals.due);
+  if (Number(r.quote) > 0) return Number(r.quote);
+  if (r.payment && Number(r.payment.amountCents) > 0) return Number(r.payment.amountCents) / 100;
+  return 0;
 }
 
 // ---------- v45: ONE-SHOT 48-hour estimate reminder sweep ----------
@@ -4702,7 +4742,7 @@ async function buildMoneyReport() {
   const techRow = (wid) => perTech[wid] || (perTech[wid] = { workerId: wid, name: (db.users.find(x => x.id === wid) || {}).name || '', jobs: 0, amount: 0, awaitingSetup: 0, bounties: 0, bountyAmount: 0 });
   let techJobs = 0, techAmount = 0;
   for (const j of db.jobs) {
-    if (!j.assignedWorkerId || j.status !== 'Done — photos sent' || j.payoutTransferId || !(Number(j.payOffer) > 0)) continue;
+    if (!j.assignedWorkerId || j.status !== 'Done — photos sent' || j.payoutTransferId || !(Number(j.payOffer) + jobSalesCommission(j) > 0)) continue;
     const amt = money(Number(j.payOffer) + jobSalesCommission(j));
     const st = j.payoutStatus || 'pending';
     const b = byState[st] || (byState[st] = { state: st, jobs: 0, amount: 0 });
@@ -5158,11 +5198,14 @@ async function handleRequest(req, res) {
     if (!requireRole(user, ['worker'], res)) return;
     if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
     // TECH ZONE ONLY: the customer LIST price (public) + HIS guaranteed
-    // take (standard pay for the service + the $10 sales commission).
-    // No member prices, no margins, no internal math beyond his own.
+    // take — v80.13: 68% of the list price (Gabriel's sold-take law),
+    // broken out as pay + the $10 commission line inside it. The payout
+    // itself computes on the job's FINAL total (the member total when
+    // the buyer is a member). No member prices, no margins, no other
+    // internal math beyond his own.
     const items = Object.keys(SERVER_MENU).map(serviceId => {
-      const pay = standardServicePay(serviceId);
-      return { serviceId, price: SERVER_MENU[serviceId].p, pay, commission: SALES_COMMISSION, take: money(pay + SALES_COMMISSION) };
+      const st = soldTakeForTotal(SERVER_MENU[serviceId].p);
+      return { serviceId, price: SERVER_MENU[serviceId].p, pay: st.pay, commission: st.commission, take: st.take };
     });
     return send(res, 200, { ok: true, commission: SALES_COMMISSION, items });
   }
@@ -5207,27 +5250,29 @@ async function handleRequest(req, res) {
     const scope = cleanText(b.description, 1000);
     if (!scope) return send(res, 400, { error: 'describe the work (scope) — the customer approves exactly what you write here' });
     const hours = Number(b.hours);
-    if (!(hours >= 0.25) || hours > 40) return send(res, 400, { error: 'estimated hours required (0.25 to 40) — your pay and the suggested price both come from the hours' });
+    if (!(hours >= 0.25) || hours > 40) return send(res, 400, { error: 'estimated hours required (0.25 to 40) — the suggested price comes from the hours' });
     const suggested = money(hours * COMPANY_HOURLY);
     let listTotal = suggested;
     if (b.price != null && b.price !== '') { const bp = Number(b.price); if (!(bp > 0)) return send(res, 400, { error: 'price must be over $0' }); listTotal = clampMoney(bp); }
     if (listTotal > 1000) return send(res, 400, { error: 'estimates cap at the $1,000 per-job limit — split the work or ask the Team' });
-    // His pay: the standard model — $50/hr × the hours he estimates,
-    // $50 short-job minimum. The margin floor is checked against the
-    // FINAL total the customer pays (after any member discount).
-    const pay = Math.max(50, money(hours * WORKER_HOURLY));
+    // His pay (v80.13, Gabriel's 68% law): his own estimate IS a sale,
+    // so his take is 68% of the FINAL total the customer pays (after
+    // any member discount), commission included — not the hours model.
+    // The margin floor is checked against THAT take for each candidate
+    // total; the post-fee margin lands ~29% at any total, so the floor
+    // below stays as a guard that should effectively never fire.
     const cust = email ? db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email) : null;
     const r = { id: linkId('GHS'), customerId: cust ? cust.id : '', customerName: customerName || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: scope, city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [], createdAt: new Date().toISOString(),
       techCreated: true, createdByWorkerId: user.id, createdByWorkerName: user.name || '', soldByWorkerId: user.id, source: ensureReferralCode(user) };
     const buildEst = (total) => applyMemberDiscount(normalizeEstimate({ items: [{ description: scope, qty: hours, unitPrice: money(total / hours), type: 'labor' }] }, r), r, cust);
-    const marginOk = (total) => marginOkAfterFees(total, pay);
+    const marginOk = (total) => marginOkAfterFees(total, soldTakeForTotal(total).take);
     let est = buildEst(listTotal);
     let adjusted = false; const adjustedFrom = est.total;
     if (!marginOk(est.total)) {
       // RAISE to the minimum total that clears the 20% floor after his
-      // pay + Stripe fees (the member discount, when it applies, rides
-      // on top of the labor line — solve for the pre-discount total).
-      const need = minTotalForMargin(pay);
+      // 68% take + Stripe fees (the member discount, when it applies,
+      // rides on top of the labor line — solve for the pre-discount total).
+      const need = minTotalForSoldMargin();
       const discFactor = est.discountPct > 0 ? (1 - est.discountPct / 100) : 1;
       const raised = money(Math.ceil((need / discFactor) * 100) / 100 + 0.01);
       if (raised > 1000) return send(res, 400, { error: 'at the hours you estimated, even the minimum price that keeps the company margin passes the $1,000 per-job limit — split the work or ask the Team' });
@@ -5722,16 +5767,26 @@ async function handleRequest(req, res) {
     if (!r) return send(res, 404, { error: 'request not found' });
     const b = await readBody(req);
     const cust = db.users.find(u => u.id === r.customerId);
-    const payOffer = Number(b.payOffer);
-    if (!payOffer || payOffer <= 0) return send(res, 400, { error: 'worker pay (payOffer) is required' });
     // v80.11: a job SOLD by a tech (his stamped cart / his estimate /
     // his referral source on the order) lands ON THE SELLER — assigned
-    // at creation, never on the open board — and carries his $10 sales
-    // commission, paid with his job pay when HE completes it.
+    // at creation, never on the open board.
     const seller811 = sellerWorkerForRequest(r);
     const soldHere = !!(seller811 && seller811.status === 'active');
-    const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || null, customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
-    if (soldHere) { j.soldByWorkerId = seller811.id; j.salesCommission = SALES_COMMISSION; j.claimedAt = new Date().toISOString(); }
+    // v80.13 (Gabriel's 68% law): a SOLD job's pay is NOT the admin's
+    // input — the seller's guaranteed take is 68% of the job's FINAL
+    // customer total, stamped here as payOffer + the $10 commission
+    // line inside it (TV Mounting: customer $125 -> pay $75 + $10 =
+    // $85). Only when no final total can be read off the request does
+    // a sold job fall back to the admin's payOffer + the flat $10
+    // commission stamp, and only a non-sold job requires the admin's
+    // payOffer as before.
+    const soldFinalTotal = soldHere ? (requestFinalTotal(r) || Number(b.customerPrice) || 0) : 0;
+    const soldTake = soldFinalTotal > 0 ? soldTakeForTotal(soldFinalTotal) : null;
+    let payOffer = Number(b.payOffer);
+    if (soldTake) payOffer = soldTake.pay;
+    if (!soldTake && (!payOffer || payOffer <= 0)) return send(res, 400, { error: 'worker pay (payOffer) is required' });
+    const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || (soldTake ? soldFinalTotal : null), customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
+    if (soldHere) { j.soldByWorkerId = seller811.id; j.salesCommission = soldTake ? soldTake.commission : SALES_COMMISSION; j.claimedAt = new Date().toISOString(); }
     db.jobs.push(j);
     r.status = 'Job posted'; r.jobId = j.id;
     r.messages = r.messages || [];
@@ -5739,7 +5794,7 @@ async function handleRequest(req, res) {
       emitJobNew(j, seller811.id);
       r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Your job (job ' + j.id + ') is assigned to the technician who helped you book it. We will coordinate the details with you here.', at: new Date().toISOString() });
       notify(r.customerId, 'job', 'Your job was assigned to your technician (job ' + j.id + '). We\'ll update you here.', '#job=' + j.id);
-      notify(seller811.id, 'job', 'A job you sold is yours: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + ' + $' + SALES_COMMISSION + ' sales commission when you complete it.', '#wjob=' + j.id);
+      notify(seller811.id, 'job', 'A job you sold is yours: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pay $' + (j.payOffer || 0) + ' + $' + (j.salesCommission || 0) + ' sales commission when you complete it.', '#wjob=' + j.id);
       audit(user, 'job.create_from_request', j.id, 'from ' + r.id + ' · pay $' + j.payOffer + ' · SOLD by ' + seller811.name + ' — assigned to seller');
     } else {
       emitJobNew(j);
