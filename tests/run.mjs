@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-17', swSrc.includes("const CACHE = 'ghs-app-v80-17'"));
+t('static: SW cache is ghs-app-v80-18', swSrc.includes("const CACHE = 'ghs-app-v80-18'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -2940,11 +2940,11 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 audit: joinedMembership flag ALONE (no subscription) does NOT grant member pricing', fakeJoin.status === 201 && fakeJoin.j.request.menuOrder.totals.due === 700);
 
   // --- menu PRO: images wired + present for all 98 ---
-  t('v46 menu: every service has a real photo file on disk', catIds.every(id => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.jpg'))));
-  t('v46 menu: cards + wizard rows load /menu-img/<id>.jpg with the category photo as fallback', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
+  t('v46 menu: every service has a real photo file on disk (v80.18: WebP files)', catIds.every(id => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.webp'))));
+  t('v46 menu: cards + wizard rows load /menu-img/<id>.webp with the category photo as fallback (v80.18)', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
   run("location.hash = ''; render(); setMenuLang('en');");
   const menuEn = elById.get('menuGroups').innerHTML;
-  t('v46 menu EN: per-service photos on the cards (98 catalog + 6 Popular = 104 imgs since v80.9)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.jpg/g) || []).length === 104 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
+  t('v46 menu EN: per-service photos on the cards (98 catalog + 6 Popular = 104 imgs since v80.9)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 104 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
   // --- menu EN|ES: one language at a time, persisted ---
   t('v46 i18n: MENU_ES covers all 98 services', run('Object.keys(MENU_ES).length') === 98 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
   run("setMenuLang('es');");
@@ -2953,7 +2953,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 menu ES: the choice persists (localStorage ghsMenuLang)', run("localStorage.getItem('ghsMenuLang')") === 'es' && elById.get('menuTitle').textContent.includes('Menú'));
   run("wzPickCat('plumbing');");
   const panelEs = elById.get('wzMenuPanel').innerHTML;
-  t('v46 wizard ES: fixed-price list speaks Spanish + shows per-service thumbs', panelEs.includes('Cambio de mezcladora') && panelEs.includes('wz-mi-img') && panelEs.includes('/menu-img/faucet-replacement.jpg') && !panelEs.includes('Faucet Replacement'));
+  t('v46 wizard ES: fixed-price list speaks Spanish + shows per-service thumbs', panelEs.includes('Cambio de mezcladora') && panelEs.includes('wz-mi-img') && panelEs.includes('/menu-img/faucet-replacement.webp') && !panelEs.includes('Faucet Replacement'));
   run("setMenuLang('en'); wzPickCat('plumbing');");
   const panelEn = elById.get('wzMenuPanel').innerHTML;
   t('v46 wizard EN: switching back restores English everywhere', panelEn.includes('Faucet Replacement') && !panelEn.includes('Cambio de mezcladora') && run("localStorage.getItem('ghsMenuLang')") === 'en');
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.17: ghs-app-v80-17)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-17'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.18: ghs-app-v80-18)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-18'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5037,16 +5037,16 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('id="planCompare"') && htmlSrc.includes('Compare the plans') && htmlSrc.includes('First in-person estimate FREE, then $50') &&
     htmlSrc.includes('HOME_CITIES') && htmlSrc.includes('Serving all of Solano County') &&
     htmlSrc.includes('Fixed price, agreed first') && htmlSrc.includes('30-day workmanship guarantee') && htmlSrc.includes('Local Solano County technicians') &&
-    htmlSrc.includes('★ 4.5 on Google · 20 reviews') && htmlSrc.includes('/ba/before.jpg') && htmlSrc.includes('/ba/after.jpg') && htmlSrc.includes('function baSlide('));
+    htmlSrc.includes('★ 4.5 on Google · 20 reviews') && htmlSrc.includes('/ba/before.webp') && htmlSrc.includes('/ba/after.webp') && htmlSrc.includes('function baSlide('));
   t('static v80.9 FUSION: header carries search + global EN|ES toggle + Install app link; 555 placeholders replaced',
     htmlSrc.includes('id="homeSearch"') && htmlSrc.includes('What do you need today?') && htmlSrc.includes('id="globLangEn"') && htmlSrc.includes('id="globLangEs"') &&
     htmlSrc.includes('id="installNavLink"') && htmlSrc.includes('href="/instalar"') &&
     !htmlSrc.includes('555-0123') && !htmlSrc.includes('555-1234') && htmlSrc.includes('707-___-____'));
   t('static v80.10 LA ORIGINAL: restored homepage hero photo inside #oldhome; the v80.9 assets still exist and stay routed; the /old/ photos are routed too',
-    htmlSrc.includes('id="oldhome"') && htmlSrc.includes('/old/old-01.jpg') &&
+    htmlSrc.includes('id="oldhome"') && htmlSrc.includes('/old/old-01.webp') &&
     fs.existsSync(path.join(APP_DIR, 'public', 'hero-tracking.png')) && fs.existsSync(path.join(APP_DIR, 'public', 'hero-tech.jpg')) &&
-    fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'before.jpg')) && fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'after.jpg')) &&
-    fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-01.jpg')) && fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-40.jpg')) &&
+    fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'before.webp')) && fs.existsSync(path.join(APP_DIR, 'public', 'ba', 'after.webp')) &&
+    fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-01.webp')) && fs.existsSync(path.join(APP_DIR, 'public', 'old', 'old-40.webp')) &&
     serverSrc.includes("'/hero-tracking.png'") && serverSrc.includes("p === '/hero-tech.jpg'") && serverSrc.includes("p.startsWith('/ba/')") && serverSrc.includes("p.startsWith('/old/')"));
   t('static v80.9 FUSION: host redirect is env-gated (MERGED_DOMAIN_LIVE=1) with the Stripe webhook exempt',
     serverSrc.includes("process.env.MERGED_DOMAIN_LIVE === '1'") && serverSrc.includes("reqHost === 'app.generalhandymans.app'") &&
@@ -5055,7 +5055,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('static v80.10 LA ORIGINAL: #oldhome sits in the customer home path (inside customerBox, before the wizard) carrying the old page\u2019s sections',
     htmlSrc.indexOf('id="oldhome"') > htmlSrc.indexOf('id="customerBox"') && htmlSrc.indexOf('id="oldhome"') < htmlSrc.indexOf('id="wizardCard"') &&
     htmlSrc.includes('Meet your technician') && htmlSrc.includes('Compare the plans') && htmlSrc.includes('Neighbors approve') &&
-    htmlSrc.includes('Serving all of Solano County') && htmlSrc.includes('/old/old-40.jpg') && htmlSrc.includes('id="ghsMemberships"'));
+    htmlSrc.includes('Serving all of Solano County') && htmlSrc.includes('/old/old-40.webp') && htmlSrc.includes('id="ghsMemberships"'));
   t('static v80.10 LA ORIGINAL: the fragment\u2019s own topbar is gone (the app header rules) and the compact v80.9 home blocks are retired',
     !htmlSrc.includes('<div class="topbar">') && !htmlSrc.includes('id="homeHero"') && !htmlSrc.includes('id="homePromos"') && !htmlSrc.includes('id="homeCities"'));
   t('static v80.10 LA ORIGINAL: in-page anchors inside #oldhome are scroll-intercepted, never routed',
@@ -5111,12 +5111,12 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.9 FUSION: gate OFF (default) — the app host still serves the app (200)', off809.status === 200);
   const slide809 = await raw809(APP_PORT, 'GET', '/hero-tracking.png', 'generalhandymans.app');
   t('v80.9 FUSION: tracking slide asset served (200 image/png)', slide809.status === 200 && String(slide809.headers['content-type']).includes('image/png') && slide809.body.length > 1000);
-  const ba809 = await raw809(APP_PORT, 'GET', '/ba/before.jpg', 'generalhandymans.app');
-  t('v80.9 FUSION: before/after photo served (200 image/jpeg)', ba809.status === 200 && String(ba809.headers['content-type']).includes('image/jpeg') && ba809.body.length > 1000);
+  const ba809 = await raw809(APP_PORT, 'GET', '/ba/before.webp', 'generalhandymans.app');
+  t('v80.9 FUSION: before/after photo served (200 image/webp since v80.18)', ba809.status === 200 && String(ba809.headers['content-type']).includes('image/webp') && ba809.body.length > 1000);
   const tech809 = await raw809(APP_PORT, 'GET', '/hero-tech.jpg', 'generalhandymans.app');
   t('v80.9 FUSION: hero technician photo served (200 image/jpeg)', tech809.status === 200 && String(tech809.headers['content-type']).includes('image/jpeg') && tech809.body.length > 1000);
-  const old8010 = await raw809(APP_PORT, 'GET', '/old/old-01.jpg', 'generalhandymans.app');
-  t('v80.10 LA ORIGINAL: restored homepage photo served (200 image/jpeg)', old8010.status === 200 && String(old8010.headers['content-type']).includes('image/jpeg') && old8010.body.length > 1000);
+  const old8010 = await raw809(APP_PORT, 'GET', '/old/old-01.webp', 'generalhandymans.app');
+  t('v80.10 LA ORIGINAL: restored homepage photo served (200 image/webp since v80.18)', old8010.status === 200 && String(old8010.headers['content-type']).includes('image/webp') && old8010.body.length > 1000);
 
   try { fs.unlinkSync('/tmp/ghs-v17-test/data-gate.json'); } catch (e) {}
   const child809 = spawn('node', ['server.js'], {
@@ -5949,6 +5949,61 @@ t('static v80.17: the guest is never trapped — exitJoinPromo disarms, any non-
     dHome817.status === 302 && (dHome817.headers.get('location') || '') === '/#join-homecare');
   t('v80.17 src: the client still captures the source from inside the hash on the promo door (ghsSrc stash intact)',
     home817.includes('function captureCampaignSource(){') && home817.includes("sessionStorage.setItem('ghsSrc'"));
+}
+
+// ---------------- v80.18 PESO Y SEO: WebP/lazy image diet + the apex SEO package ----------------
+// Audit #7 + #11: the menu photos alone were ~7.8 MB of 900px JPEGs for
+// cards that render <= ~300px wide. v80.18 converts menu/old/ba photos to
+// right-sized WebP (the .jpg pins above were updated to the new format —
+// same assertions, lighter files), lazy-loads the storefront photos, and
+// gives the apex page its description / Open Graph / LocalBusiness JSON-LD
+// + robots.txt + sitemap.xml.
+t('static v80.18: the apex head carries the meta description + the full Open Graph set (og:image is the real photo derivative, not the app icon)',
+  htmlSrc.includes('<meta name="description" content="General Handyman Solutions') &&
+  htmlSrc.includes('property="og:description"') && htmlSrc.includes('property="og:type" content="website"') &&
+  htmlSrc.includes('property="og:url" content="https://generalhandymans.app/"') &&
+  htmlSrc.includes('property="og:image" content="https://generalhandymans.app/og-image.jpg"') &&
+  !htmlSrc.includes('property="og:image" content="https://generalhandymans.app/icons/icon-512.png"'));
+t('static v80.18: the JSON-LD LocalBusiness block states only published facts (name, url, the public Voice line, Solano County, the $75/hr rate — no invented hours, ratings or address)',
+  htmlSrc.includes('type="application/ld+json"') && htmlSrc.includes('"@type":"Handyman"') &&
+  htmlSrc.includes('"name":"General Handyman Solutions"') && htmlSrc.includes('"telephone":"+1-707-862-3773"') &&
+  htmlSrc.includes('"areaServed":"Solano County, CA"') && htmlSrc.includes('"priceRange":"$75/hr"') &&
+  !htmlSrc.includes('"openingHours"') && !htmlSrc.includes('"aggregateRating"'));
+t('static v80.18: the og:image file the head points at actually exists in app/public',
+  fs.existsSync(path.join(APP_DIR, 'public', 'og-image.jpg')));
+t('static v80.18: menu cards load right-sized WebP lazily (svcImgHtml .webp?v=4 + lazy + async decoding, category fallback intact)',
+  htmlSrc.includes('src="/menu-img/\' + id + \'.webp?v=4"') && htmlSrc.includes('loading="lazy" decoding="async"') &&
+  htmlSrc.includes('this.src=CAT_IMGS['));
+t('static v80.18: the storefront /old/ photos are WebP and lazy-loaded below the fold (40+ lazy tags; the hero photo stays eager)',
+  (htmlSrc.match(/loading="lazy" decoding="async"/g) || []).length >= 40 &&
+  htmlSrc.includes('<img src="/old/old-01.webp" alt="General Handyman Solutions technician">'));
+t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.txt and sitemap.xml',
+  serverSrc.includes("p.endsWith('.webp')") && serverSrc.includes("p === '/og-image.jpg'") &&
+  serverSrc.includes("p === '/robots.txt'") && serverSrc.includes("p === '/sitemap.xml'"));
+{
+  const robots818 = await fetch(BASE + '/robots.txt');
+  const robotsTxt818 = await robots818.text();
+  t('v80.18 robots: GET /robots.txt answers 200 text, allows all and points at the sitemap',
+    robots818.status === 200 && String(robots818.headers.get('content-type') || '').includes('text/plain') &&
+    robotsTxt818.includes('User-agent: *') && robotsTxt818.includes('Allow: /') &&
+    robotsTxt818.includes('Sitemap: https://generalhandymans.app/sitemap.xml'));
+  const sitemap818 = await fetch(BASE + '/sitemap.xml');
+  const sitemapTxt818 = await sitemap818.text();
+  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing exactly the five public customer doors',
+    sitemap818.status === 200 && String(sitemap818.headers.get('content-type') || '').includes('xml') &&
+    sitemapTxt818.includes('<urlset') &&
+    ['<loc>https://generalhandymans.app/</loc>', '<loc>https://generalhandymans.app/plus</loc>',
+     '<loc>https://generalhandymans.app/plus2</loc>', '<loc>https://generalhandymans.app/homecare</loc>',
+     '<loc>https://generalhandymans.app/yard</loc>'].every(x => sitemapTxt818.includes(x)) &&
+    !sitemapTxt818.includes('/tecnico'));
+  const og818 = await fetch(BASE + '/og-image.jpg');
+  t('v80.18 og image: GET /og-image.jpg serves the 1200x630 share photo (200 image/jpeg, real bytes)',
+    og818.status === 200 && String(og818.headers.get('content-type') || '').includes('image/jpeg') &&
+    (await og818.arrayBuffer()).byteLength > 10000);
+  const mi818 = await fetch(BASE + '/menu-img/ceiling-fan.webp');
+  t('v80.18 menu photo: a converted menu image serves over the WebP route (200 image/webp, right-sized bytes)',
+    mi818.status === 200 && String(mi818.headers.get('content-type') || '').includes('image/webp') &&
+    (await mi818.arrayBuffer()).byteLength < 40000);
 }
 
 try { child4.kill('SIGTERM'); } catch (e) {}
