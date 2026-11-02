@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-22', swSrc.includes("const CACHE = 'ghs-app-v80-22'"));
+t('static: SW cache is ghs-app-v80-23', swSrc.includes("const CACHE = 'ghs-app-v80-23'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4289,7 +4289,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.22: ghs-app-v80-22)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-22'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.23: ghs-app-v80-23)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-23'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6385,6 +6385,93 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   t('v80.21.1 prices: the homepage door-slab card + EN/ES home dictionaries carry $175 / Members $140 (no $132 figure survives)',
     htmlSrc.includes('<div class="name">Door Slab Swap</div><div class="meta">~2 h · + lock install available</div><div class="price">$175</div><div class="mem">Members: $140</div>') &&
     htmlSrc.includes("mem: 'Members: $140'") && htmlSrc.includes("mem: 'Miembros: $140'") && !htmlSrc.includes('$132'));
+}
+// ---------------- v80.23 REFERIDOS DE CLIENTE (audit A-3): the customer mirror of the tech bounty ----------------
+// Same rails as v80.11: a personal code rides the ?src= first-touch
+// stamp (Admin → Tráfico counts the source like any other, now flagged
+// customerCode), and the referrer earns a $10 TRACKED account credit at
+// the same first-real-charge moments that award the tech bounty —
+// never at a free-trial start, never for himself, once per referred
+// account ever. Codes are 'C'-prefixed (workers own 'T'), so the two
+// namespaces can never collide.
+{
+  const refR = await mkCustomer3('referrer23@t.local', 'Ref Rita', '(707) 555-0411');
+  const mine0 = await req3('GET', '/api/me/referrals', { token: refR.token });
+  t('v80.23 referrals: every customer gets a personal C-code and APEX links riding the existing ?src= stamp',
+    mine0.status === 200 && /^C[0-9A-F]{6}$/.test(mine0.j.code || '') && mine0.j.link === 'https://generalhandymans.app/?src=' + mine0.j.code && mine0.j.plusLink === 'https://generalhandymans.app/plus?src=' + mine0.j.code && mine0.j.credit === 10);
+  t('v80.23 referrals: a fresh customer starts with no signups, no credits and a $0 balance',
+    (mine0.j.signups || []).length === 0 && (mine0.j.credits || []).length === 0 && mine0.j.totals.balance === 0 && mine0.j.totals.count === 0);
+  const mineWorker = await req3('GET', '/api/me/referrals', { token: wSeller.token });
+  t('v80.23 role law: the customer referral surface is customers-only (a worker token gets 403)', mineWorker.status === 403);
+  const CODE23 = mine0.j.code;
+
+  // (1) the arrival is stamped/attributed + (3) the credit fires on the qualifying event
+  const fr = await mkCustomer3('friend23@t.local', 'Friend Fran', '(707) 555-0412');
+  const fSub = await req3('POST', '/api/stripe/membership-subscribe', { token: fr.token, body: { plan: 'plus1', source: CODE23 } });
+  await mockActivate(fSub.j.subscriptionId);
+  const fConf = await req3('POST', '/api/stripe/membership-confirm', { token: fr.token, body: { plan: 'plus1' } });
+  t('v80.23 setup: the referred customer activates HomeCare Plus (paid at join)', fSub.status === 200 && fConf.status === 200 && fConf.j.active === true);
+  const mine1 = await req3('GET', '/api/me/referrals', { token: refR.token });
+  const cRow23 = (mine1.j.credits || [])[0];
+  t('v80.23 credit (3): the $10 lands in the referrer account on the referred member FIRST REAL CHARGE — tracked, status available, balance $10',
+    !!cRow23 && cRow23.amount === 10 && cRow23.status === 'available' && mine1.j.totals.balance === 10 && mine1.j.totals.count === 1);
+  t('v80.23 attribution (1): the referred signup is listed for the referrer, flagged credited + member active',
+    (mine1.j.signups || []).some(s => s.credited === true && s.memberActive === true));
+  const admCust23 = await req3('GET', '/api/customers', { token: A3 });
+  const frRow23 = (admCust23.j.customers || []).find(c => c.id === fr.id);
+  t('v80.23 attribution (1): the referred customer record carries the referrer code as its first-touch source',
+    !!frRow23 && frRow23.source === CODE23);
+  await wh3('invoice.payment_succeeded', { id: 'in_friend_823', customer: 'cus_mock_none23', subscription: fSub.j.subscriptionId, amount_paid: 10000 });
+  const mine1b = await req3('GET', '/api/me/referrals', { token: refR.token });
+  t('v80.23 credit (3): ONE credit per referred account, ever — a later real charge never double-pays',
+    (mine1b.j.credits || []).length === 1 && mine1b.j.totals.balance === 10);
+
+  // (2) no credit on trial/free events — the conversion is the event
+  const tr23 = await mkCustomer3('trialcust23@t.local', 'Trial Tia', '(707) 555-0413');
+  const trSub = await req3('POST', '/api/stripe/homecare-subscribe', { token: tr23.token, body: { source: CODE23 } });
+  t('v80.23 trial setup: the second referred customer starts HomeCare (free-month trial)', trSub.status === 200 && !!trSub.j.subscriptionId);
+  await wh3('checkout.session.completed', { id: 'cs_trial_823', mode: 'subscription', payment_status: 'paid', amount_total: 0, customer: 'cus_mock_trial23', subscription: trSub.j.subscriptionId, metadata: { userId: tr23.id, kind: 'homecare' } });
+  const mineT0 = await req3('GET', '/api/me/referrals', { token: refR.token });
+  t('v80.23 credit (2): a free-trial START earns NO credit (session totals $0)', (mineT0.j.credits || []).length === 1 && mineT0.j.totals.balance === 10);
+  await wh3('invoice.payment_succeeded', { id: 'in_trial_823', customer: 'cus_mock_trial23', subscription: trSub.j.subscriptionId, amount_paid: 2900 });
+  const mineT1 = await req3('GET', '/api/me/referrals', { token: refR.token });
+  t('v80.23 credit (2→3): the trial CONVERSION (first real $29 charge) earns the second $10', (mineT1.j.credits || []).length === 2 && mineT1.j.totals.balance === 20);
+  await wh3('invoice.payment_succeeded', { id: 'in_trial_823b', customer: 'cus_mock_trial23', subscription: trSub.j.subscriptionId, amount_paid: 2900 });
+  const mineT2 = await req3('GET', '/api/me/referrals', { token: refR.token });
+  t('v80.23 credit (3): a replayed conversion charge never double-pays', (mineT2.j.credits || []).length === 2 && mineT2.j.totals.balance === 20);
+
+  // (2) anti-self: paying under your OWN code earns nothing
+  const self23 = await mkCustomer3('self23@t.local', 'Self Sam', '(707) 555-0414');
+  const selfMine = await req3('GET', '/api/me/referrals', { token: self23.token });
+  const sSub = await req3('POST', '/api/stripe/membership-subscribe', { token: self23.token, body: { plan: 'plus1', source: selfMine.j.code } });
+  await mockActivate(sSub.j.subscriptionId);
+  const sConf = await req3('POST', '/api/stripe/membership-confirm', { token: self23.token, body: { plan: 'plus1' } });
+  const selfAfter = await req3('GET', '/api/me/referrals', { token: self23.token });
+  t('v80.23 anti-self (2): a real charge under your OWN code activates the membership but earns NO credit',
+    sConf.status === 200 && sConf.j.active === true && (selfAfter.j.credits || []).length === 0 && selfAfter.j.totals.balance === 0);
+
+  // (1) measurable in Admin → Tráfico like every other source
+  const traf23 = await req3('GET', '/api/admin/traffic?range=today', { token: A3 });
+  const tRow23 = ((traf23.j && traf23.j.rows) || []).find(r => r.source === CODE23);
+  t('v80.23 tráfico (1): the customer code is a measured source row — flagged customerCode, joins + first charges counted',
+    !!tRow23 && tRow23.customerCode === true && tRow23.workerCode === false && tRow23.joins >= 1 && tRow23.newMembers >= 1);
+
+  // (4) the customer sees link + credit state in their account, EN and ES
+  run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  const cardEn23 = run("custReferralCardHtml({code:'CABC123', link:'https://generalhandymans.app/?src=CABC123', signups:[{name:'Friend Fran', memberActive:true, credited:true}], credits:[{amount:10, customerName:'Friend Fran', status:'available'}], totals:{balance:10}})");
+  t('v80.23 card EN (4): link, $10 balance, credited friend — all in English',
+    cardEn23.includes('Refer & earn') && cardEn23.includes('https://generalhandymans.app/?src=CABC123') && cardEn23.includes('Your referral link') && cardEn23.includes('Your credit balance') && cardEn23.includes('$10.00') && cardEn23.includes('credit earned') && cardEn23.includes('Friend Fran'));
+  run("_menuLang='es'; localStorage.setItem('ghsMenuLang','es');");
+  const cardEs23 = run("custReferralCardHtml({code:'CABC123', link:'https://generalhandymans.app/?src=CABC123', signups:[], credits:[], totals:{balance:0}})");
+  t('v80.23 card ES (4): the same card renders fully in Spanish — no English leaks',
+    cardEs23.includes('Recomienda y gana') && cardEs23.includes('Tu link de referido') && cardEs23.includes('Tu saldo de crédito') && cardEs23.includes('Todavía no tienes referidos') && !cardEs23.includes('Your credit balance') && !cardEs23.includes('No referrals yet') && !cardEs23.includes('Refer & earn'));
+  run("_menuLang='en'; localStorage.setItem('ghsMenuLang','en');");
+  t('static v80.23: the credit is $10, awarded by ONE function called at the four first-real-charge sites, anti-self guarded both ways, customers-only endpoint',
+    serverSrc.includes('const CUSTOMER_REFERRAL_CREDIT = 10') && serverSrc.includes('function maybeAwardCustomerReferralCredit(') && (serverSrc.match(/maybeAwardCustomerReferralCredit\(/g) || []).length === 5
+    && serverSrc.includes('if (ref.id === u.id) return null;') && serverSrc.includes('referralCustCreditId') && serverSrc.includes("p === '/api/me/referrals'") && serverSrc.includes('r.customerCode = !!customerByRefCode(r.source)'));
+  t('static v80.23 client: the account card + loader are wired, and every new string lives in BOTH CUST_UI languages + the admin traffic dictionary',
+    htmlSrc.includes('id="myReferrals"') && htmlSrc.includes('function loadMyReferrals(') && htmlSrc.includes('function custReferralCardHtml(') && htmlSrc.includes('loadMyReferrals();')
+    && (htmlSrc.match(/crefTitle:/g) || []).length === 2 && (htmlSrc.match(/customerCode:/g) || []).length === 2);
 }
 try { child5.kill('SIGTERM'); } catch (e) {}
 
