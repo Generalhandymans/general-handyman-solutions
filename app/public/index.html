@@ -1346,6 +1346,7 @@ table.cmp button{white-space:nowrap}
     <div id="workerLocLine" style="margin:6px 0"></div>
     <div id="connectGateCard"></div>
     <div id="trackBanner" style="display:none;background:#0b5c2e;color:#fff;border-radius:12px;padding:10px 14px;margin:10px 0;font-weight:700"></div>
+    <div id="jobDetail"></div>
     <div id="jobList"></div>
     <div id="workerSkillBanner"></div>
     <div id="workerProfile"></div>
@@ -1659,6 +1660,7 @@ const W_I18N = {
     insuranceLabel: 'Insurance', insHas: 'Has general liability', insNo: 'No insurance yet', insUnsure: 'Not sure',
     availLabel: 'Availability', availPh: 'Weekdays / weekends / anytime', notesLabel: 'Anything the Team should know?', notesPh: 'Your experience, specialties, anything important',
     connectGateTitle: '💵 Work now — your pay waits in the app', connectGateMsg: 'You can take jobs now, even without Stripe Connect', connectGateBody: 'Your pay for each finished job is held in the app until you connect Stripe Connect — then it pays out to your own bank. Setup takes about 2 minutes: your ID and your bank.', connectGateBtn: 'Connect Stripe Connect',
+    connectHeldLine: '💰 {amt} of your pay is ready and waiting — it pays out to your bank as soon as your Stripe Connect setup is finished.', viewDetails: '🔎 View details', closeDetails: 'Close details', detailTitle: 'Job details', detailUnavailable: 'This job could not be opened.',
     availDaysLabel: 'Days you can work', availShiftsLabel: 'Shifts', shiftMorning: 'Mornings', shiftAfternoon: 'Afternoons', shiftEvening: 'Evenings', availOnDemand: '⚡ Available for on-demand / urgent jobs',
     permTitle: '⚙️ Finish setting up your app', permNotif: '🔔 Notifications', permNotifSub: 'Alerts with the hammer sound 🔨', permLoc: '📍 Your location', permLocSub: 'Jobs and live route', activate: 'ACTIVATE',
     permHelpT: 'Blocked it? Turn them on in your browser settings: tap the 🔒 lock next to the address → Permissions.',
@@ -1721,6 +1723,7 @@ const W_I18N = {
     insuranceLabel: 'Seguro', insHas: 'Tiene seguro general', insNo: 'Sin seguro todavía', insUnsure: 'No estoy seguro',
     availLabel: 'Disponibilidad', availPh: 'Entre semana / fines de semana / cuando sea', notesLabel: '¿Algo que el Team debe saber?', notesPh: 'Tu experiencia, especialidades, lo importante',
     connectGateTitle: '💵 Trabaja ya — tu paga espera en la app', connectGateMsg: 'Ya puedes agarrar jales, aunque todavía no tengas Stripe Connect', connectGateBody: 'Tu paga de cada jale terminado se guarda en la app hasta que conectes Stripe Connect — y de ahí se paga a tu propio banco. La configuración toma unos 2 minutos: tu ID y tu banco.', connectGateBtn: 'Conectar Stripe Connect',
+    connectHeldLine: '💰 {amt} de tu paga está lista y esperando — se paga a tu banco en cuanto termines tu configuración de Stripe Connect.', viewDetails: '🔎 Ver detalles', closeDetails: 'Cerrar detalles', detailTitle: 'Detalles del trabajo', detailUnavailable: 'Este trabajo no se pudo abrir.',
     availDaysLabel: 'Días que puedes trabajar', availShiftsLabel: 'Turnos', shiftMorning: 'Mañanas', shiftAfternoon: 'Tardes', shiftEvening: 'Noches', availOnDemand: '⚡ Disponible para jales on-demand / urgentes',
     permTitle: '⚙️ Termina de activar tu app', permNotif: '🔔 Notificaciones', permNotifSub: 'Avisos con el sonido del martillo 🔨', permLoc: '📍 Tu ubicación', permLocSub: 'Trabajos y ruta en vivo', activate: 'ACTIVAR',
     permHelpT: '¿Tocaste "Bloquear"? Actívalos desde los ajustes de tu navegador: toca el candado 🔒 junto a la dirección → Permisos.',
@@ -2714,7 +2717,7 @@ async function doAuth(){
   if (authBusy) return; authBusy = true;
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
-    if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; syncEntryFlag(); }
+    if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; syncEntryFlag(); healWorkerLocFlag(); }
     else { const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       // v77: a plan picked in the plain form's OPTIONAL membership picker
@@ -2759,7 +2762,7 @@ async function doAuth(){
 function syncEntryFlag(){ try { if (me && me.role === 'worker') localStorage.setItem('ghs_entry','worker'); else if (me) localStorage.removeItem('ghs_entry'); } catch (e) {} }
 async function logout(){ try { localStorage.removeItem('ghs_entry'); } catch (e) {} await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){}
-  syncEntryFlag();
+  syncEntryFlag(); healWorkerLocFlag();
   // Heal a stale flag: the boot snippet bounced this page to #worker but
   // there is NO session — the visitor is logged out, so the flag was a
   // leftover (a mere #worker visit under v63–v80.10, or a logout that
@@ -2806,6 +2809,10 @@ function routeNotifHash(){
   try { history.replaceState(null, '', location.pathname + location.search + (m[1] === 'wjob' ? '#worker' : '')); } catch (e) { if (m[1] === 'wjob') location.hash = '#worker'; }
   render();
   focusCardWhenReady(elId);
+  // v80.16: a worker's job notification opens the job DETAIL, not just
+  // the board — seeing the card flash was the "cannot open the job"
+  // complaint (Ri Chen). The fetch enforces the same access rules.
+  if (m[1] === 'wjob' && me && me.role === 'worker') { try { openJobDetail(m[2]); } catch (e) {} }
   return true;
 }
 function focusCardWhenReady(elId){
@@ -3468,14 +3475,43 @@ async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? WT('statusActive') : WT('statusInactive').replace('{status}', me.status);
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += WT('ratingLine').replace('{avg}', d.workerRating.average).replace('{n}', d.workerRating.count).replace('{jobs}', WT(d.workerRating.count === 1 ? 'ratedJob1' : 'ratedJobN'));
-  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br>'+escHtml(j.description)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+workerDistLine(j)+'<br>'+WT('payOffer')+' <span class="st">$'+escHtml(j.payOffer)+'</span>'+workerPayoutLine(j)+workerCommLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br>'+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
+  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br>'+escHtml(j.description)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+workerDistLine(j)+'<br>'+WT('payOffer')+' <span class="st">$'+escHtml(j.payOffer)+'</span>'+workerPayoutLine(j)+workerCommLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br><button class="ghost" onclick="openJobDetail(\''+j.id+'\')">'+WT('viewDetails')+'</button> '+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
   sndWorkerJobs(d.jobs || []);
+  if (jobDetailId) openJobDetail(jobDetailId, true); // keep an open detail view in sync with the board
 }
+// ---------- v80.16: technician job DETAIL view ----------
+// The board card is a summary; tapping "View details" (or a job
+// notification, #wjob=) opens the full detail here. The data comes
+// from GET /api/jobs/:id, whose payload is the SAME publicJob view
+// the board uses — the detail can never show more than the board
+// rules allow (no customer name/phone/total; address + time only as
+// the Team released them). Actions reuse workerJobBtns / jobChatHtml.
+let jobDetailId = null;
+async function openJobDetail(idv, keepScroll){
+  jobDetailId = idv;
+  const box = document.getElementById('jobDetail'); if (!box) return;
+  let d = null;
+  try { d = await api('/api/jobs/' + idv); } catch (e) {
+    box.innerHTML = '<div class="card" style="border:1.5px solid #e42535"><b>' + WT('detailUnavailable') + '</b>' + (e && e.message ? '<br><span class="mut">' + escHtml(e.message) + '</span>' : '') + '<br><button class="ghost" onclick="closeJobDetail()">' + WT('closeDetails') + '</button></div>';
+    return;
+  }
+  const j = (d && d.job) || {};
+  box.innerHTML = '<div class="card" style="border:1.5px solid #e42535"><b>' + WT('detailTitle') + ' — ' + escHtml(j.id || '') + '</b> <button class="ghost" style="float:right" onclick="closeJobDetail()">' + WT('closeDetails') + '</button>'
+    + '<br><b>' + escHtml(j.service || '') + '</b> <span class="pill">' + escHtml(j.status || '') + '</span>'
+    + '<br>' + escHtml(j.description || '')
+    + '<br><span class="mut">' + escHtml(j.city || '') + ' • ' + escHtml(j.when || '') + '</span>' + workerDistLine(j)
+    + '<br>' + WT('payOffer') + ' <span class="st">$' + escHtml(j.payOffer) + '</span>' + workerPayoutLine(j) + workerCommLine(j)
+    + (j.mine ? '<br>' + (j.infoReleased ? '<b>' + WT('detailsConfirmed') + '</b> ' + escHtml(j.address || '') : '<b>' + WT('addressTime') + '</b> <span class="mut">' + WT('addressTimeNote') + '</span>') + (j.notes ? '<br><b>' + WT('teamNotes') + '</b> ' + escHtml(j.notes) : '') : '')
+    + '<br><button class="ghost" onclick="closeJobDetail()">' + WT('closeDetails') + '</button> ' + workerJobBtns(j) + (j.mine ? jobChatHtml(j) : '')
+    + '</div>';
+  if (!keepScroll) { try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
+}
+function closeJobDetail(){ jobDetailId = null; const box = document.getElementById('jobDetail'); if (box) box.innerHTML = ''; }
 function workerPayoutLine(j){ if(!j.mine||!j.payoutStatus) return ''; if(j.payoutStatus==='paid') return '<br><span class="st">'+WT('payoutSent')+'</span>'; return '<br><span class="mut">'+WT('payoutLabel')+String(j.payoutStatus).replace(/_/g,' ')+'</span>'; }
 // v80.11: his own sales commission, as its own line of his pay breakdown.
 function workerCommLine(j){ if(!j.mine||!(Number(j.salesCommission)>0)) return ''; return '<br><span class="st">+ $'+Number(j.salesCommission).toFixed(2)+' '+WT('commissionLine')+'</span>'; }
 // v80.11: board distance from HIS base city (server-measured) or the unmeasured flag.
-function workerDistLine(j){ if(j.mine) return ''; if(j.distanceMiles!=null) return '<br><span class="mut">📍 '+Number(j.distanceMiles)+' '+WT('distAway')+'</span>'; if(j.rangeUnmeasured) return '<br><span class="mut">📍 '+WT('unmeasuredTag')+'</span>'; return ''; }
+function workerDistLine(j){ if(j.mine) return ''; if(j.distanceMiles!=null) return '<br><span class="mut">📍 '+Number(j.distanceMiles)+' '+WT('distAway')+'</span>'; if(j.rangeUnmeasured||j.rangeBaseUnmeasured) return '<br><span class="mut">📍 '+WT('unmeasuredTag')+'</span>'; return ''; }
 // ---------- My money (v41) ----------
 // One consolidated money view over the existing payout records: Connect
 // state (with the setup button up front when payouts are not live), the
@@ -3714,13 +3750,22 @@ async function claimJob(idv){ try{ await api('/api/jobs/'+idv+'/claim',{method:'
 // for finished jobs is held in the app, and this card says so, in his
 // language, with the setup button right there. It disappears the
 // moment he is ready.
-let connectGateStateCache = null;
+let connectGateStateCache = null, connectGateFetchedAt = 0;
 async function paintConnectGateCard(){
   const box = document.getElementById('connectGateCard'); if (!box || !me || me.role !== 'worker') return;
   if (me.status !== 'active') { box.innerHTML = ''; return; }
-  if (!connectGateStateCache) { try { connectGateStateCache = await api('/api/worker/connect/status'); } catch(e) { connectGateStateCache = { connected: false, ready: !!me.payoutsReady }; } }
+  // v80.16: the banner ALSO fires when pay is being HELD for him
+  // (payoutStatus 'awaiting_worker_setup' — the status endpoint sums
+  // it as heldPay), not only when Connect is missing entirely; the
+  // held amount rides the banner. There is still NO dismiss control:
+  // the only way out is connecting, which releases the pay. The read
+  // is cached for a minute so board refreshes don't hammer it.
+  if (!connectGateStateCache || Date.now() - connectGateFetchedAt > 60000) { try { connectGateStateCache = await api('/api/worker/connect/status'); connectGateFetchedAt = Date.now(); } catch(e) { if (!connectGateStateCache) connectGateStateCache = { connected: false, ready: !!me.payoutsReady, heldPay: 0 }; } }
   const c = connectGateStateCache || {};
-  box.innerHTML = c.ready ? '' : '<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>' + WT('connectGateTitle') + '</b><br><span>' + WT('connectGateMsg') + '</span><br><span class="mut">' + WT('connectGateBody') + '</span><br><button onclick="startConnect()" style="margin-top:8px">' + WT('connectGateBtn') + '</button></div>';
+  const held816 = Number(c.heldPay || 0);
+  if (c.ready && !(held816 > 0)) { box.innerHTML = ''; return; }
+  const heldLine816 = held816 > 0 ? '<br><span><b>' + WT('connectHeldLine').replace('{amt}', '$' + held816.toFixed(2)) + '</b></span>' : '';
+  box.innerHTML = '<div class="card" style="border:1.5px solid #6b5518;background:#221a05"><b>' + WT('connectGateTitle') + '</b><br><span>' + WT('connectGateMsg') + '</span><br><span class="mut">' + WT('connectGateBody') + '</span>' + heldLine816 + '<br><button onclick="startConnect()" style="margin-top:8px">' + WT('connectGateBtn') + '</button></div>';
 }
 async function doneJob(idv){ await api('/api/jobs/'+idv,{method:'PATCH', body:JSON.stringify({photosDone:true})}); if (trackWatch && trackWatch.jobId === idv) stopWatchOnly(); loadJobs(); }
 // ---------- Notification sound (added 2026-10-21, v22) ----------
@@ -3849,7 +3894,12 @@ function appPrompt(msg, def, placeholder){ return appDlgShow(msg, { input: true,
 // button triggers the browser's own permission popup from the tap (the
 // only way browsers allow it). Location state reads the Permissions API
 // where available, with a localStorage flag as the fallback record.
-function permLocGranted(){ try { return localStorage.getItem('ghsLoc') === 'on'; } catch(e) { return false; } }
+// v80.16: the location opt-in ALSO lives on the account (server-side,
+// u.locOptInAt via pubUser) — the localStorage flag alone was wiped by
+// PWA reinstalls / cache clears and the tech re-granted at every
+// login. The server record counts as granted and heals the local flag.
+function permLocGranted(){ try { if (localStorage.getItem('ghsLoc') === 'on') return true; } catch(e) {} return !!(me && me.role === 'worker' && me.locOptIn); }
+function healWorkerLocFlag(){ try { if (me && me.role === 'worker' && me.locOptIn) localStorage.setItem('ghsLoc', 'on'); } catch(e) {} }
 async function refreshPermCard(){
   const card = document.getElementById('permCard');
   if (!card) return;
@@ -3904,7 +3954,15 @@ async function subscribePush(){
 function maybeSubscribePush(){ if (pushSubTried) return; pushSubTried = true; subscribePush(); }
 function activarUbicacion(){
   if (!navigator.geolocation) { showInfo(WT('noLocSupport')); return; }
-  navigator.geolocation.getCurrentPosition(function(){ try { localStorage.setItem('ghsLoc', 'on'); } catch(e) {} showInfo(WT('locDone')); refreshPermCard(); }, function(){ showInfo(WT('locFail')); refreshPermCard(); }, { timeout: 10000 });
+  navigator.geolocation.getCurrentPosition(function(pos){ try { localStorage.setItem('ghsLoc', 'on'); } catch(e) {}
+    // v80.16: record the opt-in (and this fix as the last known
+    // position) on the ACCOUNT — a browser-local flag alone did not
+    // survive to the next login (the re-grant-at-every-login bug).
+    if (me && me.role === 'worker') {
+      try { api('/api/me/location/opt-in', { method: 'POST', body: JSON.stringify({ optedIn: true }) }).catch(function(){}); } catch(e) {}
+      if (pos && pos.coords) { try { api('/api/me/location', { method: 'POST', body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }) }).catch(function(){}); } catch(e) {} }
+    }
+    showInfo(WT('locDone')); refreshPermCard(); }, function(){ showInfo(WT('locFail')); refreshPermCard(); }, { timeout: 10000 });
 }
 const sndSeen = { workerOpen: null, custStatus: null, adminReqs: null, yardVisits: null };
 function sndWorkerJobs(jobs){
@@ -4771,7 +4829,7 @@ async function loadAdminWorkers(){
     const AV_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const avW = w.availability || {};
     const availLine = ((avW.days||[]).length || (avW.shifts||[]).length || avW.onDemand) ? '<br><span class="mut">Availability:</span> ' + (avW.days||[]).map(function(d){ return AV_DAY_NAMES[d] || ''; }).filter(Boolean).join(' ') + ((avW.shifts||[]).length ? ' · ' + avW.shifts.join(', ') : '') + (avW.onDemand ? ' · ⚡ on-demand' : '') : '';
-    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+escHtml(w.name)+'</b> ('+escHtml(w.email)+(w.phone?' • '+escHtml(w.phone):'')+') <span class="pill">'+escHtml(w.status)+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Payouts ready':(w.payoutsSetup==='pending'?'\u{1F4B3} Payouts: setup started':'\u{1F4B3} Payouts: NOT set up'))+'</span>' + noPhonePill
+    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+escHtml(w.name)+'</b> ('+escHtml(w.email)+(w.phone?' • '+escHtml(w.phone):'')+') <span class="pill">'+escHtml(w.status)+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Stripe Connect: Connected':(w.payoutsSetup==='pending'?'\u{1F4B3} Stripe Connect: Pending':'\u{1F4B3} Stripe Connect: Not started'))+'</span>' + noPhonePill
     + (pf.city ? '<br><span class="mut">City:</span> '+escHtml(pf.city) : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '') + availLine
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="toggleWorkerDetail(\''+w.id+'\',this)">Ver detalle ▾</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')
     + '<div id="wdetail-'+w.id+'" style="display:none">'
