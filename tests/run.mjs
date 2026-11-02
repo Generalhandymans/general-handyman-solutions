@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-10-5', swSrc.includes("const CACHE = 'ghs-app-v80-10-5'"));
+t('static: SW cache is ghs-app-v80-11', swSrc.includes("const CACHE = 'ghs-app-v80-11'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1769,7 +1769,7 @@ t('static v28: plan toggle cards conformed to the dark standard', htmlSrc.includ
 t('static v28: dark panel utilities + payment panel + designed empty states exist', htmlSrc.includes('.panel-dark{background:var(--panel)') && htmlSrc.includes('.pay-panel{') && htmlSrc.includes('.empty{border:1.5px dashed var(--field-line)'));
 t('static v28: membership status cards use the dark panels', htmlSrc.includes('class="card panel-dark panel-green"') && htmlSrc.includes('class=\"card panel-dark\"'));
 t('static v28: empty states wrapped in .empty blocks, same words', ['No invoices yet.','No requests yet.','No notifications yet.','No workers yet.','No jobs yet.'].every(w => htmlSrc.includes('<div class="empty"><p class="mut">' + w + '</p></div>')) && htmlSrc.includes("'<div class=\"empty\"><p class=\"mut\">'+WT('yardNone')+'</p></div>'"));
-t('static v27: share panel has one red Copy control for each of the 5 join links', ['homecare', 'yard1', 'yard2', 'plus1', 'plus2'].every(k => htmlSrc.includes("copyShareLink('https://app.generalhandymans.app/#join-" + k + "', this)")) && (htmlSrc.match(/class="share-copy"/g) || []).length === 5);
+t('static v27→v80.11: share panel has one red Copy control for each of the 5 join links (v80.11 item 7: APEX domain — the ONE DOMAIN law)', ['homecare', 'yard1', 'yard2', 'plus1', 'plus2'].every(k => htmlSrc.includes("copyShareLink('https://generalhandymans.app/#join-" + k + "', this)")) && (htmlSrc.match(/class="share-copy"/g) || []).length === 5);
 t('static v27: no raw signup URL sprawled as visible text, no old ghost copy buttons remain', !htmlSrc.includes('>https://app.generalhandymans.app/#join-') && !htmlSrc.includes('class="copy-link"') && !htmlSrc.includes('Copy signup link'));
 t('static v27: share panel rows name the plan + price', htmlSrc.includes('HomeCare — $29/mo') && htmlSrc.includes('Yard Care — 1 visit · $75/mo') && htmlSrc.includes('Yard Care — 2 visits · $150/mo') && htmlSrc.includes('HomeCare Plus — 1 yard visit · $100/mo') && htmlSrc.includes('HomeCare Plus — 2 yard visits · $175/mo'));
 
@@ -3080,11 +3080,11 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   // audit entry records emailed: true
   const del1 = await req2('DELETE', '/api/workers/' + dw1, { token: A2B });
   const rem1 = removalsFor(await mockEmails(), 'del1@t.local');
-  const EN1 = "Hi Del — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at app.generalhandymans.app.";
-  const ES1 = 'Hola Del — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en app.generalhandymans.app.';
+  const EN1 = "Hi Del — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at generalhandymans.app.";
+  const ES1 = 'Hola Del — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en generalhandymans.app.';
   t('v36: worker DELETE succeeds', del1.status === 200 && del1.j.ok === true && del1.j.deleted === dw1);
   t('v36: exactly one removal email to the deleted worker', rem1.length === 1);
-  t('v36: removal email carries the approved EN + ES lines and the app URL', rem1.length === 1 && (rem1[0].text || '').includes(EN1) && (rem1[0].text || '').includes(ES1) && (rem1[0].html || '').includes(EN1) && (rem1[0].html || '').includes(ES1));
+  t('v36→v80.11: removal email carries the approved EN + ES lines and the app URL (v80.11 item 7: the URL is now the APEX domain)', rem1.length === 1 && (rem1[0].text || '').includes(EN1) && (rem1[0].text || '').includes(ES1) && (rem1[0].html || '').includes(EN1) && (rem1[0].html || '').includes(ES1));
   const wlist1 = await req2('GET', '/api/workers', { token: A2B });
   t('v36: deleted worker is gone from the roster', !(wlist1.j.workers || []).some(w => w.id === dw1));
   const aud1 = await auditEntryFor(A2B, 'worker.delete', dw1);
@@ -4277,7 +4277,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10.5: ghs-app-v80-10-5)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10-5'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.11: ghs-app-v80-11)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-11'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5143,6 +5143,241 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.9 FUSION: gate ON — the onrender host is untouched (200)', onr809.status === 200);
   try { child809.kill('SIGTERM'); } catch (e) {}
 }
+
+// ---------------- v80.11 ALCANCE: statics ----------------
+t('static v80.11: 50-mile rule — constant, haversine, range check and the alert filter all exist', serverSrc.includes('const JOB_RANGE_MILES = 50') && serverSrc.includes('function haversineMiles(') && serverSrc.includes('function jobRangeFor(') && serverSrc.includes('function alertableWorkersForJob('));
+t('static v80.11: referral bounty is $10, awarded by ONE function, anti-self guarded both ways', serverSrc.includes('const REFERRAL_BOUNTY = 10') && serverSrc.includes('function maybeAwardMembershipBounty(') && serverSrc.includes('if (w.id === u.id) return null;') && serverSrc.includes('anti-self: same email, second account'));
+t('static v80.11: bounty award sites fire ONLY on real money (paid session with amount_total > 0 / non-trial HomeCare confirm / paid plan confirm / invoice amount_paid > 0)', serverSrc.includes('Number(session.amount_total) > 0) maybeAwardMembershipBounty') && serverSrc.includes('if (!wasTrial74) maybeAwardMembershipBounty') && serverSrc.includes('if (Number(obj.amount_paid) > 0) maybeAwardMembershipBounty'));
+t('static v80.11: sales commission is $10 and rides the SAME payout transfer as job pay (payOffer + commission, one event)', serverSrc.includes('const SALES_COMMISSION = 10') && serverSrc.includes('function jobSalesCommission(') && serverSrc.includes('Number(j.payOffer) + commission811'));
+t('static v80.11: tech-zone endpoints exist (referrals / sales-menu / seller carts / estimates)', serverSrc.includes("p === '/api/worker/referrals'") && serverSrc.includes("p === '/api/worker/sales-menu'") && serverSrc.includes("p === '/api/worker/carts'") && serverSrc.includes("p === '/api/worker/estimates'"));
+t('static v80.11: tech estimates are born flagged + seller-stamped and audited (no approval step in the path)', serverSrc.includes('techCreated: true') && serverSrc.includes('soldByWorkerId: user.id') && serverSrc.includes("audit(user, 'estimate.tech_create'"));
+t('static v80.11: short doors /homecare + /yard mirror /plus (fragment targets join-homecare / join-yard1)', serverSrc.includes("p === '/homecare' || p === '/yard'") && serverSrc.includes("'#join-yard1'"));
+t('static v80.11: apex is the APP_URL default and the worker emails print the apex (item 7)', serverSrc.includes("process.env.APP_URL || 'https://generalhandymans.app/'") && !serverSrc.includes("(p.appUrl || 'https://app.generalhandymans.app')") && !serverSrc.includes('re-apply anytime at app.generalhandymans.app'));
+t('static v80.11: invoice pay is email-guarded — looksLikeEmail at session creation, sanitize + admin flag in the pay handler', serverSrc.includes('function looksLikeEmail(') && serverSrc.includes('looksLikeEmail(user.email)') && serverSrc.includes('inv.emailInvalid = true') && serverSrc.includes('emailInvalid: !!inv.emailInvalid'));
+t('static v80.11 client: tech zone carries the sales / estimates / referrals sections and their loaders', htmlSrc.includes('id="workerSales"') && htmlSrc.includes('id="workerEstimates"') && htmlSrc.includes('id="workerReferrals"') && htmlSrc.includes('function loadWorkerSales(') && htmlSrc.includes('function loadWorkerEstimates(') && htmlSrc.includes('function loadWorkerReferrals('));
+t('static v80.11 client: You earn / Tú ganas labels, commission + distance job lines, admin tech-estimate badge', htmlSrc.includes("youEarn: 'You earn'") && htmlSrc.includes("youEarn: 'Tú ganas'") && htmlSrc.includes('function workerCommLine(') && htmlSrc.includes('function workerDistLine(') && htmlSrc.includes('Tech estimate · '));
+
+// ---------------- v80.11 ALCANCE: DIRECT UNIT PINS ----------------
+// The audit gap: depositSplit() was covered only indirectly and the
+// margin floor only a handful of times, yet the tech estimate creator
+// reuses that math from a second door. These pins extract the REAL
+// functions from server.js and unit-test them directly — no copies.
+const depChunk811 = serverSrc.slice(serverSrc.indexOf('const DEPOSIT_RATE'), serverSrc.indexOf('// ---------- v80 A-7'));
+const depFns811 = new Function(depChunk811 + '; return { depositSplit };')();
+const ds811 = depFns811.depositSplit;
+t('unit v80.11 depositSplit: $0 -> $0 / $0', ds811(0).depositCents === 0 && ds811(0).balanceCents === 0);
+t('unit v80.11 depositSplit: the deposit never exceeds the total ($30 job books at $30, not $50)', ds811(3000).depositCents === 3000 && ds811(3000).balanceCents === 0);
+t('unit v80.11 depositSplit: <=$300 tier is the $50 FLAT ($100 -> $50 deposit / $50 balance)', ds811(10000).depositCents === 5000 && ds811(10000).balanceCents === 5000);
+t('unit v80.11 depositSplit: the $300 boundary itself stays FLAT ($300 -> $50 / $250)', ds811(30000).depositCents === 5000 && ds811(30000).balanceCents === 25000);
+t('unit v80.11 depositSplit: tier is judged on the POST-DISCOUNT total handed in (member $240 of a $300 list job -> still the $50 flat)', ds811(24000).depositCents === 5000 && ds811(24000).balanceCents === 19000);
+t('unit v80.11 depositSplit: >$300 tier is 40% ($400 -> $160 / $240 and $1,000 -> $400 / $600)', ds811(40000).depositCents === 16000 && ds811(40000).balanceCents === 24000 && ds811(100000).depositCents === 40000 && ds811(100000).balanceCents === 60000);
+t('unit v80.11 depositSplit: one cent over $300 flips to the 40% tier ($300.01 -> $120.00 deposit)', ds811(30001).depositCents === 12000 && ds811(30001).balanceCents === 18001);
+const marChunk811 = serverSrc.slice(serverSrc.indexOf('const MARGIN_FLOOR'), serverSrc.indexOf('// Typical hours per catalog service'));
+const marFns811 = new Function(marChunk811 + '; return { marginOkAfterFees, minTotalForMargin };')();
+t('unit v80.11 margin floor: a compliant price PASSES (total $150 vs pay $100 -> 30.2% after Stripe fees)', marFns811.marginOkAfterFees(150, 100) === true);
+t('unit v80.11 margin floor: a below-floor price FAILS — the estimate creator blocks/raises it (total $120 vs pay $100 -> 13.5% after fees)', marFns811.marginOkAfterFees(120, 100) === false);
+t('unit v80.11 margin floor: boundary pair around the computed minimum for $100 pay ($130.00 fails, $130.10 passes)', marFns811.marginOkAfterFees(130, 100) === false && marFns811.marginOkAfterFees(130.10, 100) === true);
+t('unit v80.11 margin floor: minTotalForMargin inverts the floor — the raised price the creator builds (ceil-cent + $0.01) clears it', marFns811.minTotalForMargin(100) > 130.09 && marFns811.minTotalForMargin(100) < 130.10 && marFns811.marginOkAfterFees(Math.ceil(marFns811.minTotalForMargin(100) * 100) / 100 + 0.01, 100) === true);
+t('unit v80.11 margin floor: zero / negative totals never pass', marFns811.marginOkAfterFees(0, 50) === false && marFns811.marginOkAfterFees(-10, 0) === false);
+t('unit v80.11 wiring: the tech estimate creator enforces THESE helpers — no second copy of the margin math', serverSrc.includes('marginOkAfterFees(total, pay)') && serverSrc.includes('minTotalForMargin(pay)'));
+
+// ---------------- v80.11 ALCANCE: behavioral (app3 — own instance, city-aware geo mock, shared Stripe mock) ----------------
+const BASE3 = 'http://127.0.0.1:8985';
+const DATA_FILE3 = '/tmp/ghs-v17-test/data-v80-11.json';
+const geo3 = http.createServer((req, res) => {
+  const u = new URL(req.url, 'http://x');
+  if (u.pathname === '/search') {
+    const q = u.searchParams.get('q') || '';
+    if (q.includes('FAILGEO')) { res.writeHead(500); return res.end('nope'); }
+    let lat = '38.2499', lon = '-122.0369'; // Fairfield
+    if (q.includes('Mill Valley')) { lat = '38.0541'; lon = '-122.5265'; }
+    else if (q.includes('Elk Grove')) { lat = '38.4088'; lon = '-121.3716'; }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify([{ lat, lon }]));
+  }
+  res.writeHead(404); res.end();
+});
+await new Promise(r => geo3.listen(8986, r));
+try { fs.unlinkSync(DATA_FILE3); } catch (e) {}
+const child3 = spawn('node', ['server.js'], {
+  cwd: APP_DIR,
+  env: Object.assign({}, process.env, {
+    PORT: '8985', DATA_FILE: DATA_FILE3, NOMINATIM_BASE: 'http://127.0.0.1:8986',
+    SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
+    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1',
+    STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
+    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981'
+  }),
+  stdio: ['ignore', 'pipe', 'pipe']
+});
+child3.stderr.on('data', d => process.stderr.write('[app3] ' + d));
+async function req3(method, p, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+  const r = await fetch(BASE3 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, j };
+}
+async function wh3(type, object) {
+  const payload = JSON.stringify({ id: 'evt_' + Math.random().toString(36).slice(2, 9), type, data: { object } });
+  const ts = Math.floor(Date.now() / 1000);
+  const sig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(ts + '.' + payload, 'utf8').digest('hex');
+  return fetch(BASE3 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: payload });
+}
+let up3 = false;
+for (let i = 0; i < 60 && !up3; i++) { try { const r = await fetch(BASE3 + '/api/health'); up3 = r.ok; } catch (e) {} if (!up3) await sleep(250); }
+t('v80.11 app3: the ALCANCE instance boots (Stripe mock + city-aware geo mock)', up3);
+const adm3 = await req3('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin3@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+const A3 = (await req3('POST', '/api/login', { body: { email: 'admin3@t.local', password: 'adminpass1' } })).j.token;
+t('v80.11 app3: admin ready', adm3.status === 201 && !!A3);
+async function mkWorker3(email, name, phone, city, areas) {
+  const su = await req3('POST', '/api/signup', { body: { name, email, phone, password: 'workpass1', role: 'worker', profile: { city, areas, skills: ['Plumbing'] } } });
+  await req3('PATCH', '/api/workers/' + su.j.user.id, { token: A3, body: { status: 'active' } });
+  const li = await req3('POST', '/api/login', { body: { email, password: 'workpass1' } });
+  return { id: su.j.user.id, token: li.j.token };
+}
+async function mkCustomer3(email, name, phone) {
+  const su = await req3('POST', '/api/signup', { body: { name, email, phone, password: 'custpass1', role: 'customer', serviceAddress: '1 Main St, Fairfield, CA' } });
+  const li = await req3('POST', '/api/login', { body: { email, password: 'custpass1' } });
+  return { id: su.j.user.id, token: li.j.token };
+}
+const wSeller = await mkWorker3('seller@t.local', 'Seller Sam', '(707) 555-0211', 'Fairfield', 'Fairfield, Vacaville');
+const wFar = await mkWorker3('far@t.local', 'Far Fred', '(707) 555-0212', 'Elk Grove', 'Fairfield, Mill Valley, Elk Grove');
+const custX = await mkCustomer3('custx@t.local', 'Cust X', '(707) 555-0111');
+const CX = custX.token;
+
+// --- item 6: short doors ---
+async function raw3(p) { const r = await fetch(BASE3 + p, { redirect: 'manual' }); return { status: r.status, loc: r.headers.get('location') || '' }; }
+const doorHc = await raw3('/homecare');
+t('v80.11 doors: GET /homecare -> 302 /#join-homecare', doorHc.status === 302 && doorHc.loc === '/#join-homecare');
+const doorYd = await raw3('/yard?src=ABC');
+t('v80.11 doors: GET /yard?src=ABC -> 302 /#join-yard1?src=ABC (query moves inside the fragment, like /plus)', doorYd.status === 302 && doorYd.loc === '/#join-yard1?src=ABC');
+const doorPlus = await raw3('/plus');
+t('v80.11 doors: GET /plus is unchanged -> /#join-plus1', doorPlus.status === 302 && doorPlus.loc === '/#join-plus1');
+
+// --- item 2: referrals surface ---
+const ref0 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
+t('v80.11 referrals: the tech gets a personal code and an APEX link riding the existing ?src= stamp', ref0.status === 200 && !!ref0.j.code && ref0.j.link === 'https://generalhandymans.app/?src=' + ref0.j.code && ref0.j.plusLink === 'https://generalhandymans.app/plus?src=' + ref0.j.code);
+t('v80.11 referrals: a fresh tech starts with zero signups and zero bounties', (ref0.j.signups || []).length === 0 && (ref0.j.bounties || []).length === 0 && ref0.j.totals.earned === 0 && ref0.j.totals.pending === 0);
+
+// --- item 3: menú de venta ---
+const sm = await req3('GET', '/api/worker/sales-menu', { token: wSeller.token });
+const smTv = (sm.j.items || []).find(i => i.serviceId === 'tv-mounting');
+const smGw = (sm.j.items || []).find(i => i.serviceId === 'green-waste');
+t('v80.11 sales menu: the whole catalog with LIST price + his take (standard pay + $10) — TV Mounting $125 -> take $110, green waste flat $120 -> take $130', sm.status === 200 && (sm.j.items || []).length >= 90 && !!smTv && smTv.price === 125 && smTv.pay === 100 && smTv.take === 110 && !!smGw && smGw.pay === 120 && smGw.take === 130);
+t('v80.11 sales menu: NO member price, margin or internal fields leak to the tech', !!smTv && !('member' in smTv) && !('m' in smTv) && !('margin' in smTv) && !('memberTotal' in smTv));
+const smCust = await req3('GET', '/api/worker/sales-menu', { token: CX });
+t('v80.11 role law: customers never see the sales tools (403)', smCust.status === 403);
+const sc = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
+t('v80.11 sales cart: the tech builds a catalog-priced checkout cart + link (the seller stamp itself is proven end-to-end by the sold-job chain below)', sc.status === 201 && sc.j.cart.listTotal === 125 && sc.j.link.includes('/cart/' + sc.j.cart.id));
+const scForged = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1, unitPrice: 1 }] } });
+t('v80.11 sales cart: a forged unitPrice in the tech input is ignored — the catalog price rules', scForged.status === 201 && scForged.j.cart.listTotal === 125);
+const scBad = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'not-a-service', qty: 1 }] } });
+t('v80.11 sales cart: an unknown service is rejected 400', scBad.status === 400);
+const scCust = await req3('POST', '/api/worker/carts', { token: CX, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
+t('v80.11 sales cart: customers cannot build seller carts (403)', scCust.status === 403);
+
+// --- item 5: creador de estimados ---
+const estOk = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Ana', customerEmail: 'estana@t.local', description: 'Rebuild the side gate and paint it', hours: 2 } });
+t('v80.11 estimates: a compliant estimate (2h at the $75/hr suggestion = $150, margin 30%) goes out DIRECTLY, unadjusted, no approval step', estOk.status === 201 && estOk.j.total === 150 && estOk.j.adjusted === false && !!estOk.j.requestId);
+const estLow = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Bob', customerEmail: 'estbob@t.local', description: 'Custom shelf build', hours: 2, price: 120 } });
+t('v80.11 estimates: a below-floor price ($120 vs $100 pay) is RAISED to the floor minimum (~$130.11) — never sent cheap', estLow.status === 201 && estLow.j.adjusted === true && estLow.j.adjustedFrom === 120 && estLow.j.total >= 130.09 && estLow.j.total <= 130.15);
+const estBig = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Cy', description: 'Whole house remodel', hours: 20 } });
+t('v80.11 estimates: the $1,000 guardrail blocks an oversized estimate (20h -> $1,500 suggested)', estBig.status === 400);
+const estRaise = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Di', description: 'Big custom job', hours: 16, price: 900 } });
+t('v80.11 estimates: when even the margin-raised price would pass $1,000 the estimate is BLOCKED (16h, pay $800)', estRaise.status === 400);
+const admReqs3 = await req3('GET', '/api/requests', { token: A3 });
+const techEst = (admReqs3.j.requests || []).find(r => r.id === (estOk.j.requestId || ''));
+t('v80.11 estimates: admin sees the tech estimate from the moment it exists, flagged with the tech name + seller stamp', !!techEst && techEst.techCreated === true && techEst.createdByWorkerName === 'Seller Sam' && techEst.soldByWorkerId === wSeller.id && techEst.status === 'Quoted');
+const estList = await req3('GET', '/api/worker/estimates', { token: wSeller.token });
+t('v80.11 estimates: the tech lists his own estimates with shareable estimate links', estList.status === 200 && (estList.j.estimates || []).length === 2 && estList.j.estimates.every(e => String(e.link).includes('/estimate/')));
+const estCust = await req3('POST', '/api/worker/estimates', { token: CX, body: { customerName: 'X', description: 'x', hours: 1 } });
+t('v80.11 estimates: customers cannot create tech estimates (403)', estCust.status === 403);
+
+// --- item 1: the 50-mile rule ---
+async function mkJob3(city, address) {
+  return req3('POST', '/api/jobs', { token: A3, body: { service: 'Fence fix', city, description: 'gate', when: 'Tomorrow 9am', payOffer: 120, customerPrice: 200, customerName: 'Cust', customerPhone: '(707) 555-0199', address } });
+}
+const jobMV = await mkJob3('Mill Valley', '750 Redwood Hwy Frontage Rd, Mill Valley, CA');
+const jobFF = await mkJob3('Fairfield', '742 Evergreen Terrace, Fairfield, CA');
+const jobUN = await mkJob3('FAILGEO', '');
+t('v80.11 50-mile setup: admin posted the three probe jobs', jobMV.status === 201 && jobFF.status === 201 && jobUN.status === 201);
+const boardFar = await req3('GET', '/api/jobs', { token: wFar.token });
+const farJobs = boardFar.j.jobs || [];
+const ffEntry = farJobs.find(x => x.id === jobFF.j.job.id);
+const unEntry = farJobs.find(x => x.id === jobUN.j.job.id);
+t('v80.11 50-mile: the Elk Grove worker does NOT see the Mill Valley job (~95 mi) on his board', !farJobs.some(x => x.id === jobMV.j.job.id));
+t('v80.11 50-mile: the in-range Fairfield job shows WITH its measured distance (~38 mi from his base)', !!ffEntry && typeof ffEntry.distanceMiles === 'number' && ffEntry.distanceMiles > 30 && ffEntry.distanceMiles < 50);
+t('v80.11 50-mile: a job whose address cannot be measured stays visible, flagged unmeasured', !!unEntry && unEntry.rangeUnmeasured === true);
+const boardFF = await req3('GET', '/api/jobs', { token: wSeller.token });
+t('v80.11 50-mile: the Fairfield worker DOES see Mill Valley (~30 mi from his base)', (boardFF.j.jobs || []).some(x => x.id === jobMV.j.job.id));
+const boardAdm = await req3('GET', '/api/jobs', { token: A3 });
+t('v80.11 50-mile: admin sees every job regardless of distance', [jobMV, jobFF, jobUN].every(jx => (boardAdm.j.jobs || []).some(x => x.id === jx.j.job.id)));
+await sleep(300);
+const notifFar = await req3('GET', '/api/notifications', { token: wFar.token });
+const nTargets = (notifFar.j.notifications || []).map(n => n.target || '');
+t('v80.11 50-mile alerts: NO new-job alert reaches the out-of-range worker, the in-range alert does', !nTargets.includes('#wjob=' + jobMV.j.job.id) && nTargets.includes('#wjob=' + jobFF.j.job.id));
+const claimFar = await req3('POST', '/api/jobs/' + jobMV.j.job.id + '/claim', { token: wFar.token });
+t('v80.11 50-mile: claiming an out-of-range job is refused 403 with the range in the message', claimFar.status === 403 && /50/.test(claimFar.j.error || ''));
+const claimUn = await req3('POST', '/api/jobs/' + jobUN.j.job.id + '/claim', { token: wFar.token });
+t('v80.11 50-mile: the unmeasured job stays claimable (visible-with-flag, never fail-closed)', claimUn.status === 200);
+
+// --- item 8: invoice 502 fix ---
+const invBad = await req3('POST', '/api/admin/invoices', { token: A3, body: { customerName: 'Broker Co', customerEmail: 'Not An Email', items: [{ description: 'Hydro jetting', qty: 1, unitPrice: 100 }] } });
+t('v80.11 invoice setup: an invoice can exist with a non-email string stored (the legacy bad-data case)', invBad.status === 201 && !!invBad.j.invoice.id);
+const invPay = await req3('POST', '/api/invoices/' + invBad.j.invoice.id + '/pay', { body: {} });
+t('v80.11 invoice: the bad stored email can no longer 502 the pay page — 200 + a checkout url', invPay.status === 200 && !!invPay.j.url);
+const invList3 = await req3('GET', '/api/admin/invoices', { token: A3 });
+const invBadRow = (invList3.j.invoices || []).find(x => x.id === invBad.j.invoice.id);
+t('v80.11 invoice: the bad stored email is flagged for the Team instead (emailInvalid)', !!invBadRow && invBadRow.emailInvalid === true);
+const invGood = await req3('POST', '/api/admin/invoices', { token: A3, body: { customerName: 'Good Co', customerEmail: 'good@t.local', items: [{ description: 'Jetting', qty: 1, unitPrice: 50 }] } });
+const invPay2 = await req3('POST', '/api/invoices/' + invGood.j.invoice.id + '/pay', { body: {} });
+const invGoodRow = ((await req3('GET', '/api/admin/invoices', { token: A3 })).j.invoices || []).find(x => x.id === invGood.j.invoice.id);
+t('v80.11 invoice: a valid email still pays normally (200 + url) and carries NO flag', invPay2.status === 200 && !!invPay2.j.url && !!invGoodRow && invGoodRow.emailInvalid === false);
+
+// --- item 2: the bounty lifecycle — first REAL charge, never trial start ---
+const bc = await mkCustomer3('bounty@t.local', 'Bounty Cust', '(707) 555-0311');
+const bSub = await req3('POST', '/api/stripe/membership-subscribe', { token: bc.token, body: { plan: 'plus1', source: ref0.j.code } });
+await mockActivate(bSub.j.subscriptionId);
+const bConf = await req3('POST', '/api/stripe/membership-confirm', { token: bc.token, body: { plan: 'plus1' } });
+t('v80.11 bounty setup: the referred customer activates HomeCare Plus (paid at join)', bSub.status === 200 && bConf.status === 200 && bConf.j.active === true);
+const ref1 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
+const bRow = (ref1.j.bounties || [])[0];
+t('v80.11 bounty: the $10 lands on the FIRST REAL CHARGE — held as awaiting_worker_setup (no Connect yet), counted as pending', !!bRow && bRow.amount === 10 && bRow.status === 'awaiting_worker_setup' && ref1.j.totals.pending === 10 && ref1.j.totals.earned === 0);
+t('v80.11 referrals: the referred signup is listed for the tech with his bounty marked paid-out-pending', (ref1.j.signups || []).some(s => s.bountyPaid === true && s.memberActive === true));
+const tc = await mkCustomer3('trial@t.local', 'Trial Cust', '(707) 555-0312');
+const tSub = await req3('POST', '/api/stripe/homecare-subscribe', { token: tc.token, body: { source: ref0.j.code } });
+t('v80.11 bounty setup: the second referred customer starts HomeCare (free-month trial)', tSub.status === 200 && !!tSub.j.subscriptionId);
+const whTrial = await wh3('checkout.session.completed', { id: 'cs_trial_811', mode: 'subscription', payment_status: 'paid', amount_total: 0, customer: 'cus_mock_trial', subscription: tSub.j.subscriptionId, metadata: { userId: tc.id, kind: 'homecare' } });
+const ref2 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
+t('v80.11 bounty: a free-trial START pays NO bounty (session totals $0)', whTrial.status === 200 && (ref2.j.bounties || []).length === 1 && ref2.j.totals.pending === 10);
+const whConv = await wh3('invoice.payment_succeeded', { id: 'in_trial_811', customer: 'cus_mock_trial', subscription: tSub.j.subscriptionId, amount_paid: 2900 });
+const ref3 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
+t('v80.11 bounty: the trial CONVERSION (first real $29 charge) pays the second $10', whConv.status === 200 && (ref3.j.bounties || []).length === 2 && ref3.j.totals.pending === 20);
+await wh3('invoice.payment_succeeded', { id: 'in_trial_811b', customer: 'cus_mock_trial', subscription: tSub.j.subscriptionId, amount_paid: 2900 });
+const ref4 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
+t('v80.11 bounty: ONE bounty per referred customer, ever — a replayed charge never double-pays', (ref4.j.bounties || []).length === 2 && ref4.j.totals.pending === 20);
+
+// --- items 3+4: a sold job lands on the seller with his commission ---
+const soldCart = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
+const soldCo = await req3('POST', '/api/carts/' + soldCart.j.cart.id + '/checkout', { body: { name: 'Buyer Bea', phone: '7075550130', email: 'bea@t.local', address: '9 Vine St', city: 'Fairfield', when: 'Saturday' } });
+const soldSess = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === soldCart.j.cart.id && s.mode === 'payment').slice(-1)[0];
+t('v80.11 sold job: the customer checkout on a tech cart charges the DEPOSIT law amount ($125 job -> $50 today)', soldCo.status === 200 && soldCo.j.amount === 50 && !!soldSess);
+await mockSessionPaid(soldSess.id);
+await fetch(BASE3 + '/cart/' + soldCart.j.cart.id + '?paid=1&session_id=' + soldSess.id);
+const admReqs3b = await req3('GET', '/api/requests', { token: A3 });
+const soldReq = (admReqs3b.j.requests || []).find(r => r.menuOrder && r.menuOrder.cartId === soldCart.j.cart.id);
+t('v80.11 sold job: paying the tech cart births an order stamped with the seller', !!soldReq && soldReq.soldByWorkerId === wSeller.id);
+const cj811 = await req3('POST', '/api/requests/' + soldReq.id + '/create-job', { token: A3, body: { payOffer: 100 } });
+t('v80.11 sold job: create-job lands the job ON THE SELLER as Claimed (never on the open board)', cj811.status === 201 && cj811.j.job.assignedWorkerId === wSeller.id && cj811.j.job.status === 'Claimed');
+const sellerJobs = await req3('GET', '/api/jobs', { token: wSeller.token });
+const sj = (sellerJobs.j.jobs || []).find(x => x.id === cj811.j.job.id);
+t('v80.11 sold job: the seller sees the job as his own WITH the $10 sales commission in his pay breakdown', !!sj && sj.mine === true && sj.salesCommission === 10);
+const farJobs2 = await req3('GET', '/api/jobs', { token: wFar.token });
+t('v80.11 sold job: the sold job never appears on another worker board', !(farJobs2.j.jobs || []).some(x => x.id === cj811.j.job.id));
+
+try { child3.kill('SIGTERM'); } catch (e) {}
+try { geo3.close(); } catch (e) {}
 
 try { child2.kill('SIGTERM'); } catch (e) {}
 try { stripeMock.close(); } catch (e) {}
