@@ -78,7 +78,7 @@ function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUp
 // never throw on shape; handlers additionally reject non-strings.
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
 function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, favorites: cleanMenuIdList(u.favorites, 24), recents: cleanMenuIdList(u.recents, 8), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -5220,6 +5220,20 @@ const SERVER_MENU = {
   "headlight-replacement":{p:85,m:68},
   "heavy-furniture-move":{p:200,m:160}
 };
+// v80.28 BÚSQUEDA: the account's menu favorites / recents only ever
+// hold REAL catalog ids — validated here against SERVER_MENU (the one
+// price source), deduped, order preserved, capped. Anything else a
+// client sends (stale ids, junk) is dropped, never stored.
+function cleanMenuIdList(v, cap) {
+  const out = [];
+  if (Array.isArray(v)) {
+    for (const x of v) {
+      if (typeof x === 'string' && SERVER_MENU[x] && out.indexOf(x) < 0) out.push(x);
+      if (out.length >= cap) break;
+    }
+  }
+  return out;
+}
 function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   const svc = SERVER_MENU[serviceId];
   if (!svc) return null;
@@ -5796,6 +5810,32 @@ async function handleRequest(req, res) {
     if (!lang) return send(res, 400, { error: 'lang must be es or en' });
     if (user.lang !== lang) { user.lang = lang; save(); }
     return send(res, 200, { ok: true, lang, user: pubUser(user) });
+  }
+  // v80.28 BÚSQUEDA (audit P1-8 / A-8): menu favorites + recents live
+  // on the account so they follow the customer across devices; guests
+  // keep theirs in localStorage and the client merges at login. The
+  // client posts its whole list; the server validates every id
+  // against SERVER_MENU and caps (favorites 24, recents 8) — a stale
+  // or invented id can never be stored, let alone priced.
+  if (p === '/api/me/favorites' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    user.favorites = cleanMenuIdList(b.favorites, 24);
+    save();
+    return send(res, 200, { ok: true, favorites: user.favorites, user: pubUser(user) });
+  }
+  if (p === '/api/me/recents' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    if (Array.isArray(b.recents)) {
+      user.recents = cleanMenuIdList(b.recents, 8);
+    } else {
+      const sid = typeof b.serviceId === 'string' ? b.serviceId : '';
+      if (!SERVER_MENU[sid]) return send(res, 400, { error: 'unknown service' });
+      user.recents = [sid].concat(cleanMenuIdList(user.recents, 8).filter(x => x !== sid)).slice(0, 8);
+    }
+    save();
+    return send(res, 200, { ok: true, recents: user.recents, user: pubUser(user) });
   }
   // Home details + start preference: the member maintains these from their
   // account area. Partial update — only fields present in the body change.
