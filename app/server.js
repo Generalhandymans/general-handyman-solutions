@@ -78,7 +78,7 @@ function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUp
 // never throw on shape; handlers additionally reject non-strings.
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
 function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -123,6 +123,7 @@ function pwResetRateOk(email) {
   recent.push(now); pwResetAttempts.set(email, recent); return true;
 }
 const PW_RESET_GENERIC = 'If that email has an account, we\'ve sent a reset link';
+const PW_RESET_GENERIC_ES = 'Si ese correo tiene una cuenta, te mandamos un link para restablecerla';
 // ---------- Login throttle (v33 security) ----------
 // Failed sign-ins are counted per IP + email over a 15-minute window; past
 // the cap the endpoint answers 429 until the window slides. A successful
@@ -183,6 +184,15 @@ function publicCredResolves(t) {
 }
 async function sendPasswordResetEmail(u, token) {
   const link = appBase() + '/#reset=' + token;
+  if (userLangOf(u) === 'es') {
+    const htmlEs = mailShell('Restablece tu contraseña',
+      '<p style="margin:6px 0">Hola ' + escMail(u.name || '') + ', recibimos una solicitud para restablecer la contraseña de tu cuenta de General Handyman Solutions.</p>'
+      + '<p style="margin:6px 0"><a href="' + link + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Crear una contraseña nueva</a></p>'
+      + '<p style="margin:6px 0">O abre este link: ' + escMail(link) + '</p>'
+      + '<p style="margin:6px 0">Este link vence en 1 hora. Si no pediste restablecer tu contraseña, ignora este correo — tu contraseña no cambia.</p>', undefined, 'es');
+    const textEs = ['General Handyman Solutions — restablece tu contraseña', '', 'Hola ' + (u.name || '') + ', recibimos una solicitud para restablecer la contraseña de tu cuenta.', 'Abre este link para crear una contraseña nueva: ' + link, 'Este link vence en 1 hora. Si no pediste restablecer tu contraseña, ignora este correo — tu contraseña no cambia.'].join('\n');
+    return sendMail({ to: [u.email], replyTo: OWNER_EMAIL, subject: 'Restablece tu contraseña — General Handyman Solutions', html: htmlEs, text: textEs });
+  }
   const html = mailShell('Reset your password',
     '<p style="margin:6px 0">Hi ' + escMail(u.name || 'there') + ', we got a request to reset the password for your General Handyman Solutions account.</p>'
     + '<p style="margin:6px 0"><a href="' + link + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Set a new password</a></p>'
@@ -796,75 +806,92 @@ async function sendMail(o) {
     return { attempted: true, sent: true, via: 'resend', id: data.id || '' };
   } catch (e) { console.error('resend failed', e.message); return { attempted: true, sent: false, reason: e.message }; }
 }
-function mailShell(title, inner, footer) {
+function mailShell(title, inner, footer, lang) {
+  const es = lang === 'es';
   return '<div style="font-family:Arial,sans-serif;color:#111;max-width:640px;margin:0 auto;border:1px solid #ddd">'
     + '<div style="background:#0b0b0b;color:#fff;padding:18px 22px"><div style="font-size:20px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;margin-top:2px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
     + '<div style="padding:20px 22px"><h2 style="margin-top:0">' + escMail(title) + '</h2>' + inner
-    + '<p style="margin-top:18px"><a href="' + APP_URL + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Open the app</a></p>'
-    + '<p style="color:#666;font-size:13px">' + (footer || 'Questions? Text or call (707) 862-3773. Labor only \u2014 you buy materials/parts unless we agree otherwise.') + '</p></div></div>';
+    + '<p style="margin-top:18px"><a href="' + APP_URL + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + (es ? 'Abrir la app' : 'Open the app') + '</a></p>'
+    + '<p style="color:#666;font-size:13px">' + (footer || (es ? '¿Preguntas? Texto o llamada (707) 862-3773. Solo mano de obra \u2014 tú compras los materiales/partes salvo que acordemos otra cosa.' : 'Questions? Text or call (707) 862-3773. Labor only \u2014 you buy materials/parts unless we agree otherwise.')) + '</p></div></div>';
 }
 const WORKER_FOOTER = 'Questions? Text or call the Team: (707) 862-3773.';
+const WORKER_FOOTER_ES = '¿Preguntas? Texto o llamada al Team: (707) 862-3773.';
   const OWNER_FOOTER = 'General Handyman Solutions Team - internal notification.';
-function eventEmail(title, lines, footer) { return mailShell(title, lines.map(l => '<p style="margin:6px 0">' + escMail(l) + '</p>').join(''), footer); }
-function estimateItemsRowsHtml(items) {
+function eventEmail(title, lines, footer, lang) { return mailShell(title, lines.map(l => '<p style="margin:6px 0">' + escMail(l) + '</p>').join(''), footer, lang); }
+// v80.19 IDIOMA: the estimate emails speak the language stamped on the
+// request (or the customer's saved preference — requestAutomationPayload
+// resolves it onto the snapshot). No signal -> English, exactly as before.
+const EST_MAIL = {
+  en: { hi: 'Hi', hereIs: 'here is your estimate for', yourJob: 'your job', inWord: 'in', work: 'Work', qty: 'Qty', each: 'Each', line: 'Line', subtotal: 'Subtotal', materials: 'Materials included', asap: 'ASAP / Emergency (+25%)', memberDisc: 'HomeCare member discount', discount: 'Discount', credit: 'Appointment credit', total: 'Total', dueBook: 'Due to book', balance: 'Balance at completion', validUntil: 'Valid until', reviewBtn: 'Review & approve online', orOpen: 'Or open this link \u2014 no account needed:', pdfNote: 'The same estimate is attached as a PDF.', title: 'Your estimate from General Handyman Solutions', service: 'Service', totalCap: 'TOTAL', reviewLine: 'Review & approve online (no account needed): ', materialsInclLine: 'Materials are included in this estimate. Text/call (707) 862-3773.', laborLine: 'Labor only \u2014 you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.', footerMaterials: 'Questions? Text or call (707) 862-3773. Materials are included in this estimate.', materialTag: '(material)',
+    rTitle: 'Your estimate is still here \u2014 General Handyman Solutions', rNudge: 'Just a friendly nudge \u2014 your estimate for', rWaiting: 'is still waiting for you.', rTotal: 'Estimate total', rValid: 'It stays valid until', rValidTail: '\u2014 after that the Team would need to re-quote it.', rBtn: 'Review & approve your estimate', rNoAcct: 'No account needed \u2014 approve and pay right from the link. Already taken care of, or changed your mind? No problem at all \u2014 just ignore this email; we will not send another one.', rHead: 'a quick reminder about your estimate', rWaitingLine: 'is still waiting.', rIgnore: 'Already taken care of? Just ignore this email \u2014 we will not send another one.', rQuestions: 'Questions? Text/call (707) 862-3773.' },
+  es: { hi: 'Hola', hereIs: 'aqu\u00ed est\u00e1 tu estimado para', yourJob: 'tu trabajo', inWord: 'en', work: 'Trabajo', qty: 'Cant.', each: 'Cada uno', line: 'L\u00ednea', subtotal: 'Subtotal', materials: 'Materiales incluidos', asap: 'ASAP / Urgente (+25%)', memberDisc: 'Descuento de miembro HomeCare', discount: 'Descuento', credit: 'Cr\u00e9dito de la cita', total: 'Total', dueBook: 'Para apartar', balance: 'Saldo al terminar', validUntil: 'V\u00e1lido hasta', reviewBtn: 'Revisar y aprobar en l\u00ednea', orOpen: 'O abre este link \u2014 no necesitas cuenta:', pdfNote: 'El mismo estimado va adjunto como PDF.', title: 'Tu estimado de General Handyman Solutions', service: 'Servicio', totalCap: 'TOTAL', reviewLine: 'Revisa y aprueba en l\u00ednea (sin cuenta): ', materialsInclLine: 'Los materiales est\u00e1n incluidos en este estimado. Texto/llamada (707) 862-3773.', laborLine: 'Solo mano de obra \u2014 t\u00fa compras los materiales/partes salvo acuerdo contrario. Texto/llamada (707) 862-3773.', footerMaterials: '\u00bfPreguntas? Texto o llamada (707) 862-3773. Los materiales est\u00e1n incluidos en este estimado.', materialTag: '(material)',
+    rTitle: 'Tu estimado sigue aqu\u00ed \u2014 General Handyman Solutions', rNudge: 'Solo un recordatorio amable \u2014 tu estimado para', rWaiting: 'sigue esper\u00e1ndote.', rTotal: 'Total del estimado', rValid: 'Sigue v\u00e1lido hasta', rValidTail: '\u2014 despu\u00e9s de eso el Team tendr\u00eda que volver a cotizarlo.', rBtn: 'Revisa y aprueba tu estimado', rNoAcct: 'No necesitas cuenta \u2014 aprueba y paga desde el link. \u00bfYa lo resolviste o cambiaste de idea? Sin problema \u2014 ignora este correo; no enviaremos otro.', rHead: 'un recordatorio r\u00e1pido sobre tu estimado', rWaitingLine: 'sigue esperando.', rIgnore: '\u00bfYa lo resolviste? Ignora este correo \u2014 no enviaremos otro.', rQuestions: '\u00bfPreguntas? Texto/llamada (707) 862-3773.' }
+};
+function estMailLang(rq) { return cleanLang(rq && rq.lang) || 'en'; }
+function estimateItemsRowsHtml(items, lang) {
+  const tag = (EST_MAIL[lang || 'en'] || EST_MAIL.en).materialTag;
   let rows = '';
-  (items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#888;font-size:11px">(material)</span>' : '') + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
+  (items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#888;font-size:11px">' + tag + '</span>' : '') + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
   return rows;
 }
 function estimateEmailHtml(rq) {
+  const lang = estMailLang(rq); const T = EST_MAIL[lang];
   const e = rq.estimate || {};
-  let rows = estimateItemsRowsHtml(e.items);
+  let rows = estimateItemsRowsHtml(e.items, lang);
   let adj = '';
-  if (e.asapAmount > 0) adj += '<p>ASAP / Emergency (+25%): <b>' + usd(e.asapAmount) + '</b></p>';
-  if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
-  if (e.credit > 0) adj += '<p>Appointment credit: <b>-' + usd(e.credit) + '</b></p>';
-  const inner = '<p>Hi ' + escMail(rq.customerName || 'there') + ', here is your estimate for <b>' + escMail(rq.service || 'your job') + '</b>' + (rq.city ? ' in <b>' + escMail(rq.city) + '</b>' : '') + '.</p>'
-    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Work</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(e.subtotal) + '</b></p>'
-    + (estimateHasMaterials(e) ? '<p>Materials included: <b>' + usd(e.materialSubtotal) + '</b></p>' : '') + adj
-    + '<p style="font-size:18px">Total: <b>' + usd(e.total) + '</b></p>'
-    + '<p>Due to book: <b>' + usd(e.bookingDue) + '</b> \u2022 Balance at completion: <b>' + usd(e.balanceDue) + '</b></p>'
-    + (e.validUntil ? '<p>Valid until: <b>' + escMail(e.validUntil) + '</b></p>' : '')
+  if (e.asapAmount > 0) adj += '<p>' + T.asap + ': <b>' + usd(e.asapAmount) + '</b></p>';
+  if (e.discountAmount > 0) adj += '<p>' + (e.memberDiscount ? T.memberDisc : T.discount) + ' (' + escMail(e.discountPct) + '%): <b>-' + usd(e.discountAmount) + '</b></p>';
+  if (e.credit > 0) adj += '<p>' + T.credit + ': <b>-' + usd(e.credit) + '</b></p>';
+  const inner = '<p>' + T.hi + ' ' + escMail(rq.customerName || 'there') + ', ' + T.hereIs + ' <b>' + escMail(rq.service || T.yourJob) + '</b>' + (rq.city ? ' ' + T.inWord + ' <b>' + escMail(rq.city) + '</b>' : '') + '.</p>'
+    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">' + T.work + '</th><th style="padding:6px 8px">' + T.qty + '</th><th style="padding:6px 8px;text-align:right">' + T.each + '</th><th style="padding:6px 8px;text-align:right">' + T.line + '</th></tr>' + rows + '</table>'
+    + '<p>' + T.subtotal + ': <b>' + usd(e.subtotal) + '</b></p>'
+    + (estimateHasMaterials(e) ? '<p>' + T.materials + ': <b>' + usd(e.materialSubtotal) + '</b></p>' : '') + adj
+    + '<p style="font-size:18px">' + T.total + ': <b>' + usd(e.total) + '</b></p>'
+    + '<p>' + T.dueBook + ': <b>' + usd(e.bookingDue) + '</b> \u2022 ' + T.balance + ': <b>' + usd(e.balanceDue) + '</b></p>'
+    + (e.validUntil ? '<p>' + T.validUntil + ': <b>' + escMail(e.validUntil) + '</b></p>' : '')
     + (rq.quoteNote ? '<p>' + escMail(rq.quoteNote) + '</p>' : '')
-    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & approve online</a></p>'
-    + '<p style="color:#666;font-size:13px">Or open this link — no account needed:<br>' + escMail(estimatePageLink(rq)) + '</p>'
-    + '<p>The same estimate is attached as a PDF.</p>';
-  return mailShell('Your estimate from General Handyman Solutions', inner, estimateHasMaterials(e) ? 'Questions? Text or call (707) 862-3773. Materials are included in this estimate.' : undefined);
+    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + T.reviewBtn + '</a></p>'
+    + '<p style="color:#666;font-size:13px">' + T.orOpen + '<br>' + escMail(estimatePageLink(rq)) + '</p>'
+    + '<p>' + T.pdfNote + '</p>';
+  return mailShell(T.title, inner, estimateHasMaterials(e) ? T.footerMaterials : undefined, lang);
 }
 function estimateEmailText(rq) {
+  const lang = estMailLang(rq); const T = EST_MAIL[lang];
   const e = rq.estimate || {};
-  const lines = ['General Handyman Solutions — your estimate (' + rq.id + ')', 'Service: ' + (rq.service || '') + (rq.city ? ' in ' + rq.city : ''), ''];
+  const lines = ['General Handyman Solutions \u2014 ' + (lang === 'es' ? 'tu estimado' : 'your estimate') + ' (' + rq.id + ')', T.service + ': ' + (rq.service || '') + (rq.city ? ' ' + T.inWord + ' ' + rq.city : ''), ''];
   (e.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
-  lines.push('', 'Subtotal: ' + usd(e.subtotal));
-  if (estimateHasMaterials(e)) lines.push('Materials included: ' + usd(e.materialSubtotal));
-  if (e.asapAmount > 0) lines.push('ASAP / Emergency (+25%): ' + usd(e.asapAmount));
-  if (e.discountAmount > 0) lines.push((e.memberDiscount ? 'HomeCare member discount' : 'Discount') + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
-  if (e.credit > 0) lines.push('Appointment credit: -' + usd(e.credit));
-  lines.push('TOTAL: ' + usd(e.total), 'Due to book: ' + usd(e.bookingDue) + ' | Balance at completion: ' + usd(e.balanceDue));
-  if (e.validUntil) lines.push('Valid until: ' + e.validUntil);
-  lines.push('', 'Review & approve online (no account needed): ' + estimatePageLink(rq), estimateHasMaterials(e) ? 'Materials are included in this estimate. Text/call (707) 862-3773.' : 'Labor only — you buy materials/parts unless agreed otherwise. Text/call (707) 862-3773.');
+  lines.push('', T.subtotal + ': ' + usd(e.subtotal));
+  if (estimateHasMaterials(e)) lines.push(T.materials + ': ' + usd(e.materialSubtotal));
+  if (e.asapAmount > 0) lines.push(T.asap + ': ' + usd(e.asapAmount));
+  if (e.discountAmount > 0) lines.push((e.memberDiscount ? T.memberDisc : T.discount) + ' (' + e.discountPct + '%): -' + usd(e.discountAmount));
+  if (e.credit > 0) lines.push(T.credit + ': -' + usd(e.credit));
+  lines.push(T.totalCap + ': ' + usd(e.total), T.dueBook + ': ' + usd(e.bookingDue) + ' | ' + T.balance + ': ' + usd(e.balanceDue));
+  if (e.validUntil) lines.push(T.validUntil + ': ' + e.validUntil);
+  lines.push('', T.reviewLine + estimatePageLink(rq), estimateHasMaterials(e) ? T.materialsInclLine : T.laborLine);
   return lines.join('\n');
 }
 // ---------- v45: the one-shot 48-hour estimate reminder email ----------
 // Gabriel approved this exact exception to his automation stop: ONE
 // reminder per estimate, sent by the app server itself, never two.
 function estimateReminderEmailHtml(rq) {
+  const lang = estMailLang(rq); const T = EST_MAIL[lang];
   const e = rq.estimate || {};
-  const inner = '<p>Hi ' + escMail(rq.customerName || 'there') + ',</p>'
-    + '<p>Just a friendly nudge — your estimate for <b>' + escMail(rq.service || 'your job') + '</b>' + (rq.city ? ' in <b>' + escMail(rq.city) + '</b>' : '') + ' is still waiting for you.</p>'
-    + '<p style="font-size:18px">Estimate total: <b>' + usd(e.total) + '</b></p>'
-    + (e.validUntil ? '<p>It stays valid until <b>' + escMail(e.validUntil) + '</b> — after that the Team would need to re-quote it.</p>' : '')
-    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & approve your estimate</a></p>'
-    + '<p style="color:#666;font-size:13px">No account needed — approve and pay right from the link. Already taken care of, or changed your mind? No problem at all — just ignore this email; we will not send another one.</p>';
-  return mailShell('Your estimate is still here — General Handyman Solutions', inner, estimateHasMaterials(e) ? 'Questions? Text or call (707) 862-3773. Materials are included in this estimate.' : undefined);
+  const inner = '<p>' + T.hi + ' ' + escMail(rq.customerName || 'there') + ',</p>'
+    + '<p>' + T.rNudge + ' <b>' + escMail(rq.service || T.yourJob) + '</b>' + (rq.city ? ' ' + T.inWord + ' <b>' + escMail(rq.city) + '</b>' : '') + ' ' + T.rWaiting + '</p>'
+    + '<p style="font-size:18px">' + T.rTotal + ': <b>' + usd(e.total) + '</b></p>'
+    + (e.validUntil ? '<p>' + T.rValid + ' <b>' + escMail(e.validUntil) + '</b> ' + T.rValidTail + '</p>' : '')
+    + '<p><a href="' + estimatePageLink(rq) + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + T.rBtn + '</a></p>'
+    + '<p style="color:#666;font-size:13px">' + T.rNoAcct + '</p>';
+  return mailShell(T.rTitle, inner, estimateHasMaterials(e) ? T.footerMaterials : undefined, lang);
 }
 function estimateReminderEmailText(rq) {
+  const lang = estMailLang(rq); const T = EST_MAIL[lang];
   const e = rq.estimate || {};
-  const lines = ['General Handyman Solutions — a quick reminder about your estimate (' + rq.id + ')', '',
-    'Your estimate for ' + (rq.service || 'your job') + (rq.city ? ' in ' + rq.city : '') + ' is still waiting.',
-    'Estimate total: ' + usd(e.total)];
-  if (e.validUntil) lines.push('Valid until: ' + e.validUntil);
-  lines.push('', 'Review & approve online (no account needed): ' + estimatePageLink(rq), '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.');
+  const lines = ['General Handyman Solutions \u2014 ' + T.rHead + ' (' + rq.id + ')', '',
+    (lang === 'es' ? 'Tu estimado para ' : 'Your estimate for ') + (rq.service || T.yourJob) + (rq.city ? ' ' + T.inWord + ' ' + rq.city : '') + ' ' + T.rWaitingLine,
+    T.rTotal + ': ' + usd(e.total)];
+  if (e.validUntil) lines.push(T.validUntil + ': ' + e.validUntil);
+  lines.push('', T.reviewLine + estimatePageLink(rq), '', T.rIgnore, T.rQuestions);
   return lines.join('\n');
 }
 // ---------- v80.15 SEGUIMIENTO: follow-up email builders ----------
@@ -899,10 +926,11 @@ function cartReminderEmailText(c) {
   if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; aún no recibimos el depósito y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · Para apartar hoy: ' + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
   return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; we have not received the deposit yet, so your job is not booked yet.', 'Total: ' + usd(total) + ' · Due to book today: ' + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
 }
-// Trial-ending + payment-failed + review-ask emails: the server stores
-// NO per-account language for users/requests (v80.18 unifies idioma
-// later), so these follow the worker_removed precedent — ONE email,
-// EN block then ES block — never the wrong language, never two sends.
+// Trial-ending + payment-failed + review-ask emails: the builders
+// return BOTH language blocks; the dispatcher sends ONE language when
+// the account carries a saved preference (v80.19: u.lang / the request
+// snapshot's lang) and falls back to the bilingual single email when
+// there is no signal — never the wrong language, never two sends.
 function trialEndingEmailParts(p) {
   const usr = p.user || {};
   const first = String(usr.name || '').trim().split(/\s+/)[0] || '';
@@ -970,40 +998,42 @@ async function resendAutomation(type, payload) {
     const rq = p.request || {};
     if (!rq.customerEmail) return { attempted: true, sent: false, reason: 'customer has no email on file' };
     const atts = rq.estimate ? [{ filename: 'estimate-' + rq.id + '.pdf', content: buildEstimatePdf(rq).toString('base64') }] : [];
-    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your estimate from General Handyman Solutions (' + rq.id + ')', html: estimateEmailHtml(rq), text: estimateEmailText(rq), attachments: atts });
+    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: EST_MAIL[estMailLang(rq)].title + ' (' + rq.id + ')', html: estimateEmailHtml(rq), text: estimateEmailText(rq), attachments: atts });
   }
   if (type === 'new_request') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'New customer request: ' + (rq.service || 'job') + (rq.city ? ' - ' + rq.city : ''), html: eventEmail('New customer request', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || '') + ' ' + (rq.customerPhone || ''), 'Service: ' + (rq.service || ''), 'City: ' + (rq.city || ''), 'When: ' + (rq.when || ''), 'Details: ' + (rq.description || '')], OWNER_FOOTER), text: 'New request ' + rq.id }); }
   if (type === 'new_worker') { const w = p.worker || {}; return sendMail({ to: owner, subject: 'New worker application: ' + (w.name || ''), html: eventEmail('New worker application', ['Name: ' + (w.name || ''), 'Email: ' + (w.email || ''), 'Phone: ' + (w.phone || ''), 'Status: ' + (w.status || 'review')], OWNER_FOOTER), text: 'New worker: ' + (w.name || '') }); }
-  if (type === 'worker_activated') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions worker account is ACTIVE', html: eventEmail('You are active - welcome to the team', ['Hi ' + (w.name || 'there') + ',', 'Your worker account is now ACTIVE. You can log into the app and see the open jobs in your area.', 'Every job shows exactly what it pays before you claim it, so you only take the ones that work for you. First active worker to claim gets the job.', 'The Team coordinates everything with the customer and confirms the address and time with you in the app. Questions during a job? Message us right in the job chat.', 'HOW TO LOG IN (save this email): 1) Open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico — it takes you straight to the technician door. 2) Type the email + password from your application. 3) Tap ENTRAR and you will see the open jobs. Forgot your password? On that same screen, type your email and tap the "¿Primera vez o no recuerdas tu contraseña?" button — we email you a link to set a new one.'], WORKER_FOOTER), text: 'Your worker account is ACTIVE. Open the app to see open jobs - every job shows its pay before you claim it. HOW TO LOG IN: open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico, type the email + password from your application, and tap ENTRAR. Forgot your password? Use the button on that screen and we will email you a link to set a new one.' }); }
-  if (type === 'worker_removed') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; const first = String(w.name || '').trim().split(/\s+/)[0] || ''; const en = "Hi " + (first || 'there') + " — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at generalhandymans.app."; const es = "Hola" + (first ? ' ' + first : '') + " — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en generalhandymans.app."; return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, es, '— The Team'], WORKER_FOOTER), text: en + '\n\n' + es + '\n\n— The Team · (707) 862-3773' }); }
-  if (type === 'job_posted') { const j = p.job || {}; const ws = (p.workers || []).filter(w => w.email); if (!ws.length) return { attempted: true, sent: false, reason: 'no matching worker emails' }; let sentCount = 0; for (const w of ws) { const r = await sendMail({ to: [w.email], subject: 'New job posted: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('New job in your area', ['Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app to claim it - first active worker to claim gets it.'], WORKER_FOOTER), text: 'New job pays ' + usd(j.payOffer) }); if (r.sent) sentCount++; } return { attempted: true, sent: sentCount > 0, via: 'resend', emailed: sentCount }; }
-  if (type === 'job_direct_offer') { const j = p.job || {}; const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; return sendMail({ to: [w.email], subject: 'Direct job offer for you: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('The Team offered you a job directly', ['Hi ' + (w.name || 'there') + ',', 'This job was assigned to YOU — it is not on the open board.', 'Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app — the job is already in your jobs list. The Team confirms the address and time with you there.'], WORKER_FOOTER), text: 'Direct job offer: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pays ' + usd(j.payOffer) + '. It is already in your jobs list in the app.' }); }
+  if (type === 'worker_activated') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; if (cleanLang(w.lang) === 'es') return sendMail({ to: [w.email], subject: 'Tu cuenta de técnico de General Handyman Solutions está ACTIVA', html: eventEmail('Ya estás activo - bienvenido al equipo', ['Hola ' + (w.name || '') + ',', 'Tu cuenta de técnico ya está ACTIVA. Entra a la app y mira los trabajos abiertos en tu área.', 'Cada trabajo muestra exactamente cuánto paga antes de que lo tomes, así que solo agarras los que te convienen. El primer técnico activo que lo toma se lo queda.', 'El Team coordina todo con el cliente y te confirma la dirección y la hora contigo en la app. ¿Dudas durante un trabajo? Escríbenos en el chat del trabajo.', 'CÓMO ENTRAR (guarda este correo): 1) Abre ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico — te lleva directo a la puerta de técnicos. 2) Escribe el correo + contraseña de tu aplicación. 3) Toca ENTRAR y verás los trabajos abiertos. ¿Olvidaste tu contraseña? En esa misma pantalla, escribe tu correo y toca el botón "¿Primera vez o no recuerdas tu contraseña?" — te mandamos un link para crear una nueva.'], WORKER_FOOTER_ES, 'es'), text: 'Tu cuenta de técnico está ACTIVA. Abre la app para ver trabajos abiertos - cada trabajo muestra su paga antes de que lo tomes. CÓMO ENTRAR: abre ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico, escribe el correo + contraseña de tu aplicación y toca ENTRAR. ¿Olvidaste tu contraseña? Usa el botón en esa pantalla y te mandamos un link para crear una nueva.' }); return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions worker account is ACTIVE', html: eventEmail('You are active - welcome to the team', ['Hi ' + (w.name || 'there') + ',', 'Your worker account is now ACTIVE. You can log into the app and see the open jobs in your area.', 'Every job shows exactly what it pays before you claim it, so you only take the ones that work for you. First active worker to claim gets the job.', 'The Team coordinates everything with the customer and confirms the address and time with you in the app. Questions during a job? Message us right in the job chat.', 'HOW TO LOG IN (save this email): 1) Open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico — it takes you straight to the technician door. 2) Type the email + password from your application. 3) Tap ENTRAR and you will see the open jobs. Forgot your password? On that same screen, type your email and tap the "¿Primera vez o no recuerdas tu contraseña?" button — we email you a link to set a new one.'], WORKER_FOOTER), text: 'Your worker account is ACTIVE. Open the app to see open jobs - every job shows its pay before you claim it. HOW TO LOG IN: open ' + (p.appUrl || 'https://generalhandymans.app') + '/tecnico, type the email + password from your application, and tap ENTRAR. Forgot your password? Use the button on that screen and we will email you a link to set a new one.' }); }
+  if (type === 'worker_removed') { const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; const first = String(w.name || '').trim().split(/\s+/)[0] || ''; const en = "Hi " + (first || 'there') + " — this is the General Handyman Solutions Team. Your technician account has been removed. Thank you for applying and for your time. If you'd like to apply again in the future, you're welcome to — you can re-apply anytime at generalhandymans.app."; const es = "Hola" + (first ? ' ' + first : '') + " — somos el equipo de General Handyman Solutions. Tu cuenta de técnico ha sido eliminada. Gracias por aplicar y por tu tiempo. Si en el futuro deseas aplicar de nuevo, eres bienvenido — puedes hacerlo cuando quieras en generalhandymans.app."; const wl = cleanLang(w.lang); if (wl === 'es') return sendMail({ to: [w.email], subject: 'Tu cuenta de técnico de General Handyman Solutions', html: eventEmail('Tu cuenta de técnico ha sido eliminada', [es, '— The Team'], WORKER_FOOTER_ES, 'es'), text: es + '\n\n— The Team · (707) 862-3773' }); if (wl === 'en') return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, '— The Team'], WORKER_FOOTER), text: en + '\n\n— The Team · (707) 862-3773' }); return sendMail({ to: [w.email], subject: 'Your General Handyman Solutions technician account', html: eventEmail('Your technician account has been removed', [en, es, '— The Team'], WORKER_FOOTER), text: en + '\n\n' + es + '\n\n— The Team · (707) 862-3773' }); }
+  if (type === 'job_posted') { const j = p.job || {}; const ws = (p.workers || []).filter(w => w.email); if (!ws.length) return { attempted: true, sent: false, reason: 'no matching worker emails' }; let sentCount = 0; for (const w of ws) { const r = cleanLang(w.lang) === 'es'
+      ? await sendMail({ to: [w.email], subject: 'Nuevo trabajo publicado: ' + (j.service || 'Trabajo') + (j.city ? ' - ' + j.city : '') + ' - Paga ' + usd(j.payOffer), html: eventEmail('Nuevo trabajo en tu área', ['Servicio: ' + (j.service || ''), 'Ciudad: ' + (j.city || ''), 'Cuándo: ' + (j.when || 'Por confirmar'), 'Este trabajo te paga: ' + usd(j.payOffer), (j.description || ''), 'Abre la app para tomarlo - el primer técnico activo que lo toma se lo queda.'], WORKER_FOOTER_ES, 'es'), text: 'Nuevo trabajo paga ' + usd(j.payOffer) })
+      : await sendMail({ to: [w.email], subject: 'New job posted: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('New job in your area', ['Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app to claim it - first active worker to claim gets it.'], WORKER_FOOTER), text: 'New job pays ' + usd(j.payOffer) }); if (r.sent) sentCount++; } return { attempted: true, sent: sentCount > 0, via: 'resend', emailed: sentCount }; }
+  if (type === 'job_direct_offer') { const j = p.job || {}; const w = p.worker || {}; if (!w.email) return { attempted: true, sent: false, reason: 'worker has no email' }; if (cleanLang(w.lang) === 'es') return sendMail({ to: [w.email], subject: 'Oferta de trabajo directa para ti: ' + (j.service || 'Trabajo') + (j.city ? ' - ' + j.city : '') + ' - Paga ' + usd(j.payOffer), html: eventEmail('El Team te ofreció un trabajo directamente', ['Hola ' + (w.name || '') + ',', 'Este trabajo se te asignó a TI — no está en el tablero abierto.', 'Servicio: ' + (j.service || ''), 'Ciudad: ' + (j.city || ''), 'Cuándo: ' + (j.when || 'Por confirmar'), 'Este trabajo te paga: ' + usd(j.payOffer), (j.description || ''), 'Abre la app — el trabajo ya está en tu lista. El Team te confirma la dirección y la hora contigo ahí.'], WORKER_FOOTER_ES, 'es'), text: 'Oferta directa: ' + (j.service || 'Trabajo') + (j.city ? ' en ' + j.city : '') + ' — paga ' + usd(j.payOffer) + '. Ya está en tu lista de trabajos en la app.' }); return sendMail({ to: [w.email], subject: 'Direct job offer for you: ' + (j.service || 'Job') + (j.city ? ' - ' + j.city : '') + ' - Pays ' + usd(j.payOffer), html: eventEmail('The Team offered you a job directly', ['Hi ' + (w.name || 'there') + ',', 'This job was assigned to YOU — it is not on the open board.', 'Service: ' + (j.service || ''), 'City: ' + (j.city || ''), 'When: ' + (j.when || 'TBD'), 'This job pays you: ' + usd(j.payOffer), (j.description || ''), 'Open the app — the job is already in your jobs list. The Team confirms the address and time with you there.'], WORKER_FOOTER), text: 'Direct job offer: ' + (j.service || 'Job') + (j.city ? ' in ' + j.city : '') + ' — pays ' + usd(j.payOffer) + '. It is already in your jobs list in the app.' }); }
   if (type === 'job_claimed') { const j = p.job || {}; const to = owner.slice(); if (p.customer && p.customer.email) to.push(p.customer.email); return sendMail({ to: to, subject: 'Job claimed: ' + (j.service || '') + (j.city ? ' - ' + j.city : ''), html: eventEmail('A worker claimed the job', ['Job: ' + (j.service || '') + ' in ' + (j.city || ''), 'Worker: ' + ((p.worker || {}).name || ''), 'Status: ' + (j.status || 'Claimed'), 'Open the app for the job chat with the Team and your worker.']), text: 'Job claimed.' }); }
   if (type === 'quote_decision') { const rq = p.request || {}; return sendMail({ to: owner, subject: 'Customer ' + (p.decision || 'answered') + ' the quote on ' + rq.id, html: eventEmail('Quote ' + (p.decision || ''), ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Service: ' + (rq.service || '') + ' ' + (rq.city || ''), 'Quote: ' + usd(rq.quote || (rq.estimate && rq.estimate.total) || 0)], OWNER_FOOTER), text: 'Quote ' + (p.decision || '') }); }
-  if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
-  if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($29/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $50 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($29/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
-  if (type === 'homecare_cancelled') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'HomeCare membership cancelled', html: eventEmail('HomeCare cancelled', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership has been cancelled.', 'You can rejoin anytime from your dashboard — we would love to have you back.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Your HomeCare membership has been cancelled. Rejoin anytime from your dashboard.' }); }
+  if (type === 'payment_received') { const rq = p.request || {}; const cust = (p.request && p.request.customerEmail) || ''; const out = []; if (cust && cleanLang(rq.lang) === 'es') out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Pago recibido — tu cita está apartada (' + rq.id + ')', html: eventEmail('Pago recibido', ['Recibimos tu pago de ' + usd(p.paidAmount || 0) + ' por la solicitud ' + rq.id + '.', 'Tu cita está apartada. El Team te confirma tu hora contigo aquí en la app.', 'Solo mano de obra — tú compras los materiales/partes salvo acuerdo contrario.'], undefined, 'es'), text: 'Pago recibido: ' + usd(p.paidAmount || 0) + ' en la solicitud ' + rq.id + '. Tu cita está apartada. Solo mano de obra — tú compras los materiales/partes.' })); else if (cust) out.push(await sendMail({ to: [cust], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — your appointment is secured (' + rq.id + ')', html: eventEmail('Payment received', ['We received your payment of ' + usd(p.paidAmount || 0) + ' for request ' + rq.id + '.', 'Your appointment is secured. The Team will confirm your time with you here in the app.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Payment received: ' + usd(p.paidAmount || 0) + ' on request ' + rq.id + '. Your appointment is secured. Labor only — you buy materials/parts.' })); out.push(await sendMail({ to: owner, subject: 'Payment received: ' + usd(p.paidAmount || 0) + ' on ' + rq.id, html: eventEmail('Payment received', ['Request ' + rq.id, 'Customer: ' + (rq.customerName || ''), 'Amount: ' + usd(p.paidAmount || 0)], OWNER_FOOTER), text: 'Payment ' + usd(p.paidAmount || 0) + ' on ' + rq.id })); return { attempted: true, sent: out.some(x => x.sent), via: 'resend' }; }
+  if (type === 'homecare_welcome') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; if (cleanLang(usr.lang) === 'es') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Bienvenido a HomeCare — tu primer estimado es gratis', html: eventEmail('Bienvenido a HomeCare', ['Hola ' + (usr.name || '') + ', tu membresía HomeCare ($29/mes) ya está activa.', 'Tu primer estimado en persona es GRATIS — pídelo desde tu panel cuando quieras.', 'Después: los estimados de miembro cuestan $50 (en vez de $75), 20% menos en mano de obra en trabajos bajo $1,000, y agenda prioritaria.', 'Puedes cancelar cuando quieras desde tu panel — sin penalidades, sin letra chica.', 'Solo mano de obra — tú compras los materiales/partes salvo acuerdo contrario.'], undefined, 'es'), text: 'Bienvenido a HomeCare ($29/mes). Tu primer estimado en persona es GRATIS. Cancela cuando quieras. Solo mano de obra — tú compras los materiales/partes.' }); return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Welcome to HomeCare — your first estimate is free', html: eventEmail('Welcome to HomeCare', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership ($29/month) is now active.', 'Your first in-person estimate is FREE — request it from your dashboard whenever you are ready.', 'After that: member estimates are $50 (instead of $75), 20% off labor on jobs under $1,000, and priority scheduling.', 'You can cancel anytime from your dashboard — no penalties, no fine print.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Welcome to HomeCare ($29/month). Your first in-person estimate is FREE. Cancel anytime. Labor only — you buy materials/parts.' }); }
+  if (type === 'homecare_cancelled') { const usr = p.user || {}; if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' }; if (cleanLang(usr.lang) === 'es') return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'Membresía HomeCare cancelada', html: eventEmail('HomeCare cancelado', ['Hola ' + (usr.name || '') + ', tu membresía HomeCare ha sido cancelada.', 'Puedes volver cuando quieras desde tu panel — nos encantaría tenerte de vuelta.', 'Solo mano de obra — tú compras los materiales/partes salvo acuerdo contrario.'], undefined, 'es'), text: 'Tu membresía HomeCare ha sido cancelada. Vuelve cuando quieras desde tu panel.' }); return sendMail({ to: [usr.email], replyTo: OWNER_EMAIL, subject: 'HomeCare membership cancelled', html: eventEmail('HomeCare cancelled', ['Hi ' + (usr.name || 'there') + ', your HomeCare membership has been cancelled.', 'You can rejoin anytime from your dashboard — we would love to have you back.', 'Labor only — you buy materials/parts unless we agree otherwise.']), text: 'Your HomeCare membership has been cancelled. Rejoin anytime from your dashboard.' }); }
   if (type === 'invoice_sent') {
     const inv = p.invoice || {};
     if (!inv.customerEmail) return { attempted: true, sent: false, reason: 'invoice has no customer email' };
-    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your invoice from General Handyman Solutions (' + inv.id + ') — ' + usd(inv.total || 0) + ' due', html: invoiceEmailHtml(inv), text: invoiceEmailText(inv) });
+    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: (invoiceMailLang(inv) === 'es' ? ('Tu factura de General Handyman Solutions (' + inv.id + ') — ' + usd(inv.total || 0) + ' a pagar') : ('Your invoice from General Handyman Solutions (' + inv.id + ') — ' + usd(inv.total || 0) + ' due')), html: invoiceEmailHtml(inv), text: invoiceEmailText(inv) });
   }
   if (type === 'invoice_paid') {
     const inv = p.invoice || {};
     const out = [];
-    if (inv.customerEmail) out.push(await sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment received — invoice ' + inv.id + ' paid in full', html: eventEmail('Invoice paid — thank you', ['Invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is now PAID IN FULL.', 'Payment method: ' + (inv.paidMethod || 'card') + '.', 'Thank you for your business! If you need anything else, just reply to this email or text (707) 862-3773.']), text: 'Invoice ' + inv.id + ' paid in full (' + usd(inv.total || 0) + '). Thank you!' }));
+    if (inv.customerEmail) { const il = invoiceMailLang(inv); out.push(await sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: il === 'es' ? ('Pago recibido — factura ' + inv.id + ' pagada por completo') : ('Payment received — invoice ' + inv.id + ' paid in full'), html: il === 'es' ? eventEmail('Factura pagada — gracias', ['La factura ' + inv.id + ' (' + usd(inv.total || 0) + ') ya está PAGADA POR COMPLETO.', 'Método de pago: ' + (inv.paidMethod || 'tarjeta') + '.', '¡Gracias por tu negocio! Si necesitas algo más, responde a este correo o manda texto al (707) 862-3773.'], undefined, 'es') : eventEmail('Invoice paid — thank you', ['Invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is now PAID IN FULL.', 'Payment method: ' + (inv.paidMethod || 'card') + '.', 'Thank you for your business! If you need anything else, just reply to this email or text (707) 862-3773.']), text: il === 'es' ? ('Factura ' + inv.id + ' pagada por completo (' + usd(inv.total || 0) + '). ¡Gracias!') : ('Invoice ' + inv.id + ' paid in full (' + usd(inv.total || 0) + '). Thank you!') })); }
     out.push(await sendMail({ to: [OWNER_EMAIL], subject: 'Invoice PAID: ' + inv.id + ' — ' + usd(inv.total || 0), html: eventEmail('Invoice paid', ['Invoice ' + inv.id, 'Customer: ' + (inv.customerName || '') + ' ' + (inv.customerEmail || ''), 'Amount: ' + usd(inv.total || 0), 'Method: ' + (inv.paidMethod || 'card')], OWNER_FOOTER), text: 'Invoice ' + inv.id + ' paid: ' + usd(inv.total || 0) }));
     return { attempted: true, sent: out.some(x => x.sent), via: 'resend' };
   }
   if (type === 'estimate_reminder') {
     const rq = p.request || {};
     if (!rq.customerEmail) return { attempted: true, sent: false, reason: 'customer has no email on file' };
-    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Reminder: your estimate (' + rq.id + ') is still waiting — General Handyman Solutions', html: estimateReminderEmailHtml(rq), text: estimateReminderEmailText(rq) });
+    return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: estMailLang(rq) === 'es' ? ('Recordatorio: tu estimado (' + rq.id + ') sigue esperando — General Handyman Solutions') : ('Reminder: your estimate (' + rq.id + ') is still waiting — General Handyman Solutions'), html: estimateReminderEmailHtml(rq), text: estimateReminderEmailText(rq) });
   }
   if (type === 'invoice_reminder') {
     const inv = p.invoice || {};
     if (!inv.customerEmail) return { attempted: true, sent: false, reason: 'invoice has no customer email' };
-    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment reminder: invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is still unpaid', html: invoiceReminderEmailHtml(inv), text: invoiceReminderEmailText(inv) });
+    return sendMail({ to: [inv.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: (invoiceMailLang(inv) === 'es' ? ('Recordatorio de pago: factura ' + inv.id + ' (' + usd(inv.total || 0) + ') sigue sin pagar') : ('Payment reminder: invoice ' + inv.id + ' (' + usd(inv.total || 0) + ') is still unpaid')), html: invoiceReminderEmailHtml(inv), text: invoiceReminderEmailText(inv) });
   }
   if (type === 'cart_reminder') {
     const c = p.cart || {};
@@ -1015,12 +1045,20 @@ async function resendAutomation(type, payload) {
     const usr = p.user || {};
     if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' };
     const parts = trialEndingEmailParts(p);
+    const lang = cleanLang(usr.lang);
+    // v80.19: a saved preference gets ONE language; no preference keeps
+    // the bilingual single email (never the wrong language, never two).
+    if (lang === 'es') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Tu mes gratis de HomeCare termina pronto', html: eventEmail('Tu mes gratis está por terminar', [parts.es, '— The Team'], undefined, 'es'), text: parts.es + '\n\n— The Team · (707) 862-3773' });
+    if (lang === 'en') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your free HomeCare month ends soon', html: eventEmail('Your free month is almost over', [parts.en, '— The Team']), text: parts.en + '\n\n— The Team · (707) 862-3773' });
     return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto', html: eventEmail('Your free month is almost over · Tu mes gratis está por terminar', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
   }
   if (type === 'payment_failed') {
     const usr = p.user || {};
     if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' };
     const parts = paymentFailedEmailParts(p);
+    const lang = cleanLang(usr.lang);
+    if (lang === 'es') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Pago fallido — actualiza tu tarjeta', html: eventEmail('Tu pago falló', [parts.es, '— The Team'], undefined, 'es'), text: parts.es + '\n\n— The Team · (707) 862-3773' });
+    if (lang === 'en') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment failed — please update your card', html: eventEmail('Your payment failed', [parts.en, '— The Team']), text: parts.en + '\n\n— The Team · (707) 862-3773' });
     return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Payment failed — please update your card · Pago fallido — actualiza tu tarjeta', html: eventEmail('Your payment failed · Tu pago falló', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
   }
   if (type === 'review_request') {
@@ -1028,6 +1066,9 @@ async function resendAutomation(type, payload) {
     if (!rq.customerEmail) return { attempted: true, sent: false, reason: 'customer has no email on file' };
     if (!p.reviewUrl) return { attempted: true, sent: false, reason: 'no google review link configured' };
     const parts = reviewAskEmailParts(p);
+    const lang = cleanLang(rq.lang);
+    if (lang === 'es') return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: '¡Gracias! ¿Cómo lo hicimos?', html: eventEmail('¡Gracias!', [parts.es, '— The Team'], undefined, 'es'), text: parts.es + '\n\n— The Team · (707) 862-3773' });
+    if (lang === 'en') return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Thank you! How did we do?', html: eventEmail('Thank you!', [parts.en, '— The Team']), text: parts.en + '\n\n— The Team · (707) 862-3773' });
     return sendMail({ to: [rq.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?', html: eventEmail('Thank you! · ¡Gracias!', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
   }
   return { attempted: false, sent: false, reason: 'no email template for ' + type };
@@ -1784,7 +1825,7 @@ function sweepFollowups() {
     }).slice(0, 10);
     for (const u of dueTrial) {
       try {
-        const res = await sendAutomation('trial_ending', { user: { name: u.name, email: u.email }, trialEnd: new Date(trialEndMsFor(u)).toISOString(), appUrl: APP_URL });
+        const res = await sendAutomation('trial_ending', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, trialEnd: new Date(trialEndMsFor(u)).toISOString(), appUrl: APP_URL });
         if (res && res.sent) { u.trialEndRemindedAt = new Date().toISOString(); audit(null, 'trial.reminder', u.id, 'trial-ending email sent; first $29 charge lands ' + new Date(trialEndMsFor(u)).toISOString().slice(0, 10)); dirty = true; }
       } catch (err) { console.error('trial reminder failed', u.id, err.message); }
     }
@@ -2341,7 +2382,7 @@ function activateHomeCare(u, isFirst) {
     if (!hadMembership) u.freeEstimateUsed = false; // fresh membership gets its free first estimate
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
-    fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, appUrl: APP_URL });
   } else {
     notify(u.id, 'membership', 'Your HomeCare payment went through — your membership is active again with all member benefits.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') HomeCare payment succeeded — membership active.');
@@ -2370,7 +2411,7 @@ function activateHomeCareFromCheckout(u, session) {
   if (!alreadyActiveHere) {
     notify(u.id, 'membership', 'Welcome to HomeCare! Your membership is active. Your first in-person estimate is FREE — request it from your dashboard.', '#memberships');
     notifyAdmins('membership', u.name + ' (' + u.email + ') joined HomeCare ($29/mo).');
-    fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+    fireAutomation('homecare_welcome', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, appUrl: APP_URL });
   }
   return !alreadyActiveHere;
 }
@@ -3393,7 +3434,7 @@ async function handleStripeEvent(event) {
       } else {
         notify(u.id, 'membership', 'Your HomeCare membership has been cancelled. You can rejoin anytime from your dashboard.', '#memberships');
         notifyAdmins('membership', u.name + ' (' + u.email + ') cancelled HomeCare.');
-        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, appUrl: APP_URL });
       }
     }
   } else if (type === 'customer.subscription.updated') {
@@ -3429,7 +3470,7 @@ async function handleStripeEvent(event) {
         setMembershipPlan(u, 'homecare', { status: 'cancelled', subscriptionId: u.stripeSubscriptionId || '', since: u.homeCareSince || null, cancelAt: u.homeCareCancelAt });
         notify(u.id, 'payment', 'Your HomeCare payment failed, so your membership was paused. Update your card and rejoin from your dashboard to get your member benefits back.', '#memberships');
         notifyAdmins('payment', 'HomeCare payment FAILED for ' + u.name + ' (' + u.email + ') — membership paused.');
-        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email }, appUrl: APP_URL });
+        fireAutomation('homecare_cancelled', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, appUrl: APP_URL });
       }
     }
     // v80.15: ONE clear email per failure event — what failed, how
@@ -3437,7 +3478,7 @@ async function handleStripeEvent(event) {
     // notified in-app and, for HomeCare, sent the cancellation
     // template, which never says "payment failed — fix your card").
     // Fires exactly where the failure is recorded: once per event.
-    if (u && (u.email || '').includes('@')) fireAutomation('payment_failed', { user: { name: u.name, email: u.email }, amountCents: Math.max(0, Math.round(Number(obj.amount_due) || 0)), appUrl: APP_URL });
+    if (u && (u.email || '').includes('@')) fireAutomation('payment_failed', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, amountCents: Math.max(0, Math.round(Number(obj.amount_due) || 0)), appUrl: APP_URL });
   } else if (type === 'invoice.payment_succeeded') {
     // Payment recovered (e.g. after a retry or a rejoin): restore member status.
     // Also the backup activator for the inline "New HomeCare member" card flow.
@@ -3522,6 +3563,10 @@ async function handleStripeEvent(event) {
 function money(v) { const n = Number(v); return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0; }
 function clampMoney(v) { return Math.max(0, money(v)); }
 function cleanText(v, max) { return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max || 500); }
+// v80.19 IDIOMA: the account's saved language preference ('es' | 'en';
+// null = never chosen — every surface keeps its legacy default).
+function cleanLang(v) { return (v === 'es' || v === 'en') ? v : null; }
+function userLangOf(u) { return u ? cleanLang(u.lang) : null; }
 function cleanDate(v) { const s = String(v == null ? '' : v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
 // Home details (added 2026-10-21): optional customer-supplied facts about the
 // home the Team will service. ZIP is NEVER required (Gabriel's call) — it
@@ -3696,54 +3741,70 @@ function invoicePayLink(inv) { return appBase() + '/invoice/' + inv.id; }
 function publicInvoice(inv) {
   return { id: inv.id, customerName: inv.customerName || '', customerEmail: inv.customerEmail || '', emailInvalid: !!inv.emailInvalid, customerPhone: inv.customerPhone || '', jobId: inv.jobId || '', requestId: inv.requestId || '', items: inv.items || [], subtotal: inv.subtotal || 0, discount: inv.discount || 0, total: inv.total || 0, status: inv.status || 'draft', notes: inv.notes || '', dueDate: inv.dueDate || '', payLink: invoicePayLink(inv), createdAt: inv.createdAt || '', updatedAt: inv.updatedAt || null, sentAt: inv.sentAt || null, paidAt: inv.paidAt || null, paidMethod: inv.paidMethod || '', paidAmount: inv.paidAmount || 0, tip: inv.tip || 0, remindedAt: inv.remindedAt || null, reminderCount: inv.reminderCount || 0, preferredDate: inv.preferredDate || '', preferredTime: inv.preferredTime || '', scheduleNotes: inv.scheduleNotes || '', scheduleRequestedAt: inv.scheduleRequestedAt || null, confirmedDate: inv.confirmedDate || '', confirmedTime: inv.confirmedTime || '' };
 }
-function invoiceEmailHtml(inv) {
+// v80.19 IDIOMA: invoice emails resolve their language from the
+// customer's account (matched by the invoice email); no account or no
+// preference -> English, exactly as before.
+const INV_MAIL = {
+  en: { hi: 'Hi', hereIs: 'here is your invoice', from: 'from General Handyman Solutions.', desc: 'Description', qty: 'Qty', each: 'Each', line: 'Line', subtotal: 'Subtotal', discount: 'Discount', totalDue: 'Total due', dueDate: 'Due date', payNow: 'Pay', nowWord: 'now', orOpen: 'Or open this link to pay securely online:', title: 'Your invoice from General Handyman Solutions', footerQ: 'Questions about this invoice? Text or call (707) 862-3773. Thank you for your business!', customer: 'Customer', totalDueCap: 'TOTAL DUE', payLine: 'Pay securely online: ', questions: 'Questions? Text/call (707) 862-3773.',
+    rIntro1: 'This is a friendly reminder that invoice', rIntro2: 'is still unpaid', rDueWord: 'due', rDisregard: 'If you already paid, please disregard this message \u2014 and thank you!', rTitlePre: 'Payment reminder \u2014 invoice ', rStill: ' still unpaid', rHeadCap: 'PAYMENT REMINDER', rFor: 'for', rIsStill: 'is still unpaid.', rSettle: 'Please settle this at your earliest convenience so we can close out your job. If something looks wrong on the invoice, just reply to this email and we will make it right.', rAlready: 'Already paid? Please disregard this message.' },
+  es: { hi: 'Hola', hereIs: 'aqu\u00ed est\u00e1 tu factura', from: 'de General Handyman Solutions.', desc: 'Descripci\u00f3n', qty: 'Cant.', each: 'Cada uno', line: 'L\u00ednea', subtotal: 'Subtotal', discount: 'Descuento', totalDue: 'Total a pagar', dueDate: 'Fecha de vencimiento', payNow: 'Pagar', nowWord: 'ahora', orOpen: 'O abre este link para pagar en l\u00ednea de forma segura:', title: 'Tu factura de General Handyman Solutions', footerQ: '\u00bfPreguntas sobre esta factura? Texto o llamada (707) 862-3773. \u00a1Gracias por tu negocio!', customer: 'Cliente', totalDueCap: 'TOTAL A PAGAR', payLine: 'Paga en l\u00ednea de forma segura: ', questions: '\u00bfPreguntas? Texto/llamada (707) 862-3773.',
+    rIntro1: 'Este es un recordatorio amable de que la factura', rIntro2: 'sigue sin pagar', rDueWord: 'venc\u00eda', rDisregard: 'Si ya pagaste, ignora este mensaje \u2014 \u00a1y gracias!', rTitlePre: 'Recordatorio de pago \u2014 factura ', rStill: ' sigue sin pagar', rHeadCap: 'RECORDATORIO DE PAGO', rFor: 'por', rIsStill: 'sigue sin pagar.', rSettle: 'Por favor paga cuando puedas para cerrar tu trabajo. Si algo se ve mal en la factura, responde a este correo y lo arreglamos.', rAlready: '\u00bfYa pagaste? Ignora este mensaje.' }
+};
+function invoiceMailLang(inv) { const em = String((inv && inv.customerEmail) || '').toLowerCase(); if (!em) return 'en'; const u = db.users.find(x => (x.email || '').toLowerCase() === em); return userLangOf(u) || 'en'; }
+function invoiceRowsHtml(inv, T) {
   let rows = '';
   (inv.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
-  const inner = '<p>Hi ' + escMail(inv.customerName || 'there') + ', here is your invoice <b>' + escMail(inv.id) + '</b> from General Handyman Solutions.</p>'
-    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Description</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(inv.subtotal) + '</b></p>'
-    + (inv.discount > 0 ? '<p>Discount: <b>-' + usd(inv.discount) + '</b></p>' : '')
-    + '<p style="font-size:18px">Total due: <b>' + usd(inv.total) + '</b></p>'
-    + (inv.dueDate ? '<p>Due date: <b>' + escMail(inv.dueDate) + '</b></p>' : '')
-    + (inv.notes ? '<p>' + escMail(inv.notes) + '</p>' : '')
-    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Pay ' + usd(inv.total) + ' now</a></p>'
-    + '<p style="color:#666;font-size:13px">Or open this link to pay securely online:<br>' + escMail(invoicePayLink(inv)) + '</p>';
-  return mailShell('Your invoice from General Handyman Solutions', inner, 'Questions about this invoice? Text or call (707) 862-3773. Thank you for your business!');
+  return rows;
 }
-function invoiceEmailText(inv) {
-  const lines = ['General Handyman Solutions — invoice ' + inv.id, 'Customer: ' + (inv.customerName || ''), ''];
+function invoiceTableHtml(inv, T) { return '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">' + T.desc + '</th><th style="padding:6px 8px">' + T.qty + '</th><th style="padding:6px 8px;text-align:right">' + T.each + '</th><th style="padding:6px 8px;text-align:right">' + T.line + '</th></tr>' + invoiceRowsHtml(inv, T) + '</table>'; }
+function invoiceEmailHtml(inv, lang) {
+  const L = lang || invoiceMailLang(inv); const T = INV_MAIL[L] || INV_MAIL.en;
+  const inner = '<p>' + T.hi + ' ' + escMail(inv.customerName || 'there') + ', ' + T.hereIs + ' <b>' + escMail(inv.id) + '</b> ' + T.from + '</p>'
+    + invoiceTableHtml(inv, T)
+    + '<p>' + T.subtotal + ': <b>' + usd(inv.subtotal) + '</b></p>'
+    + (inv.discount > 0 ? '<p>' + T.discount + ': <b>-' + usd(inv.discount) + '</b></p>' : '')
+    + '<p style="font-size:18px">' + T.totalDue + ': <b>' + usd(inv.total) + '</b></p>'
+    + (inv.dueDate ? '<p>' + T.dueDate + ': <b>' + escMail(inv.dueDate) + '</b></p>' : '')
+    + (inv.notes ? '<p>' + escMail(inv.notes) + '</p>' : '')
+    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + T.payNow + ' ' + usd(inv.total) + ' ' + T.nowWord + '</a></p>'
+    + '<p style="color:#666;font-size:13px">' + T.orOpen + '<br>' + escMail(invoicePayLink(inv)) + '</p>';
+  return mailShell(T.title, inner, T.footerQ, L);
+}
+function invoiceEmailText(inv, lang) {
+  const L = lang || invoiceMailLang(inv); const T = INV_MAIL[L] || INV_MAIL.en;
+  const lines = ['General Handyman Solutions \u2014 ' + (L === 'es' ? 'factura ' : 'invoice ') + inv.id, T.customer + ': ' + (inv.customerName || ''), ''];
   (inv.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
-  lines.push('', 'Subtotal: ' + usd(inv.subtotal));
-  if (inv.discount > 0) lines.push('Discount: -' + usd(inv.discount));
-  lines.push('TOTAL DUE: ' + usd(inv.total));
-  if (inv.dueDate) lines.push('Due date: ' + inv.dueDate);
+  lines.push('', T.subtotal + ': ' + usd(inv.subtotal));
+  if (inv.discount > 0) lines.push(T.discount + ': -' + usd(inv.discount));
+  lines.push(T.totalDueCap + ': ' + usd(inv.total));
+  if (inv.dueDate) lines.push(T.dueDate + ': ' + inv.dueDate);
   if (inv.notes) lines.push('', inv.notes);
-  lines.push('', 'Pay securely online: ' + invoicePayLink(inv), 'Questions? Text/call (707) 862-3773.');
+  lines.push('', T.payLine + invoicePayLink(inv), T.questions);
   return lines.join('\n');
 }
 // Manual payment reminder email (added 2026-10-12): polite but firm. Only sent
-// when the admin presses "Remind" — there is no automatic reminder schedule.
-function invoiceReminderEmailHtml(inv) {
-  let rows = '';
-  (inv.items || []).forEach(it => { rows += '<tr><td style="padding:6px 8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:6px 8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>'; });
-  const inner = '<p>Hi ' + escMail(inv.customerName || 'there') + ',</p>'
-    + '<p>This is a friendly reminder that invoice <b>' + escMail(inv.id) + '</b> for <b>' + usd(inv.total) + '</b> is still unpaid' + (inv.dueDate ? ' (due <b>' + escMail(inv.dueDate) + '</b>)' : '') + '.</p>'
-    + '<p>If you already paid, please disregard this message — and thank you!</p>'
-    + '<table style="border-collapse:collapse;width:100%"><tr><th style="text-align:left;padding:6px 8px">Description</th><th style="padding:6px 8px">Qty</th><th style="padding:6px 8px;text-align:right">Each</th><th style="padding:6px 8px;text-align:right">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(inv.subtotal) + '</b></p>'
-    + (inv.discount > 0 ? '<p>Discount: <b>-' + usd(inv.discount) + '</b></p>' : '')
-    + '<p style="font-size:18px">Total due: <b>' + usd(inv.total) + '</b></p>'
-    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Pay ' + usd(inv.total) + ' now</a></p>'
-    + '<p style="color:#666;font-size:13px">Or open this link to pay securely online:<br>' + escMail(invoicePayLink(inv)) + '</p>'
-    + '<p>Please settle this at your earliest convenience so we can close out your job. If something looks wrong on the invoice, just reply to this email and we will make it right.</p>';
-  return mailShell('Payment reminder — invoice ' + inv.id + ' (' + usd(inv.total) + ') still unpaid', inner, 'Questions about this invoice? Text or call (707) 862-3773. Thank you for your business!');
+// when the admin presses "Remind" \u2014 there is no automatic reminder schedule.
+function invoiceReminderEmailHtml(inv, lang) {
+  const L = lang || invoiceMailLang(inv); const T = INV_MAIL[L] || INV_MAIL.en;
+  const inner = '<p>' + T.hi + ' ' + escMail(inv.customerName || 'there') + ',</p>'
+    + '<p>' + T.rIntro1 + ' <b>' + escMail(inv.id) + '</b> ' + T.rFor + ' <b>' + usd(inv.total) + '</b> ' + T.rIntro2 + (inv.dueDate ? ' (' + T.rDueWord + ' <b>' + escMail(inv.dueDate) + '</b>)' : '') + '.</p>'
+    + '<p>' + T.rDisregard + '</p>'
+    + invoiceTableHtml(inv, T)
+    + '<p>' + T.subtotal + ': <b>' + usd(inv.subtotal) + '</b></p>'
+    + (inv.discount > 0 ? '<p>' + T.discount + ': <b>-' + usd(inv.discount) + '</b></p>' : '')
+    + '<p style="font-size:18px">' + T.totalDue + ': <b>' + usd(inv.total) + '</b></p>'
+    + '<p><a href="' + invoicePayLink(inv) + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + T.payNow + ' ' + usd(inv.total) + ' ' + T.nowWord + '</a></p>'
+    + '<p style="color:#666;font-size:13px">' + T.orOpen + '<br>' + escMail(invoicePayLink(inv)) + '</p>'
+    + '<p>' + T.rSettle + '</p>';
+  return mailShell(T.rTitlePre + inv.id + ' (' + usd(inv.total) + ')' + T.rStill, inner, T.footerQ, L);
 }
-function invoiceReminderEmailText(inv) {
-  const lines = ['General Handyman Solutions — PAYMENT REMINDER', 'Invoice ' + inv.id + ' for ' + usd(inv.total) + ' is still unpaid.', ''];
+function invoiceReminderEmailText(inv, lang) {
+  const L = lang || invoiceMailLang(inv); const T = INV_MAIL[L] || INV_MAIL.en;
+  const lines = ['General Handyman Solutions \u2014 ' + T.rHeadCap, (L === 'es' ? 'La factura ' : 'Invoice ') + inv.id + ' ' + T.rFor + ' ' + usd(inv.total) + ' ' + T.rIsStill, ''];
   (inv.items || []).forEach(it => { lines.push('- ' + it.description + ' x' + it.qty + ' @ ' + usd(it.unitPrice) + ' = ' + usd(it.lineTotal)); });
-  lines.push('', 'TOTAL DUE: ' + usd(inv.total));
-  if (inv.dueDate) lines.push('Due date: ' + inv.dueDate);
-  lines.push('', 'Pay securely online: ' + invoicePayLink(inv), 'Already paid? Please disregard this message. Questions? Text/call (707) 862-3773.');
+  lines.push('', T.totalDueCap + ': ' + usd(inv.total));
+  if (inv.dueDate) lines.push(T.dueDate + ': ' + inv.dueDate);
+  lines.push('', T.payLine + invoicePayLink(inv), T.rAlready + ' ' + T.questions);
   return lines.join('\n');
 }
 function invoicePageHtml(inv) {
@@ -4697,7 +4758,7 @@ function requestAutomationPayload(r) {
   return {
     appUrl: APP_URL,
     businessEmail: BUSINESS_EMAIL,
-    request: { id: r.id, customerName: r.customerName || (cust ? cust.name : ''), customerEmail: r.customerEmail || (cust ? cust.email : ''), customerPhone: r.customerPhone || (cust ? (cust.phone || '') : ''), service: r.service || '', description: r.description || '', city: r.city || '', address: r.address || '', when: r.when || '', estimateType: r.estimateType || '', membership: r.membership || '', status: r.status || '', quote: r.quote, quoteNote: r.quoteNote || '', estimate: r.estimate || null, createdAt: r.createdAt || '' },
+    request: { id: r.id, customerName: r.customerName || (cust ? cust.name : ''), customerEmail: r.customerEmail || (cust ? cust.email : ''), customerPhone: r.customerPhone || (cust ? (cust.phone || '') : ''), service: r.service || '', description: r.description || '', city: r.city || '', address: r.address || '', when: r.when || '', estimateType: r.estimateType || '', membership: r.membership || '', status: r.status || '', quote: r.quote, quoteNote: r.quoteNote || '', estimate: r.estimate || null, lang: userLangOf(cust) || cleanLang(r.lang), createdAt: r.createdAt || '' },
     adminEmails: adminEmails()
   };
 }
@@ -4706,7 +4767,7 @@ function jobWorkerAutomationPayload(j, workerList) {
     appUrl: APP_URL,
     businessEmail: BUSINESS_EMAIL,
     job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0, createdAt: j.createdAt || '' },
-    workers: (workerList || matchedWorkersForJob(j)).map(w => ({ name: w.name, email: w.email })),
+    workers: (workerList || matchedWorkersForJob(j)).map(w => ({ name: w.name, email: w.email, lang: userLangOf(w) })),
     adminEmails: adminEmails()
   };
 }
@@ -5303,6 +5364,7 @@ async function handleRequest(req, res) {
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
     const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    if (cleanLang(b.lang)) u.lang = b.lang; // v80.19: the UI language at registration becomes the account's saved preference
     stampUserSource(u, b); // v79 P0-7: acquisition source on the record from day one
     db.users.push(u); claimOrphanRecords(u); // v80 P1-1: guest history under this email becomes theirs at signup
     if (role === 'worker') { notifyAdmins('worker', 'New worker application: ' + u.name + (prof.city ? ' (' + prof.city + ')' : '') + ' — review in Workers.'); fireAutomation('new_worker', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: u.name, email: u.email, phone: u.phone || '', status: u.status, profile: u.profile || {} } }); } save(); return send(res, 201, { user: pubUser(u), token: newSession(u) });
@@ -5337,7 +5399,7 @@ async function handleRequest(req, res) {
         await sendPasswordResetEmail(u, token);
       }
     }
-    return send(res, 200, { ok: true, message: PW_RESET_GENERIC });
+    return send(res, 200, { ok: true, message: cleanLang(b.lang) === 'es' ? PW_RESET_GENERIC_ES : PW_RESET_GENERIC });
   }
   if (p === '/api/auth/reset' && req.method === 'POST') {
     const b = await readBody(req);
@@ -5357,7 +5419,7 @@ async function handleRequest(req, res) {
     audit(u, 'auth.password_reset', '', 'password changed; all sessions invalidated');
     invalidateSessionsFor(u.id); // every prior session (any device) is signed out
     save();
-    return send(res, 200, { ok: true, message: 'Your password has been updated — log in with your new password.' });
+    return send(res, 200, { ok: true, message: userLangOf(u) === 'es' ? 'Tu contraseña ha sido actualizada — entra con tu contraseña nueva.' : 'Your password has been updated — log in with your new password.' });
   }
   if (p === '/api/logout' && req.method === 'POST') {
     // v80.8 (audit #6): logout REVOKES the server-side session — the
@@ -5382,6 +5444,17 @@ async function handleRequest(req, res) {
     user.serviceAddress = serviceAddress;
     save();
     return send(res, 200, { ok: true, serviceAddress, user: pubUser(user) });
+  }
+  // v80.19 IDIOMA: the EN|ES toggle persists on the account while logged
+  // in, so server-composed emails speak the user's language and every
+  // device heals to the same choice. Only 'es'/'en' ever land.
+  if (p === '/api/me/lang' && req.method === 'POST') {
+    if (!user) return send(res, 401, { error: 'login required' });
+    const b = await readBody(req);
+    const lang = cleanLang(b.lang);
+    if (!lang) return send(res, 400, { error: 'lang must be es or en' });
+    if (user.lang !== lang) { user.lang = lang; save(); }
+    return send(res, 200, { ok: true, lang, user: pubUser(user) });
   }
   // Home details + start preference: the member maintains these from their
   // account area. Partial update — only fields present in the body change.
@@ -5588,7 +5661,7 @@ async function handleRequest(req, res) {
     // below stays as a guard that should effectively never fire.
     const cust = email ? db.users.find(u => u.role === 'customer' && (u.email || '').toLowerCase() === email) : null;
     const r = { id: linkId('GHS'), customerId: cust ? cust.id : '', customerName: customerName || (cust ? cust.name : ''), customerEmail: email, customerPhone: cleanText(b.customerPhone, 40) || (cust ? (cust.phone || '') : ''), service: cleanText(b.service, 120) || 'Estimate', description: scope, city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: 'inperson', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, photos: [], messages: [], createdAt: new Date().toISOString(),
-      techCreated: true, createdByWorkerId: user.id, createdByWorkerName: user.name || '', soldByWorkerId: user.id, source: ensureReferralCode(user) };
+      techCreated: true, createdByWorkerId: user.id, createdByWorkerName: user.name || '', soldByWorkerId: user.id, lang: userLangOf(user), source: ensureReferralCode(user) };
     const buildEst = (total) => applyMemberDiscount(normalizeEstimate({ items: [{ description: scope, qty: hours, unitPrice: money(total / hours), type: 'labor' }] }, r), r, cust);
     const marginOk = (total) => marginOkAfterFees(total, soldTakeForTotal(total).take);
     let est = buildEst(listTotal);
@@ -5870,7 +5943,7 @@ async function handleRequest(req, res) {
         clientDue: (clientDue != null && isFinite(clientDue)) ? Math.round(clientDue * 100) / 100 : undefined
       };
     }
-    const r = { id: linkId('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], createdAt: new Date().toISOString() };
+    const r = { id: linkId('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], lang: cleanLang(b.lang), createdAt: new Date().toISOString() };
     // v79 P0-7: the order carries its acquisition source; a first order
     // also promotes the source onto the customer account (first touch).
     r.source = (user && user.source) || acquisitionSource(b) || null;
@@ -6050,13 +6123,19 @@ async function handleRequest(req, res) {
       const capturedTotalCents = results.reduce((s, x) => s + (Number(x.capturedCents) || 0), 0);
       if (capturedTotalCents > 0 && r.customerEmail && !r.captureReceiptSentAt) {
         r.captureReceiptSentAt = new Date().toISOString();
-        const receiptLines = [
+        const receiptEs = cleanLang(r.lang) === 'es';
+        const receiptLines = receiptEs ? [
+          'Gracias — tu pago por la solicitud ' + r.id + ' está completo.',
+          'Servicio: ' + (r.service || 'Servicio de handyman'),
+          'Monto cobrado: ' + usd(capturedTotalCents / 100),
+          'Fecha: ' + new Date().toLocaleDateString('es-US', { year: 'numeric', month: 'long', day: 'numeric' })
+        ] : [
           'Thank you — your payment for request ' + r.id + ' is complete.',
           'Service: ' + (r.service || 'Handyman service'),
           'Amount charged: ' + usd(capturedTotalCents / 100),
           'Date: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
         ];
-        sendMail({ to: [r.customerEmail], replyTo: OWNER_EMAIL, subject: 'Your receipt — General Handyman Solutions', html: eventEmail('Your receipt', receiptLines), text: receiptLines.join('\n') })
+        sendMail({ to: [r.customerEmail], replyTo: OWNER_EMAIL, subject: receiptEs ? 'Tu recibo — General Handyman Solutions' : 'Your receipt — General Handyman Solutions', html: eventEmail(receiptEs ? 'Tu recibo' : 'Your receipt', receiptLines, undefined, receiptEs ? 'es' : undefined), text: receiptLines.join('\n') })
           .then(m => { if (!m.sent) console.error('receipt email not sent for request ' + r.id + ': ' + (m.reason || 'unknown')); })
           .catch(e => console.error('receipt email failed for request ' + r.id + ':', e.message));
       }
@@ -6201,7 +6280,7 @@ async function handleRequest(req, res) {
       // cards flag phoneless records as "incomplete — no phone".
       const effectivePhone = (typeof b.phone === 'string' ? cleanText(b.phone, 40) : '') || w.phone || '';
       if (b.status === 'active' && w.status !== 'active' && !effectivePhone) return send(res, 400, { error: 'worker has no phone on file — add a phone number before activating (incomplete record)', code: 'PHONE_REQUIRED' });
-      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status } }); }
+      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status, lang: userLangOf(w) } }); }
     }
     // Private Team-only skill ranks (1-5 per skill). Stored outside profile so workers never see them.
     if (b.skillRanks && typeof b.skillRanks === 'object' && !Array.isArray(b.skillRanks)) {
@@ -6268,7 +6347,7 @@ async function handleRequest(req, res) {
     // fails the deletion — the outcome is recorded in the audit entry.
     let emailed = false;
     if (removed.email) {
-      try { const r = await sendAutomation('worker_removed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: removed.name, email: removed.email } }); emailed = !!(r && r.sent); } catch (e) { emailed = false; }
+      try { const r = await sendAutomation('worker_removed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: removed.name, email: removed.email, lang: userLangOf(removed) } }); emailed = !!(r && r.sent); } catch (e) { emailed = false; }
     }
     audit(user, 'worker.delete', removed.id, (removed.email || 'no email on file') + ' · emailed: ' + emailed);
     invalidateSessionsFor(removed.id);
@@ -6355,7 +6434,7 @@ async function handleRequest(req, res) {
       const cust = (inv.customerId && db.users.find(u => u.id === inv.customerId)) || (inv.customerEmail && db.users.find(u => u.role === 'customer' && u.email === inv.customerEmail));
       inv.reminderCount = (inv.reminderCount || 0) + 1;
       inv.remindedAt = new Date().toISOString();
-      if (cust) notify(cust.id, 'invoice_reminder', 'Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv), '/invoice/' + inv.id);
+      if (cust) notify(cust.id, 'invoice_reminder', userLangOf(cust) === 'es' ? ('Recordatorio: la factura ' + inv.id + ' (' + usd(inv.total) + ') sigue sin pagar — paga aquí: ' + invoicePayLink(inv)) : ('Reminder: invoice ' + inv.id + ' (' + usd(inv.total) + ') is still unpaid — pay here: ' + invoicePayLink(inv)), '/invoice/' + inv.id);
       notifyAdmins('invoice', 'Payment reminder #' + inv.reminderCount + ' sent for invoice ' + inv.id + ' (' + inv.customerName + ', ' + usd(inv.total) + ').');
       audit(user, 'invoice.remind', inv.id, 'reminder #' + inv.reminderCount);
       save();
@@ -6467,7 +6546,7 @@ async function handleRequest(req, res) {
       // broadcast). fireAutomation swallows every failure — email can
       // never block or fail the assignment.
       const dw = db.users.find(u => u.id === assignedWorkerId);
-      if (dw) fireAutomation('job_direct_offer', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: dw.name, email: dw.email }, job: { id: j.id, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0 } });
+      if (dw) fireAutomation('job_direct_offer', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: dw.name, email: dw.email, lang: userLangOf(dw) }, job: { id: j.id, service: j.service || '', city: j.city || '', description: j.description || '', when: j.when || '', payOffer: j.payOffer || 0 } });
       emitJobNew(j, assignedWorkerId);
     } else {
       // v80.11: board alerts (in-app + job_posted email) go ONLY to
@@ -7252,6 +7331,7 @@ async function handleRequest(req, res) {
       setCookie = sessionCookie(newSession(u), req);
     }
     stampUserSource(u, b); // v79 P0-7
+    if (!u.lang && cleanLang(b.lang)) u.lang = b.lang; // v80.19: an account born/healed at checkout keeps the language it checked out in
     if (!['customer', 'admin'].includes(u.role)) return send(res, 400, { error: 'this account cannot check out as a customer' });
     const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
     // The cart is priced BEFORE anything is created — a line the
@@ -7393,6 +7473,7 @@ async function handleRequest(req, res) {
       setCookie = sessionCookie(newSession(u), req);
     }
     stampUserSource(u, b); // v79 P0-7
+    if (!u.lang && cleanLang(b.lang)) u.lang = b.lang; // v80.19: an account born/healed at checkout keeps the language it checked out in
     if (!['customer', 'admin'].includes(u.role)) return send(res, 400, { error: 'this account cannot check out as a customer' });
     const cookieHdr = setCookie ? { 'Set-Cookie': setCookie } : {};
     if (!serverCartTotals(b.items, u.homeCareStatus === 'active')) return send(res, 400, { error: 'cart has an item we could not price' });
