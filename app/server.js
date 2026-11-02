@@ -1694,6 +1694,56 @@ function maybeAwardMembershipBounty(u, planKey) {
   save();
   return e;
 }
+// ---------- v80.23 REFERIDOS DE CLIENTE (audit A-3) ----------
+// The customer mirror of the tech bounty above, on the SAME rails:
+// every customer carries a personal code ('C' + id suffix — workers
+// own the 'T' prefix, so the two namespaces can never collide) that
+// rides the EXISTING ?src= stamp (first-touch source on the customer
+// record — the same per-source rows Admin → Tráfico already counts,
+// now flagged customerCode exactly like workerCode). The ONE award
+// site below is called at the exact four first-real-charge moments
+// that award the tech bounty, with the same evidence: real money
+// landed, a free-trial start never reaches it. The credit is $10
+// flat — audit A-3 leaves the amount open, so it mirrors
+// REFERRAL_BOUNTY; A-3 names the credit's use (against a membership
+// or the next job), and the balance lives tracked on the referrer's
+// account (GET /api/me/referrals), not as cash out. One credit per
+// referred account, ever (u.referralCustCreditId), and never to the
+// referrer himself (same account, or same email on a second one).
+const CUSTOMER_REFERRAL_CREDIT = 10;
+function custRefCodeOf(u) {
+  if (!u) return '';
+  if (u.custReferralCode) return u.custReferralCode;
+  return 'C' + String(u.id || '').split('-').pop().toUpperCase();
+}
+function ensureCustReferralCode(u) {
+  if (!u || u.role !== 'customer') return '';
+  if (!u.custReferralCode) { u.custReferralCode = custRefCodeOf(u); save(); }
+  return u.custReferralCode;
+}
+function customerByRefCode(code) {
+  const s = sanitizeSource(code);
+  if (!s) return null;
+  const up = s.toUpperCase();
+  return db.users.find(u => u.role === 'customer' && custRefCodeOf(u).toUpperCase() === up) || null;
+}
+function customerReferralCreditsOf() { if (!Array.isArray(db.customerReferralCredits)) db.customerReferralCredits = []; return db.customerReferralCredits; }
+// The ONE customer-credit award site (mirrors maybeAwardMembershipBounty).
+function maybeAwardCustomerReferralCredit(u, planKey) {
+  if (!u || u.role !== 'customer' || u.referralCustCreditId) return null;
+  const ref = customerByRefCode(u.source);
+  if (!ref) return null;
+  if (ref.id === u.id) return null; // anti-self-referral: same account
+  if ((ref.email || '').toLowerCase() && (ref.email || '').toLowerCase() === (u.email || '').toLowerCase()) return null; // anti-self: same email, second account
+  const e = { id: id('RFC'), referrerId: ref.id, customerId: u.id, customerName: u.name || '', customerEmail: u.email || '', planKey: planKey || '', amount: CUSTOMER_REFERRAL_CREDIT, status: 'available', createdAt: new Date().toISOString() };
+  customerReferralCreditsOf().push(e);
+  u.referralCustCreditId = e.id;
+  notify(ref.id, 'payment', 'You earned a ' + usd(CUSTOMER_REFERRAL_CREDIT) + ' referral credit — ' + (u.name || 'a friend you referred') + ' just paid their first membership charge. Your credit is in your account, ready for your next job or membership payment.', '#memberships');
+  notifyAdmins('payment', 'Customer referral credit: ' + usd(CUSTOMER_REFERRAL_CREDIT) + ' to ' + (ref.name || ref.email || '') + ' — referred member ' + (u.name || u.email || '') + ' paid a first real charge (' + (planKey || 'membership') + ').');
+  audit(null, 'referral.cust_credit', e.id, (ref.name || ref.email || ref.id) + ' +' + usd(CUSTOMER_REFERRAL_CREDIT) + ' from ' + (u.email || u.id));
+  save();
+  return e;
+}
 // Seller resolution for a request: an explicit stamp wins; otherwise
 // the request's first-touch source may BE a tech's referral code.
 function sellerWorkerForRequest(r) {
@@ -2501,7 +2551,7 @@ function activateMembershipFromCheckout(u, session) {
   // never reaches the award.
   // v80.12: the same moment stamps the customer's first REAL charge —
   // the funnel/CAC count of NEW PAYING members reads that stamp.
-  if (session && session.payment_status === 'paid' && Number(session.amount_total) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, plan.key); }
+  if (session && session.payment_status === 'paid' && Number(session.amount_total) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, plan.key); maybeAwardCustomerReferralCredit(u, plan.key); }
   return plan;
 }
 // ---------- Pay-in-full order payments (v44, DISENO-PAGO-COMPLETO) ----------
@@ -3569,7 +3619,7 @@ async function handleStripeEvent(event) {
       // first REAL charge, so a referred member's bounty may be due.
       // $0 invoices (trial start) never award.
       // v80.12: same moment, the first-real-charge stamp for CAC.
-      if (Number(obj.amount_paid) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, planKey || current.planKey || ''); }
+      if (Number(obj.amount_paid) > 0) { stampFirstRealCharge(u); maybeAwardMembershipBounty(u, planKey || current.planKey || ''); maybeAwardCustomerReferralCredit(u, planKey || current.planKey || ''); }
     }
   } else if (type === 'payment_intent.amount_capturable_updated' || type === 'payment_intent.succeeded' || type === 'payment_intent.canceled' || type === 'payment_intent.payment_failed') {
     // v44 pay-in-full PIs (menu orders + admin carts): the confirm
@@ -5180,7 +5230,7 @@ function tsInWindow(ts, startMs) { const t = ts ? new Date(ts).getTime() : NaN; 
 function buildTrafficReport(range) {
   const win = trafficWindow(range);
   const rows = {};
-  const rowOf = (k) => rows[k] || (rows[k] = { source: k, views: 0, homeViews: 0, menuViews: 0, joinViews: 0, cartViews: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null, convCarts: null, convJoins: null, convPayments: null, workerCode: false });
+  const rowOf = (k) => rows[k] || (rows[k] = { source: k, views: 0, homeViews: 0, menuViews: 0, joinViews: 0, cartViews: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null, convCarts: null, convJoins: null, convPayments: null, workerCode: false, customerCode: false });
   const keyOf = (raw) => sanitizeSource(raw) || 'direct';
   const t = trafficOf();
   for (const day of Object.keys(t)) {
@@ -5211,6 +5261,7 @@ function buildTrafficReport(range) {
     r.cac = (r.spend > 0 && r.newMembers > 0) ? money(r.spend / r.newMembers) : null;
     r.convCarts = pct(r.carts, r.views); r.convJoins = pct(r.joins, r.carts); r.convPayments = pct(r.payments, r.joins);
     r.workerCode = !!workerByRefCode(r.source);
+    r.customerCode = !!customerByRefCode(r.source);
     return r;
   }).sort((a, b) => (b.views - a.views) || (b.joins - a.joins) || (b.carts - a.carts) || (b.payments - a.payments));
   const totals = { views: 0, carts: 0, joins: 0, deposits: 0, depositAmount: 0, newMembers: 0, payments: 0, spend: 0, cac: null, convCarts: null, convJoins: null, convPayments: null };
@@ -5765,6 +5816,22 @@ async function handleRequest(req, res) {
     return send(res, 200, { ok: true, connect: { connected: !!user.stripeAccountId, ready: !!user.stripePayoutsReady, detailsSubmitted: !!user.stripeDetailsSubmitted }, totals: { paidOut, pending, jobs: mine.length }, entries: mine });
   }
 
+  // ---------- v80.23 REFERIDOS DE CLIENTE: the customer's own referral surface (audit A-3) ----------
+  // Mirrors /api/worker/referrals: personal code + APEX links riding the
+  // ?src= stamp, the people who arrived through it, and the tracked
+  // credits it earned — the balance the customer sees in their account.
+  if (p === '/api/me/referrals' && req.method === 'GET') {
+    if (!requireRole(user, ['customer'], res)) return;
+    const code = ensureCustReferralCode(user);
+    const signups = db.users.filter(u => u.role === 'customer' && u.id !== user.id && u.source && u.source.toUpperCase() === code.toUpperCase()).map(u => {
+      const plan = membershipPlanOf(u);
+      return { name: u.name || '', memberActive: plan.status === 'active', joinedAt: u.createdAt || null, credited: !!u.referralCustCreditId };
+    });
+    const credits = customerReferralCreditsOf().filter(e => e.referrerId === user.id).slice().reverse().map(e => ({ id: e.id, customerName: e.customerName || '', planKey: e.planKey || '', amount: e.amount, status: e.status, createdAt: e.createdAt }));
+    const earned = money(credits.reduce((s, e) => s + Number(e.amount || 0), 0));
+    const balance = money(credits.filter(e => e.status === 'available').reduce((s, e) => s + Number(e.amount || 0), 0));
+    return send(res, 200, { ok: true, code, link: appBase() + '/?src=' + code, plusLink: appBase() + '/plus?src=' + code, credit: CUSTOMER_REFERRAL_CREDIT, signups, credits, totals: { earned, balance, count: credits.length } });
+  }
   // ---------- v80.11 ALCANCE: tech zone — referrals, sales menu, sales carts, estimate creator ----------
   if (p === '/api/worker/referrals' && req.method === 'GET') {
     if (!requireRole(user, ['worker'], res)) return;
@@ -7384,7 +7451,7 @@ async function handleRequest(req, res) {
       // v80.11: a NON-trial confirm means a real charge just landed —
       // a referred member's bounty may be due (a trial start is not).
       // v80.12: stamp the first real charge at the same moment.
-      if (!wasTrial74) { stampFirstRealCharge(user); maybeAwardMembershipBounty(user, 'homecare'); }
+      if (!wasTrial74) { stampFirstRealCharge(user); maybeAwardMembershipBounty(user, 'homecare'); maybeAwardCustomerReferralCredit(user, 'homecare'); }
       return send(res, 200, { active: true, trial: wasTrial74 });
     } catch (e) { console.error('homecare confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
@@ -7423,7 +7490,7 @@ async function handleRequest(req, res) {
       if (b.plan && b.plan !== chk.plan.key) return send(res, 400, { error: 'plan mismatch' });
       if (!chk.paid) return send(res, 200, { active: false });
       activateMembershipPlan(user, chk.plan.key, { subscriptionId: chk.sub.id, first: true });
-      stampFirstRealCharge(user); maybeAwardMembershipBounty(user, chk.plan.key); // v80.11: chk.paid = a real charge just landed (Plus/Yard charge at join); v80.12: + the first-charge stamp
+      stampFirstRealCharge(user); maybeAwardMembershipBounty(user, chk.plan.key); maybeAwardCustomerReferralCredit(user, chk.plan.key); // v80.11: chk.paid = a real charge just landed (Plus/Yard charge at join); v80.12: + the first-charge stamp
       return send(res, 200, { active: true, plan: chk.plan.key });
     } catch (e) { console.error('membership confirm failed', e.message); return send(res, 502, { error: 'could not verify the payment — if you were charged, the Team will activate your membership shortly' }); }
   }
