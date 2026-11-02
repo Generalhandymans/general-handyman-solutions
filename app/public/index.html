@@ -2290,6 +2290,8 @@ en: {
   reqQuotePre: 'Your quote: ', reqLaborNote: ' labor (you buy materials) ', reqApprove: 'Approve quote', reqDecline: 'Decline', reqWaiting: 'Waiting for the Team to send your quote.',
   reqSecureTpl: 'Secure my appointment — authorize {amt} hold (not a charge yet)',
   payPaidFull: 'Paid in full: ', payPartialRefPre: 'Paid ', payPartialRefSuf: ' — partially refunded', payRefunded: 'Payment refunded', refundIssued: 'Refund issued: ', refundKeptFee: ' booking fee kept (already dispatched)',
+  payDepositTpl: 'Deposit paid: {dep} of {total} — your job is booked. Balance due when the work is done: {bal}', payBalanceBtnTpl: 'Pay balance {amt}', payNotConnected: 'Online payment is still being connected — text or call (707) 862-3773 and the Team will take your payment.',
+  ordPlacedH: '✅ Order placed — ', ordDepositTpl: '💳 <b>Deposit paid: {dep}</b> — your job is booked. The balance of <b>{bal}</b> is due when the work is done — pay it right here in the app. The Team confirms your time within minutes.', ordPaidFullBody: '💳 <b>Paid in full.</b> The Team confirms your time within minutes.', ordFollow: ' Follow your order live — and message the Team — right here in the app.', ordWelcome: '🎉 Welcome to HomeCare! Your membership is active and its member price was applied to this order.', ordGoOrders: 'Go to my orders',
   reqNone: 'No requests yet.', reqLoadErr2: 'We could not load your requests.',
   msgCustomerWord: 'Customer', jobPhotoAlt: 'Job photo', threadNone: 'No messages yet.', threadPhCust: 'Message the customer...', threadPhTeam: 'Message the Team...', sendBtn: 'Send',
   ratingYours: 'Your rating:', ratingTapFirst: 'Tap the stars first.',
@@ -2407,6 +2409,8 @@ es: {
   reqQuotePre: 'Tu cotización: ', reqLaborNote: ' de mano de obra (tú compras los materiales) ', reqApprove: 'Aprobar cotización', reqDecline: 'Rechazar', reqWaiting: 'Esperando que el Team te mande tu cotización.',
   reqSecureTpl: 'Aparta mi cita — autoriza una retención de {amt} (sin cobro todavía)',
   payPaidFull: 'Pagado por completo: ', payPartialRefPre: 'Pagado ', payPartialRefSuf: ' — reembolso parcial', payRefunded: 'Pago reembolsado', refundIssued: 'Reembolso emitido: ', refundKeptFee: ' de cargo de apartado retenido (ya despachado)',
+  payDepositTpl: 'Anticipo pagado: {dep} de {total} — tu trabajo está agendado. Saldo al terminar el trabajo: {bal}', payBalanceBtnTpl: 'Pagar saldo {amt}', payNotConnected: 'El pago en línea todavía se está conectando — manda un texto o llama al (707) 862-3773 y el Team toma tu pago.',
+  ordPlacedH: '✅ Orden recibida — ', ordDepositTpl: '💳 <b>Anticipo pagado: {dep}</b> — tu trabajo está agendado. El saldo de <b>{bal}</b> se paga cuando el trabajo esté terminado — págalo aquí mismo en la app. El Team confirma tu hora en minutos.', ordPaidFullBody: '💳 <b>Pagado por completo.</b> El Team confirma tu hora en minutos.', ordFollow: ' Sigue tu orden en vivo — y escríbele al Team — aquí mismo en la app.', ordWelcome: '🎉 ¡Bienvenido a HomeCare! Tu membresía está activa y su precio de miembro se aplicó a esta orden.', ordGoOrders: 'Ir a mis órdenes',
   reqNone: 'Todavía no tienes solicitudes.', reqLoadErr2: 'No pudimos cargar tus solicitudes.',
   msgCustomerWord: 'Cliente', jobPhotoAlt: 'Foto del trabajo', threadNone: 'Todavía no hay mensajes.', threadPhCust: 'Mensaje al cliente...', threadPhTeam: 'Mensaje al Team...', sendBtn: 'Enviar',
   ratingYours: 'Tu calificación:', ratingTapFirst: 'Toca las estrellas primero.',
@@ -3829,7 +3833,7 @@ async function loadRequests(){
     const quoteLine=est ? '' : (r.quote!=null?'<br>'+CU('reqQuotePre')+'<span class="st">$'+r.quote+'</span>'+CU('reqLaborNote')+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">'+CU('reqApprove')+'</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">'+CU('reqDecline')+'</button>':''):'<br><span class="mut">'+CU('reqWaiting')+'</span>');
     const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
     const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">'+CU('reqSecureTpl').replace('{amt}', moneyFmt(r.estimateDue))+'</button></div>':'');
-    const payBlock=r.payment?'<div class="pay-panel"><b>💳 '+(r.payment.status==='paid'?CU('payPaidFull')+moneyFmt((r.payment.amountCents||0)/100):(r.payment.status==='partially_refunded'?CU('payPartialRefPre')+moneyFmt((r.payment.amountCents||0)/100)+CU('payPartialRefSuf'):CU('payRefunded')))+'</b>'+(r.refund?'<br><span class="mut">'+CU('refundIssued')+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+CU('refundKeptFee'):'')+'</span>':'')+'</div>':'';
+    const payBlock=reqPayPanelHtml(r);
     return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+payBlock+holdBlock+threadHtml(r)+'</div>';
   }).join('') || '<div class="empty"><p class="mut">' + CU('reqNone') + '</p></div>';
 }
@@ -4893,6 +4897,74 @@ function holdStatusHtml(r){
   });
   return '<div class="pay-panel"><b>'+CU('holdTitle')+'</b> '+parts.join('<br>')+'<br><span class="mut">'+CU('holdExplainer')+'</span></div>';
 }
+// v80.22 ORDEN HONESTA (audit P0-4): the customer's order card speaks
+// the TRUE payment state. A deposit is a deposit — booked, balance
+// due — and NEVER renders as "refunded" (the old inline panel mapped
+// every non-paid status onto the refunded words, so most menu orders
+// told their owner the money had been sent back). Only a real refund
+// earns the refunded words; only a settled full payment earns "Paid
+// in full". A deposit-state menu order also gets its one-tap balance
+// payment right here — the v44 /api/orders/pay rail has existed all
+// along; this is its first customer UI.
+function reqPayPanelHtml(r){
+  if(!r || !r.payment) return '';
+  const p=r.payment;
+  let main='';
+  if(p.status==='paid') main=CU('payPaidFull')+moneyFmt((p.amountCents||0)/100);
+  else if(p.status==='deposit'){
+    const tot=(Number(p.totalCents)||0) || ((Number(p.amountCents)||0)+(Number(p.balanceCents)||0));
+    main=CU('payDepositTpl').replace('{dep}', moneyFmt((p.amountCents||0)/100)).replace('{total}', moneyFmt(tot/100)).replace('{bal}', moneyFmt((p.balanceCents||0)/100));
+  }
+  else if(p.status==='partially_refunded') main=CU('payPartialRefPre')+moneyFmt((p.amountCents||0)/100)+CU('payPartialRefSuf');
+  else if(p.status==='refunded') main=CU('payRefunded');
+  else return '';
+  let h='<div class="pay-panel"><b>💳 '+main+'</b>';
+  if(r.refund) h+='<br><span class="mut">'+CU('refundIssued')+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+CU('refundKeptFee'):'')+'</span>';
+  h+='</div>';
+  if(p.status==='deposit' && r.estimateType==='menu' && (Number(p.balanceCents)||0)>0 && !r.refund){
+    const bal=moneyFmt((p.balanceCents||0)/100);
+    h+='<div style="margin-top:8px"><button class="black" onclick="reqPayBalanceStart(\''+r.id+'\')">'+CU('payBalanceBtnTpl').replace('{amt}', bal)+'</button>'
+      +'<div id="reqPay-'+r.id+'" style="display:none;margin-top:8px"><div id="reqCard-'+r.id+'" style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff"></div>'
+      +'<div style="margin-top:8px"><button class="black" id="reqPayGo-'+r.id+'" onclick="reqPayBalanceConfirm(\''+r.id+'\')">'+CU('payBalanceBtnTpl').replace('{amt}', bal)+'</button> <span class="mut" id="reqPayMsg-'+r.id+'"></span></div></div></div>';
+  }
+  return h;
+}
+// The balance retry: /api/orders/pay opens the intent for THIS order's
+// outstanding balance only, the card confirms in place, and
+// /api/orders/pay-confirm re-verifies the PaymentIntent server-side
+// before anything settles. A declined card changes NOTHING — the
+// deposit state and this pay box stay exactly as they were.
+const reqPayEls={};
+async function reqPayBalanceStart(idv){
+  const box=document.getElementById('reqPay-'+idv); if(!box) return;
+  if(box.style.display!=='none'){ box.style.display='none'; return; }
+  box.style.display='block';
+  if(reqPayEls[idv]) return;
+  const msg=document.getElementById('reqPayMsg-'+idv);
+  try{
+    if(msg) msg.textContent=CU('procGen');
+    const d=await api('/api/orders/pay',{method:'POST', body:JSON.stringify({requestId:idv})});
+    const st=await cartEnsureStripe();
+    if(st!=='ready'||!stripeObj) throw new Error(CU('payNotConnected'));
+    const cel=stripeObj.elements().create('card',{style:{base:{fontSize:'16px'}}});
+    cel.mount('#reqCard-'+idv);
+    reqPayEls[idv]={el:cel, secret:d.clientSecret, pi:d.paymentIntentId};
+    if(msg) msg.textContent='';
+  }catch(e){ if(msg) msg.textContent=e.message; }
+}
+async function reqPayBalanceConfirm(idv){
+  const st=reqPayEls[idv]; if(!st) return;
+  const msg=document.getElementById('reqPayMsg-'+idv); const btn=document.getElementById('reqPayGo-'+idv);
+  if(btn) btn.disabled=true;
+  if(msg) msg.textContent=CU('procPay');
+  try{
+    const conf=await stripeObj.confirmCardPayment(st.secret,{payment_method:{card:st.el, billing_details:{name:(me&&me.name)||'', email:(me&&me.email)||''}}});
+    if(conf.error) throw new Error(conf.error.message);
+    await api('/api/orders/pay-confirm',{method:'POST', body:JSON.stringify({requestId:idv, paymentIntentId:(conf.paymentIntent&&conf.paymentIntent.id)||st.pi})});
+    delete reqPayEls[idv];
+    loadRequests();
+  }catch(e){ if(msg) msg.textContent=e.message; if(btn) btn.disabled=false; }
+}
 async function secureHold(idv){
   try{
     const d=await api('/api/stripe/checkout',{method:'POST', body:JSON.stringify({kind:'estimate-hold', requestId:idv, lang:menuLang()})});
@@ -4904,7 +4976,13 @@ function adminPaymentHtml(r){
   const captured=holdsOf(r).some(function(h){ return h.status==='captured'; });
   let h='';
   if(r.payment){
-    h+='<div class="pay-panel"><b>💳 Paid in full:</b> '+moneyFmt((r.payment.amountCents||0)/100)+' <span class="mut">('+(r.payment.kind||'card')+' • '+escHtml(String(r.payment.at||'').slice(0,10))+' • status: '+escHtml(r.payment.status)+')</span></div>';
+    // v80.22: the admin card names the TRUE state too — a deposit is
+    // not "paid in full" (the old line printed Paid in full for ANY
+    // payment record, deposit included).
+    const pLbl = r.payment.status==='deposit'
+      ? '💳 Deposit: '+moneyFmt((r.payment.amountCents||0)/100)+' of '+moneyFmt((r.payment.totalCents||0)/100)+' — balance '+moneyFmt((r.payment.balanceCents||0)/100)+' due'
+      : (r.payment.status==='paid' ? '💳 Paid in full: '+moneyFmt((r.payment.amountCents||0)/100) : '💳 Payment ('+escHtml(r.payment.status||'')+'): '+moneyFmt((r.payment.amountCents||0)/100));
+    h+='<div class="pay-panel"><b>'+pLbl+'</b> <span class="mut">('+(r.payment.kind||'card')+' • '+escHtml(String(r.payment.at||'').slice(0,10))+' • status: '+escHtml(r.payment.status)+')</span></div>';
   }
   if(r.refund){
     h+='<div style="margin-top:6px"><b>Refund:</b> '+moneyFmt((r.refund.refundedCents||0)/100)+' refunded'+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+' booking fee kept (was dispatched)':' • full refund (not dispatched)')+' <span class="mut">'+escHtml(String(r.refund.at||'').slice(0,10))+'</span></div>';
@@ -7181,7 +7259,7 @@ function cartOnPaid(requestId){
   const d = document.getElementById('cartDone');
   if (d) {
     d.style.display = 'block';
-    d.innerHTML = '<h3>✅ Order placed — ' + escHtml(requestId || '') + '</h3><p>' + (ccBal > 0 ? '💳 <b>Deposit paid: $' + ccDep + '</b> — your job is booked. The balance of <b>$' + ccBal + '</b> is due when the work is done — pay it right here in the app. The Team confirms your time within minutes.' : '💳 <b>Paid in full.</b> The Team confirms your time within minutes.') + ' Follow your order live — and message the Team — right here in the app.</p>' + (cartJoinedOnce ? '<p>🎉 Welcome to HomeCare! Your membership is active and its member price was applied to this order.</p>' : '') + '<button onclick="exitCart()">Go to my orders</button>';
+    d.innerHTML = '<h3>' + CU('ordPlacedH') + escHtml(requestId || '') + '</h3><p>' + (ccBal > 0 ? CU('ordDepositTpl').replace('{dep}', '$' + ccDep).replace('{bal}', '$' + ccBal) : CU('ordPaidFullBody')) + CU('ordFollow') + '</p>' + (cartJoinedOnce ? '<p>' + CU('ordWelcome') + '</p>' : '') + '<button onclick="exitCart()">' + CU('ordGoOrders') + '</button>';
     if (d.scrollIntoView) d.scrollIntoView({ behavior: 'smooth' });
   }
 }
