@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-12', swSrc.includes("const CACHE = 'ghs-app-v80-12'"));
+t('static: SW cache is ghs-app-v80-13', swSrc.includes("const CACHE = 'ghs-app-v80-13'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.12: ghs-app-v80-12)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-12'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.13: ghs-app-v80-13)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-13'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5189,7 +5189,26 @@ t('unit v80.11 margin floor: a below-floor price FAILS — the estimate creator 
 t('unit v80.11 margin floor: boundary pair around the computed minimum for $100 pay ($130.00 fails, $130.10 passes)', marFns811.marginOkAfterFees(130, 100) === false && marFns811.marginOkAfterFees(130.10, 100) === true);
 t('unit v80.11 margin floor: minTotalForMargin inverts the floor — the raised price the creator builds (ceil-cent + $0.01) clears it', marFns811.minTotalForMargin(100) > 130.09 && marFns811.minTotalForMargin(100) < 130.10 && marFns811.marginOkAfterFees(Math.ceil(marFns811.minTotalForMargin(100) * 100) / 100 + 0.01, 100) === true);
 t('unit v80.11 margin floor: zero / negative totals never pass', marFns811.marginOkAfterFees(0, 50) === false && marFns811.marginOkAfterFees(-10, 0) === false);
-t('unit v80.11 wiring: the tech estimate creator enforces THESE helpers — no second copy of the margin math', serverSrc.includes('marginOkAfterFees(total, pay)') && serverSrc.includes('minTotalForMargin(pay)'));
+t('unit v80.11→v80.13 wiring: the tech estimate creator enforces THESE helpers against the 68% sold take — no second copy of the margin math', serverSrc.includes('marginOkAfterFees(total, soldTakeForTotal(total).take)') && serverSrc.includes('minTotalForSoldMargin()'));
+
+// ---------------- v80.13 AJUSTE VENTA 68%: statics + DIRECT UNIT PINS ----------------
+// Gabriel's law (settled 2026-11-01 17:52): a job the tech SELLS pays
+// him 68% of the FINAL customer total, commission INCLUDED. These pins
+// extract the REAL helpers from server.js and unit-test them directly.
+t('static v80.13: the 68% sold-take law lives in the server (pct + take helper + final-total reader)', serverSrc.includes('const SOLD_TAKE_PCT = 0.68') && serverSrc.includes('function soldTakeForTotal(') && serverSrc.includes('function requestFinalTotal('));
+t('static v80.13: the take derives at BOTH sale doors — the sales menu and create-job', serverSrc.includes('soldTakeForTotal(SERVER_MENU[serviceId].p)') && serverSrc.includes('soldTakeForTotal(soldFinalTotal)'));
+t('static v80.13 client: the tech-zone copy states the 68% rule in EN and ES (sales + estimates)', htmlSrc.includes('You keep 68% of what the customer pays') && htmlSrc.includes('te quedas el 68% de lo que paga el cliente') && htmlSrc.includes('Te quedas el 68% de lo que paga el cliente'));
+const takeChunk813 = serverSrc.slice(serverSrc.indexOf('const SALES_COMMISSION'), serverSrc.indexOf('// Typical hours per catalog service'));
+const takeFns813 = new Function(takeChunk813 + '; return { soldTakeForTotal, minTotalForSoldMargin, marginOkAfterFees };')();
+const st813 = takeFns813.soldTakeForTotal;
+t('unit v80.13 sold take: THE canonical case — TV Mounting $125 -> take $85 (pay $75 + $10 commission), NOT $110', st813(125).take === 85 && st813(125).pay === 75 && st813(125).commission === 10);
+t('unit v80.13 sold take: a member final total of $100 -> take $68 (pay $58 + $10)', st813(100).take === 68 && st813(100).pay === 58 && st813(100).commission === 10);
+t('unit v80.13 sold take: a $300 estimate total -> take $204 (pay $194 + $10)', st813(300).take === 204 && st813(300).pay === 194 && st813(300).commission === 10);
+t('unit v80.13 sold take: green waste $225 -> take $153 (pay $143 + $10) — the flat $120 trip pay no longer applies to a SALE', st813(225).take === 153 && st813(225).pay === 143 && st813(225).commission === 10);
+t('unit v80.13 sold take: a tiny total clamps the commission line to the take itself — neither line ever goes negative ($7 -> take $5, all commission, pay $0)', st813(7).take === 5 && st813(7).commission === 5 && st813(7).pay === 0);
+t('unit v80.13 sold take: zero / negative totals take nothing', st813(0).take === 0 && st813(0).pay === 0 && st813(0).commission === 0 && st813(-50).take === 0);
+t('unit v80.13 margin guard: with the 68% take the post-fee margin clears the floor at real totals ($120 -> 28.5%, $150 -> 28.9%)', takeFns813.marginOkAfterFees(120, st813(120).take) === true && takeFns813.marginOkAfterFees(150, st813(150).take) === true);
+t('unit v80.13 margin guard: minTotalForSoldMargin inverts the floor (~$3.30) and the guard still fires below it ($2.50 fails, $3.31 passes)', takeFns813.minTotalForSoldMargin() > 3.29 && takeFns813.minTotalForSoldMargin() < 3.30 && takeFns813.marginOkAfterFees(2.50, st813(2.50).take) === false && takeFns813.marginOkAfterFees(3.31, st813(3.31).take) === true);
 
 // ---------------- v80.11 ALCANCE: behavioral (app3 — own instance, city-aware geo mock, shared Stripe mock) ----------------
 const BASE3 = 'http://127.0.0.1:8985';
@@ -5274,7 +5293,7 @@ t('v80.11 referrals: a fresh tech starts with zero signups and zero bounties', (
 const sm = await req3('GET', '/api/worker/sales-menu', { token: wSeller.token });
 const smTv = (sm.j.items || []).find(i => i.serviceId === 'tv-mounting');
 const smGw = (sm.j.items || []).find(i => i.serviceId === 'green-waste');
-t('v80.11 sales menu: the whole catalog with LIST price + his take (standard pay + $10) — TV Mounting $125 -> take $110, green waste flat $120 -> take $130', sm.status === 200 && (sm.j.items || []).length >= 90 && !!smTv && smTv.price === 125 && smTv.pay === 100 && smTv.take === 110 && !!smGw && smGw.pay === 120 && smGw.take === 130);
+t('v80.11→v80.13 sales menu: the whole catalog with LIST price + his take (68% of the price) — TV Mounting $125 -> take $85 (pay $75 + $10), green waste $225 -> take $153', sm.status === 200 && (sm.j.items || []).length >= 90 && !!smTv && smTv.price === 125 && smTv.pay === 75 && smTv.take === 85 && !!smGw && smGw.pay === 143 && smGw.take === 153);
 t('v80.11 sales menu: NO member price, margin or internal fields leak to the tech', !!smTv && !('member' in smTv) && !('m' in smTv) && !('margin' in smTv) && !('memberTotal' in smTv));
 const smCust = await req3('GET', '/api/worker/sales-menu', { token: CX });
 t('v80.11 role law: customers never see the sales tools (403)', smCust.status === 403);
@@ -5291,16 +5310,16 @@ t('v80.11 sales cart: customers cannot build seller carts (403)', scCust.status 
 const estOk = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Ana', customerEmail: 'estana@t.local', description: 'Rebuild the side gate and paint it', hours: 2 } });
 t('v80.11 estimates: a compliant estimate (2h at the $75/hr suggestion = $150, margin 30%) goes out DIRECTLY, unadjusted, no approval step', estOk.status === 201 && estOk.j.total === 150 && estOk.j.adjusted === false && !!estOk.j.requestId);
 const estLow = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Bob', customerEmail: 'estbob@t.local', description: 'Custom shelf build', hours: 2, price: 120 } });
-t('v80.11 estimates: a below-floor price ($120 vs $100 pay) is RAISED to the floor minimum (~$130.11) — never sent cheap', estLow.status === 201 && estLow.j.adjusted === true && estLow.j.adjustedFrom === 120 && estLow.j.total >= 130.09 && estLow.j.total <= 130.15);
+t('v80.11→v80.13 estimates: under the 68% law a $120 price now CLEARS the floor (his take is $82, margin 28.5%) — it goes out as priced, NO raise (the v80.11 raise to ~$130.11 was the old $100-pay model)', estLow.status === 201 && estLow.j.adjusted === false && estLow.j.total === 120);
 const estBig = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Cy', description: 'Whole house remodel', hours: 20 } });
 t('v80.11 estimates: the $1,000 guardrail blocks an oversized estimate (20h -> $1,500 suggested)', estBig.status === 400);
 const estRaise = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Di', description: 'Big custom job', hours: 16, price: 900 } });
-t('v80.11 estimates: when even the margin-raised price would pass $1,000 the estimate is BLOCKED (16h, pay $800)', estRaise.status === 400);
+t('v80.11→v80.13 estimates: a $900 price at 16h is no longer blocked by the margin floor — under the 68% take the margin is ~29% at any total, so it goes OUT at $900 (the $1,000 cap still applies to the price itself)', estRaise.status === 201 && estRaise.j.adjusted === false && estRaise.j.total === 900);
 const admReqs3 = await req3('GET', '/api/requests', { token: A3 });
 const techEst = (admReqs3.j.requests || []).find(r => r.id === (estOk.j.requestId || ''));
 t('v80.11 estimates: admin sees the tech estimate from the moment it exists, flagged with the tech name + seller stamp', !!techEst && techEst.techCreated === true && techEst.createdByWorkerName === 'Seller Sam' && techEst.soldByWorkerId === wSeller.id && techEst.status === 'Quoted');
 const estList = await req3('GET', '/api/worker/estimates', { token: wSeller.token });
-t('v80.11 estimates: the tech lists his own estimates with shareable estimate links', estList.status === 200 && (estList.j.estimates || []).length === 2 && estList.j.estimates.every(e => String(e.link).includes('/estimate/')));
+t('v80.11→v80.13 estimates: the tech lists his own estimates with shareable estimate links (three now — the $900 one goes out under the 68% law)', estList.status === 200 && (estList.j.estimates || []).length === 3 && estList.j.estimates.every(e => String(e.link).includes('/estimate/')));
 const estCust = await req3('POST', '/api/worker/estimates', { token: CX, body: { customerName: 'X', description: 'x', hours: 1 } });
 t('v80.11 estimates: customers cannot create tech estimates (403)', estCust.status === 403);
 
@@ -5498,6 +5517,76 @@ const TBad = await req3('GET', '/api/admin/traffic?range=year', { token: A3 });
 t('v80.12 traffic: ranges answer hoy/7d/30d and a bogus range falls back to 7d', T30.status === 200 && T30.j.range === '30d' && T30.j.totals.views >= T1.j.totals.views && TBad.j.range === '7d');
 const MInst1 = await req('GET', '/api/admin/money', { token: A });
 t('v80.12 dinero: without a Stripe key the Stripe box degrades to not-available and the page still answers', MInst1.status === 200 && MInst1.j.stripe.available === false && !!MInst1.j.receivables);
+
+// ---------------- v80.13 AJUSTE VENTA 68% (app3) ----------------
+// Gabriel's law end-to-end on the v80.11 sold TV job (cj811): the $125
+// order was born with a $50 deposit in and a $75 balance out. The
+// seller's take is 68% of $125 = $85 — pay $75 + the $10 commission.
+const admJobs813 = await req3('GET', '/api/jobs', { token: A3 });
+const soldJob813 = (admJobs813.j.jobs || []).find(x => x.id === cj811.j.job.id);
+t('v80.13 sold job: create-job stamped the 68% take on the $125 TV sale (pay $75 + $10 commission — NOT the admin-entered $100 standard pay)', !!soldJob813 && soldJob813.payOffer === 75 && soldJob813.salesCommission === 10 && soldJob813.customerPrice === 125);
+const sellerJobs813 = await req3('GET', '/api/jobs', { token: wSeller.token });
+const sj813 = (sellerJobs813.j.jobs || []).find(x => x.id === cj811.j.job.id);
+t('v80.13 sold job: the seller sees the guaranteed take in his own pay breakdown (pay $75 + $10 commission)', !!sj813 && sj813.payOffer === 75 && sj813.salesCommission === 10);
+// Complete it with NO Connect on file: the $85 must wait — and Dinero
+// must already count it at exactly $85 (the same math as the payout).
+const M813a = await req3('GET', '/api/admin/money', { token: A3 });
+const doneSold813 = await req3('PATCH', '/api/jobs/' + cj811.j.job.id, { token: wSeller.token, body: { photosDone: true } });
+const admJobs813b = await req3('GET', '/api/jobs', { token: A3 });
+const doneJob813 = (admJobs813b.j.jobs || []).find(x => x.id === cj811.j.job.id);
+const M813b = await req3('GET', '/api/admin/money', { token: A3 });
+const sRow813a = (M813a.j.techPayouts.perTech || []).find(w => w.workerId === wSeller.id) || { amount: 0, awaitingSetup: 0 };
+const sRow813b = (M813b.j.techPayouts.perTech || []).find(w => w.workerId === wSeller.id) || { amount: 0, awaitingSetup: 0 };
+t('v80.13 dinero: the completed sold job waits as EXACTLY $85 in the pending tech payouts (per-tech row + total, awaiting setup)', doneSold813.status === 200 && doneSold813.j.job.status === 'Done — photos sent' && !!doneJob813 && doneJob813.payoutStatus === 'awaiting_worker_setup' && !doneJob813.payoutTransferId && sRow813b.amount === sRow813a.amount + 85 && sRow813b.awaitingSetup === sRow813a.awaitingSetup + 85 && M813b.j.techPayouts.amount === M813a.j.techPayouts.amount + 85);
+// The customer pays the $75 balance on the same cart link: the order
+// is paid in full — the $85 still cannot move (no Connect yet).
+const balCo813 = await req3('POST', '/api/carts/' + soldCart.j.cart.id + '/checkout', { body: { balance: true } });
+const balSess813 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === soldCart.j.cart.id && s.metadata.payStep === 'balance').slice(-1)[0];
+await mockSessionPaid(balSess813.id);
+await fetch(BASE3 + '/cart/' + soldCart.j.cart.id + '?paid=1&session_id=' + balSess813.id);
+const admReqs813 = await req3('GET', '/api/requests', { token: A3 });
+const soldReq813 = (admReqs813.j.requests || []).find(r => r.id === soldReq.id);
+t('v80.13 sold job: the balance settles the $125 order in full ($50 deposit + $75 balance)', balCo813.status === 200 && balCo813.j.amount === 75 && !!balSess813 && !!soldReq813 && !!soldReq813.payment && soldReq813.payment.status === 'paid');
+// The seller connects Stripe: the held $85 releases in ONE transfer.
+const trBefore813 = stripeState.connectTransfers.length;
+await req3('POST', '/api/worker/connect/start', { token: wSeller.token, body: {} });
+const cs813 = await req3('GET', '/api/worker/connect/status', { token: wSeller.token });
+let paidJob813 = null;
+for (let i = 0; i < 14; i++) { const aj = await req3('GET', '/api/jobs', { token: A3 }); paidJob813 = (aj.j.jobs || []).find(x => x.id === cj811.j.job.id); if (paidJob813 && paidJob813.payoutStatus === 'paid') break; await sleep(200); }
+t('v80.13 payout: ONE transfer of EXACTLY $85 (8500 cents) releases to the seller when he connects', cs813.status === 200 && cs813.j.ready === true && !!paidJob813 && paidJob813.payoutStatus === 'paid' && /^tr_mock/.test(paidJob813.payoutTransferId || '') && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 8500).length === 1);
+const again813 = await req3('POST', '/api/admin/jobs/' + cj811.j.job.id + '/pay-worker', { token: A3, body: {} });
+t('v80.13 payout: the pay-worker override never double-pays the sold take', again813.status === 200 && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 8500).length === 1);
+const money813 = await req3('GET', '/api/worker/money', { token: wSeller.token });
+const mEnt813 = (money813.j.entries || []).find(e => e.jobId === cj811.j.job.id);
+t('v80.13 money view: the seller paid row reads $85 total (pay $75 + $10 commission), status paid', !!mEnt813 && mEnt813.amount === 85 && mEnt813.payOffer === 75 && mEnt813.salesCommission === 10 && mEnt813.status === 'paid');
+// Member sale: a Plus member buys the same TV service through the
+// seller's link — the FINAL total is the $100 member price, so the
+// seller's take is 68% of $100 = $68 (pay $58 + $10).
+const memCart813 = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
+const memCo813 = await req3('POST', '/api/carts/' + memCart813.j.cart.id + '/checkout', { body: { name: 'Iggy Cust', phone: '7075550411', email: 'igcust@t.local', address: '12 Vine St', city: 'Fairfield', when: 'Monday' } });
+const memSess813 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === memCart813.j.cart.id && s.mode === 'payment').slice(-1)[0];
+await mockSessionPaid(memSess813.id);
+await fetch(BASE3 + '/cart/' + memCart813.j.cart.id + '?paid=1&session_id=' + memSess813.id);
+const admReqs813b = await req3('GET', '/api/requests', { token: A3 });
+const memReq813 = (admReqs813b.j.requests || []).find(r => r.menuOrder && r.menuOrder.cartId === memCart813.j.cart.id);
+const memCj813 = await req3('POST', '/api/requests/' + (memReq813 ? memReq813.id : 'none') + '/create-job', { token: A3, body: { payOffer: 100 } });
+t('v80.13 member sale: the member final total is $100 and the seller take is 68% of it (pay $58 + $10 = $68)', memCo813.status === 200 && memCo813.j.total === 100 && memCo813.j.memberApplied === true && !!memReq813 && memReq813.menuOrder.totals.due === 100 && memCj813.status === 201 && memCj813.j.job.payOffer === 58 && memCj813.j.job.salesCommission === 10 && memCj813.j.job.assignedWorkerId === wSeller.id);
+// His own estimate is a sale too: 4h at the $75/hr suggestion = $300,
+// and the job that lands on him carries pay $194 + $10 = $204.
+const est300 = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Eve', customerEmail: 'esteve@t.local', description: 'Build a custom pantry shelf wall', hours: 4, city: 'Fairfield' } });
+const estCj813 = await req3('POST', '/api/requests/' + (est300.j.requestId || 'none') + '/create-job', { token: A3, body: { payOffer: 200 } });
+const estDone813 = estCj813.j && estCj813.j.job ? await req3('PATCH', '/api/jobs/' + estCj813.j.job.id, { token: wSeller.token, body: { photosDone: true } }) : { status: 0 };
+const money813b = await req3('GET', '/api/worker/money', { token: wSeller.token });
+const estEnt813 = (money813b.j.entries || []).find(e => estCj813.j && estCj813.j.job && e.jobId === estCj813.j.job.id);
+t('v80.13 estimate sale: a $300 tech estimate lands on its seller at 68% (pay $194 + $10 = $204 waiting)', est300.status === 201 && est300.j.total === 300 && est300.j.adjusted === false && estCj813.status === 201 && estCj813.j.job.payOffer === 194 && estCj813.j.job.salesCommission === 10 && estDone813.status === 200 && !!estEnt813 && estEnt813.amount === 204 && estEnt813.payOffer === 194 && estEnt813.salesCommission === 10);
+// A job the tech did NOT sell keeps the standard pay model, untouched:
+// a board TV job at the standard $100 offer pays exactly that.
+const boardTv813 = await req3('POST', '/api/jobs', { token: A3, body: { service: 'TV Mounting', city: 'Fairfield', description: 'board tv', when: 'Friday 9am', payOffer: 100, customerPrice: 125, customerName: 'Board Cust', customerPhone: '(707) 555-0177', address: '742 Evergreen Terrace, Fairfield, CA' } });
+const claimTv813 = await req3('POST', '/api/jobs/' + boardTv813.j.job.id + '/claim', { token: wFar.token });
+await req3('PATCH', '/api/jobs/' + boardTv813.j.job.id, { token: wFar.token, body: { photosDone: true } });
+const farMoney813 = await req3('GET', '/api/worker/money', { token: wFar.token });
+const boardEnt813 = (farMoney813.j.entries || []).find(e => e.jobId === boardTv813.j.job.id);
+t('v80.13 non-sold job: a board TV job claimed by another tech pays its STANDARD offer ($100, no commission, no 68%)', claimTv813.status === 200 && !!boardEnt813 && boardEnt813.amount === 100 && boardEnt813.payOffer === 100 && boardEnt813.salesCommission === 0);
 
 try { child3.kill('SIGTERM'); } catch (e) {}
 try { geo3.close(); } catch (e) {}
