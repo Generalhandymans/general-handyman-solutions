@@ -1352,6 +1352,7 @@ table.cmp button{white-space:nowrap}
     <div id="myJobs" class="custAccountOnly"></div>
     <h2 class="custAccountOnly">My invoices</h2>
     <div id="myInvoices" class="custAccountOnly"></div>
+    <div id="myReferrals" class="custAccountOnly"></div>
     <div id="delAcctSlotC"></div>
   </div>
 
@@ -2321,7 +2322,10 @@ en: {
   ccOfferTitle: '⭐ Add HomeCare — first month FREE', ccOfferBody: 'Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.',
   ccAddMore: '＋ Add more services', ccPayTitle: 'Payment',
   ccPayNote: 'You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.',
-  ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…'
+  ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…',
+  crefTitle: '🎁 Refer & earn', crefIntro: 'Share your personal link. When a friend joins a membership and pays their first real charge, you earn a $10 credit for your next job or membership payment — one credit per friend, tracked automatically right here.',
+  crefYourLink: 'Your referral link', crefCopy: 'Copy', crefBalance: 'Your credit balance', crefSignups: 'Friends you referred', crefNoSignups: 'No referrals yet — share your link to get started.',
+  crefCreditWord: 'credit', crefCredited: 'credit earned', crefMember: 'member'
 },
 es: {
   authTitleMember: 'Acceso de miembros', authTitleLogin: 'Entrar / Crear cuenta',
@@ -2440,7 +2444,10 @@ es: {
   ccOfferTitle: '⭐ Agregar HomeCare — primer mes GRATIS', ccOfferBody: 'Los miembros ahorran 20% en mano de obra — el precio de miembro aplica a ESTA orden de inmediato. Luego $29/mes, cancela cuando quieras. Totalmente opcional: tu orden funciona sin esto.',
   ccAddMore: '＋ Agregar más servicios', ccPayTitle: 'Pago',
   ccPayNote: 'Hoy pagas solo el depósito de apartado — $50 fijo en totales hasta $300, 40% en totales sobre $300 — y el saldo cuando el trabajo esté hecho. Cancela antes de que un técnico sea despachado y recibes reembolso completo; después del despacho, $75 no son reembolsables.',
-  ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…'
+  ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…',
+  crefTitle: '🎁 Recomienda y gana', crefIntro: 'Comparte tu link personal. Cuando un amigo se une a una membresía y paga su primer cargo real, ganas un crédito de $10 para tu próximo trabajo o pago de membresía — un crédito por amigo, rastreado automáticamente aquí mismo.',
+  crefYourLink: 'Tu link de referido', crefCopy: 'Copiar', crefBalance: 'Tu saldo de crédito', crefSignups: 'Amigos que referiste', crefNoSignups: 'Todavía no tienes referidos — comparte tu link para empezar.',
+  crefCreditWord: 'crédito', crefCredited: 'crédito ganado', crefMember: 'miembro'
 }
 };
 function CU(k){ const d = CUST_UI[menuLang()] || CUST_UI.en; const v = d[k]; return v !== undefined ? v : (CUST_UI.en[k] !== undefined ? CUST_UI.en[k] : k); }
@@ -3370,7 +3377,7 @@ function render(){
       try { sessionStorage.removeItem('ghsRoleNote'); } catch (e) {}
     } else rn.style.display = 'none';
   }
-  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); }
+  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); loadMyReferrals(); }
   if(!(me && me.role==='worker' && me.status==='active')) stopDutySharing();
   if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadWorkerSales(); loadWorkerEstimates(); loadWorkerReferrals(); loadCaptainArea(); loadWorkerProfile(); initDutySharing(); }
   if(me && me.role==='admin'){ loadAdmin(); }
@@ -3983,6 +3990,23 @@ async function loadWorkerReferrals(){ const box=document.getElementById('workerR
   box.innerHTML='<h2>'+WT('refTitle')+'</h2><div class="card"><p class="mut">'+WT('refIntro')+'</p><b>'+WT('refYourLink')+'</b><br><span style="word-break:break-all">'+escHtml(d.link)+'</span> <button type="button" class="ghost" onclick="copyShareLink(\''+d.link+'\', this)">'+WT('copyBtn')+'</button>'
     + '<div style="margin-top:8px"><b>'+WT('refEarned')+' <span class="st">$'+Number((d.totals||{}).earned||0).toFixed(2)+'</span></b> · <b>'+WT('refPending')+' $'+Number((d.totals||{}).pending||0).toFixed(2)+'</b></div>'
     + '<h3>'+WT('refSignups')+'</h3>'+(srows||'<p class="mut">'+WT('refNoSignups')+'</p>')+(brows?'<div style="margin-top:6px">'+brows+'</div>':'')+'</div>';
+}
+// ---------- v80.23: customer referrals card (audit A-3) ----------
+// The customer's mirror of the tech referral card: their personal link
+// (the ?src= stamp does the attribution), the friends who arrived
+// through it, and the tracked credit balance — all copy through CUST_UI.
+function custReferralCardHtml(d){
+  if(!d || !d.code) return '';
+  const srows=(d.signups||[]).map(function(s){ return '<div style="padding:5px 0;border-bottom:1px dashed #333">'+escHtml(s.name||'')+(s.memberActive?' · <b>'+CU('crefMember')+'</b> ✓':'')+(s.credited?' <span class="pill">'+CU('crefCredited')+'</span>':'')+'</div>'; }).join('');
+  const crows=(d.credits||[]).map(function(x){ return '<div style="padding:5px 0;border-bottom:1px dashed #333"><span class="st">$'+Number(x.amount||0).toFixed(2)+'</span> '+CU('crefCreditWord')+' — '+escHtml(x.customerName||'')+'</div>'; }).join('');
+  return '<h2>'+CU('crefTitle')+'</h2><div class="card"><p class="mut">'+CU('crefIntro')+'</p><b>'+CU('crefYourLink')+'</b><br><span style="word-break:break-all">'+escHtml(d.link)+'</span> <button type="button" class="ghost" onclick="copyShareLink(\''+d.link+'\', this)">'+CU('crefCopy')+'</button>'
+    + '<div style="margin-top:8px"><b>'+CU('crefBalance')+': <span class="st">$'+Number((d.totals||{}).balance||0).toFixed(2)+'</span></b></div>'
+    + '<h3>'+CU('crefSignups')+'</h3>'+(srows||'<p class="mut">'+CU('crefNoSignups')+'</p>')+(crows?'<div style="margin-top:6px">'+crows+'</div>':'')+'</div>';
+}
+async function loadMyReferrals(){ const box=document.getElementById('myReferrals'); if(!box||!me||me.role!=='customer'){ if(box) box.innerHTML=''; return; }
+  let d=null; try{ d=await api('/api/me/referrals'); }catch(e){}
+  if(!d||!d.code){ box.innerHTML=''; return; }
+  box.innerHTML=custReferralCardHtml(d);
 }
 // ---------- Worker avatars (v41) ----------
 // One avatar treatment everywhere (worker profile, customer technician
@@ -5602,8 +5626,8 @@ async function loadAdminSources(){
 // app language) so the two sections read in the language Gabriel is
 // using, like the rest of the app's painted blocks.
 const ADM812 = {
-  en: { today: 'Today', d7: '7 days', d30: '30 days', funnel: 'Funnel', views: 'views', carts: 'carts', joins: 'signups', payments: 'payments', source: 'Source', deposits: 'Deposits', newMembers: 'New paying members', spend: 'Ad spend', cac: 'CAC', workerCode: 'worker code', addSpend: 'Add ad spend', amount: 'Amount', date: 'Date', save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', noSpend: 'No spend records yet — add the first one above when an ad runs.', couldNot: 'Could not load.', depWaiting: 'Deposits in, balance still out', orders: 'orders', collected: 'collected', balanceOut: 'balance still out', receivable: 'Total receivable', orderBalances: 'order balances', cartBalances: 'unconverted cart balances', invoicesOpen: 'open invoices', techDue: 'Tech payouts waiting', jobs: 'jobs', bounties: 'referral bounties pending', awaitingSetup: 'waiting on Stripe setup', captainsDue: 'Captain overrides accrued', entries: 'entries', memFail: 'Membership payment failures (this month)', stripeBox: 'Stripe', avail: 'available', pendingBal: 'pending', nextPayout: 'next payout', noStripe: 'Balance not available right now — the rest of this page is live from the app.' },
-  es: { today: 'Hoy', d7: '7 días', d30: '30 días', funnel: 'Embudo', views: 'visitas', carts: 'carritos', joins: 'registros', payments: 'pagos', source: 'Fuente', deposits: 'Depósitos', newMembers: 'Miembros nuevos que pagaron', spend: 'Gasto en anuncios', cac: 'CAC', workerCode: 'código de técnico', addSpend: 'Agregar gasto en anuncios', amount: 'Monto', date: 'Fecha', save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Borrar', noSpend: 'Todavía no hay gastos registrados — agrega el primero arriba cuando corra un anuncio.', couldNot: 'No se pudo cargar.', depWaiting: 'Depósitos cobrados, saldo pendiente', orders: 'órdenes', collected: 'cobrados', balanceOut: 'de saldo por cobrar', receivable: 'Total por cobrar', orderBalances: 'saldos de órdenes', cartBalances: 'saldos de carritos sin convertir', invoicesOpen: 'facturas abiertas', techDue: 'Pagos a técnicos en espera', jobs: 'trabajos', bounties: 'bonos de referido pendientes', awaitingSetup: 'esperando su Stripe', captainsDue: 'Overrides de capitán acumulados', entries: 'registros', memFail: 'Pagos de membresía fallidos (este mes)', stripeBox: 'Stripe', avail: 'disponible', pendingBal: 'pendiente', nextPayout: 'próximo payout', noStripe: 'Saldo no disponible ahorita — el resto de la página sí es en vivo desde la app.' }
+  en: { today: 'Today', d7: '7 days', d30: '30 days', funnel: 'Funnel', views: 'views', carts: 'carts', joins: 'signups', payments: 'payments', source: 'Source', deposits: 'Deposits', newMembers: 'New paying members', spend: 'Ad spend', cac: 'CAC', workerCode: 'worker code', customerCode: 'customer code', addSpend: 'Add ad spend', amount: 'Amount', date: 'Date', save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', noSpend: 'No spend records yet — add the first one above when an ad runs.', couldNot: 'Could not load.', depWaiting: 'Deposits in, balance still out', orders: 'orders', collected: 'collected', balanceOut: 'balance still out', receivable: 'Total receivable', orderBalances: 'order balances', cartBalances: 'unconverted cart balances', invoicesOpen: 'open invoices', techDue: 'Tech payouts waiting', jobs: 'jobs', bounties: 'referral bounties pending', awaitingSetup: 'waiting on Stripe setup', captainsDue: 'Captain overrides accrued', entries: 'entries', memFail: 'Membership payment failures (this month)', stripeBox: 'Stripe', avail: 'available', pendingBal: 'pending', nextPayout: 'next payout', noStripe: 'Balance not available right now — the rest of this page is live from the app.' },
+  es: { today: 'Hoy', d7: '7 días', d30: '30 días', funnel: 'Embudo', views: 'visitas', carts: 'carritos', joins: 'registros', payments: 'pagos', source: 'Fuente', deposits: 'Depósitos', newMembers: 'Miembros nuevos que pagaron', spend: 'Gasto en anuncios', cac: 'CAC', workerCode: 'código de técnico', customerCode: 'código de cliente', addSpend: 'Agregar gasto en anuncios', amount: 'Monto', date: 'Fecha', save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Borrar', noSpend: 'Todavía no hay gastos registrados — agrega el primero arriba cuando corra un anuncio.', couldNot: 'No se pudo cargar.', depWaiting: 'Depósitos cobrados, saldo pendiente', orders: 'órdenes', collected: 'cobrados', balanceOut: 'de saldo por cobrar', receivable: 'Total por cobrar', orderBalances: 'saldos de órdenes', cartBalances: 'saldos de carritos sin convertir', invoicesOpen: 'facturas abiertas', techDue: 'Pagos a técnicos en espera', jobs: 'trabajos', bounties: 'bonos de referido pendientes', awaitingSetup: 'esperando su Stripe', captainsDue: 'Overrides de capitán acumulados', entries: 'registros', memFail: 'Pagos de membresía fallidos (este mes)', stripeBox: 'Stripe', avail: 'disponible', pendingBal: 'pendiente', nextPayout: 'próximo payout', noStripe: 'Saldo no disponible ahorita — el resto de la página sí es en vivo desde la app.' }
 };
 let trafficRange812 = '7d';
 function setTrafficRange(r){ trafficRange812 = r; loadAdminTraffic(); }
@@ -5624,7 +5648,7 @@ async function loadAdminTraffic(){
     const rows = d.rows || [];
     if (rows.length) {
       h += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><tr><th style="text-align:left">' + S.source + '</th><th>' + S.views + '</th><th>' + S.carts + '</th><th>' + S.joins + '</th><th>' + S.deposits + '</th><th>' + S.newMembers + '</th><th>' + S.spend + '</th><th>' + S.cac + '</th></tr>'
-        + rows.map(function (r) { return '<tr><td>' + escHtml(r.source) + (r.workerCode ? ' <span class="mut">(' + S.workerCode + ')</span>' : '') + '</td><td style="text-align:center">' + r.views + '</td><td style="text-align:center">' + r.carts + '</td><td style="text-align:center">' + r.joins + '</td><td style="text-align:center">' + r.deposits + '</td><td style="text-align:center">' + r.newMembers + '</td><td style="text-align:center">' + (r.spend ? moneyFmt(r.spend) : '—') + '</td><td style="text-align:center">' + (r.cac == null ? '—' : moneyFmt(r.cac)) + '</td></tr>'; }).join('') + '</table></div>';
+        + rows.map(function (r) { return '<tr><td>' + escHtml(r.source) + (r.workerCode ? ' <span class="mut">(' + S.workerCode + ')</span>' : '') + (r.customerCode ? ' <span class="mut">(' + S.customerCode + ')</span>' : '') + '</td><td style="text-align:center">' + r.views + '</td><td style="text-align:center">' + r.carts + '</td><td style="text-align:center">' + r.joins + '</td><td style="text-align:center">' + r.deposits + '</td><td style="text-align:center">' + r.newMembers + '</td><td style="text-align:center">' + (r.spend ? moneyFmt(r.spend) : '—') + '</td><td style="text-align:center">' + (r.cac == null ? '—' : moneyFmt(r.cac)) + '</td></tr>'; }).join('') + '</table></div>';
     }
     h += '<div style="margin-top:10px"><b>' + S.addSpend + '</b><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'
       + '<input id="adsSrc" placeholder="' + S.source + ' (ig, fb, google…)" style="flex:1;min-width:120px">'
