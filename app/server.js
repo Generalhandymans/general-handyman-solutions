@@ -4413,7 +4413,7 @@ function platformCards(T, ua) {
 function payResultPageHtml(kind, langOverride, detail) {
   const lang = langOverride === 'es' ? 'es' : 'en';
   const ok = kind === 'success';
-  const T = lang === 'es' ? (ok ? {
+  let T = lang === 'es' ? (ok ? {
     title: 'Pago recibido', h: 'Pago <span style="color:#e42535">recibido</span> ✅',
     body: 'Gracias — tu pago se procesó. Qué sigue depende de lo que pagaste:',
     steps: ['<b>¿Apartaste con un depósito?</b> Tu trabajo quedó agendado — el Team te confirma el día y la hora exactos, y el resto se paga al terminar el trabajo.', '<b>¿Te uniste a una membresía?</b> Ya está activa — tus precios de miembro aplican desde ya, y tu primer estimado en persona es GRATIS.', '<b>¿Pagaste una orden del menú o un estimado?</b> Ya quedó apartado — el Team te confirma tu horario.'],
@@ -4438,6 +4438,23 @@ function payResultPageHtml(kind, langOverride, detail) {
     body: 'No charge was made. Nothing was booked or charged — you can come back and finish anytime; your cart or request is still saved.',
     steps: [], cta: 'Back to the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
   });
+  // v80.22: the UNPROVEN landing — Stripe could not prove a payment
+  // for this arrival, so the page confirms nothing: no booking, no
+  // active membership, no received payment is claimed. It tells the
+  // customer exactly where the truth will show up (their orders in
+  // the app) and that an uncharged cart/request is still saved to
+  // finish paying.
+  if (kind === 'pending') {
+    T = lang === 'es' ? {
+      title: 'Pago en confirmación', h: 'Pago <span style="color:#e42535">en confirmación</span> ⏳',
+      body: 'Todavía no pudimos confirmar este pago — nada queda agendado ni activo hasta que el pago se confirme. Si se hizo el cargo a tu tarjeta, tu orden aparecerá en tu cuenta en la app y el Team la confirma. Si no se hizo ningún cargo, tu carrito o solicitud sigue guardado — abre la app y termina de pagar ahí.',
+      steps: [], cta: 'Abrir la app', foot: '¿Preguntas? Texto o llamada al (707) 862-3773.', otherL: 'View in English'
+    } : {
+      title: 'Payment being confirmed', h: 'Payment <span style="color:#e42535">being confirmed</span> ⏳',
+      body: 'We could not confirm this payment yet — nothing is booked or active until the payment clears. If your card was charged, your order will appear in your account in the app and the Team will confirm it. If no charge went through, your cart or request is still saved — open the app and finish paying there.',
+      steps: [], cta: 'Open the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
+    };
+  }
   const other = lang === 'es' ? 'en' : 'es';
   // v80.21: the personalized detail card (what was paid, how much, its
   // number, and the button back to that exact object) replaces the
@@ -8436,25 +8453,36 @@ async function handleRequest(req, res) {
     // v80.21 CHECKOUT UNO: personalize when Stripe can prove what was
     // paid — the session names the kind + object in metadata stamped at
     // creation. The page language follows the customer's saved account
-    // language, then the session's own locale, then ?lang=. No session
-    // id / unpaid / lookup failure -> the generic page, as before.
+    // language, then the session's own locale, then ?lang=.
+    // v80.22 ORDEN HONESTA (P0-4): the "Payment received" page is
+    // PROOF-GATED — it renders ONLY when Stripe proves this session
+    // paid (or needed no payment). No session id, a forged/unknown id,
+    // an UNPAID session (async methods settle late; a failed first
+    // invoice leaves a completed subscription session unpaid) or a
+    // lookup failure all land on the honest "being confirmed" page:
+    // nothing on it claims a booking, a membership or a received
+    // payment the system cannot prove.
     let detail = null;
+    let proven = false;
     let lang = url.searchParams.get('lang');
     const sid = url.searchParams.get('session_id') || '';
     if (sid && stripeReady()) {
       try {
         const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(sid));
-        if (sess && sess.id === sid && (sess.payment_status === 'paid' || sess.payment_status === 'no_payment_required')) {
-          detail = successDetailFor(sess);
+        if (sess && sess.id === sid) {
           if (!lang) {
             const md = sess.metadata || {};
             const su = md.userId ? db.users.find(x => x.id === md.userId) : null;
             lang = userLangOf(su) || ((sess.locale === 'es' || sess.locale === 'en') ? sess.locale : null);
           }
+          if (sess.payment_status === 'paid' || sess.payment_status === 'no_payment_required') {
+            proven = true;
+            detail = successDetailFor(sess);
+          }
         }
       } catch (e) { console.error('success page session lookup failed', e.message); }
     }
-    return send(res, 200, payResultPageHtml('success', lang, detail));
+    return send(res, 200, payResultPageHtml(proven ? 'success' : 'pending', lang, detail));
   }
   if (p === '/payment/cancelled' && req.method === 'GET') {
     return send(res, 200, payResultPageHtml('cancelled', url.searchParams.get('lang')));
