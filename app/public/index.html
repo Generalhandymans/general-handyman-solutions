@@ -1344,6 +1344,7 @@ table.cmp button{white-space:nowrap}
         <button onclick="saveHomeDetails()" id="saveHomeDetailsBtn">Save home details</button> <span id="homeDetailsMsg" class="mut"></span>
       </div>
     </div>
+    <div id="mySeasonal" class="custAccountOnly"></div>
     <div id="myRecoveredCart" class="custAccountOnly"></div>
     <div id="myProposals" class="custAccountOnly"></div>
     <h2 class="custAccountOnly">My requests</h2>
@@ -2330,7 +2331,9 @@ en: {
   ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…',
   crefTitle: '🎁 Refer & earn', crefIntro: 'Share your personal link. When a friend joins a membership and pays their first real charge, you earn a $10 credit for your next job or membership payment — one credit per friend, tracked automatically right here.',
   crefYourLink: 'Your referral link', crefCopy: 'Copy', crefBalance: 'Your credit balance', crefSignups: 'Friends you referred', crefNoSignups: 'No referrals yet — share your link to get started.',
-  crefCreditWord: 'credit', crefCredited: 'credit earned', crefMember: 'member'
+  crefCreditWord: 'credit', crefCredited: 'credit earned', crefMember: 'member',
+  seasTitle: '🍂 Due again this season', seasIntro: 'These services from your history run on a seasonal cycle — and yours is due again. One tap sets up the order at today\'s price; the usual booking deposit applies and the balance is due when the work is done.',
+  seasLastDone: 'Last done', seasBook: 'Book it again', seasDismiss: 'Not now', seasFilterNote: 'Includes the air / cabin filter swap', seasDueNow: 'Due this season'
 },
 es: {
   authTitleMember: 'Acceso de miembros', authTitleLogin: 'Entrar / Crear cuenta',
@@ -2457,7 +2460,9 @@ es: {
   ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…',
   crefTitle: '🎁 Recomienda y gana', crefIntro: 'Comparte tu link personal. Cuando un amigo se une a una membresía y paga su primer cargo real, ganas un crédito de $10 para tu próximo trabajo o pago de membresía — un crédito por amigo, rastreado automáticamente aquí mismo.',
   crefYourLink: 'Tu link de referido', crefCopy: 'Copiar', crefBalance: 'Tu saldo de crédito', crefSignups: 'Amigos que referiste', crefNoSignups: 'Todavía no tienes referidos — comparte tu link para empezar.',
-  crefCreditWord: 'crédito', crefCredited: 'crédito ganado', crefMember: 'miembro'
+  crefCreditWord: 'crédito', crefCredited: 'crédito ganado', crefMember: 'miembro',
+  seasTitle: '🍂 Ya toca esta temporada', seasIntro: 'Estos servicios de tu historial van por ciclo de temporada — y el tuyo ya toca otra vez. Un toque arma la orden al precio de hoy; aplica el depósito de reserva de siempre y el saldo se paga cuando el trabajo está hecho.',
+  seasLastDone: 'Última vez', seasBook: 'Reservarlo de nuevo', seasDismiss: 'Ahora no', seasFilterNote: 'Incluye el cambio de filtro de aire / cabina', seasDueNow: 'Toca esta temporada'
 }
 };
 function CU(k){ const d = CUST_UI[menuLang()] || CUST_UI.en; const v = d[k]; return v !== undefined ? v : (CUST_UI.en[k] !== undefined ? CUST_UI.en[k] : k); }
@@ -3429,7 +3434,7 @@ function render(){
       try { sessionStorage.removeItem('ghsRoleNote'); } catch (e) {}
     } else rn.style.display = 'none';
   }
-  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); loadMyReferrals(); }
+  if(me && me.role==='customer'){ renderMyMembership(); loadRequests(); loadProposals(); loadMyJobs(); loadRecoveredCart(); custSummary(); loadMyReferrals(); loadSeasonal(); }
   if(!(me && me.role==='worker' && me.status==='active')) stopDutySharing();
   if(me && me.role==='worker'){ loadJobs(); loadWorkerYardVisits(); loadPayouts(); loadWorkerSales(); loadWorkerEstimates(); loadWorkerReferrals(); loadCaptainArea(); loadWorkerProfile(); initDutySharing(); }
   if(me && me.role==='admin'){ loadAdmin(); }
@@ -4060,6 +4065,34 @@ async function loadMyReferrals(){ const box=document.getElementById('myReferrals
   if(!d||!d.code){ box.innerHTML=''; return; }
   box.innerHTML=custReferralCardHtml(d);
 }
+// ---------- v80.27: seasonal rebooking card (audit A-4) ----------
+// The proposal lives ONLY here, in the account — nothing is ever sent
+// anywhere (STOP TOTAL). Headline = the full LIST price; the member
+// price rides as its own line (Gabriel's price-presentation law). One
+// tap on Book builds the standard customer cart and lands on its page,
+// where the normal checkout and the deposit law run unchanged.
+function seasonalCardHtml(d){
+  const props=(d&&d.proposals)||[];
+  if(!props.length) return '';
+  const rows=props.map(function(pr){
+    return '<div style="padding:8px 0;border-bottom:1px dashed #333">'
+      + '<b>'+escHtml(svcName(pr.serviceId))+'</b> <span class="pill">'+CU('seasDueNow')+'</span><br>'
+      + '<span class="mut">'+CU('seasLastDone')+': '+escHtml(String(pr.lastDoneAt||'').slice(0,10))+'</span>'
+      + (pr.addonId ? '<br><span class="mut">'+CU('seasFilterNote')+'</span>' : '')
+      + '<div style="margin-top:4px"><span style="font-size:20px"><b>$'+Number(pr.list||0).toFixed(0)+'</b></span> · <span class="st">'+CU('cartMembersPayPre')+Number(pr.member||0).toFixed(0)+'</span></div>'
+      + '<div style="margin-top:6px"><button type="button" onclick="seasonalBook(\''+pr.serviceId+'\',this)">'+CU('seasBook')+'</button> <button type="button" class="ghost" onclick="seasonalDismiss(\''+pr.serviceId+'\')">'+CU('seasDismiss')+'</button></div></div>';
+  }).join('');
+  return '<h2>'+CU('seasTitle')+'</h2><div class="card"><p class="mut">'+CU('seasIntro')+'</p>'+rows+'</div>';
+}
+async function loadSeasonal(){ const box=document.getElementById('mySeasonal'); if(!box||!me||me.role!=='customer'){ if(box) box.innerHTML=''; return; }
+  let d=null; try{ d=await api('/api/me/seasonal'); }catch(e){}
+  box.innerHTML=seasonalCardHtml(d||{});
+}
+async function seasonalBook(serviceId, btn){ if(btn) btn.disabled=true;
+  try{ const d=await api('/api/me/seasonal/confirm',{method:'POST', body:JSON.stringify({serviceId})}); if(d&&d.link){ location.href=d.link; return; } }catch(e){}
+  if(btn) btn.disabled=false; loadSeasonal();
+}
+async function seasonalDismiss(serviceId){ try{ await api('/api/me/seasonal/dismiss',{method:'POST', body:JSON.stringify({serviceId})}); }catch(e){} await loadSeasonal(); }
 // ---------- Worker avatars (v41) ----------
 // One avatar treatment everywhere (worker profile, customer technician
 // card, admin cards, captain team, map pins): the worker's photo in a
