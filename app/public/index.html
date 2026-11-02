@@ -1012,7 +1012,7 @@ table.cmp button{white-space:nowrap}
   <div class="sub">Doors, furniture, drywall &amp; more</div>
   <div class="grid">
     <div class="card"><div class="tile"><img src="/old/old-12.webp" alt="Furniture assembly" loading="lazy" decoding="async"></div><div class="body"><div class="name">Furniture Assembly</div><div class="meta">~1.5 h · Standard piece</div><div class="price">$125</div><div class="mem">Members: $100</div><a class="pedir" href="#order/furniture-assembly" style="text-decoration:none;color:#fff">Order</a></div></div>
-    <div class="card"><div class="tile"><img src="/old/old-13.webp" alt="Door slab installation" loading="lazy" decoding="async"></div><div class="body"><div class="name">Door Slab Swap</div><div class="meta">~2 h · + lock install available</div><div class="price">$165</div><div class="mem">Members: $132</div><a class="pedir" href="#order/door-slab-swap" style="text-decoration:none;color:#fff">Order</a></div></div>
+    <div class="card"><div class="tile"><img src="/old/old-13.webp" alt="Door slab installation" loading="lazy" decoding="async"></div><div class="body"><div class="name">Door Slab Swap</div><div class="meta">~2 h · + lock install available</div><div class="price">$175</div><div class="mem">Members: $140</div><a class="pedir" href="#order/door-slab-swap" style="text-decoration:none;color:#fff">Order</a></div></div>
     <div class="card"><div class="tile"><img src="/old/old-14.webp" alt="Closet organizer install" loading="lazy" decoding="async"></div><div class="body"><div class="name">Closet Organizer Install</div><div class="meta">~3 h · Kit systems</div><div class="price">$250</div><div class="mem">Members: $200</div><a class="pedir" href="#order/closet-organizer" style="text-decoration:none;color:#fff">Order</a></div></div>
     <div class="card"><div class="tile"><img src="/old/old-15.webp" alt="Drywall patch" loading="lazy" decoding="async"></div><div class="body"><div class="name">Drywall Patch — Medium</div><div class="meta">Textured, ready to paint</div><div class="price">$250</div><div class="mem">Members: $200</div><a class="pedir" href="#order/drywall-patch-medium" style="text-decoration:none;color:#fff">Order</a></div></div>
   </div>
@@ -6179,17 +6179,17 @@ window.addEventListener('hashchange', function(){
 const MENU_CATALOG = {
   // ---------- Carpintería (master list section 1) ----------
   'closet-doors': { name: 'Closet Doors (Pair)', meta: '~2.5 h · Per pair', price: 215, member: 172 },
-  'door-slab-swap': { name: 'Door Slab Swap', meta: '~2 h · + lock install available', price: 165, member: 132, addons: [{ id: 'knob', name: 'Install a knob/lever on the new slab', price: 75 }, { id: 'deadbolt', name: 'Install a deadbolt on the new slab', price: 75 }, { id: 'haul-door', name: 'Haul away the old door', price: 50, nodisc: true }] },
+  'door-slab-swap': { name: 'Door Slab Swap', meta: '~2 h · + lock install available', price: 175, member: 140, addons: [{ id: 'knob', name: 'Install a knob/lever on the new slab', price: 75 }, { id: 'deadbolt', name: 'Install a deadbolt on the new slab', price: 75 }, { id: 'haul-door', name: 'Haul away the old door', price: 50, nodisc: true }] },
   'door-knob-install': { name: 'Door Knob / Lever Install', meta: '~1 h · Per door', price: 85, member: 68 },
   'deadbolt-install': { name: 'Deadbolt Install — Single', meta: '~45 min · Flat', price: 85, member: 68 },
   'deadbolt-knob-combo': { name: 'Deadbolt + Knob Combo Install', meta: '~1 h · Flat', price: 125, member: 100 },
   'smart-lock-install': { name: 'Smart Lock Install & Setup', meta: '~1.5 h · Flat', price: 135, member: 108 },
   'door-adjustment': { name: 'Door Adjustment', meta: '~1 h · Sticks / hard to latch', price: 85, member: 68 },
   'weatherstripping': { name: 'Weatherstripping', meta: '~1 h · Per door', price: 85, member: 68 },
-  'screen-door-install': { name: 'Screen Door Install', meta: '~2 h · Flat', price: 165, member: 132 },
+  'screen-door-install': { name: 'Screen Door Install', meta: '~2 h · Flat', price: 175, member: 140 },
   'sliding-door-service': { name: 'Sliding Door Roller / Track Service', meta: '~1.5 h · Flat', price: 135, member: 108 },
   'window-screen-repair': { name: 'Window Screen Rescreen / Repair', meta: '~1 h · Up to 2 screens', price: 85, member: 68, addons: [{ id: 'extra-screen', name: 'Additional screen rescreen — same visit', price: 25 }] },
-  'pet-door-install': { name: 'Pet Door Install (In Door)', meta: '~2 h · Flat', price: 165, member: 132 },
+  'pet-door-install': { name: 'Pet Door Install (In Door)', meta: '~2 h · Flat', price: 175, member: 140 },
   'furniture-assembly': { name: 'Furniture Assembly', meta: '~1.5 h · Standard piece', price: 125, member: 100 },
   'furniture-assembly-large': { name: 'Furniture Assembly — Large / Complex', meta: '~2.5 h · Wardrobe, bunk bed, big pieces', price: 215, member: 172 },
   'closet-organizer': { name: 'Closet Organizer Install', meta: '~3 h · Kit systems', price: 250, member: 200 },
@@ -6214,7 +6214,7 @@ const MENU_CATALOG = {
   'paint-room-large-ceiling': { name: 'Paint Large Room + Ceiling', meta: '~8 h · Labor', price: 675, member: 540 },
   'accent-wall-painting': { name: 'Accent Wall Painting', meta: '~2.5 h · Per wall', price: 225, member: 180 },
   'interior-door-painting': { name: 'Interior Door Painting', meta: '~1 h · Per door', price: 85, member: 68 },
-  'fence-picket-repair': { name: 'Fence Picket Repair (Up to 5)', meta: '~2 h · Flat', price: 165, member: 132 },
+  'fence-picket-repair': { name: 'Fence Picket Repair (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140 },
   'fence-post-replacement': { name: 'Fence Post Replacement', meta: '~1-1.5 h · Per post — add-on to a fence repair visit', price: 125, member: 100 },
   'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140 },
   'gate-repair': { name: 'Gate Repair / Adjustment', meta: '~1.5 h · Flat', price: 135, member: 108 },
@@ -6241,7 +6241,7 @@ const MENU_CATALOG = {
   'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
   'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 215, member: 172, addons: [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50, nodisc: true }] },
   'toilet-repair': { name: 'Toilet Repair (Fill Valve / Flapper)', meta: '~1 h · Flat', price: 125, member: 100 },
-  'garbage-disposal-swap': { name: 'Garbage Disposal Swap', meta: '~2 h · Flat', price: 165, member: 132, addons: [{ id: 'haul-disposal', name: 'Haul away the old disposal', price: 50, nodisc: true }] },
+  'garbage-disposal-swap': { name: 'Garbage Disposal Swap', meta: '~2 h · Flat', price: 175, member: 140, addons: [{ id: 'haul-disposal', name: 'Haul away the old disposal', price: 50, nodisc: true }] },
   'showerhead-swap': { name: 'Showerhead Swap', meta: '~45 min · Flat', price: 85, member: 68 },
   'tub-shower-recaulk': { name: 'Tub / Shower Re-Caulk', meta: '~1.5 h · Flat', price: 135, member: 108 },
   'grab-bar-install': { name: 'Grab Bar Install', meta: '~1 h · Each', price: 125, member: 100, addons: [{ id: 'extra-grab-bar', name: 'Additional grab bar — same visit', price: 75 }] },
@@ -7611,7 +7611,7 @@ const OH_UI = {
     secCarpH: '🪚 Carpentry', secCarpSub: 'Doors, furniture, drywall & more',
     carpCards: [
       { name: 'Furniture Assembly', meta: '~1.5 h · Standard piece', mem: 'Members: $100' },
-      { name: 'Door Slab Swap', meta: '~2 h · + lock install available', mem: 'Members: $132' },
+      { name: 'Door Slab Swap', meta: '~2 h · + lock install available', mem: 'Members: $140' },
       { name: 'Closet Organizer Install', meta: '~3 h · Kit systems', mem: 'Members: $200' },
       { name: 'Drywall Patch — Medium', meta: 'Textured, ready to paint', mem: 'Members: $200' }
     ],
@@ -7714,7 +7714,7 @@ const OH_UI = {
     secCarpH: '🪚 Carpintería', secCarpSub: 'Puertas, muebles, drywall y más',
     carpCards: [
       { name: 'Armado de muebles', meta: '~1.5 h · Pieza estándar', mem: 'Miembros: $100' },
-      { name: 'Cambio de puerta (solo la hoja)', meta: '~2 h · + Instalación de chapa disponible', mem: 'Miembros: $132' },
+      { name: 'Cambio de puerta (solo la hoja)', meta: '~2 h · + Instalación de chapa disponible', mem: 'Miembros: $140' },
       { name: 'Instalación de organizador de clóset', meta: '~3 h · Sistemas en kit', mem: 'Miembros: $200' },
       { name: 'Parche de tablaroca — mediano', meta: 'Con textura, listo para pintar', mem: 'Miembros: $200' }
     ],
