@@ -402,7 +402,7 @@ table.cmp button{white-space:nowrap}
 <header>
   <span id="homeSearchWrap" style="flex:1 1 200px;max-width:420px;display:flex;min-width:150px"><input id="homeSearch" type="search" placeholder="What do you need today?" oninput="menuSearch(this.value)" style="width:100%;border-radius:999px;padding:9px 14px" aria-label="Search services"></span>
   <span style="display:flex;align-items:center;gap:10px">
-    <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app">Inicio</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menú</a><a href="#memberships">Memberships</a><a href="#yard-care">Yard Care</a></nav>
+    <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app" id="navHomeLink">Inicio</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menú</a><a href="#memberships" id="navMembershipsLink">Memberships</a><a href="#yard-care" id="navYardLink">Yard Care</a></nav>
     <a href="/instalar" id="installNavLink" style="color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a">📱 Install app</a>
     <span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="globLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="globLangEs" onclick="setMenuLang('es')">ES</button></span>
     <button id="memberLoginBtn" onclick="showLogin()" style="background:#fff;color:#0b0b0b;border:1px solid #fff;font-size:14px;padding:8px 14px">Member log in</button>
@@ -413,7 +413,7 @@ table.cmp button{white-space:nowrap}
   </span>
 </header>
 <div id="notifPanel" class="card" style="display:none;max-width:880px;margin:10px auto"></div>
-<div id="teamContactPill"><a href="tel:+17078623773">📞 Call the Team</a><a class="sms" href="sms:+17078623773">💬 Text the Team</a><span id="photoFab"><a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener">📸 Free estimate</a></span></div>
+<div id="teamContactPill"><a href="tel:+17078623773" id="pillCall">📞 Call the Team</a><a class="sms" href="sms:+17078623773" id="pillText">💬 Text the Team</a><span id="photoFab"><a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener" id="pillPhoto">📸 Free estimate</a></span></div>
 
 <div class="wrap">
   <!-- PLAN COMPARISON (added 2026-10-21) — front-page grid: no membership vs membership -->
@@ -450,9 +450,9 @@ table.cmp button{white-space:nowrap}
       <p class="mut" style="font-size:12.5px;margin:4px 0 0">Switch plans right here — every price in this form follows the plan you pick.</p>
     </div>
     <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
-    <div id="nameRow"><label>Full name</label><input id="aName" placeholder="First & last name"></div>
+    <div id="nameRow"><label id="authFullNameLbl">Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
-    <div id="phoneRow"><label>Phone</label><input id="aPhone" placeholder="707-___-____"></div>
+    <div id="phoneRow"><label id="authPhoneLbl">Phone</label><input id="aPhone" placeholder="707-___-____"></div>
     <!-- v77 (Gabriel, 2026-10-25): membership is an OPTIONAL offer inside
          the plain signup — default is the free account alone. Picking a
          plan reveals the membership fields and, on submit, continues to
@@ -474,25 +474,25 @@ table.cmp button{white-space:nowrap}
       </div>
     </div>
     <div id="serviceAddressRow" style="display:none">
-      <label>Service address — where we'll do the work</label>
+      <label id="serviceAddressLbl">Service address — where we'll do the work</label>
       <input id="aServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
       <p class="mut" id="serviceAddressHint" style="font-size:12.5px;margin:4px 0 0">Optional for a regular account. Required when joining Yard Care or HomeCare Plus.</p>
     </div>
     <div id="homeGroup" style="display:none">
-      <label>ZIP code <span class="mut">(optional — helps the Team plan your route)</span></label>
+      <label id="zipLbl">ZIP code <span class="mut">(optional — helps the Team plan your route)</span></label>
       <input id="aZip" inputmode="numeric" autocomplete="postal-code" placeholder="94534">
       <div class="row">
-        <div><label>Home type</label><select id="aHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
-        <div><label>Yard size</label><select id="aYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+        <div><label id="homeTypeLbl">Home type</label><select id="aHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
+        <div><label id="yardSizeLbl">Yard size</label><select id="aYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
       </div>
-      <label>Home notes <span class="mut">(optional — gate, dogs, access)</span></label>
+      <label id="homeNotesLbl">Home notes <span class="mut">(optional — gate, dogs, access)</span></label>
       <input id="aHomeNotes" maxlength="300" placeholder="Gate code, pets, parking…">
     </div>
     <div id="startGroup" style="display:none">
-      <label>Preferred start — we'll confirm your exact day</label>
+      <label id="startLbl">Preferred start — we'll confirm your exact day</label>
       <div class="pick" id="aStartPick"><button type="button" data-v="asap" class="sel">As soon as possible</button><button type="button" data-v="date">A specific date</button></div>
       <input id="aStartDate" type="date" style="display:none;margin-top:8px">
-      <p class="mut" style="font-size:12.5px;margin:4px 0 0">Just a preference — the Team confirms your exact start day with you. Picking a date books nothing and charges nothing.</p>
+      <p class="mut" id="startNote" style="font-size:12.5px;margin:4px 0 0">Just a preference — the Team confirms your exact start day with you. Picking a date books nothing and charges nothing.</p>
     </div>
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="cardRow" style="display:none">
@@ -591,11 +591,11 @@ table.cmp button{white-space:nowrap}
   <!-- RESET PASSWORD (added 2026-10-21, v20) — shown when the app is
        opened from an emailed #reset=<token> link -->
   <div id="resetBox" class="card" style="display:none">
-    <h3 style="margin-top:0">Set a new password</h3>
-    <p class="mut">Choose a new password for your account (at least 8 characters). This signs you out everywhere else.</p>
+    <h3 style="margin-top:0" id="resetTitleEl">Set a new password</h3>
+    <p class="mut" id="resetSubEl">Choose a new password for your account (at least 8 characters). This signs you out everywhere else.</p>
     <div id="resetErr" class="err"></div>
-    <label>New password</label><input id="rPass1" type="password" placeholder="New password" autocomplete="new-password">
-    <label>Confirm new password</label><input id="rPass2" type="password" placeholder="Type it again" autocomplete="new-password">
+    <label id="resetLbl1">New password</label><input id="rPass1" type="password" placeholder="New password" autocomplete="new-password">
+    <label id="resetLbl2">Confirm new password</label><input id="rPass2" type="password" placeholder="Type it again" autocomplete="new-password">
     <button id="resetBtn" onclick="submitReset()" style="margin-top:10px">Set new password</button>
   </div>
 
@@ -714,12 +714,12 @@ table.cmp button{white-space:nowrap}
     </div>
     <div id="membershipPageState"></div>
     <div id="membershipAddressBox" class="card" style="display:none;border-color:#e42535;background:#fff5f5">
-      <h3 style="margin-top:0">Service address needed</h3>
-      <p class="mut">Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.</p>
-      <label>Service address — where we'll do the work</label>
+      <h3 style="margin-top:0" id="memAddrTitle">Service address needed</h3>
+      <p class="mut" id="memAddrNote">Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.</p>
+      <label id="serviceAddressLbl2">Service address — where we'll do the work</label>
       <input id="membershipServiceAddress" placeholder="Street address, city, ZIP" autocomplete="street-address">
       <div id="membershipAddressErr" class="err"></div>
-      <button onclick="saveMembershipServiceAddress()">Save &amp; continue to payment</button>
+      <button onclick="saveMembershipServiceAddress()" id="memAddrSave">Save &amp; continue to payment</button>
     </div>
     <div class="membership-grid" id="membershipGrid">
       <div class="card plan-card" id="homeCarePlanCard">
@@ -783,45 +783,45 @@ table.cmp button{white-space:nowrap}
       <button class="ghost" onclick="exitCart()" style="margin-bottom:10px">← Back</button>
       <h3 style="margin:0 0 4px" id="cartTitle">Your cart</h3>
       <p class="mut" style="margin:0 0 6px">General Handyman Solutions · Solano County</p>
-      <div id="cartEmpty" style="display:none"><p class="mut">Your cart is empty — add services from the menu and they will wait for you right here.</p><button onclick="exitCart();goMenu();return false;">Browse the menu</button></div>
+      <div id="cartEmpty" style="display:none"><p class="mut" id="cartEmptyTxt">Your cart is empty — add services from the menu and they will wait for you right here.</p><button onclick="exitCart();goMenu();return false;" id="cartBrowseBtn">Browse the menu</button></div>
       <div id="cartLines"></div>
       <div id="cartTotals"></div>
       <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap"><button id="cartCheckoutBtn" onclick="cartShowCheckout()">Checkout →</button><button class="ghost" id="cartClearBtn" onclick="cartClearAll()">Clear cart</button></div>
     </div>
     <div class="card" id="cartCheckoutCard" style="display:none">
-      <h3 style="margin-top:0">Checkout</h3>
+      <h3 style="margin-top:0" id="ccTitleEl">Checkout</h3>
       <div id="ccAcct">
-        <h4>Your account — last step</h4>
-        <label>Your name<input id="ccName" autocomplete="name"></label>
-        <label>Email<input id="ccEmail" type="email" autocomplete="email"></label>
-        <label>Phone<input id="ccPhone" type="tel" autocomplete="tel"></label>
-        <label>Password<input id="ccPass" type="password" autocomplete="current-password" placeholder="Create one (8+ characters) — or your account password"></label>
+        <h4 id="ccAcctTitleEl">Your account — last step</h4>
+        <label id="ccNameLbl">Your name<input id="ccName" autocomplete="name"></label>
+        <label id="ccEmailLbl">Email<input id="ccEmail" type="email" autocomplete="email"></label>
+        <label id="ccPhoneLbl">Phone<input id="ccPhone" type="tel" autocomplete="tel"></label>
+        <label id="ccPassLbl">Password<input id="ccPass" type="password" autocomplete="current-password" placeholder="Create one (8+ characters) — or your account password"></label>
         <p class="mut" id="ccAcctNote">New here? This creates your account as part of checkout. Already a customer? Use your account email + password and we log you in.</p>
       </div>
-      <h4>Where &amp; when</h4>
-      <label>Service address<input id="ccAddress" placeholder="Street address" autocomplete="street-address"></label>
-      <label>City<input id="ccCity" placeholder="Fairfield"></label>
+      <h4 id="ccWhereWhenEl">Where &amp; when</h4>
+      <label id="ccAddrLbl">Service address<input id="ccAddress" placeholder="Street address" autocomplete="street-address"></label>
+      <label id="ccCityLbl">City<input id="ccCity" placeholder="Fairfield"></label>
       <div class="pick" id="ccWhenPick">
         <button type="button" data-w="Today" class="sel" onclick="cartWhenPick(this)">Today</button>
         <button type="button" data-w="Tomorrow" onclick="cartWhenPick(this)">Tomorrow</button>
         <button type="button" data-w="ASAP" onclick="cartWhenPick(this)">ASAP</button>
       </div>
-      <label>Preferred time / details<input id="ccWhenText" placeholder="e.g. after 3 PM — you propose, we confirm"></label>
-      <label>Notes for the technician<textarea id="ccNotes" rows="2" placeholder="Gate code, parking, pets…"></textarea></label>
+      <label id="ccWhenLbl">Preferred time / details<input id="ccWhenText" placeholder="e.g. after 3 PM — you propose, we confirm"></label>
+      <label id="ccNotesLbl">Notes for the technician<textarea id="ccNotes" rows="2" placeholder="Gate code, parking, pets…"></textarea></label>
       <div id="ccOffer" class="auth-offer" style="margin:14px 0;display:none">
-        <label style="display:block"><input type="checkbox" id="ccJoin" onchange="cartJoinToggled()"> <b>⭐ Add HomeCare — first month FREE</b></label>
-        <p class="mut" style="margin:6px 0 0">Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.</p>
+        <label style="display:block"><input type="checkbox" id="ccJoin" onchange="cartJoinToggled()"> <b id="ccOfferTitleEl">⭐ Add HomeCare — first month FREE</b></label>
+        <p class="mut" id="ccOfferBodyEl" style="margin:6px 0 0">Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.</p>
       </div>
       <div id="ccLines"></div>
       <div style="margin:4px 0 6px"><button type="button" class="ghost" id="ccAddMoreBtn" onclick="cartToggleAddMore()">＋ Add more services</button></div>
       <div id="ccAddList" style="display:none"></div>
       <div id="cartTotalsDue" style="margin:10px 0"></div>
-      <h4>Payment</h4>
-      <p class="mut">You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
+      <h4 id="ccPayTitleEl">Payment</h4>
+      <p class="mut" id="ccPayNoteEl">You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="cartPayElement"></div>
       <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
       <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%" disabled>Pay</button>
-      <p class="mut" style="text-align:center">One card, one tap · Secured by Stripe · Deposit today, balance at completion</p>
+      <p class="mut" id="ccFootNoteEl" style="text-align:center">One card, one tap · Secured by Stripe · Deposit today, balance at completion</p>
     </div>
     <div class="card" id="cartDone" style="display:none"></div>
   </div>
@@ -1248,10 +1248,10 @@ table.cmp button{white-space:nowrap}
     <h2>Request a handyman — pide tu servicio</h2>
     <p class="mut">Step by step, no account needed — pick what you need, add pictures, choose when. Free photo estimate, or an in-person estimate for $75 flat (members of any plan: first estimate free, then $50). Labor-only — you buy materials/parts.</p>
     <div class="card" id="wizardCard">
-      <div class="wz-progress"><div class="wz-bar"><div id="wzBarFill"></div></div><span id="wzStepLabel" class="mut">Paso 1 de 4 · Step 1 of 4</span></div>
+      <div class="wz-progress"><div class="wz-bar"><div id="wzBarFill"></div></div><span id="wzStepLabel" class="mut">Step 1 of 4</span></div>
       <div id="wzMsg" class="err" style="display:none"></div>
       <div id="wzStep1">
-        <h3 style="margin-top:6px">¿Qué necesitas? · What do you need?</h3>
+        <h3 style="margin-top:6px" id="wzT1">What do you need?</h3>
         <div class="pick wz-cats" id="cService">
           <button type="button" data-v="Carpentry" data-cat="carpentry"><img id="wzImg-carpentry" alt="Carpentry"><span>Carpintería · Carpentry</span></button>
           <button type="button" data-v="Electrical" data-cat="electrical"><img id="wzImg-electrical" alt="Electrical"><span>Electricidad · Electrical</span></button>
@@ -1263,46 +1263,46 @@ table.cmp button{white-space:nowrap}
         <div id="wzMenuPanel"></div>
       </div>
       <div id="wzStep2" style="display:none">
-        <h3 style="margin-top:6px">Detalles y fotos · Details &amp; photos</h3>
+        <h3 style="margin-top:6px" id="wzT2">Details &amp; photos</h3>
         <p class="mut" id="wzDescHint"></p>
-        <label>Describe the job · Describe el trabajo</label><textarea id="rDesc" placeholder="What do you need done?"></textarea>
-        <label>Photos of the job (up to 6) — the Team quotes faster with pictures</label>
+        <label id="wzDescLbl">Describe the job</label><textarea id="rDesc" placeholder="What do you need done?"></textarea>
+        <label id="wzPhotosLbl">Photos of the job (up to 6) — the Team quotes faster with pictures</label>
         <div id="wzPhotoGuide"></div>
         <input id="rPhotos" type="file" accept="image/*" multiple>
         <div id="rPhotoNames" class="mut"></div>
-        <label>Estimate type · Tipo de estimado</label>
+        <label id="wzEstTypeLbl">Estimate type</label>
         <div class="pick" id="cEst">
-          <button type="button" data-v="photo">Free photo estimate — pictures required</button><button type="button" data-v="inperson" class="sel">In-person estimate — $75</button>
+          <button type="button" data-v="photo" id="wzEstPhotoBtn">Free photo estimate — pictures required</button><button type="button" data-v="inperson" class="sel" id="wzEstInPersonBtn">In-person estimate — $75</button>
         </div>
-        <p class="mut">Photo estimate is always FREE. In-person: $75 flat — members of any plan get their first one FREE, then $50. The fee is credited toward your repair when you approve the work the same day.</p>
+        <p class="mut" id="wzEstNote">Photo estimate is always FREE. In-person: $75 flat — members of any plan get their first one FREE, then $50. The fee is credited toward your repair when you approve the work the same day.</p>
       </div>
       <div id="wzStep3" style="display:none">
-        <h3 style="margin-top:6px">Dónde y cuándo · Where &amp; when</h3>
-        <label>Where is the job? · Ciudad</label>
+        <h3 style="margin-top:6px" id="wzT3">Where &amp; when</h3>
+        <label id="wzCityLbl">Where is the job?</label>
         <div class="pick" id="cCity">
           <button type="button" data-v="Fairfield">Fairfield</button><button type="button" data-v="Vacaville">Vacaville</button><button type="button" data-v="Vallejo">Vallejo</button><button type="button" data-v="Suisun City">Suisun City</button><button type="button" data-v="Napa area">Napa area</button><button type="button" data-v="Other nearby">Other nearby</button>
         </div>
-        <label>Full home address (required)</label><input id="rAddr" placeholder="Street address" autocomplete="street-address">
+        <label id="wzAddrLbl">Full home address (required)</label><input id="rAddr" placeholder="Street address" autocomplete="street-address">
         <div id="wzAddrSugg"></div>
-        <label>When do you need it? · ¿Cuándo?</label>
+        <label id="wzWhenLbl">When do you need it?</label>
         <div class="pick" id="cWhen">
           <button type="button" data-v="ASAP / Emergency">ASAP / Emergency (+25%)</button><button type="button" data-v="Today">Today</button><button type="button" data-v="Tomorrow">Tomorrow</button><button type="button" data-v="This week">This week</button><button type="button" data-v="Pick a date">Pick a date</button>
         </div>
         <input id="rDate" type="date" style="display:none">
-        <p class="mut">You propose the day and time — the Team confirms it with you before anything is final. · Tú propones el día y la hora; el Team te lo confirma.</p>
-        <label>Access notes — gate code, dogs, parking… (optional)</label>
+        <p class="mut" id="wzWhenNote">You propose the day and time — the Team confirms it with you before anything is final.</p>
+        <label id="wzAccessLbl">Access notes — gate code, dogs, parking… (optional)</label>
         <input id="rAccess" maxlength="300" placeholder="Gate code, pets, parking…">
       </div>
       <div id="wzStep4" style="display:none">
-        <h3 style="margin-top:6px">Tus datos y enviar · Your info &amp; send</h3>
+        <h3 style="margin-top:6px" id="wzT4">Your info &amp; send</h3>
         <div id="anonContact" style="display:none;border-bottom:1px dashed #ddd;margin-bottom:10px;padding-bottom:10px">
-          <label>Your name</label><input id="rName" placeholder="Full name" style="width:100%;max-width:420px">
-          <label>Email (we send your quote here)</label><input id="rEmail" type="email" placeholder="you@email.com" style="width:100%;max-width:420px">
-          <label>Phone</label><input id="rPhone" type="tel" placeholder="707-___-____" style="width:100%;max-width:420px">
+          <label id="wzNameLbl">Your name</label><input id="rName" placeholder="Full name" style="width:100%;max-width:420px">
+          <label id="wzEmailLbl">Email (we send your quote here)</label><input id="rEmail" type="email" placeholder="you@email.com" style="width:100%;max-width:420px">
+          <label id="wzPhoneLbl">Phone</label><input id="rPhone" type="tel" placeholder="707-___-____" style="width:100%;max-width:420px">
         </div>
-        <label>HomeCare membership — $29/mo</label>
+        <label id="wzMemberLbl">HomeCare membership — $29/mo</label>
         <div class="pick" id="cMember">
-          <button type="button" data-v="none" class="sel">Not a member — $75</button><button type="button" data-v="new">New member — first estimate FREE</button><button type="button" data-v="member">Member — $50 estimate</button>
+          <button type="button" data-v="none" class="sel" id="wzMemberNoneBtn">Not a member — $75</button><button type="button" data-v="new" id="wzMemberNewBtn">New member — first estimate FREE</button><button type="button" data-v="member" id="wzMemberMemberBtn">Member — $50 estimate</button>
         </div>
         <div id="wzSummary"></div>
         <div class="card" style="background:#faf9f7;margin:10px 0">
@@ -1316,8 +1316,8 @@ table.cmp button{white-space:nowrap}
       </div>
       <div id="wzDone" style="display:none"></div>
       <div class="wz-nav" id="wzNav">
-        <button type="button" id="wzBack" class="ghost" onclick="wzBackFn()">← Atrás · Back</button>
-        <button type="button" id="wzNext" onclick="wzNextFn()">Continuar · Continue →</button>
+        <button type="button" id="wzBack" class="ghost" onclick="wzBackFn()">← Back</button>
+        <button type="button" id="wzNext" onclick="wzNextFn()">Continue →</button>
       </div>
     </div>
     <div id="menuBox">
@@ -1333,15 +1333,15 @@ table.cmp button{white-space:nowrap}
         <p class="mut" style="margin-top:0">Optional details that help the Team plan your visits — your ZIP is never required.</p>
         <label>ZIP code</label><input id="hZip" inputmode="numeric" autocomplete="postal-code" placeholder="94534">
         <div class="row">
-          <div><label>Home type</label><select id="hHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
-          <div><label>Yard size</label><select id="hYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
+          <div><label id="homeTypeLbl2">Home type</label><select id="hHomeType"><option value="">—</option><option value="house">House</option><option value="townhouse">Townhouse</option><option value="apartment">Apartment</option><option value="other">Other</option></select></div>
+          <div><label id="yardSizeLbl2">Yard size</label><select id="hYardSize"><option value="">—</option><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select></div>
         </div>
-        <label>Home notes — gate, dogs, access…</label><input id="hHomeNotes" maxlength="300" placeholder="Gate code, pets, parking…">
-        <label>Preferred start — we'll confirm your exact day</label>
+        <label id="homeNotesLbl2">Home notes — gate, dogs, access…</label><input id="hHomeNotes" maxlength="300" placeholder="Gate code, pets, parking…">
+        <label id="startLbl2">Preferred start — we'll confirm your exact day</label>
         <div class="pick" id="hStartPick"><button type="button" data-v="asap" class="sel">As soon as possible</button><button type="button" data-v="date">A specific date</button></div>
         <input id="hStartDate" type="date" style="display:none;margin-top:8px">
-        <p class="mut" style="font-size:12.5px">Just a preference — picking a date books nothing; the Team confirms your start day with you.</p>
-        <button onclick="saveHomeDetails()">Save home details</button> <span id="homeDetailsMsg" class="mut"></span>
+        <p class="mut" id="startNote2" style="font-size:12.5px">Just a preference — picking a date books nothing; the Team confirms your start day with you.</p>
+        <button onclick="saveHomeDetails()" id="saveHomeDetailsBtn">Save home details</button> <span id="homeDetailsMsg" class="mut"></span>
       </div>
     </div>
     <div id="myRecoveredCart" class="custAccountOnly"></div>
@@ -1553,11 +1553,11 @@ function memberFormPlan(){
 function syncAuthPriceTexts(m){
   const info = (m === 'join' || m === 'homecare') ? JOIN_PLAN_INFO[memberFormPlan()] : null;
   const hc = document.getElementById('hcChargeNote');
-  if (hc && info) hc.innerHTML = info.kind === 'homecare'
-    ? info.name + ' — $' + info.monthly + '/mo total. Your first month is FREE — $0 charged today, then $' + info.monthly + '/mo (one free month per account). ' + info.perks
-    : info.name + ' — $' + info.monthly + '/mo total. Your card will be charged $' + info.monthly + ' today, then $' + info.monthly + '/mo. ' + info.perks;
+  const perks = (menuLang() === 'es' && info && info.perksEs) ? info.perksEs : (info ? info.perks : '');
+  const fill = function(t){ return t.replace(/\{name\}/g, info.name).replace(/\{amt\}/g, info.monthly).replace(/\{perks\}/g, perks); };
+  if (hc && info) hc.innerHTML = fill(CU(info.kind === 'homecare' ? 'hcNoteFreeTpl' : 'hcNotePaidTpl'));
   const lbl = document.getElementById('cardChargeLabel');
-  if (lbl && info) lbl.textContent = info.kind === 'homecare' ? 'Card — $0 charged today, then $' + info.monthly + '/mo' : 'Card — charged $' + info.monthly + ' today, then $' + info.monthly + '/mo';
+  if (lbl && info) lbl.textContent = fill(CU(info.kind === 'homecare' ? 'cardLblFreeTpl' : 'cardLblPaidTpl'));
   const promo = document.getElementById('hcPromo');
   if (promo) promo.style.display = (m === 'join' || m === 'customer' || isWorkerEntry()) ? 'none' : 'block';
 }
@@ -1589,9 +1589,7 @@ function paintOptPlanNote(){
   const info = (s && JOIN_PLAN_INFO[s.value]) ? JOIN_PLAN_INFO[s.value] : null;
   if (!info) { note.style.display = 'none'; note.innerHTML = ''; return; }
   note.style.display = 'block';
-  note.innerHTML = info.kind === 'homecare'
-    ? info.name + ' — your first month is FREE. $0 at checkout today, then $' + info.monthly + '/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.'
-    : info.name + ' — $' + info.monthly + '/mo. Tap Create account and we take you straight to secure checkout to start it — $' + info.monthly + ' charged today, then $' + info.monthly + '/mo. Cancel anytime.';
+  note.innerHTML = CU(info.kind === 'homecare' ? 'optNoteFreeTpl' : 'optNotePaidTpl').replace(/\{name\}/g, info.name).replace(/\{amt\}/g, info.monthly);
 }
 function mode(m){ curMode=m;
   // The member tab IS the join form now (v17): landing on it — via the tab
@@ -1630,8 +1628,8 @@ function mode(m){ curMode=m;
   if (workerAgreeRow) workerAgreeRow.style.display = m==='worker' ? 'block':'none';
   const serviceAddressHint = document.getElementById('serviceAddressHint');
   if (serviceAddressHint) serviceAddressHint.textContent = (pendingMembershipPlan || (pendingJoin && pendingJoin.kind !== 'homecare'))
-    ? 'Required to join this membership — the Team uses this address to schedule your included visits.'
-    : 'Optional for a regular account. Required when joining Yard Care or HomeCare Plus.';
+    ? CU('saHintPlan')
+    : CU('saHintPlain');
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
   const homeGroupEl = document.getElementById('homeGroup');
   if (homeGroupEl) homeGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
@@ -1642,7 +1640,7 @@ function mode(m){ curMode=m;
   document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
   syncAuthPriceTexts(m);
   if (fbInfo) { const promoEl = document.getElementById('hcPromo'); if (promoEl) promoEl.style.display = 'none'; } // the armed plan is the only price on this form — never a competing $49 promo under a Yard/Plus fallback
-  document.getElementById('authBtn').textContent = (m==='homecare' || m==='join') ? 'Create account & join — $' + JOIN_PLAN_INFO[memberFormPlan()].monthly + '/mo' : (fbInfo ? 'Create account & continue — $' + fbInfo.monthly + '/mo' : (m==='login' ? 'Log in' : 'Create account'));
+  document.getElementById('authBtn').textContent = (m==='homecare' || m==='join') ? CU('btnJoinTpl').replace('{amt}', JOIN_PLAN_INFO[memberFormPlan()].monthly) : (fbInfo ? CU('btnContinueTpl').replace('{amt}', fbInfo.monthly) : (m==='login' ? CU('btnLogin') : CU('btnCreate')));
   if (m==='homecare') ensureStripe();
   paintOptPlanNote();
   const tlrM = document.getElementById('techLinkRow');
@@ -1719,7 +1717,8 @@ const W_I18N = {
     chatOpen: 'Job chat is open — say hello.', chatPh: 'Message about this job...', chatSend: 'Send',
     delTitle: 'Delete my account', delIntro: 'You can delete your account and personal information yourself, right here. This is permanent.', delWhatTitle: 'What happens when you delete your account:',
     delLi1: 'Your profile and login are deleted, and you are signed out everywhere.', delLi2: 'Any active membership is cancelled effective immediately. Membership payments are prepaid and are <b>not refunded</b>.', delLi3: 'Past invoices and payment records are kept in anonymized form (no name, email, phone, or address) for tax and legal purposes.', delLi4: 'Work still in progress must be finished — or reassigned by the Team — before your account can be deleted.',
-    delTypeLabel: 'Type your account email address to confirm', delYes: 'Yes, delete my account permanently', delKeep: 'Keep my account', delNeedEmail: 'Type your account email address to confirm.', delDoneTitle: 'Your account has been deleted', delDoneBody: 'Your profile, login, and membership are gone. Thank you for being with General Handyman Solutions — the Team is at (707) 862-3773 if you ever need us again.'
+    delTypeLabel: 'Type your account email address to confirm', delYes: 'Yes, delete my account permanently', delKeep: 'Keep my account', delNeedEmail: 'Type your account email address to confirm.', delDoneTitle: 'Your account has been deleted', delDoneBody: 'Your profile, login, and membership are gone. Thank you for being with General Handyman Solutions — the Team is at (707) 862-3773 if you ever need us again.',
+    loadingGeneric: 'Loading…', errGeneric: 'Could not load this — check your connection.', retryBtn: '↻ Retry'
   },
   es: {
     workerTitle: 'Inicio de técnico', tabWorker: 'Solicitud de técnico nuevo', techSignIn: '🔨 Entrar como técnico', workerEnter: '🔨 ENTRAR', createAccount: 'Crear cuenta',
@@ -1782,7 +1781,8 @@ const W_I18N = {
     chatOpen: 'El chat del trabajo está abierto — saluda.', chatPh: 'Mensaje sobre este trabajo...', chatSend: 'Enviar',
     delTitle: 'Borrar mi cuenta', delIntro: 'Puedes borrar tu cuenta y tu información personal tú mismo, aquí mismo. Es permanente.', delWhatTitle: 'Qué pasa cuando borras tu cuenta:',
     delLi1: 'Tu perfil y tu acceso se borran, y se cierra tu sesión en todos lados.', delLi2: 'Cualquier membresía activa se cancela con efecto inmediato. Los pagos de membresía son por adelantado y <b>no se reembolsan</b>.', delLi3: 'Las facturas y registros de pago pasados se guardan de forma anonimizada (sin nombre, correo, teléfono ni dirección) por requisitos fiscales y legales.', delLi4: 'El trabajo en curso debe terminarse — o ser reasignado por el Team — antes de que puedas borrar tu cuenta.',
-    delTypeLabel: 'Escribe el correo de tu cuenta para confirmar', delYes: 'Sí, borrar mi cuenta para siempre', delKeep: 'Quedarme con mi cuenta', delNeedEmail: 'Escribe el correo de tu cuenta para confirmar.', delDoneTitle: 'Tu cuenta ha sido borrada', delDoneBody: 'Tu perfil, tu acceso y tu membresía ya no existen. Gracias por estar con General Handyman Solutions — el Team está al (707) 862-3773 si nos necesitas otra vez.'
+    delTypeLabel: 'Escribe el correo de tu cuenta para confirmar', delYes: 'Sí, borrar mi cuenta para siempre', delKeep: 'Quedarme con mi cuenta', delNeedEmail: 'Escribe el correo de tu cuenta para confirmar.', delDoneTitle: 'Tu cuenta ha sido borrada', delDoneBody: 'Tu perfil, tu acceso y tu membresía ya no existen. Gracias por estar con General Handyman Solutions — el Team está al (707) 862-3773 si nos necesitas otra vez.',
+    loadingGeneric: 'Cargando…', errGeneric: 'No se pudo cargar — revisa tu conexión.', retryBtn: '↻ Reintentar'
   }
 };
 let _workerLangChoice = null; // explicit/stored pick only — the derived default is re-read until a pick exists
@@ -1796,6 +1796,9 @@ function workerLang(){
   return (entry === 'worker' || location.hash === '#worker') ? 'es' : 'en';
 }
 function WT(k){ const d = W_I18N[workerLang()]; return (d && d[k] != null) ? d[k] : (W_I18N.en[k] != null ? W_I18N.en[k] : k); }
+// v80.19: the ONE active language for any non-worker surface — admin
+// chrome too (Gabriel works in both; the toggle rules everywhere).
+function langOf(u){ return u && u.role === 'worker' ? workerLang() : menuLang(); }
 function wTradeName(k){ return WT('trade_' + k); }
 function setWorkerLang(l){
   _workerLangChoice = (l === 'es') ? 'es' : 'en';
@@ -1810,6 +1813,12 @@ function setWorkerLang(l){
     if (!dw || dw.style.display === 'none') { delAcctPaintedFor = ''; paintDeleteAccount(); }
   }
   refreshPermCard();
+  // v80.19: same switch as the customer toggle — keep both in step.
+  _menuLang = _workerLangChoice;
+  try { localStorage.setItem('ghsMenuLang', _menuLang); } catch (e) {}
+  persistLangPref(_workerLangChoice);
+  if (typeof applyMenuLang === 'function') applyMenuLang();
+  if (typeof renderMenu === 'function') renderMenu();
 }
 function applyWorkerLang(){
   const L = workerLang();
@@ -1843,11 +1852,10 @@ function applyWorkerEntry(){
   const tabH = document.getElementById('tabHomecare');
   if (tabH) tabH.style.display = w ? 'none' : '';
   const h = document.querySelector('#authBox h3');
-  if (h) h.textContent = w ? WT('workerTitle') : 'Log in / Sign up';
+  if (h) h.textContent = w ? WT('workerTitle') : CU('authTitleLogin');
   const hint = document.getElementById('authHint');
-  if (hint) hint.innerHTML = w
-    ? WT('authHintWorker')
-    : 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.';
+  if (hint) { if (w) hint.innerHTML = WT('authHintWorker'); else hint.textContent = CU('authHintLogin'); }
+  if (!w && typeof paintAuthFace === 'function') paintAuthFace();
   const hc = document.getElementById('hcPromo');
   if (hc) hc.style.display = (w || curMode === 'join') ? 'none' : 'block';
   const tlr = document.getElementById('techLinkRow');
@@ -1908,11 +1916,11 @@ let pendingAddressCheckout = null;
 // prices here are display-only; the server plan map stays authoritative.
 let pendingJoin = null;
 const JOIN_PLAN_INFO = {
-  homecare: { name: 'HomeCare', monthly: 29, kind: 'homecare', perks: 'First month FREE • 20% off any job • Free first in-person estimate • Cancel anytime.' },
-  yard1: { name: 'Yard Care', monthly: 75, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
-  yard2: { name: 'Yard Care', monthly: 150, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.' },
-  plus1: { name: 'HomeCare Plus', monthly: 100, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.' },
-  plus2: { name: 'HomeCare Plus', monthly: 175, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 2 yard visits / month included • Cancel anytime.' }
+  homecare: { name: 'HomeCare', monthly: 29, kind: 'homecare', perks: 'First month FREE • 20% off any job • Free first in-person estimate • Cancel anytime.', perksEs: 'Primer mes GRATIS • 20% menos en cualquier trabajo • Primer estimado en persona gratis • Cancela cuando quieras.' },
+  yard1: { name: 'Yard Care', monthly: 75, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.', perksEs: 'Cuidado de yarda mensual • Primer estimado en persona gratis • Un solo cobro total • Cancela cuando quieras.' },
+  yard2: { name: 'Yard Care', monthly: 150, kind: 'yardcare', perks: 'Monthly yard care • Free first in-person estimate • One total charge • Cancel anytime.', perksEs: 'Cuidado de yarda mensual • Primer estimado en persona gratis • Un solo cobro total • Cancela cuando quieras.' },
+  plus1: { name: 'HomeCare Plus', monthly: 100, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 1 yard visit / month included • Cancel anytime.', perksEs: '20% menos en cualquier trabajo • Primer estimado en persona gratis • 1 visita de yarda / mes incluida • Cancela cuando quieras.' },
+  plus2: { name: 'HomeCare Plus', monthly: 175, kind: 'homecare-plus', perks: '20% off any job • Free first in-person estimate • 2 yard visits / month included • Cancel anytime.', perksEs: '20% menos en cualquier trabajo • Primer estimado en persona gratis • 2 visitas de yarda / mes incluidas • Cancela cuando quieras.' }
 };
 // Re-render every price-bearing string of the member form from the plan
 // currently selected; the in-form selector and pendingJoin are kept in
@@ -1924,11 +1932,9 @@ function renderJoinTexts(){
   const sel = document.getElementById('aPlanSel');
   if (sel && sel.value !== plan) sel.value = plan;
   const note = document.getElementById('joinChargeNote');
-  if (note && info) note.innerHTML = info.kind === 'homecare'
-    ? 'Joining ' + info.name + ' — your first month is FREE: $0 charged today, then $' + info.monthly + '/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.'
-    : 'Joining ' + info.name + ' — your card will be charged $' + info.monthly + ' today, then $' + info.monthly + '/mo. One form, one submit: account, service address and payment together. Cancel anytime.';
+  if (note && info) note.innerHTML = CU(info.kind === 'homecare' ? 'joinNoteFreeTpl' : 'joinNotePaidTpl').replace(/\{name\}/g, info.name).replace(/\{amt\}/g, info.monthly);
   const btn = document.getElementById('authBtn');
-  if (btn && info) btn.textContent = 'Create account & join — $' + info.monthly + '/mo';
+  if (btn && info) btn.textContent = CU('btnJoinTpl').replace('{amt}', info.monthly);
   // v80.17 PUERTA PLUS: while the promo door is up, its hero follows the
   // form's plan too (in-form selector switches repaint both).
   if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
@@ -1979,7 +1985,7 @@ function renderMemberFallback(){
   const sel = document.getElementById('aPlanSel');
   if (sel) sel.value = pending.plan;
   const note = document.getElementById('joinChargeNote');
-  if (note) note.innerHTML = 'Joining ' + info.name + ' — $' + info.monthly + '/mo. Create your account and we will take you straight to secure checkout for this plan.' + (info.kind === 'homecare' ? ' Your first month is FREE — $0 at checkout today, then $' + info.monthly + '/mo (one free month per account).' : ' Your service address is required for Yard Care and HomeCare Plus.');
+  if (note) note.innerHTML = CU('fbNoteTpl').replace(/\{name\}/g, info.name).replace(/\{amt\}/g, info.monthly) + (info.kind === 'homecare' ? CU('fbNoteFreeSuffix').replace(/\{amt\}/g, info.monthly) : CU('fbNoteAddrSuffix'));
   hideErr();
 }
 async function beginInlineJoin(kind, plan){
@@ -2026,7 +2032,7 @@ async function finishInlineJoin(email){
       await startMembershipCheckout(pj.kind, pj.plan);
       return;
     }
-    btn.disabled = true; btn.textContent = 'Processing payment…';
+    btn.disabled = true; btn.textContent = CU('procPay');
     const s = await api('/api/stripe/membership-subscribe', { method: 'POST', body: JSON.stringify({ plan: pj.plan, source: campaignSource() }) });
     const conf = await stripeObj.confirmCardPayment(s.clientSecret, {
       payment_method: { card: cardEl, billing_details: {
@@ -2041,9 +2047,9 @@ async function finishInlineJoin(email){
     btn.disabled = false;
     pendingJoin = null;
     if (chk.active) {
-      document.getElementById('authBox').innerHTML = '<h3>Welcome to ' + (info ? info.name : 'your membership') + '! 🎉</h3><p>Your membership is <b>active</b> — $' + (info ? info.monthly : '') + '/mo. ' + (pj.kind === 'yardcare'
-        ? 'The Team will schedule your yard visits with you — watch for a message from us.'
-        : 'Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.') + '</p>';
+      document.getElementById('authBox').innerHTML = '<h3>' + CU('welcomeTpl').replace('{name}', info ? info.name : CU('welcomeYourPlan')) + '</h3><p>' + CU('memActiveTpl').replace('{amt}', info ? info.monthly : '') + (pj.kind === 'yardcare'
+        ? CU('welcomeYardNote')
+        : CU('welcomeEstNote')) + '</p>';
     }
     render();
   } catch (e) {
@@ -2190,6 +2196,251 @@ const JOIN_PROMO_BENEFITS = {
 // The hero always sells the plan the FORM is armed with (what you see is
 // what submit charges): the live pending join wins, then the armed
 // account-first fallback, then the plan the deep link arrived with.
+
+let _menuLang = null; // declared early (v80.19): CU()/menuLang() are reachable from the boot-time mode('login') paint, long before the menu section below
+// v80.19 IDIOMA: the customer-side twin of W_I18N — every customer
+// surface string that used to be hardcoded (or bilingual-combined)
+// lives here, keyed once per language, rendered through CU() in the
+// ACTIVE menuLang. The technician zone keeps WT(); admin keeps its
+// own dictionaries. One language at a time, everywhere.
+const CUST_UI = {
+en: {
+  authTitleMember: 'Member login', authTitleLogin: 'Log in / Sign up',
+  authHintLogin: 'No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.',
+  authHintJoin: 'Create your account — your plan starts the moment you tap Join. You can cancel anytime from your account.',
+  authHintPlain: '',
+  lblFullName: 'Full name', lblPhone: 'Phone', lblEmail: 'Email', lblPassword: 'Password',
+  lblServiceAddress: 'Service address (for membership visits)',
+  lblEmailAddress: 'Email address',
+  saHintPlan: 'Required to join this membership — the Team uses this address to schedule your included visits.',
+  saHintPlain: 'Optional for a regular account. Required when joining Yard Care or HomeCare Plus.',
+  btnLogin: 'Log in', btnCreate: 'Create account',
+  btnJoinTpl: 'Create account & join — ${amt}/mo', btnContinueTpl: 'Create account & continue — ${amt}/mo',
+  planPer: '/mo', planYardVisits: 'Monthly yard plan — {n} visit(s) / month', planPlusVisits: 'Monthly plan — PLUS {n} yard visit(s) / month included',
+  hcNoteFreeTpl: '{name} — ${amt}/mo total. Your first month is FREE — $0 charged today, then ${amt}/mo (one free month per account). {perks}', hcNotePaidTpl: '{name} — ${amt}/mo total. Your card will be charged ${amt} today, then ${amt}/mo. {perks}',
+  cardLblFreeTpl: 'Card — $0 charged today, then ${amt}/mo', cardLblPaidTpl: 'Card — charged ${amt} today, then ${amt}/mo',
+  optNoteFreeTpl: '{name} — your first month is FREE. $0 at checkout today, then ${amt}/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.', optNotePaidTpl: '{name} — ${amt}/mo. Tap Create account and we take you straight to secure checkout to start it — ${amt} charged today, then ${amt}/mo. Cancel anytime.', joinNoteFreeTpl: 'Joining {name} — your first month is FREE: $0 charged today, then ${amt}/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.', joinNotePaidTpl: 'Joining {name} — your card will be charged ${amt} today, then ${amt}/mo. One form, one submit: account, service address and payment together. Cancel anytime.', fbNoteTpl: 'Joining {name} — ${amt}/mo. Create your account and we will take you straight to secure checkout for this plan.', fbNoteFreeSuffix: ' Your first month is FREE — $0 at checkout today, then ${amt}/mo (one free month per account).', fbNoteAddrSuffix: ' Your service address is required for Yard Care and HomeCare Plus.', welcomeTpl: 'Welcome to {name}! 🎉', welcomeYourPlan: 'your membership', memActiveTpl: 'Your membership is <b>active</b> — ${amt}/mo. ', welcomeYardNote: 'The Team will schedule your yard visits with you — watch for a message from us.', welcomeEstNote: 'Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.', welcomeHcTitle: 'Welcome to HomeCare! 🎉', memActiveTrial: 'Your membership is <b>active</b> — your first month is <b>FREE</b>, then $29/mo. ', memActivePaid: 'Your membership is <b>active</b> — $29/mo. ', procPay: 'Processing payment…', procGen: 'Processing…', errAddressReq: 'Service address is required to join this membership — enter the address where we will do the work.',
+  resetTitle: 'Set a new password', resetSub: 'Choose a new password for your account (at least 8 characters). This signs you out everywhere else.', resetLbl1: 'New password', resetLbl2: 'Confirm new password', resetPh1: 'New password', resetPh2: 'Type it again',
+  resetBtn: 'Set new password',
+  resetNoToken: 'This reset link is missing its code. Open the link from your email again.',
+  resetEnterEmail: 'Type your email above first, then tap "Forgot my password".', resetPassMin: 'Your new password must be at least 8 characters.', resetPassMatch: 'The two passwords do not match — type the same password twice.',
+  resetChanged: 'Your password has been updated — log in with your new password.',
+  forgotLink: 'Forgot my password', pillCall: '📞 Call the Team', pillText: '💬 Text the Team', pillPhoto: '📸 Free estimate', cartTitle: 'Your cart',
+  saLabel: 'Service address — where we\'ll do the work', zipLblHtml: 'ZIP code <span class="mut">(optional — helps the Team plan your route)</span>', homeTypeLbl: 'Home type', yardSizeLbl: 'Yard size', homeNotesHtml: 'Home notes <span class="mut">(optional — gate, dogs, access)</span>', startLbl: 'Preferred start — we\'ll confirm your exact day', startNote: 'Just a preference — the Team confirms your exact start day with you. Picking a date books nothing and charges nothing.', startAsap: 'As soon as possible', startDateOpt: 'A specific date', optHouse: 'House', optTownhouse: 'Townhouse', optApartment: 'Apartment', optOther: 'Other', optSmall: 'Small', optMedium: 'Medium', optLarge: 'Large', namePh: 'First & last name', addrPh: 'Street address, city, ZIP', homeNotesPh: 'Gate code, pets, parking…',
+  wzCat_carpentry: 'Carpentry', wzCat_electrical: 'Electrical', wzCat_plumbing: 'Plumbing', wzCat_gardening: 'Gardening', wzCat_mechanic: 'Mechanic', wzCat_otro: 'Other / not sure', memAddrTitle: 'Service address needed', memAddrNote: 'Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.', memAddrSave: 'Save & continue to payment', homeNotesLbl2: 'Home notes — gate, dogs, access…', startNote2: 'Just a preference — picking a date books nothing; the Team confirms your start day with you.', saveHomeDetailsBtn: 'Save home details',
+  navHome: 'Inicio', navMenu: 'Menú', navMemberships: 'Memberships', navYard: 'Yard Care',
+  contactPill: 'Text / call · (707) 862-3773', memberLoginBtn: 'Member log in',
+  notifTitle: 'Notifications', notifPayNow: 'Pay now', notifEmpty: 'No notifications yet.',
+  loading: 'Loading…', loadErr: 'We could not load this — check your connection.', retry: '↻ Retry',
+  estStatus: { draft: 'Draft', sent: 'Sent', accepted: 'Accepted', declined: 'Declined', paid: 'Paid' },
+  ratingPrompt: 'How did we do?', ratingPlaceholder: 'Tell us about the work (optional)', ratingSend: 'Send rating',
+  trkHeadingTo: ' — heading to ', trkUpdated: 'updated ', agoNow: 'just now', agoMin1: '1 min ago', agoMinTpl: '{n} min ago',
+  trkYourTech: 'Your technician is on the way', trkTechAdmin: 'Technician is on the way',
+  trkFallback: 'Your technician is on the job — live map unavailable on this device, message the Team here for updates.',
+  yourTech: 'Your technician:',
+  wizTimeImpl: 'Tell us when you want the visit — your first time is free for all active members (one per account); the in-person estimate is $75 and is credited the same day toward your repair if you approve it.', wizTimeUsed: 'Members: your one free estimate (first time, one per account) is already used — the visit is $50. Regular in-person estimate $75 (credited toward your approved repair the same day).',
+  wizWhen: 'When?', wizAddress: 'Service address', wizDetails: 'Job details', wizPickPhoto: 'Pick a service or send a photo',
+  wizNeedName: 'Please enter your name.', wizNeedContact: 'Add your phone or email so the Team can reach you.', wizNeedSvc: 'Pick a service or choose “Another job / not listed.”', wizNeedDetails: 'Tell us a little about the job first.',
+  yardNoteDone: 'Done — photos sent', yardNoteDonePending: 'Done — the Team confirms',
+  feeFreePhoto: 'FREE photo estimate', feeFreeMember: 'FREE — first estimate with your membership', feeFreeMonth: 'FREE — first estimate this month',
+  feeMember50: '$50 member estimate', feeFlat75: '$75 flat', feeAsapTpl: ' + 25% ASAP/Emergency = $',
+  memberAppliedTpl: 'Your membership — $50 member estimate applied', memberFreeApplied: 'Your membership — first in-person estimate FREE',
+  holdTitle: '💳 Your payment:', holdOnHold: 'ON HOLD — not charged yet', holdCharged: 'CHARGED ', holdValidUntil: ' • hold valid until ', holdWord: ' hold: ',
+  holdExplainer: 'A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.',
+  estBadgeAwaiting: 'awaiting approval', estBadgePaid: 'paid', estBadgeApproved: 'approved — awaiting payment', estBadgeDeclined: 'declined', estBadgeWord: 'estimate: ',
+  trkHeadingTo2: 'Heading to ', trkLocUpdated: 'Location updated ',
+  wzDone: 'Done', wzStepOfTpl: 'Step {n} of 4',
+  wzNeedTitle: 'What do you need?', wzDetailsTitle: 'Details & photos', wzDescLabel: 'Describe the job', wzDescPh: 'What do you need done?',
+  wzPhotosLabel: 'Photos of the job (up to 6) — the Team quotes faster with pictures', wzEstTypeLabel: 'Estimate type',
+  wzEstPhotoBtn: 'Free photo estimate — pictures required', wzEstInPersonBtn: 'In-person estimate — $75',
+  wzEstNote: 'Photo estimate is always FREE. In-person: $75 flat — members of any plan get their first one FREE, then $50. The fee is credited toward your repair when you approve the work the same day.',
+  wzWhereTitle: 'Where & when', wzCityLabel: 'Where is the job?', wzAddrLabel: 'Full home address (required)', wzAddrPh: 'Street address',
+  wzWhenLabel: 'When do you need it?', wzWhenNote: 'You propose the day and time — the Team confirms it with you before anything is final.',
+  wzAccessLabel: 'Access notes — gate code, dogs, parking… (optional)', wzAccessPh: 'Gate code, pets, parking…',
+  wzInfoTitle: 'Your info & send', wzNameLabel: 'Your name', wzNamePh: 'Full name', wzEmailLabel: 'Email (we send your quote here)', wzPhoneLabel: 'Phone',
+  wzMemberLabel: 'HomeCare membership — $29/mo', wzMemberNone: 'Not a member — $75', wzMemberNew: 'New member — first estimate FREE', wzMemberMember: 'Member — $50 estimate',
+  wzFeeTitleInPerson: 'In-person estimate — $75 flat',
+  wzFeeDesc: 'Due to book the visit — and it goes credited toward your repair when you approve the work the same day. Final labor is quoted after the Team sees the job (or from clear photos). Labor-only — you buy materials/parts. ASAP / Emergency adds 25%.',
+  wzAck: '☐ I understand the estimate charge + labor-only (I buy materials/parts)', wzSend: 'Send request', wzBack: '← Back', wzNext: 'Continue →',
+  sumService: 'Service', sumDetails: 'Details', sumPhotos: 'Photos', sumWhere: 'Where', sumWhen: 'When', sumAccess: 'Access', sumContact: 'Contact',
+  sumAttached: ' attached', sumNone: 'none', wizWhenOn: 'On ',
+  memTitle: 'My membership', memSvcAddr: 'Service address: ', memNotOnFile: 'Not on file',
+  memEst50: 'In-person estimates: <b>$50</b> — your member price.', memReqFreeBtn: 'Request your FREE on-site estimate', memFreeIncl: 'One FREE in-person estimate is included with your membership.',
+  memCancelsOn: 'Cancels on ', memStaysActive: ' — your membership stays active until then.', memKeepBtn: 'Keep my membership', memChangeBtn: 'Change plan', memCancelBtn: 'Cancel membership',
+  memRenewLine: 'Your plan renews monthly. Questions? Call the Team at (707) 862-3773.',
+  memEmpty: 'No active membership yet — members save 20% on labor, get $50 estimates, and can add monthly yard care.', memViewBtn: 'View memberships',
+  memPlanVisit1: ' • 1 yard visit/month included', memPlanVisitsN: ' • {n} yard visits/month included', memPlanPlusTag: ' • all HomeCare benefits included', memPlanHcTag: ' • member benefits active', memPlanYardTag: ' • yard visits only',
+  planVisits1: '1 yard visit/month', planVisits2: '2 yard visits/month', planVisits0: 'no yard visits',
+  chgTitle: 'Change your plan', chgCurrent: 'Your current plan: ', chgCurrentTag: ' (current)', backBtn: 'Back',
+  chgConfirmTitle: 'Confirm your plan change', chgConfirmTpl: 'Switch from {cur} (${curAmt}/mo) to {next} (${nextAmt}/mo)? Stripe prorates the difference — you might see a prorated charge or credit today. Your new plan starts today and renews at ${nextAmt}/mo.', chgYes: 'Yes, change my plan', neverMind: 'Never mind',
+  cancelTitle: 'Cancel your membership?', cancelUntilTpl: 'Your {name} stays active until {until}. After that it ends and you won\'t be charged again.', cancelUntilDefault: 'the end of your current paid period', cancelYes: 'Yes, cancel',
+  yardNone2: 'No yard visits scheduled yet — the Team schedules your included visits here.', yardNextPre: 'Next yard visit: ', yardAlso: 'Also coming up: ', yardLastDone: 'Last visit done: ', yardPhotoAlt: 'Your yard after the visit',
+  invDue: 'Due ', invViewPay: 'View & pay invoice', invView: 'View invoice', invNone: 'No invoices yet.', invLoadErr2: 'We could not load your invoices.',
+  invSt_draft: 'draft', invSt_sent: 'sent', invSt_paid: 'paid', invSt_overdue: 'overdue', invSt_cancelled: 'cancelled',
+  propTitle: '📩 Proposals from the Team', propCartWord: 'Cart ', propEstimateWord: 'Estimate', propTotalWord: ' · Total ', propBookedTag: 'Booked — deposit paid', propSavedTag: ' · 💾 Saved for later',
+  propBalanceLine: 'Balance due at completion: ', propBookToday: 'To book today: ', propBalanceAt: ' · Balance at completion: ',
+  propPayBalance: 'Pay balance', propAccept: '✅ Accept — go to checkout', propKeep: '🛒 Keep shopping', propMoveBack: '↩ Move back to active', propSave: '💾 Save for later', propLoadErr: 'We could not load your proposals.',
+  notifOpenTitle: 'Open',
+  jobsNoneCust: 'No assigned jobs yet. When a worker picks your job, the job chat opens here.',
+  estMatPill: 'material', estAsapRow: 'ASAP / Emergency (+25%)', estDiscountRow: 'Discount (', estCreditRow: 'Appointment credit (approved same day)',
+  estWord: 'Estimate ', estCustomer: 'Customer:', estCustomerFallback: 'Customer', estThConcept: 'Concept', estThQty: 'Qty', estThPrice: 'Price', estThTotal: 'Total',
+  estSubtotal: 'Subtotal', estTotalWord: 'TOTAL', estDueBook: 'Due to book:', estBalanceWord: 'Balance at completion:',
+  estMatIncl: 'Materials included in this estimate.', estLaborOnly: 'Labor only — customer buys materials/parts unless the Team says otherwise in writing.',
+  estValidUntil: ' Valid until ', estValid7: ' Estimate valid for 7 days.', estTeamNote: 'Team note:', estApprove: 'Approve estimate',
+  reqQuotePre: 'Your quote: ', reqLaborNote: ' labor (you buy materials) ', reqApprove: 'Approve quote', reqDecline: 'Decline', reqWaiting: 'Waiting for the Team to send your quote.',
+  reqSecureTpl: 'Secure my appointment — authorize {amt} hold (not a charge yet)',
+  payPaidFull: 'Paid in full: ', payPartialRefPre: 'Paid ', payPartialRefSuf: ' — partially refunded', payRefunded: 'Payment refunded', refundIssued: 'Refund issued: ', refundKeptFee: ' booking fee kept (already dispatched)',
+  reqNone: 'No requests yet.', reqLoadErr2: 'We could not load your requests.',
+  msgCustomerWord: 'Customer', jobPhotoAlt: 'Job photo', threadNone: 'No messages yet.', threadPhCust: 'Message the customer...', threadPhTeam: 'Message the Team...', sendBtn: 'Send',
+  ratingYours: 'Your rating:', ratingTapFirst: 'Tap the stars first.',
+  sumEstimate: 'Estimate', sumPickOne: 'pick one', feeTitlePhoto: 'Free photo estimate', feeTitleInPersonPre: 'In-person estimate — ', feeTitleInPersonPre2: 'In-person — ',
+  sendBtnPhoto: 'Request free photo estimate', sendBtnPre: 'Send request — ', sendSecuresTpl: '${amt} secures your appointment — and it goes credited towards your repair when approved the same day.',
+  srPickService: 'Pick a service first.', srAddAddress: 'Add the home address.', srChooseWhen: 'Choose when you need it.', srDescribe: 'Describe the job in a sentence or two.',
+  srAck: 'Tap the confirm box (estimate + labor-only) before sending.', srAddName: 'Add your name.', srAddEmail: 'Add a valid email — we send your quote there.', srNeedPhoto: 'Free photo estimates need at least one picture.',
+  srSentPre: 'Request sent', srWithPhotosTpl: ' with {n} photo(s)', srSentMeSuffix: '. The Team will review and send your quote right here — check back in this thread.',
+  srSentAnonTpl: 'Request sent! The Team will review it and send your quote to {email}. No account needed — you can approve and pay right from the email link.',
+  estTypeFree: 'In-person estimate — FREE with your membership', estTypeMember: 'In-person estimate — $50 member price',
+  wzAckText: ' I understand the estimate charge + labor-only (I buy materials/parts)',
+  cartEach: ' each', cartMembersSavePre: 'Members −$', cartMembersPayPre: 'Members pay $', cartRemoveBtn: 'Remove',
+  cartSubtotal: 'Subtotal', cartSavingsRow: 'HomeCare member savings (−20%)', cartTotalWord: 'Total',
+  cartMemberApplied: '✓ Your HomeCare member price is applied.', cartMembersPayTpl: 'Members pay ${member} — save ${savings}',
+  cartOfferTitle: '⭐ HomeCare — first month FREE', cartOfferBody: 'Join at checkout (first month FREE) and the member price applies to this order right away.',
+  ccLinesTitle: 'Your services — tap to fix anything', ccMembersWord: ' · members $', ccInCart: 'In cart ×', ccAdd: '＋ Add',
+  cartMemberPriceRow: 'HomeCare member price (−20%)', cartJoinRow: 'HomeCare membership — first month', cartFreeWord: 'FREE',
+  cartDepositDue: 'Deposit due today', cartBalanceRow: 'Balance at completion',
+  cartPayJoinTpl: 'Join HomeCare — then pay ${amt} deposit for your order', cartPayDepositTpl: 'Pay ${amt} deposit',
+  cartValAddress: 'Enter the service address — where the technician will do the work.', cartValNameEmail: 'Add your name and a valid email — your account is created with this step.', cartValPassword: 'Create a password of 8+ characters (or enter your account password).',
+  cartPayLoading: '⏳ Loading secure payment…', cartPayFailBody: '⚠️ The secure payment form could not load — check your connection.', cartPayHostedBtn: 'Pay on Stripe\'s secure page', cartPayRetryBtn: '↻ Try again',
+  cartEmptyTxt: 'Your cart is empty — add services from the menu and they will wait for you right here.', cartBrowseBtn: 'Browse the menu', cartCheckoutBtnTxt: 'Checkout →', cartClearBtnTxt: 'Clear cart',
+  ccTitle: 'Checkout', ccAcctTitle: 'Your account — last step', ccNameLbl: 'Your name', ccPassPh: 'Create one (8+ characters) — or your account password',
+  ccAcctNote: 'New here? This creates your account as part of checkout. Already a customer? Use your account email + password and we log you in.',
+  ccWhereWhen: 'Where & when', ccAddrLbl: 'Service address', ccCityLbl: 'City', ccToday: 'Today', ccTomorrow: 'Tomorrow',
+  ccWhenLbl: 'Preferred time / details', ccWhenPh: 'e.g. after 3 PM — you propose, we confirm', ccNotesLbl: 'Notes for the technician',
+  ccOfferTitle: '⭐ Add HomeCare — first month FREE', ccOfferBody: 'Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.',
+  ccAddMore: '＋ Add more services', ccPayTitle: 'Payment',
+  ccPayNote: 'You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.',
+  ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…'
+},
+es: {
+  authTitleMember: 'Acceso de miembros', authTitleLogin: 'Entrar / Crear cuenta',
+  authHintLogin: 'No necesitas cuenta para pedir una cotización — solo mándala y te respondemos por correo. Crea una cuenta para seguir tus trabajos, pagar facturas en línea o unirte a HomeCare.',
+  authHintJoin: 'Crea tu cuenta — tu plan empieza en el momento que tocas Unirse. Puedes cancelar cuando quieras desde tu cuenta.',
+  authHintPlain: '',
+  lblFullName: 'Nombre completo', lblPhone: 'Teléfono', lblEmail: 'Correo', lblPassword: 'Contraseña',
+  lblServiceAddress: 'Dirección del servicio (para las visitas de la membresía)',
+  lblEmailAddress: 'Correo electrónico',
+  saHintPlan: 'Obligatoria para unirte a esta membresía — el Team usa esta dirección para agendar tus visitas incluidas.',
+  saHintPlain: 'Opcional para una cuenta normal. Obligatoria al unirte a Yard Care o HomeCare Plus.',
+  btnLogin: 'Entrar', btnCreate: 'Crear cuenta',
+  btnJoinTpl: 'Crear cuenta y unirse — ${amt}/mes', btnContinueTpl: 'Crear cuenta y continuar — ${amt}/mes',
+  planPer: '/mes', planYardVisits: 'Plan de yarda mensual — {n} visita(s) / mes', planPlusVisits: 'Plan mensual — PLUS {n} visita(s) de yarda / mes incluidas',
+  hcNoteFreeTpl: '{name} — ${amt}/mes en total. Tu primer mes es GRATIS — $0 cobrados hoy, luego ${amt}/mes (un mes gratis por cuenta). {perks}', hcNotePaidTpl: '{name} — ${amt}/mes en total. Hoy se cargan ${amt} a tu tarjeta, luego ${amt}/mes. {perks}',
+  cardLblFreeTpl: 'Tarjeta — $0 cobrados hoy, luego ${amt}/mes', cardLblPaidTpl: 'Tarjeta — se cargan ${amt} hoy, luego ${amt}/mes',
+  optNoteFreeTpl: '{name} — tu primer mes es GRATIS. $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta). Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo. Cancela cuando quieras.', optNotePaidTpl: '{name} — ${amt}/mes. Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo — ${amt} cobrados hoy, luego ${amt}/mes. Cancela cuando quieras.', joinNoteFreeTpl: 'Te unes a {name} — tu primer mes es GRATIS: $0 cobrados hoy, luego ${amt}/mes empezando en 30 días (un mes gratis por cuenta). Un solo formulario, un solo envío: cuenta y pago juntos. Cancela cuando quieras.', joinNotePaidTpl: 'Te unes a {name} — hoy se cargan ${amt} a tu tarjeta, luego ${amt}/mes. Un solo formulario, un solo envío: cuenta, dirección del servicio y pago juntos. Cancela cuando quieras.', fbNoteTpl: 'Te unes a {name} — ${amt}/mes. Crea tu cuenta y te llevamos directo al checkout seguro para este plan.', fbNoteFreeSuffix: ' Tu primer mes es GRATIS — $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta).', fbNoteAddrSuffix: ' Tu dirección del servicio es obligatoria para Yard Care y HomeCare Plus.', welcomeTpl: '¡Bienvenido a {name}! 🎉', welcomeYourPlan: 'tu membresía', memActiveTpl: 'Tu membresía está <b>activa</b> — ${amt}/mes. ', welcomeYardNote: 'El Team agendará tus visitas de yarda contigo — pendiente de nuestro mensaje.', welcomeEstNote: 'Tu primer estimado en persona es <b>GRATIS</b>: pídelo desde tu panel y reserva trabajos directo en la app.', welcomeHcTitle: '¡Bienvenido a HomeCare! 🎉', memActiveTrial: 'Tu membresía está <b>activa</b> — tu primer mes es <b>GRATIS</b>, luego $29/mes. ', memActivePaid: 'Tu membresía está <b>activa</b> — $29/mes. ', procPay: 'Procesando pago…', procGen: 'Procesando…', errAddressReq: 'La dirección del servicio es obligatoria para unirte a esta membresía — escribe la dirección donde haremos el trabajo.',
+  resetTitle: 'Crea una contraseña nueva', resetSub: 'Elige una contraseña nueva para tu cuenta (al menos 8 caracteres). Esto cierra tu sesión en todos los demás lugares.', resetLbl1: 'Contraseña nueva', resetLbl2: 'Confirma la contraseña nueva', resetPh1: 'Contraseña nueva', resetPh2: 'Escríbela de nuevo',
+  resetBtn: 'Guardar contraseña nueva',
+  resetNoToken: 'A este link de restablecimiento le falta su código. Abre de nuevo el link de tu correo.',
+  resetEnterEmail: 'Escribe tu correo arriba primero, luego toca "Olvidé mi contraseña".', resetPassMin: 'Tu contraseña nueva debe tener al menos 8 caracteres.', resetPassMatch: 'Las dos contraseñas no coinciden — escribe la misma contraseña dos veces.',
+  resetChanged: 'Tu contraseña ha sido actualizada — entra con tu contraseña nueva.',
+  forgotLink: 'Olvidé mi contraseña', pillCall: '📞 Llama al Team', pillText: '💬 Texto al Team', pillPhoto: '📸 Estimado gratis', cartTitle: 'Tu carrito',
+  saLabel: 'Dirección del servicio — donde haremos el trabajo', zipLblHtml: 'Código ZIP <span class="mut">(opcional — ayuda al Team a planear tu ruta)</span>', homeTypeLbl: 'Tipo de casa', yardSizeLbl: 'Tamaño de la yarda', homeNotesHtml: 'Notas de la casa <span class="mut">(opcional — puerta, perros, acceso)</span>', startLbl: 'Inicio preferido — te confirmamos el día exacto', startNote: 'Solo es una preferencia — el Team te confirma el día exacto de inicio. Elegir una fecha no aparta nada ni cobra nada.', startAsap: 'Lo antes posible', startDateOpt: 'Una fecha específica', optHouse: 'Casa', optTownhouse: 'Townhouse', optApartment: 'Apartamento', optOther: 'Otro', optSmall: 'Pequeña', optMedium: 'Mediana', optLarge: 'Grande', namePh: 'Nombre y apellido', addrPh: 'Dirección, ciudad, ZIP', homeNotesPh: 'Código de puerta, mascotas, estacionamiento…',
+  wzCat_carpentry: 'Carpintería', wzCat_electrical: 'Electricidad', wzCat_plumbing: 'Plomería', wzCat_gardening: 'Jardinería', wzCat_mechanic: 'Mecánica', wzCat_otro: 'Otro / no estoy seguro', memAddrTitle: 'Dirección del servicio necesaria', memAddrNote: 'Antes del pago, agrega la dirección donde nuestro técnico hará el trabajo. El Team la usa para agendar tus visitas incluidas.', memAddrSave: 'Guardar y continuar al pago', homeNotesLbl2: 'Notas de la casa — puerta, perros, acceso…', startNote2: 'Solo es una preferencia — elegir una fecha no aparta nada; el Team te confirma el día de inicio.', saveHomeDetailsBtn: 'Guardar detalles de la casa',
+  navHome: 'Inicio', navMenu: 'Menú', navMemberships: 'Membresías', navYard: 'Yard Care',
+  contactPill: 'Texto / llamada · (707) 862-3773', memberLoginBtn: 'Entrar (miembros)',
+  notifTitle: 'Notificaciones', notifPayNow: 'Pagar ahora', notifEmpty: 'Todavía no tienes notificaciones.',
+  loading: 'Cargando…', loadErr: 'No pudimos cargar esto — revisa tu conexión.', retry: '↻ Reintentar',
+  estStatus: { draft: 'Borrador', sent: 'Enviado', accepted: 'Aceptado', declined: 'Rechazado', paid: 'Pagado' },
+  ratingPrompt: '¿Cómo nos fue?', ratingPlaceholder: 'Cuéntanos sobre el trabajo (opcional)', ratingSend: 'Enviar calificación',
+  trkHeadingTo: ' — en camino a ', trkUpdated: 'actualizado ', agoNow: 'ahora mismo', agoMin1: 'hace 1 min', agoMinTpl: 'hace {n} min',
+  trkYourTech: 'Tu técnico va en camino', trkTechAdmin: 'El técnico va en camino',
+  trkFallback: 'Tu técnico está en el trabajo — el mapa en vivo no está disponible en este dispositivo, escríbele al Team aquí para novedades.',
+  yourTech: 'Tu técnico:',
+  wizTimeImpl: 'Dinos cuándo quieres la visita — tu primera vez es gratis para todos los miembros activos (una por cuenta); el estimado en persona cuesta $75 y se te descuenta el mismo día de tu reparación si la apruebas.', wizTimeUsed: 'Miembros: tu único estimado gratis (primera vez, uno por cuenta) ya fue usado — la visita cuesta $50. Estimado en persona normal $75 (se descuenta de tu reparación aprobada el mismo día).',
+  wizWhen: '¿Cuándo?', wizAddress: 'Dirección del servicio', wizDetails: 'Detalles del trabajo', wizPickPhoto: 'Elige un servicio o manda una foto',
+  wizNeedName: 'Escribe tu nombre.', wizNeedContact: 'Agrega tu teléfono o correo para que el Team te contacte.', wizNeedSvc: 'Elige un servicio o selecciona “Otro trabajo / no listado.”', wizNeedDetails: 'Cuéntanos un poco del trabajo primero.',
+  yardNoteDone: 'Terminado — fotos enviadas', yardNoteDonePending: 'Terminado — el Team confirma',
+  feeFreePhoto: 'Estimado por foto GRATIS', feeFreeMember: 'GRATIS — primer estimado con tu membresía', feeFreeMonth: 'GRATIS — primer estimado este mes',
+  feeMember50: 'Estimado de miembro $50', feeFlat75: '$75 fijo', feeAsapTpl: ' + 25% ASAP/Emergencia = $',
+  memberAppliedTpl: 'Tu membresía — estimado de miembro de $50 aplicado', memberFreeApplied: 'Tu membresía — primer estimado en persona GRATIS',
+  holdTitle: '💳 Tu pago:', holdOnHold: 'EN RETENCIÓN — sin cobro todavía', holdCharged: 'COBRADO ', holdValidUntil: ' • retención válida hasta ', holdWord: ' retención: ',
+  holdExplainer: 'Una retención reserva el dinero pero no lo cobra. Solo se te cobra el monto final cuando el trabajo termina.',
+  estBadgeAwaiting: 'esperando aprobación', estBadgePaid: 'pagado', estBadgeApproved: 'aprobado — esperando pago', estBadgeDeclined: 'rechazado', estBadgeWord: 'estimado: ',
+  trkHeadingTo2: 'En camino a ', trkLocUpdated: 'Ubicación actualizada ',
+  wzDone: '¡Listo!', wzStepOfTpl: 'Paso {n} de 4',
+  wzNeedTitle: '¿Qué necesitas?', wzDetailsTitle: 'Detalles y fotos', wzDescLabel: 'Describe el trabajo', wzDescPh: '¿Qué necesitas hacer?',
+  wzPhotosLabel: 'Fotos del trabajo (hasta 6) — el Team cotiza más rápido con fotos', wzEstTypeLabel: 'Tipo de estimado',
+  wzEstPhotoBtn: 'Estimado por foto gratis — fotos requeridas', wzEstInPersonBtn: 'Estimado en persona — $75',
+  wzEstNote: 'El estimado por foto siempre es GRATIS. En persona: $75 fijo — los miembros de cualquier plan tienen el primero GRATIS, después $50. El cobro se descuenta de tu reparación si apruebas el trabajo el mismo día.',
+  wzWhereTitle: 'Dónde y cuándo', wzCityLabel: '¿Dónde es el trabajo?', wzAddrLabel: 'Dirección completa de la casa (obligatoria)', wzAddrPh: 'Dirección',
+  wzWhenLabel: '¿Cuándo lo necesitas?', wzWhenNote: 'Tú propones el día y la hora — el Team te lo confirma antes de que sea final.',
+  wzAccessLabel: 'Notas de acceso — código de puerta, perros, estacionamiento… (opcional)', wzAccessPh: 'Código de puerta, mascotas, estacionamiento…',
+  wzInfoTitle: 'Tus datos y enviar', wzNameLabel: 'Tu nombre', wzNamePh: 'Nombre completo', wzEmailLabel: 'Correo (te mandamos tu cotización aquí)', wzPhoneLabel: 'Teléfono',
+  wzMemberLabel: 'Membresía HomeCare — $29/mes', wzMemberNone: 'No soy miembro — $75', wzMemberNew: 'Miembro nuevo — primer estimado GRATIS', wzMemberMember: 'Miembro — estimado $50',
+  wzFeeTitleInPerson: 'Estimado en persona — $75 fijo',
+  wzFeeDesc: 'Se paga para apartar la visita — y se descuenta de tu reparación si apruebas el trabajo el mismo día. La mano de obra final se cotiza después de que el Team vea el trabajo (o con fotos claras). Solo mano de obra — tú compras los materiales/partes. ASAP / Emergencia agrega 25%.',
+  wzAck: '☐ Entiendo el cobro del estimado + solo mano de obra (yo compro los materiales/partes)', wzSend: 'Enviar solicitud', wzBack: '← Atrás', wzNext: 'Continuar →',
+  sumService: 'Servicio', sumDetails: 'Detalles', sumPhotos: 'Fotos', sumWhere: 'Dónde', sumWhen: 'Cuándo', sumAccess: 'Acceso', sumContact: 'Contacto',
+  sumAttached: ' adjunta(s)', sumNone: 'ninguna', wizWhenOn: 'El ',
+  memTitle: 'Mi membresía', memSvcAddr: 'Dirección del servicio: ', memNotOnFile: 'No registrada',
+  memEst50: 'Estimados en persona: <b>$50</b> — tu precio de miembro.', memReqFreeBtn: 'Pide tu estimado en sitio GRATIS', memFreeIncl: 'Un estimado en persona GRATIS está incluido con tu membresía.',
+  memCancelsOn: 'Se cancela el ', memStaysActive: ' — tu membresía sigue activa hasta entonces.', memKeepBtn: 'Quedarme con mi membresía', memChangeBtn: 'Cambiar plan', memCancelBtn: 'Cancelar membresía',
+  memRenewLine: 'Tu plan se renueva cada mes. ¿Preguntas? Llama al Team al (707) 862-3773.',
+  memEmpty: 'Todavía no tienes membresía activa — los miembros ahorran 20% en mano de obra, pagan estimados de $50 y pueden agregar cuidado de yarda mensual.', memViewBtn: 'Ver membresías',
+  memPlanVisit1: ' • 1 visita de yarda/mes incluida', memPlanVisitsN: ' • {n} visitas de yarda/mes incluidas', memPlanPlusTag: ' • todos los beneficios de HomeCare incluidos', memPlanHcTag: ' • beneficios de miembro activos', memPlanYardTag: ' • solo visitas de yarda',
+  planVisits1: '1 visita de yarda/mes', planVisits2: '2 visitas de yarda/mes', planVisits0: 'sin visitas de yarda',
+  chgTitle: 'Cambia tu plan', chgCurrent: 'Tu plan actual: ', chgCurrentTag: ' (actual)', backBtn: 'Atrás',
+  chgConfirmTitle: 'Confirma tu cambio de plan', chgConfirmTpl: '¿Cambiar de {cur} (${curAmt}/mes) a {next} (${nextAmt}/mes)? Stripe prorratea la diferencia — hoy podrías ver un cargo o crédito prorrateado. Tu plan nuevo empieza hoy y se renueva a ${nextAmt}/mes.', chgYes: 'Sí, cambiar mi plan', neverMind: 'Mejor no',
+  cancelTitle: '¿Cancelar tu membresía?', cancelUntilTpl: 'Tu {name} sigue activa hasta el {until}. Después termina y no se te cobra más.', cancelUntilDefault: 'el fin de tu periodo pagado actual', cancelYes: 'Sí, cancelar',
+  yardNone2: 'Todavía no hay visitas de yarda agendadas — el Team agenda tus visitas incluidas aquí.', yardNextPre: 'Próxima visita de yarda: ', yardAlso: 'También vienen: ', yardLastDone: 'Última visita hecha: ', yardPhotoAlt: 'Tu yarda después de la visita',
+  invDue: 'Vence ', invViewPay: 'Ver y pagar factura', invView: 'Ver factura', invNone: 'Todavía no tienes facturas.', invLoadErr2: 'No pudimos cargar tus facturas.',
+  invSt_draft: 'borrador', invSt_sent: 'enviada', invSt_paid: 'pagada', invSt_overdue: 'vencida', invSt_cancelled: 'cancelada',
+  propTitle: '📩 Propuestas del Team', propCartWord: 'Carrito ', propEstimateWord: 'Estimado', propTotalWord: ' · Total ', propBookedTag: 'Apartado — depósito pagado', propSavedTag: ' · 💾 Guardada para después',
+  propBalanceLine: 'Saldo al terminar: ', propBookToday: 'Para apartar hoy: ', propBalanceAt: ' · Saldo al terminar: ',
+  propPayBalance: 'Pagar saldo', propAccept: '✅ Aceptar — ir a pagar', propKeep: '🛒 Seguir comprando', propMoveBack: '↩ Volver a activas', propSave: '💾 Guardar para después', propLoadErr: 'No pudimos cargar tus propuestas.',
+  notifOpenTitle: 'Abrir',
+  jobsNoneCust: 'Todavía no hay trabajos asignados. Cuando un trabajador tome tu trabajo, el chat se abre aquí.',
+  estMatPill: 'material', estAsapRow: 'ASAP / Emergencia (+25%)', estDiscountRow: 'Descuento (', estCreditRow: 'Crédito de cita (aprobado el mismo día)',
+  estWord: 'Estimado ', estCustomer: 'Cliente:', estCustomerFallback: 'Cliente', estThConcept: 'Concepto', estThQty: 'Cant.', estThPrice: 'Precio', estThTotal: 'Total',
+  estSubtotal: 'Subtotal', estTotalWord: 'TOTAL', estDueBook: 'Para apartar:', estBalanceWord: 'Saldo al terminar:',
+  estMatIncl: 'Materiales incluidos en este estimado.', estLaborOnly: 'Solo mano de obra — el cliente compra los materiales/partes salvo que el Team diga lo contrario por escrito.',
+  estValidUntil: ' Válido hasta ', estValid7: ' Estimado válido por 7 días.', estTeamNote: 'Nota del Team:', estApprove: 'Aprobar estimado',
+  reqQuotePre: 'Tu cotización: ', reqLaborNote: ' de mano de obra (tú compras los materiales) ', reqApprove: 'Aprobar cotización', reqDecline: 'Rechazar', reqWaiting: 'Esperando que el Team te mande tu cotización.',
+  reqSecureTpl: 'Aparta mi cita — autoriza una retención de {amt} (sin cobro todavía)',
+  payPaidFull: 'Pagado por completo: ', payPartialRefPre: 'Pagado ', payPartialRefSuf: ' — reembolso parcial', payRefunded: 'Pago reembolsado', refundIssued: 'Reembolso emitido: ', refundKeptFee: ' de cargo de apartado retenido (ya despachado)',
+  reqNone: 'Todavía no tienes solicitudes.', reqLoadErr2: 'No pudimos cargar tus solicitudes.',
+  msgCustomerWord: 'Cliente', jobPhotoAlt: 'Foto del trabajo', threadNone: 'Todavía no hay mensajes.', threadPhCust: 'Mensaje al cliente...', threadPhTeam: 'Mensaje al Team...', sendBtn: 'Enviar',
+  ratingYours: 'Tu calificación:', ratingTapFirst: 'Toca las estrellas primero.',
+  sumEstimate: 'Estimado', sumPickOne: 'elige uno', feeTitlePhoto: 'Estimado por foto gratis', feeTitleInPersonPre: 'Estimado en persona — ', feeTitleInPersonPre2: 'En persona — ',
+  sendBtnPhoto: 'Pedir estimado por foto gratis', sendBtnPre: 'Enviar solicitud — ', sendSecuresTpl: '${amt} apartan tu cita — y se descuentan de tu reparación si la apruebas el mismo día.',
+  srPickService: 'Elige un servicio primero.', srAddAddress: 'Agrega la dirección de la casa.', srChooseWhen: 'Elige cuándo lo necesitas.', srDescribe: 'Describe el trabajo en una frase o dos.',
+  srAck: 'Toca la casilla de confirmación (estimado + solo mano de obra) antes de enviar.', srAddName: 'Agrega tu nombre.', srAddEmail: 'Agrega un correo válido — ahí te mandamos tu cotización.', srNeedPhoto: 'Los estimados por foto gratis necesitan al menos una foto.',
+  srSentPre: 'Solicitud enviada', srWithPhotosTpl: ' con {n} foto(s)', srSentMeSuffix: '. El Team lo revisa y te manda tu cotización aquí mismo — revisa este hilo.',
+  srSentAnonTpl: '¡Solicitud enviada! El Team la revisa y te manda tu cotización a {email}. No necesitas cuenta — puedes aprobar y pagar directo desde el link del correo.',
+  estTypeFree: 'Estimado en persona — GRATIS con tu membresía', estTypeMember: 'Estimado en persona — precio de miembro $50',
+  wzAckText: ' Entiendo el cobro del estimado + solo mano de obra (yo compro los materiales/partes)',
+  cartEach: ' cada uno', cartMembersSavePre: 'Miembros −$', cartMembersPayPre: 'Miembros pagan $', cartRemoveBtn: 'Quitar',
+  cartSubtotal: 'Subtotal', cartSavingsRow: 'Ahorro de miembro HomeCare (−20%)', cartTotalWord: 'Total',
+  cartMemberApplied: '✓ Tu precio de miembro HomeCare está aplicado.', cartMembersPayTpl: 'Miembros pagan ${member} — ahorras ${savings}',
+  cartOfferTitle: '⭐ HomeCare — primer mes GRATIS', cartOfferBody: 'Únete en el checkout (primer mes GRATIS) y el precio de miembro aplica a esta orden de inmediato.',
+  ccLinesTitle: 'Tus servicios — toca para corregir lo que sea', ccMembersWord: ' · miembros $', ccInCart: 'En el carrito ×', ccAdd: '＋ Agregar',
+  cartMemberPriceRow: 'Precio de miembro HomeCare (−20%)', cartJoinRow: 'Membresía HomeCare — primer mes', cartFreeWord: 'GRATIS',
+  cartDepositDue: 'Depósito a pagar hoy', cartBalanceRow: 'Saldo al terminar',
+  cartPayJoinTpl: 'Únete a HomeCare — luego paga ${amt} de depósito por tu orden', cartPayDepositTpl: 'Paga ${amt} de depósito',
+  cartValAddress: 'Escribe la dirección del servicio — donde el técnico hará el trabajo.', cartValNameEmail: 'Agrega tu nombre y un correo válido — tu cuenta se crea con este paso.', cartValPassword: 'Crea una contraseña de 8+ caracteres (o escribe la de tu cuenta).',
+  cartPayLoading: '⏳ Cargando pago seguro…', cartPayFailBody: '⚠️ El formulario de pago seguro no cargó — revisa tu conexión.', cartPayHostedBtn: 'Pagar en la página segura de Stripe', cartPayRetryBtn: '↻ Reintentar',
+  cartEmptyTxt: 'Tu carrito está vacío — agrega servicios del menú y te esperan aquí mismo.', cartBrowseBtn: 'Ver el menú', cartCheckoutBtnTxt: 'Ir a pagar →', cartClearBtnTxt: 'Vaciar carrito',
+  ccTitle: 'Pago', ccAcctTitle: 'Tu cuenta — último paso', ccNameLbl: 'Tu nombre', ccPassPh: 'Crea una (8+ caracteres) — o la contraseña de tu cuenta',
+  ccAcctNote: '¿Nuevo aquí? Esto crea tu cuenta como parte del checkout. ¿Ya eres cliente? Usa el correo + contraseña de tu cuenta y entras directo.',
+  ccWhereWhen: 'Dónde y cuándo', ccAddrLbl: 'Dirección del servicio', ccCityLbl: 'Ciudad', ccToday: 'Hoy', ccTomorrow: 'Mañana',
+  ccWhenLbl: 'Hora preferida / detalles', ccWhenPh: 'ej. después de las 3 PM — tú propones, nosotros confirmamos', ccNotesLbl: 'Notas para el técnico',
+  ccOfferTitle: '⭐ Agregar HomeCare — primer mes GRATIS', ccOfferBody: 'Los miembros ahorran 20% en mano de obra — el precio de miembro aplica a ESTA orden de inmediato. Luego $29/mes, cancela cuando quieras. Totalmente opcional: tu orden funciona sin esto.',
+  ccAddMore: '＋ Agregar más servicios', ccPayTitle: 'Pago',
+  ccPayNote: 'Hoy pagas solo el depósito de apartado — $50 fijo en totales hasta $300, 40% en totales sobre $300 — y el saldo cuando el trabajo esté hecho. Cancela antes de que un técnico sea despachado y recibes reembolso completo; después del despacho, $75 no son reembolsables.',
+  ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…'
+}
+};
+function CU(k){ const d = CUST_UI[menuLang()] || CUST_UI.en; const v = d[k]; return v !== undefined ? v : (CUST_UI.en[k] !== undefined ? CUST_UI.en[k] : k); }
+
 function joinPromoPlanKey(){
   if (!joinPromo) return '';
   if (pendingJoin && JOIN_PLAN_INFO[pendingJoin.plan]) return pendingJoin.plan;
@@ -2456,7 +2707,7 @@ async function startMembershipCheckout(kind, planOverride){
 }
 function membershipPlanLine(p){
   if (!p || p.status !== 'active') return '';
-  return '<b>' + escHtml(p.name) + '</b> — $' + escHtml(p.monthly) + '/mo' + (p.visitsPerMonth ? ' • ' + p.visitsPerMonth + ' yard visit' + (p.visitsPerMonth === 1 ? '' : 's') + '/month included' : '') + (p.type === 'plus' ? ' • all HomeCare benefits included' : (p.type === 'homecare' ? ' • member benefits active' : ' • yard visits only'));
+  return '<b>' + escHtml(p.name) + '</b> — $' + escHtml(p.monthly) + CU('planPer') + (p.visitsPerMonth ? (p.visitsPerMonth === 1 ? CU('memPlanVisit1') : CU('memPlanVisitsN').replace('{n}', p.visitsPerMonth)) : '') + (p.type === 'plus' ? CU('memPlanPlusTag') : (p.type === 'homecare' ? CU('memPlanHcTag') : CU('memPlanYardTag')));
 }
 function renderMembershipPageState(){
   const el = document.getElementById('membershipPageState');
@@ -2473,14 +2724,14 @@ function renderMyMembership(){
   if (!me || me.role !== 'customer') { el.innerHTML = ''; return; }
   const p = me.membershipPlan;
   if (p && p.status === 'active') {
-    el.innerHTML = '<div class="card panel-dark panel-green"><h3 style="margin-top:0">My membership</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">Service address: ' + escHtml(me.serviceAddress || 'Not on file') + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
-      ? '<div style="margin-top:6px">In-person estimates: <b>$50</b> — your member price.</div>'
-      : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">Request your FREE on-site estimate</button><div class="mut" style="margin-top:4px">One FREE in-person estimate is included with your membership.</div></div>') + (p.cancelAt && new Date(p.cancelAt).getTime() > Date.now()
-      ? '<div style="margin-top:8px"><b>Cancels on ' + fmtDateLong(p.cancelAt) + '</b> — your membership stays active until then.<br><button style="margin-top:6px" onclick="doReactivateMembership()">Keep my membership</button> <button class="ghost" onclick="showChangePlan()">Change plan</button></div>'
-      : '<div style="margin-top:8px"><button onclick="showChangePlan()">Change plan</button> <button class="ghost" onclick="showCancelMembership()">Cancel membership</button></div>') + '<div id="membershipAction"></div>' + '<div class="mut" style="margin-top:6px">Your plan renews monthly. Questions? Call the Team at (707) 862-3773.</div></div>';
+    el.innerHTML = '<div class="card panel-dark panel-green"><h3 style="margin-top:0">' + CU('memTitle') + '</h3>' + membershipPlanLine(p) + ((p.type === 'yard' || p.type === 'plus') ? '<div class="mut" style="margin-top:4px">' + CU('memSvcAddr') + escHtml(me.serviceAddress || CU('memNotOnFile')) + '</div><div id="myYardVisits" style="margin-top:6px"></div>' : '') + (me.freeEstimateUsed
+      ? '<div style="margin-top:6px">' + CU('memEst50') + '</div>'
+      : '<div style="margin-top:8px"><button onclick="requestFreeEstimate()">' + CU('memReqFreeBtn') + '</button><div class="mut" style="margin-top:4px">' + CU('memFreeIncl') + '</div></div>') + (p.cancelAt && new Date(p.cancelAt).getTime() > Date.now()
+      ? '<div style="margin-top:8px"><b>' + CU('memCancelsOn') + fmtDateLong(p.cancelAt) + '</b>' + CU('memStaysActive') + '<br><button style="margin-top:6px" onclick="doReactivateMembership()">' + CU('memKeepBtn') + '</button> <button class="ghost" onclick="showChangePlan()">' + CU('memChangeBtn') + '</button></div>'
+      : '<div style="margin-top:8px"><button onclick="showChangePlan()">' + CU('memChangeBtn') + '</button> <button class="ghost" onclick="showCancelMembership()">' + CU('memCancelBtn') + '</button></div>') + '<div id="membershipAction"></div>' + '<div class="mut" style="margin-top:6px">' + CU('memRenewLine') + '</div></div>';
     if (p.type === 'yard' || p.type === 'plus') loadMyYardVisits();
   } else {
-    el.innerHTML = '<div class="card"><h3 style="margin-top:0">My membership</h3><span class="mut">No active membership yet — members save 20% on labor, get $50 estimates, and can add monthly yard care.</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">View memberships</button></div>';
+    el.innerHTML = '<div class="card"><h3 style="margin-top:0">' + CU('memTitle') + '</h3><span class="mut">' + CU('memEmpty') + '</span><br><button style="margin-top:8px" onclick="location.hash=\'#memberships\'">' + CU('memViewBtn') + '</button></div>';
   }
 }
 // ---------- Delete my account (added 2026-10-21, v26) ----------
@@ -2543,29 +2794,29 @@ async function doDeleteAccount(sfx){
 // the END of the already-paid month (Gabriel's decision) and can be
 // undone while the paid period is still running.
 const MEMBERSHIP_PLAN_ORDER = ['homecare','yard1','yard2','plus1','plus2'];
-function fmtDateLong(iso){ if (!iso) return ''; try { return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
-function planVisitsText(k){ return (k === 'yard1' || k === 'plus1') ? '1 yard visit/month' : ((k === 'yard2' || k === 'plus2') ? '2 yard visits/month' : 'no yard visits'); }
+function fmtDateLong(iso){ if (!iso) return ''; try { return new Date(iso).toLocaleDateString(menuLang() === 'es' ? 'es-US' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
+function planVisitsText(k){ return (k === 'yard1' || k === 'plus1') ? CU('planVisits1') : ((k === 'yard2' || k === 'plus2') ? CU('planVisits2') : CU('planVisits0')); }
 function membershipActionBox(){ return document.getElementById('membershipAction'); }
 function cancelMembershipAction(){ const b = membershipActionBox(); if (b) b.innerHTML = ''; }
 function membershipActionErr(t, id){ const e = document.getElementById(id || 'membershipActionErr'); if (e) { e.textContent = t; e.classList.add('show'); } else alert(t); }
 function showChangePlan(){
   const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
   const cur = me.membershipPlan;
-  let h = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Change your plan</b><div class="mut" style="margin:4px 0">Your current plan: <b>' + escHtml(cur.name) + '</b> — $' + escHtml(cur.monthly) + '/mo (current)</div>';
+  let h = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>' + CU('chgTitle') + '</b><div class="mut" style="margin:4px 0">' + CU('chgCurrent') + '<b>' + escHtml(cur.name) + '</b> — $' + escHtml(cur.monthly) + CU('planPer') + CU('chgCurrentTag') + '</div>';
   for (const k of MEMBERSHIP_PLAN_ORDER){
     if (k === cur.planKey) continue;
     const i = JOIN_PLAN_INFO[k];
-    h += '<button class="ghost" style="display:block;width:100%;text-align:left;margin-top:6px" onclick="showChangeConfirm(\'' + k + '\')"><b>' + i.name + '</b> — $' + i.monthly + '/mo • ' + planVisitsText(k) + '</button>';
+    h += '<button class="ghost" style="display:block;width:100%;text-align:left;margin-top:6px" onclick="showChangeConfirm(\'' + k + '\')"><b>' + i.name + '</b> — $' + i.monthly + CU('planPer') + ' • ' + planVisitsText(k) + '</button>';
   }
-  h += '<div style="margin-top:8px"><button class="ghost" onclick="cancelMembershipAction()">Back</button></div></div>';
+  h += '<div style="margin-top:8px"><button class="ghost" onclick="cancelMembershipAction()">' + CU('backBtn') + '</button></div></div>';
   box.innerHTML = h;
 }
 function showChangeConfirm(planKey){
   const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
   const cur = me.membershipPlan, info = JOIN_PLAN_INFO[planKey];
-  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Confirm your plan change</b>'
-    + '<p style="margin:6px 0">Switch from ' + escHtml(cur.name) + ' ($' + escHtml(cur.monthly) + '/mo) to ' + escHtml(info.name) + ' ($' + info.monthly + '/mo)? Stripe prorates the difference — you might see a prorated charge or credit today. Your new plan starts today and renews at $' + info.monthly + '/mo.</p>'
-    + '<button onclick="doChangePlan(\'' + planKey + '\')">Yes, change my plan</button> <button class="ghost" onclick="cancelMembershipAction()">Never mind</button>'
+  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>' + CU('chgConfirmTitle') + '</b>'
+    + '<p style="margin:6px 0">' + CU('chgConfirmTpl').replace('{cur}', escHtml(cur.name)).replace('{curAmt}', escHtml(cur.monthly)).replace('{next}', escHtml(info.name)).replace(/\{nextAmt\}/g, info.monthly) + '</p>'
+    + '<button onclick="doChangePlan(\'' + planKey + '\')">' + CU('chgYes') + '</button> <button class="ghost" onclick="cancelMembershipAction()">' + CU('neverMind') + '</button>'
     + '<div class="err" id="membershipActionErr"></div></div>';
 }
 async function doChangePlan(planKey){
@@ -2580,11 +2831,11 @@ async function doChangePlan(planKey){
 async function showCancelMembership(){
   const box = membershipActionBox(); if (!box || !me || !me.membershipPlan) return;
   const cur = me.membershipPlan;
-  let until = 'the end of your current paid period';
+  let until = CU('cancelUntilDefault');
   try { const d = await api('/api/me/membership'); if (d.currentPeriodEnd) until = fmtDateLong(d.currentPeriodEnd); } catch (e) {}
-  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>Cancel your membership?</b>'
-    + '<p style="margin:6px 0">Your ' + escHtml(cur.name) + ' stays active until ' + escHtml(until) + '. After that it ends and you won\'t be charged again.</p>'
-    + '<button onclick="doCancelMembership()">Yes, cancel</button> <button class="ghost" onclick="cancelMembershipAction()">Keep my membership</button>'
+  box.innerHTML = '<div style="margin-top:10px;border-top:1px dashed #cde8cd;padding-top:10px"><b>' + CU('cancelTitle') + '</b>'
+    + '<p style="margin:6px 0">' + CU('cancelUntilTpl').replace('{name}', escHtml(cur.name)).replace('{until}', escHtml(until)) + '</p>'
+    + '<button onclick="doCancelMembership()">' + CU('cancelYes') + '</button> <button class="ghost" onclick="cancelMembershipAction()">' + CU('memKeepBtn') + '</button>'
     + '<div class="err" id="membershipCancelErr"></div></div>';
 }
 async function doCancelMembership(){
@@ -2668,7 +2919,7 @@ async function chargeHomeCare(email){
       showErr('Online HomeCare signup is still being connected — your account was created. Text (707) 862-3773 and the Team will finish your membership.');
       render(); return;
     }
-    btn.disabled = true; btn.textContent = 'Processing…';
+    btn.disabled = true; btn.textContent = CU('procGen');
     const s = await api('/api/stripe/homecare-subscribe', { method: 'POST', body: JSON.stringify({ source: campaignSource() }) });
     const pmArgs = { payment_method: { card: cardEl, billing_details: {
         name: document.getElementById('aName').value.trim(),
@@ -2684,7 +2935,7 @@ async function chargeHomeCare(email){
     try { cardEl.clear(); } catch(e){}
     btn.disabled = false; mode('homecare');
     if (chk.active) {
-      document.getElementById('authBox').innerHTML = '<h3>Welcome to HomeCare! 🎉</h3><p>Your membership is <b>active</b> — ' + (chk.trial ? 'your first month is <b>FREE</b>, then $29/mo.' : '$29/mo.') + ' Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.</p>';
+      document.getElementById('authBox').innerHTML = '<h3>' + CU('welcomeHcTitle') + '</h3><p>' + (chk.trial ? CU('memActiveTrial') : CU('memActivePaid')) + CU('welcomeEstNote') + '</p>';
     }
     render();
   }catch(e){
@@ -2702,9 +2953,9 @@ function showInfo(t){ const e=document.getElementById('authErr'); e.style.color=
 // email has an account, so this form can never reveal who is registered.
 async function forgotPassword(){
   const email = (document.getElementById('aEmail').value || '').trim();
-  if (!email) { showErr(isWorkerEntry() ? WT('forgotNeedEmail') : 'Type your email above first, then tap "Forgot my password".'); return; }
+  if (!email) { showErr(isWorkerEntry() ? WT('forgotNeedEmail') : CU('resetEnterEmail')); return; }
   try {
-    const d = await api('/api/auth/forgot', { method: 'POST', body: JSON.stringify({ email }) });
+    const d = await api('/api/auth/forgot', { method: 'POST', body: JSON.stringify({ email, lang: isWorkerEntry() ? workerLang() : menuLang() }) });
     showInfo(d.message || 'If that email has an account, we\'ve sent a reset link');
   } catch (e) { showErr(e.message); }
 }
@@ -2720,8 +2971,8 @@ function resetErrMsg(t){ const e = document.getElementById('resetErr'); if (e) {
 async function submitReset(){
   const p1 = document.getElementById('rPass1').value || '';
   const p2 = document.getElementById('rPass2').value || '';
-  if (p1.length < 8) { resetErrMsg('Your new password must be at least 8 characters.'); return; }
-  if (p1 !== p2) { resetErrMsg('The two passwords do not match — type the same password twice.'); return; }
+  if (p1.length < 8) { resetErrMsg(CU('resetPassMin')); return; }
+  if (p1 !== p2) { resetErrMsg(CU('resetPassMatch')); return; }
   const btn = document.getElementById('resetBtn');
   try {
     btn.disabled = true;
@@ -2730,7 +2981,7 @@ async function submitReset(){
     document.getElementById('resetBox').style.display = 'none';
     if (location.hash) location.hash = '';
     showLogin();
-    showInfo(d.message || 'Your password has been updated — log in with your new password.');
+    showInfo(d.message || CU('resetChanged'));
   } catch (e) { resetErrMsg(e.message); }
   finally { btn.disabled = false; }
 }
@@ -2850,7 +3101,7 @@ async function doAuth(){
   if (authBusy) return; authBusy = true;
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
-    if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; syncEntryFlag(); healWorkerLocFlag(); }
+    if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; syncEntryFlag(); healWorkerLocFlag(); healLangFromAccount(); }
     else { const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       // v77: a plan picked in the plain form's OPTIONAL membership picker
@@ -2859,11 +3110,11 @@ async function doAuth(){
       // HomeCare), exactly like the member-join fallback. No pick = the
       // account alone, no charge surface at all.
       if (curMode==='customer' && !pendingMembershipPlan && optPlanPicked()) { const op = document.getElementById('aOptPlan').value; pendingMembershipPlan = { kind: JOIN_PLAN_INFO[op].kind, plan: op }; }
-      if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
-      if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr('Service address is required to join this membership — enter the address where we will do the work.'); return; }
+      if (curMode==='customer' && pendingMembershipPlan && !serviceAddress) { showErr(CU('errAddressReq')); return; }
+      if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr(CU('errAddressReq')); return; }
       const role = (curMode==='homecare' || curMode==='join') ? 'customer' : curMode;
       const homePayload = (curMode==='customer' || curMode==='join' || curMode==='homecare') ? readHomeForm() : {};
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({source: campaignSource(), name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile, availability: curMode==='worker' ? availCbs.value : undefined}, homePayload))});
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({source: campaignSource(), lang: curMode === 'worker' ? workerLang() : menuLang(), name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile, availability: curMode==='worker' ? availCbs.value : undefined}, homePayload))});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; syncEntryFlag();
       if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // legacy homecare-mode submit: inline $49 charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks it: never let it become a $49 HomeCare charge; the resume below takes the user to the selected plan's checkout instead
       if(curMode==='join' && pendingJoin){
@@ -2895,7 +3146,7 @@ async function doAuth(){
 function syncEntryFlag(){ try { if (me && me.role === 'worker') localStorage.setItem('ghs_entry','worker'); else if (me) localStorage.removeItem('ghs_entry'); } catch (e) {} }
 async function logout(){ try { localStorage.removeItem('ghs_entry'); } catch (e) {} await api('/api/logout',{method:'POST'}).catch(()=>{}); location.reload(); }
 async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e){}
-  syncEntryFlag(); healWorkerLocFlag();
+  syncEntryFlag(); healWorkerLocFlag(); healLangFromAccount();
   // Heal a stale flag: the boot snippet bounced this page to #worker but
   // there is NO session — the visitor is logged out, so the flag was a
   // leftover (a mere #worker visit under v63–v80.10, or a logout that
@@ -2904,17 +3155,17 @@ async function loadMe(){ try{ const d=await api('/api/me'); me=d.user; }catch(e)
   render(); }
 let notifs=[]; let lastUnread=-1;
 async function loadNotifs(){ if(!me) return; refreshPermCard(); maybeSubscribePush(); try{ const d=await api('/api/notifications'); notifs=d.notifications||[]; const b=document.getElementById('bellBadge'); b.textContent=d.unread||''; b.style.display=d.unread?'inline-block':'none'; if(lastUnread>=0 && d.unread>lastUnread && window.Notification && Notification.permission==='granted' && notifs[0]){ try{ new Notification('General Handyman Solutions', { body: notifs[0].text, icon: '/icons/icon-192.png' }); }catch(e){} } lastUnread=d.unread||0; if(document.getElementById('notifPanel').style.display==='block') renderNotifs(); }catch(e){} }
-function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">Notifications</h3>'+(notifs.length?notifs.map(function(n){
+function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerHTML='<h3 style="margin-top:0">' + CU('notifTitle') + '</h3>'+(notifs.length?notifs.map(function(n){
   var urgent=n.type==='invoice_reminder';
   var payBtn='';
-  if(urgent){ var m=String(n.text).match(/\/invoice\/([\w-]+)/); if(m) payBtn='<div style="margin-top:6px"><a href="/invoice/'+m[1]+'"><button style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer">Pay now</button></a></div>'; }
+  if(urgent){ var m=String(n.text).match(/\/invoice\/([\w-]+)/); if(m) payBtn='<div style="margin-top:6px"><a href="/invoice/'+m[1]+'"><button style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:8px 18px;font-weight:700;cursor:pointer">' + CU('notifPayNow') + '</button></a></div>'; }
   // v80 P1-4: a row with a structured target is TAPPABLE — it lands on
   // the exact request / job / proposal / page the notice is about.
   var tgt = notifTargetFor(n);
-  var click = tgt ? ' onclick="notifGo(\''+tgt.replace(/'/g,"\\'")+'\')" style="cursor:pointer" title="Open · Abrir"' : '';
+  var click = tgt ? ' onclick="notifGo(\''+tgt.replace(/'/g,"\\'")+'\')" style="cursor:pointer" title="' + CU('notifOpenTitle') + '"' : '';
   var arrow = tgt ? ' <span style="color:#e42535;font-weight:700">→</span>' : '';
   return '<div'+click+' style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+escHtml(n.text)+arrow+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
-}).join(''):'<div class="empty"><p class="mut">No notifications yet.</p></div>'); }
+}).join(''):'<div class="empty"><p class="mut">' + CU('notifEmpty') + '</p></div>'); }
 // v80 P1-4: resolve a notification's target for THIS session. Worker
 // sessions are NEVER routed to a customer surface (v79 frontier): a
 // customer-side target in a worker's bell falls back to #worker.
@@ -3127,7 +3378,7 @@ function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const img=n
     const c=document.createElement('canvas'); c.width=w; c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg',0.78)); };
   img.onerror=reject; img.src=url; }); }
 let custAck=false;
-document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+' I understand the estimate charge + labor-only (I buy materials/parts)'; this.style.borderColor=custAck?'#e42535':''; });
+document.getElementById('cAck').addEventListener('click', function(){ custAck=!custAck; this.textContent=(custAck?'☑':'☐')+CU('wzAckText'); this.style.borderColor=custAck?'#e42535':''; });
 ['cService','cEst','cCity','cWhen','cMember'].forEach(function(gid){ const g=document.getElementById(gid); if(g) g.addEventListener('click', custSummary); });
 document.getElementById('rDate').addEventListener('change', custSummary);
 ['jService', 'jCity'].forEach(function(gid){ const g = document.getElementById(gid); if (g) { g.addEventListener('input', queueJobCandidates); g.addEventListener('change', queueJobCandidates); } });
@@ -3142,15 +3393,15 @@ function syncMemberPicker(){
   const g = document.getElementById('cMember');
   if (!g) return;
   const lbl = (g.previousElementSibling && g.previousElementSibling.tagName === 'LABEL') ? g.previousElementSibling : null;
-  if (!me || me.role !== 'customer') { if (lbl) lbl.textContent = 'HomeCare membership — $29/mo'; setEstTypePrice(false, false); return; }
+  if (!me || me.role !== 'customer') { if (lbl) lbl.textContent = CU('wzMemberLabel'); setEstTypePrice(false, false); return; }
   const hcActive = me.homeCareStatus === 'active';
   const p = me.membershipPlan || {};
   const anyMember = hcActive || (p.status === 'active' && !!p.planKey);
   const want = anyMember ? (me.freeEstimateUsed ? 'member' : 'new') : 'none';
   g.querySelectorAll('button').forEach(function(b){ b.classList.toggle('sel', b.dataset.v === want); b.disabled = true; });
   if (lbl) lbl.textContent = anyMember
-    ? (me.freeEstimateUsed ? 'Your membership — $50 member estimate applied' : 'Your membership — first in-person estimate FREE')
-    : 'HomeCare membership — $29/mo';
+    ? (me.freeEstimateUsed ? CU('memberAppliedTpl') : CU('memberFreeApplied'))
+    : CU('wzMemberLabel');
   setEstTypePrice(anyMember, !me.freeEstimateUsed);
 }
 // The in-person choice in the estimate-type selector carries the visitor's
@@ -3160,55 +3411,55 @@ function setEstTypePrice(anyMember, freeUnused){
   const g = document.getElementById('cEst');
   if (!g) return;
   g.querySelectorAll('button').forEach(function(b){
-    if (b.dataset.v === 'inperson') b.textContent = anyMember ? (freeUnused ? 'In-person estimate — FREE with your membership' : 'In-person estimate — $50 member price') : 'In-person estimate — $75';
+    if (b.dataset.v === 'inperson') b.textContent = anyMember ? (freeUnused ? CU('estTypeFree') : CU('estTypeMember')) : CU('wzEstInPersonBtn');
   });
 }
 function custState(){
-  const est=pickOne('cEst')||'inperson', member=pickOne('cMember')||'none', when=(pickOne('cWhen')==='Pick a date' && document.getElementById('rDate').value) ? 'On '+document.getElementById('rDate').value : (pickOne('cWhen')||'');
+  const est=pickOne('cEst')||'inperson', member=pickOne('cMember')||'none', when=(pickOne('cWhen')==='Pick a date' && document.getElementById('rDate').value) ? CU('wizWhenOn')+document.getElementById('rDate').value : (pickOne('cWhen')||'');
   document.getElementById('rDate').style.display = pickOne('cWhen')==='Pick a date' ? 'block':'none';
   return { service:pickOne('cService'), est, member, city:pickOne('cCity'), when };
 }
 function custFee(){
   const st=custState();
-  if(st.est==='photo') return {label:'FREE photo estimate', due:0};
+  if(st.est==='photo') return {label:CU('feeFreePhoto'), due:0};
   let base = st.member==='new'?0:(st.member==='member'?50:75);
   let urgent = st.when==='ASAP / Emergency';
   let due = urgent && base>0 ? Math.round(base*1.25*100)/100 : base;
-  return {label:(st.member==='new'?'FREE — first estimate this month':(st.member==='member'?'$50 member estimate':'$75 flat'))+(urgent&&base>0?' + 25% ASAP/Emergency = $'+due:''), due};
+  return {label:(st.member==='new'?CU('feeFreeMonth'):(st.member==='member'?CU('feeMember50'):CU('feeFlat75')))+(urgent&&base>0?CU('feeAsapTpl')+due:''), due};
 }
 function custSummary(){
   const st=custState(); const f=custFee();
-  document.getElementById('cFeeTitle').textContent = st.est==='photo' ? 'Free photo estimate' : ('In-person estimate — '+f.label);
-  document.getElementById('cSummary').innerHTML = 'Service: <b>'+(st.service||'pick one')+'</b> • Where: <b>'+(st.city||'—')+'</b> • When: <b>'+(st.when||'—')+'</b> • Estimate: <b>'+f.label+'</b>';
-  document.getElementById('cSendBtn').textContent = st.est==='photo' ? 'Request free photo estimate' : 'Send request — '+f.label;
-  if(st.est!=='photo' && f.due>0) document.getElementById('cSummary').innerHTML += '<br><b>$' + f.due + ' secures your appointment — and it goes credited towards your repair when approved the same day.</b>';
+  document.getElementById('cFeeTitle').textContent = st.est==='photo' ? CU('feeTitlePhoto') : (CU('feeTitleInPersonPre')+f.label);
+  document.getElementById('cSummary').innerHTML = CU('sumService')+': <b>'+(st.service||CU('sumPickOne'))+'</b> • '+CU('sumWhere')+': <b>'+(st.city||'—')+'</b> • '+CU('sumWhen')+': <b>'+(st.when||'—')+'</b> • '+CU('sumEstimate')+': <b>'+f.label+'</b>';
+  document.getElementById('cSendBtn').textContent = st.est==='photo' ? CU('sendBtnPhoto') : CU('sendBtnPre')+f.label;
+  if(st.est!=='photo' && f.due>0) document.getElementById('cSummary').innerHTML += '<br><b>' + CU('sendSecuresTpl').replace('{amt}', f.due) + '</b>';
 }
 async function sendRequest(){
   const st=custState(); const f=custFee();
   const msg=document.getElementById('rMsg');
-  if(!st.service){ msg.textContent='Pick a service first.'; return; }
-  if(!document.getElementById('rAddr').value.trim()){ msg.textContent='Add the home address.'; return; }
-  if(!st.when){ msg.textContent='Choose when you need it.'; return; }
-  if(!document.getElementById('rDesc').value.trim()){ msg.textContent='Describe the job in a sentence or two.'; return; }
-  if(!custAck){ msg.textContent='Tap the confirm box (estimate + labor-only) before sending.'; return; }
+  if(!st.service){ msg.textContent=CU('srPickService'); return; }
+  if(!document.getElementById('rAddr').value.trim()){ msg.textContent=CU('srAddAddress'); return; }
+  if(!st.when){ msg.textContent=CU('srChooseWhen'); return; }
+  if(!document.getElementById('rDesc').value.trim()){ msg.textContent=CU('srDescribe'); return; }
+  if(!custAck){ msg.textContent=CU('srAck'); return; }
   let cName='', cEmail='', cPhone='';
   if(!me){
     cName=document.getElementById('rName').value.trim();
     cEmail=document.getElementById('rEmail').value.trim();
     cPhone=document.getElementById('rPhone').value.trim();
-    if(!cName){ msg.textContent='Add your name.'; return; }
-    if(!/.+@.+\..+/.test(cEmail)){ msg.textContent='Add a valid email — we send your quote there.'; return; }
+    if(!cName){ msg.textContent=CU('srAddName'); return; }
+    if(!/.+@.+\..+/.test(cEmail)){ msg.textContent=CU('srAddEmail'); return; }
   }
   try{ const files=[...document.getElementById('rPhotos').files].slice(0,6); const photos=[];
     for(const fl of files){ photos.push(await fileToDataUrl(fl)); }
-    if(st.est==='photo' && !photos.length){ msg.textContent='Free photo estimates need at least one picture.'; return; }
+    if(st.est==='photo' && !photos.length){ msg.textContent=CU('srNeedPhoto'); return; }
     // v42: the wizard's access notes ride inside the description — the
     // request model (and what the admin sees) stays exactly the same.
     const accessEl=document.getElementById('rAccess'); const access=accessEl?accessEl.value.trim():'';
     const descFull=document.getElementById('rDesc').value+(access?'\nAccess notes: '+access:'');
-    const rd=await api('/api/requests',{method:'POST', body:JSON.stringify({source: campaignSource(), service:st.service, description:descFull, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:me?st.member:'none', photos, customerName:cName, customerEmail:cEmail, customerPhone:cPhone})});
-    msg.textContent= me ? 'Request sent'+(photos.length?' with '+photos.length+' photo(s)':'')+'. The Team will review and send your quote right here — check back in this thread.'
-      : 'Request sent! The Team will review it and send your quote to '+cEmail+'. No account needed — you can approve and pay right from the email link.';
+    const rd=await api('/api/requests',{method:'POST', body:JSON.stringify({source: campaignSource(), lang: menuLang(), service:st.service, description:descFull, city:st.city, address:document.getElementById('rAddr').value, when:st.when, estimateType:st.est, membership:me?st.member:'none', photos, customerName:cName, customerEmail:cEmail, customerPhone:cPhone})});
+    msg.textContent= me ? CU('srSentPre')+(photos.length?CU('srWithPhotosTpl').replace('{n}', photos.length):'')+CU('srSentMeSuffix')
+      : CU('srSentAnonTpl').replace('{email}', cEmail);
     document.getElementById('rPhotos').value=''; if(me) loadRequests();
     if(rd && rd.request && typeof wzShowDone==='function') wzShowDone(rd.request);
   }catch(e){ msg.textContent=e.message; }
@@ -3218,21 +3469,22 @@ function moneyFmt(v){ const n=Number(v)||0; return '$'+n.toFixed(2); }
 function estimateHtml(r, isCustomer){
   const e=r && r.estimate;
   if(!e || !Array.isArray(e.items) || !e.items.length) return '';
-  const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+(it.type==='material'?' <span class="pill" style="background:#6b6762">material</span>':'')+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
+  const X=function(k){ return isCustomer ? CU(k) : (CUST_UI.en[k] !== undefined ? CUST_UI.en[k] : k); };
+  const rows=e.items.map(function(it){ return '<tr><td>'+escHtml(it.description)+(it.type==='material'?' <span class="pill" style="background:#6b6762">'+X('estMatPill')+'</span>':'')+'</td><td class="num">'+escHtml(it.qty)+'</td><td class="num">'+moneyFmt(it.unitPrice)+'</td><td class="num">'+moneyFmt(it.lineTotal)+'</td></tr>'; }).join('');
   let adj='';
-  if(e.asapAmount) adj+='<tr><td colspan="3">ASAP / Emergency (+25%)</td><td class="num">'+moneyFmt(e.asapAmount)+'</td></tr>';
-  if(e.discountAmount) adj+='<tr><td colspan="3">Discount ('+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
-  if(e.credit) adj+='<tr><td colspan="3">Appointment credit (approved same day)</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
-  return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">Estimate '+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • generalhandymans.app</div></div><div class="estimate-body"><b>Customer:</b> '+escHtml(r.customerName||'Customer')+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>Concept</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>'+rows+'<tr><td colspan="3"><b>Subtotal</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">TOTAL</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>Due to book:</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>Balance at completion:</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">'+((e.materialSubtotal||0)>0?'Materials included in this estimate.':'Labor only — customer buys materials/parts unless the Team says otherwise in writing.')+(e.validUntil?' Valid until '+escHtml(e.validUntil)+'.':' Estimate valid for 7 days.')+'</span>'+(r.quoteNote?'<br><b>Team note:</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve estimate</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button></div>':'')+'</div></div>';
+  if(e.asapAmount) adj+='<tr><td colspan="3">'+X('estAsapRow')+'</td><td class="num">'+moneyFmt(e.asapAmount)+'</td></tr>';
+  if(e.discountAmount) adj+='<tr><td colspan="3">'+X('estDiscountRow')+escHtml(e.discountPct)+'%)</td><td class="num">−'+moneyFmt(e.discountAmount)+'</td></tr>';
+  if(e.credit) adj+='<tr><td colspan="3">'+X('estCreditRow')+'</td><td class="num">−'+moneyFmt(e.credit)+'</td></tr>';
+  return '<div class="estimate"><div class="estimate-head"><b>General Handyman <span>Solutions</span></b><div class="estimate-meta">'+X('estWord')+escHtml(r.id)+' • '+escHtml(r.service||'')+' • '+escHtml(r.city||'')+'<br>(707) 862-3773 • generalhandymans.app</div></div><div class="estimate-body"><b>'+X('estCustomer')+'</b> '+escHtml(r.customerName||X('estCustomerFallback'))+'<br><span class="mut">'+escHtml(r.description||'')+' • '+escHtml(r.when||'')+'</span><table><tr><th>'+X('estThConcept')+'</th><th class="num">'+X('estThQty')+'</th><th class="num">'+X('estThPrice')+'</th><th class="num">'+X('estThTotal')+'</th></tr>'+rows+'<tr><td colspan="3"><b>'+X('estSubtotal')+'</b></td><td class="num"><b>'+moneyFmt(e.subtotal)+'</b></td></tr>'+adj+'<tr class="estimate-total"><td colspan="3">'+X('estTotalWord')+'</td><td class="num">'+moneyFmt(e.total)+'</td></tr></table><div class="est-summary"><b>'+X('estDueBook')+'</b> '+moneyFmt(e.bookingDue)+' &nbsp; • &nbsp; <b>'+X('estBalanceWord')+'</b> '+moneyFmt(e.balanceDue)+'<br><span class="mut">'+((e.materialSubtotal||0)>0?X('estMatIncl'):X('estLaborOnly'))+(e.validUntil?X('estValidUntil')+escHtml(e.validUntil)+'.':X('estValid7'))+'</span>'+(r.quoteNote?'<br><b>'+X('estTeamNote')+'</b> '+escHtml(r.quoteNote):'')+'</div>'+(isCustomer && r.status==='Quoted'?'<div class="est-actions"><button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">'+X('estApprove')+'</button><button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">'+X('reqDecline')+'</button></div>':'')+'</div></div>';
 }
 function estimateStatusBadgeHtml(r){
   if(!r.estimate) return '';
-  var label='awaiting approval', color='#b26a00';
+  var label=CU('estBadgeAwaiting'), color='#b26a00';
   if(r.status==='Approved'){
     var paid=r.estimateInvoice && r.estimateInvoice.status==='paid';
-    label=paid?'paid':'approved — awaiting payment'; color='#1a7f37';
-  } else if(r.status==='Declined'){ label='declined'; color='#6b6762'; }
-  return ' <span class="pill" style="background:'+color+'">estimate: '+label+'</span>';
+    label=paid?CU('estBadgePaid'):CU('estBadgeApproved'); color='#1a7f37';
+  } else if(r.status==='Declined'){ label=CU('estBadgeDeclined'); color='#6b6762'; }
+  return ' <span class="pill" style="background:'+color+'">'+CU('estBadgeWord')+label+'</span>';
 }
 function copyEstimateLink(idv){
   var url=location.origin+'/estimate/'+idv;
@@ -3403,7 +3655,7 @@ async function createInvoice(){
     msg.textContent='Draft invoice created.'; document.getElementById('invRows').innerHTML=''; addInvoiceItem(); document.getElementById('iDiscount').value='0'; document.getElementById('iNotes').value=''; updateInvoiceSummary(); loadInvoices();
   }catch(e){ msg.textContent=e.message; }
 }
-function invStatusBadge(s){ const c={draft:'#6b6762',sent:'#b26a00',paid:'#1a7f37',overdue:'#e42535',cancelled:'#6b6762'}[s]||'#6b6762'; return '<span class="pill" style="border-color:'+c+';color:'+c+'">'+escHtml(s)+'</span>'; }
+function invStatusBadge(s){ const c={draft:'#6b6762',sent:'#b26a00',paid:'#1a7f37',overdue:'#e42535',cancelled:'#6b6762'}[s]||'#6b6762'; const lbl=(typeof me !== 'undefined' && me && me.role === 'customer') ? (CUST_UI[menuLang()]['invSt_' + s] || s) : s; return '<span class="pill" style="border-color:'+c+';color:'+c+'">'+escHtml(lbl)+'</span>'; }
 let adminInvoicesCache=[];
 async function loadInvoices(){
   checkStripeHealth();
@@ -3500,19 +3752,19 @@ function copyInvoiceLink(idv){
 }
 async function loadMyInvoices(){
   const el=document.getElementById('myInvoices'); if(!el) return;
-  if(!el.innerHTML) el.innerHTML=listLoadingHtml('Loading your invoices… · Cargando tus facturas…');
+  if(!el.innerHTML) el.innerHTML=listLoadingHtml();
   let d=null;
-  try{ d=await api('/api/invoices/mine'); }catch(e){ el.innerHTML=listErrorHtml('loadMyInvoices()','We could not load your invoices.'); return; }
+  try{ d=await api('/api/invoices/mine'); }catch(e){ el.innerHTML=listErrorHtml('loadMyInvoices()', CU('invLoadErr2')); return; }
   el.innerHTML = d.invoices.map(function(inv){
     const unpaid=['draft','sent','overdue'].indexOf(inv.status)>=0;
-    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br>'+(inv.dueDate?'<span class="mut">Due '+escHtml(inv.dueDate)+' • </span>':'')+'<b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b><br>'+(unpaid?'<a href="/invoice/'+inv.id+'"><button style="margin-top:8px">View & pay invoice</button></a>':'<a href="/invoice/'+inv.id+'" class="mut">View invoice</a>')+'</div>';
-  }).join('') || '<div class="empty"><p class="mut">No invoices yet.</p></div>';
+    return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br>'+(inv.dueDate?'<span class="mut">'+CU('invDue')+escHtml(inv.dueDate)+' • </span>':'')+'<b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b><br>'+(unpaid?'<a href="/invoice/'+inv.id+'"><button style="margin-top:8px">'+CU('invViewPay')+'</button></a>':'<a href="/invoice/'+inv.id+'" class="mut">'+CU('invView')+'</a>')+'</div>';
+  }).join('') || '<div class="empty"><p class="mut">' + CU('invNone') + '</p></div>';
 }
 function threadHtml(r){
-  const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||'Customer'); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
-  const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="Job photo">'; }).join('');
+  const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||CU('msgCustomerWord')); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
+  const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="'+CU('jobPhotoAlt')+'">'; }).join('');
   const canPost = !!me && (me.role==='admin' || r.customerId===me.id);
-  return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<div class="empty"><span class="mut">No messages yet.</span></div>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="Message the '+(me.role==='admin'?'customer':'Team')+'..."><button onclick="sendMsg(\''+r.id+'\')">Send</button></div>':'');
+  return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<div class="empty"><span class="mut">'+CU('threadNone')+'</span></div>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="'+(me.role==='admin'?CU('threadPhCust'):CU('threadPhTeam'))+'"><button onclick="sendMsg(\''+r.id+'\')">'+CU('sendBtn')+'</button></div>':'');
 }
 async function sendMsg(idv){
   const inp=document.getElementById('m-'+idv); if(!inp) return;
@@ -3528,24 +3780,24 @@ async function sendMsg(idv){
 // parked in the account, still visible, no nagging.
 async function loadProposals(){
   const host = document.getElementById('myProposals'); if (!host) return;
-  if (!host.innerHTML) host.innerHTML = listLoadingHtml('Loading proposals… · Cargando propuestas…');
+  if (!host.innerHTML) host.innerHTML = listLoadingHtml();
   let d = null;
-  try { d = await api('/api/me/proposals'); } catch (e) { host.innerHTML = listErrorHtml('loadProposals()', 'We could not load your proposals.'); return; }
+  try { d = await api('/api/me/proposals'); } catch (e) { host.innerHTML = listErrorHtml('loadProposals()', CU('propLoadErr')); return; }
   const ps = (d && d.proposals) || [];
   // Genuinely empty (a SUCCESSFUL response with none): the section
   // simply does not render — v79's no-nagging design. An ERROR never
   // lands here anymore (v80 P1-2).
   if (!ps.length) { host.innerHTML = ''; return; }
   const money = function (n) { return '$' + (Math.round(Number(n) * 100) / 100); };
-  let h = '<h2>📩 Proposals from the Team</h2>';
+  let h = '<h2>' + CU('propTitle') + '</h2>';
   ps.forEach(function (pr) {
     h += '<div class="card" style="margin:8px 0"><b>' + escHtml(pr.title) + '</b>'
-      + '<div class="mut">' + (pr.kind === 'cart' ? 'Cart ' + escHtml(pr.id) : 'Estimate') + ' · Total ' + money(pr.total) + (pr.state === 'booked' ? ' · <b style="color:#16a34a">Booked — deposit paid</b>' : '') + (pr.saved ? ' · 💾 Saved for later' : '') + '</div>'
-      + (pr.state === 'booked' ? '<div style="margin-top:4px">Balance due at completion: <b>' + money(pr.balanceDue) + '</b></div>' : '<div style="margin-top:4px">To book today: <b>' + money(pr.depositDue) + '</b> · Balance at completion: <b>' + money(pr.balanceDue) + '</b></div>')
+      + '<div class="mut">' + (pr.kind === 'cart' ? CU('propCartWord') + escHtml(pr.id) : CU('propEstimateWord')) + CU('propTotalWord') + money(pr.total) + (pr.state === 'booked' ? ' · <b style="color:#16a34a">' + CU('propBookedTag') + '</b>' : '') + (pr.saved ? CU('propSavedTag') : '') + '</div>'
+      + (pr.state === 'booked' ? '<div style="margin-top:4px">' + CU('propBalanceLine') + '<b>' + money(pr.balanceDue) + '</b></div>' : '<div style="margin-top:4px">' + CU('propBookToday') + '<b>' + money(pr.depositDue) + '</b>' + CU('propBalanceAt') + '<b>' + money(pr.balanceDue) + '</b></div>')
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
-      + '<button onclick="location.href=\'' + pr.url + '\'">' + (pr.state === 'booked' ? 'Pay balance' : '✅ Accept — go to checkout') + '</button>'
-      + '<button type="button" class="ghost" onclick="propKeepShopping(this)">🛒 Keep shopping</button>'
-      + '<button type="button" class="ghost" onclick="propSaveLater(\'' + pr.kind + '\',\'' + pr.id + '\',' + (pr.saved ? 'false' : 'true') + ')">' + (pr.saved ? '↩ Move back to active' : '💾 Save for later') + '</button>'
+      + '<button onclick="location.href=\'' + pr.url + '\'">' + (pr.state === 'booked' ? CU('propPayBalance') : CU('propAccept')) + '</button>'
+      + '<button type="button" class="ghost" onclick="propKeepShopping(this)">' + CU('propKeep') + '</button>'
+      + '<button type="button" class="ghost" onclick="propSaveLater(\'' + pr.kind + '\',\'' + pr.id + '\',' + (pr.saved ? 'false' : 'true') + ')">' + (pr.saved ? CU('propMoveBack') : CU('propSave')) + '</button>'
       + '</div></div>';
   });
   host.innerHTML = h;
@@ -3565,21 +3817,21 @@ async function propSaveLater(kind, idv, saved){
 // genuinely EMPTY (only after a SUCCESSFUL response), and ERROR with a
 // Retry button that re-runs the loader. A network failure must never
 // again paint a false "nothing here yet".
-function listLoadingHtml(label){ return '<div class="empty" aria-busy="true"><p class="mut">⏳ ' + (label || 'Loading… · Cargando…') + '</p></div>'; }
-function listErrorHtml(retryFn, msg){ return '<div class="empty" style="border-color:#e42535"><p class="mut">⚠️ ' + escHtml(msg || 'We could not load this — check your connection.') + '</p><button type="button" class="ghost" onclick="' + retryFn + '">↻ Retry · Reintentar</button></div>'; }
+function listLoadingHtml(label, aud){ const w = aud === 'worker' || (!aud && me && me.role === 'worker'); return '<div class="empty" aria-busy="true"><p class="mut">⏳ ' + (label || (w ? WT('loadingGeneric') : CU('loading'))) + '</p></div>'; }
+function listErrorHtml(retryFn, msg, aud){ const w = aud === 'worker' || (!aud && me && me.role === 'worker'); return '<div class="empty" style="border-color:#e42535"><p class="mut">⚠️ ' + escHtml(msg || (w ? WT('errGeneric') : CU('loadErr'))) + '</p><button type="button" class="ghost" onclick="' + retryFn + '">' + (w ? WT('retryBtn') : CU('retry')) + '</button></div>'; }
 async function loadRequests(){
   const host=document.getElementById('myRequests'); if(!host) return;
-  if(!host.innerHTML) host.innerHTML=listLoadingHtml('Loading your requests… · Cargando tus solicitudes…');
+  if(!host.innerHTML) host.innerHTML=listLoadingHtml();
   let d=null;
-  try{ d=await api('/api/requests'); }catch(e){ host.innerHTML=listErrorHtml('loadRequests()','We could not load your requests.'); return; }
+  try{ d=await api('/api/requests'); }catch(e){ host.innerHTML=listErrorHtml('loadRequests()', CU('reqLoadErr2')); return; }
   host.innerHTML = d.requests.map(function(r){
     const est=estimateHtml(r,true);
-    const quoteLine=est ? '' : (r.quote!=null?'<br>Your quote: <span class="st">$'+r.quote+'</span> labor (you buy materials) '+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">Approve quote</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">Decline</button>':''):'<br><span class="mut">Waiting for the Team to send your quote.</span>');
+    const quoteLine=est ? '' : (r.quote!=null?'<br>'+CU('reqQuotePre')+'<span class="st">$'+r.quote+'</span>'+CU('reqLaborNote')+(r.status==='Quoted'?'<button class="black" onclick="actReq(\''+r.id+'\',\'approve\')">'+CU('reqApprove')+'</button> <button class="ghost" onclick="actReq(\''+r.id+'\',\'decline\')">'+CU('reqDecline')+'</button>':''):'<br><span class="mut">'+CU('reqWaiting')+'</span>');
     const hasLiveHold=holdsOf(r).some(function(h){ return h.status==='authorized'||h.status==='captured'; });
-    const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">Secure my appointment — authorize '+moneyFmt(r.estimateDue)+' hold (not a charge yet)</button></div>':'');
-    const payBlock=r.payment?'<div class="pay-panel"><b>💳 '+(r.payment.status==='paid'?'Paid in full: '+moneyFmt((r.payment.amountCents||0)/100):(r.payment.status==='partially_refunded'?'Paid '+moneyFmt((r.payment.amountCents||0)/100)+' — partially refunded':'Payment refunded'))+'</b>'+(r.refund?'<br><span class="mut">Refund issued: '+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+' booking fee kept (already dispatched)':'')+'</span>':'')+'</div>':'';
+    const holdBlock=holdStatusHtml(r)+((r.estimateType==='inperson' && (Number(r.estimateDue)||0)>0 && !hasLiveHold && !r.estimatePaid && r.status!=='Closed')?'<div style="margin-top:8px"><button class="black" onclick="secureHold(\''+r.id+'\')">'+CU('reqSecureTpl').replace('{amt}', moneyFmt(r.estimateDue))+'</button></div>':'');
+    const payBlock=r.payment?'<div class="pay-panel"><b>💳 '+(r.payment.status==='paid'?CU('payPaidFull')+moneyFmt((r.payment.amountCents||0)/100):(r.payment.status==='partially_refunded'?CU('payPartialRefPre')+moneyFmt((r.payment.amountCents||0)/100)+CU('payPartialRefSuf'):CU('payRefunded')))+'</b>'+(r.refund?'<br><span class="mut">'+CU('refundIssued')+moneyFmt((r.refund.refundedCents||0)/100)+(r.refund.keptFeeCents?' • '+moneyFmt(r.refund.keptFeeCents/100)+CU('refundKeptFee'):'')+'</span>':'')+'</div>':'';
     return '<div class="card" id="reqcard-'+r.id+'"><b>'+r.id+'</b> — '+escHtml(r.service)+' <span class="pill">'+escHtml(r.status)+'</span><br><span class="mut">'+escHtml(r.city)+' • '+escHtml(r.when)+'</span>'+est+quoteLine+payBlock+holdBlock+threadHtml(r)+'</div>';
-  }).join('') || '<div class="empty"><p class="mut">No requests yet.</p></div>';
+  }).join('') || '<div class="empty"><p class="mut">' + CU('reqNone') + '</p></div>';
 }
 async function actReq(idv, action){ await api('/api/requests/'+idv,{method:'PATCH', body:JSON.stringify({action})}); loadRequests(); }
 function jobChatHtml(j){
@@ -3596,10 +3848,10 @@ async function sendJobMsg(idv){
 const ratePicks = {};
 function ratingHtml(j){
   if (j.status !== 'Done — photos sent') return '';
-  if (j.rating) return '<div style="margin-top:8px"><b>Your rating:</b> <span style="color:#b26a00;font-size:18px">' + '★'.repeat(j.rating) + '☆'.repeat(5 - j.rating) + '</span>' + (j.reviewText ? '<br><span class="mut">&ldquo;' + escHtml(j.reviewText) + '&rdquo;</span>' : '') + '</div>';
+  if (j.rating) return '<div style="margin-top:8px"><b>' + CU('ratingYours') + '</b> <span style="color:#b26a00;font-size:18px">' + '★'.repeat(j.rating) + '☆'.repeat(5 - j.rating) + '</span>' + (j.reviewText ? '<br><span class="mut">&ldquo;' + escHtml(j.reviewText) + '&rdquo;</span>' : '') + '</div>';
   let stars = '';
   for (let s = 1; s <= 5; s++) stars += '<button type="button" class="ghost" id="star-' + j.id + '-' + s + '" style="font-size:20px;padding:2px 8px" onclick="pickStars(\'' + j.id + '\',' + s + ')">☆</button>';
-  return '<div style="margin-top:8px"><b>How did we do?</b><br>' + stars + '<br><input id="rateText-' + j.id + '" placeholder="Tell us about the work (optional)" style="width:100%"><button class="black" onclick="submitRating(\'' + j.id + '\')">Send rating</button> <span class="mut" id="rateMsg-' + j.id + '"></span></div>';
+  return '<div style="margin-top:8px"><b>' + CU('ratingPrompt') + '</b><br>' + stars + '<br><input id="rateText-' + j.id + '" placeholder="' + CU('ratingPlaceholder') + '" style="width:100%"><button class="black" onclick="submitRating(\'' + j.id + '\')">' + CU('ratingSend') + '</button> <span class="mut" id="rateMsg-' + j.id + '"></span></div>';
 }
 function pickStars(idv, s){
   ratePicks[idv] = s;
@@ -3608,7 +3860,7 @@ function pickStars(idv, s){
 async function submitRating(idv){
   const msg = document.getElementById('rateMsg-' + idv);
   const s = ratePicks[idv] || 0;
-  if (!s) { if (msg) msg.textContent = 'Tap the stars first.'; return; }
+  if (!s) { if (msg) msg.textContent = CU('ratingTapFirst'); return; }
   try {
     await api('/api/jobs/' + idv + '/rating', { method: 'POST', body: JSON.stringify({ stars: s, text: (document.getElementById('rateText-' + idv) || {}).value || '' }) });
     loadMyJobs();
@@ -3616,10 +3868,10 @@ async function submitRating(idv){
 }
 async function loadMyJobs(){
   const el=document.getElementById('myJobs'); if(!el) return;
-  if(!el.innerHTML) el.innerHTML=listLoadingHtml('Loading your jobs… · Cargando tus trabajos…');
+  if(!el.innerHTML) el.innerHTML=listLoadingHtml(null, 'worker');
   let d=null;
   try{ d=await api('/api/jobs'); }catch(e){ el.innerHTML=listErrorHtml('loadMyJobs()','We could not load your jobs.'); return; }
-  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">No assigned jobs yet. When a worker picks your job, the job chat opens here.</p></div>';
+  el.innerHTML = d.jobs.map(j=>'<div class="card" id="jobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+techCardHtml(j)+trackBlockHtml(j,'customer')+ratingHtml(j)+jobChatHtml(j)+'</div>').join('') || '<div class="empty"><p class="mut">' + CU('jobsNoneCust') + '</p></div>';
   sndCustomerJobs(d.jobs);
   initTrackMaps(d.jobs);
 }
@@ -3747,7 +3999,7 @@ function avatarHtml(photo, name, size){
 // payload carries ONLY name + photo for the worker — never phone or pay.
 function techCardHtml(j){
   if (!j || !j.technician) return '';
-  return '<div style="display:flex;align-items:center;gap:8px;margin-top:8px">' + avatarHtml(j.technicianPhoto, j.technician, 36) + '<span>Tu técnico / Your technician: <b>' + escHtml(j.technician) + '</b></span></div>';
+  return '<div style="display:flex;align-items:center;gap:8px;margin-top:8px">' + avatarHtml(j.technicianPhoto, j.technician, 36) + '<span>' + CU('yourTech') + ' <b>' + escHtml(j.technician) + '</b></span></div>';
 }
 // ---------- Mi perfil + Mis oficios + Disponibilidad (v41) ----------
 // EVERY worker edits his full profile here — including accounts created
@@ -4053,6 +4305,101 @@ function appPrompt(msg, def, placeholder){ return appDlgShow(msg, { input: true,
 // login. The server record counts as granted and heals the local flag.
 function permLocGranted(){ try { if (localStorage.getItem('ghsLoc') === 'on') return true; } catch(e) {} return !!(me && me.role === 'worker' && me.locOptIn); }
 function healWorkerLocFlag(){ try { if (me && me.role === 'worker' && me.locOptIn) localStorage.setItem('ghsLoc', 'on'); } catch(e) {} }
+// v80.19 IDIOMA: the toggle IS the preference — while logged in it is
+// saved on the account (fire-and-forget; the local choice already
+// rules this device) so server emails follow it, and at login the
+// account's saved language heals this device's toggles.
+function persistLangPref(l){ if (!me || (l !== 'es' && l !== 'en')) return; try { fetch('/api/me/lang', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lang: l }) }).catch(function(){}); } catch (e) {} }
+function healLangFromAccount(){ try { if (me && (me.lang === 'es' || me.lang === 'en')) { const L = me.lang; if (_menuLang !== L || _workerLangChoice !== L) { _menuLang = L; _workerLangChoice = L; try { localStorage.setItem('ghsMenuLang', L); localStorage.setItem('ghsWorkerLang', L); } catch (e) {} if (typeof applyMenuLang === 'function') applyMenuLang(); if (typeof applyWorkerLang === 'function') applyWorkerLang(); if (typeof renderMenu === 'function') renderMenu(); } } } catch (e) {} }
+function paintAuthFace(){
+  if (isWorkerEntry()) return;
+  const h = document.querySelector('#authBox h3'); const hint = document.getElementById('authHint');
+  if (curMode === 'join' || curMode === 'homecare') { if (h) h.textContent = CU('authTitleMember'); if (hint) hint.textContent = CU('authHintJoin'); }
+  else if (curMode === 'login') { if (h) h.textContent = CU('authTitleLogin'); if (hint) hint.textContent = CU('authHintLogin'); }
+  else { if (h) h.textContent = CU('authTitleLogin'); if (hint) hint.textContent = CU('authHintPlain'); }
+}
+function paintStaticChrome(){
+  const set = function(id, txt){ const el = document.getElementById(id); if (el && txt != null) el.textContent = txt; };
+  const setH = function(id, html){ const el = document.getElementById(id); if (el && html != null) el.innerHTML = html; };
+  set('navHomeLink', CU('navHome')); set('menuNavLink', CU('navMenu')); set('navMembershipsLink', CU('navMemberships')); set('navYardLink', CU('navYard'));
+  set('memberLoginBtn', CU('memberLoginBtn'));
+  set('pillCall', CU('pillCall')); set('pillText', CU('pillText')); set('pillPhoto', CU('pillPhoto'));
+  const cb = document.getElementById('cartBtn'); if (cb) { cb.title = CU('cartTitle'); if (cb.setAttribute) cb.setAttribute('aria-label', CU('cartTitle')); }
+  set('memAddrTitle', CU('memAddrTitle')); set('memAddrNote', CU('memAddrNote')); set('memAddrSave', CU('memAddrSave'));
+  set('serviceAddressLbl2', CU('saLabel'));
+  set('homeNotesLbl2', CU('homeNotesLbl2')); set('startLbl2', CU('startLbl')); set('startNote2', CU('startNote2')); set('saveHomeDetailsBtn', CU('saveHomeDetailsBtn'));
+  set('homeTypeLbl2', CU('homeTypeLbl')); set('yardSizeLbl2', CU('yardSizeLbl'));
+  paintPickLabels('hStartPick');
+  paintHomeOptionLabels('hHomeType', 'hYardSize');
+  const hn = document.getElementById('hHomeNotes'); if (hn) hn.placeholder = CU('homeNotesPh');
+  if (!isWorkerEntry()) {
+    set('authFullNameLbl', CU('lblFullName')); set('authPhoneLbl', CU('lblPhone'));
+    set('lblEmailW', CU('lblEmail')); set('lblPasswordW', CU('lblPassword'));
+    set('serviceAddressLbl', CU('saLabel'));
+    setH('zipLbl', CU('zipLblHtml')); set('homeTypeLbl', CU('homeTypeLbl')); set('yardSizeLbl', CU('yardSizeLbl')); setH('homeNotesLbl', CU('homeNotesHtml'));
+    set('startLbl', CU('startLbl')); set('startNote', CU('startNote'));
+    paintPickLabels('aStartPick');
+    paintHomeOptionLabels('aHomeType', 'aYardSize');
+    const an = document.getElementById('aName'); if (an) an.placeholder = CU('namePh');
+    const as2 = document.getElementById('aServiceAddress'); if (as2) as2.placeholder = CU('addrPh');
+    const ms = document.getElementById('membershipServiceAddress'); if (ms) ms.placeholder = CU('addrPh');
+    const ahn = document.getElementById('aHomeNotes'); if (ahn) ahn.placeholder = CU('homeNotesPh');
+    const fr = document.querySelector('#forgotRow a'); if (fr) fr.textContent = CU('forgotLink');
+    paintAuthFace();
+  }
+  set('resetTitleEl', CU('resetTitle')); set('resetSubEl', CU('resetSub')); set('resetLbl1', CU('resetLbl1')); set('resetLbl2', CU('resetLbl2')); set('resetBtn', CU('resetBtn'));
+  const rp1 = document.getElementById('rPass1'); if (rp1) rp1.placeholder = CU('resetPh1');
+  const rp2 = document.getElementById('rPass2'); if (rp2) rp2.placeholder = CU('resetPh2');
+  if (typeof paintCartStatics === 'function') paintCartStatics();
+  wzPaint();
+}
+function paintPickLabels(pickId){
+  document.querySelectorAll('#' + pickId + ' button').forEach(function(b){
+    if (b.getAttribute('data-v') === 'asap') b.textContent = CU('startAsap');
+    if (b.getAttribute('data-v') === 'date') b.textContent = CU('startDateOpt');
+  });
+}
+function paintHomeOptionLabels(typeId, sizeId){
+  const paint = function(selId, map){ const sel = document.getElementById(selId); if (!sel || !sel.options) return; Array.prototype.forEach.call(sel.options, function(o){ if (map[o.value]) o.textContent = map[o.value]; }); };
+  paint(typeId, { house: CU('optHouse'), townhouse: CU('optTownhouse'), apartment: CU('optApartment'), other: CU('optOther') });
+  paint(sizeId, { small: CU('optSmall'), medium: CU('optMedium'), large: CU('optLarge') });
+}
+function paintCartStatics(){
+  const set = function(id, txt){ const el = document.getElementById(id); if (el && txt != null) el.textContent = txt; };
+  const setLabel = function(id, txt){ const el = document.getElementById(id); if (!el || txt == null) return; const nodes = el.childNodes || []; for (const n of nodes) { if (n.nodeType === 3) { n.textContent = txt; return; } } };
+  set('cartEmptyTxt', CU('cartEmptyTxt')); set('cartBrowseBtn', CU('cartBrowseBtn')); set('cartCheckoutBtn', CU('cartCheckoutBtnTxt')); set('cartClearBtn', CU('cartClearBtnTxt'));
+  set('ccTitleEl', CU('ccTitle')); set('ccAcctTitleEl', CU('ccAcctTitle'));
+  setLabel('ccNameLbl', CU('ccNameLbl')); setLabel('ccEmailLbl', CU('lblEmail')); setLabel('ccPhoneLbl', CU('lblPhone')); setLabel('ccPassLbl', CU('lblPassword'));
+  set('ccAcctNote', CU('ccAcctNote'));
+  set('ccWhereWhenEl', CU('ccWhereWhen')); setLabel('ccAddrLbl', CU('ccAddrLbl')); setLabel('ccCityLbl', CU('ccCityLbl')); setLabel('ccWhenLbl', CU('ccWhenLbl')); setLabel('ccNotesLbl', CU('ccNotesLbl'));
+  set('ccOfferTitleEl', CU('ccOfferTitle')); set('ccOfferBodyEl', CU('ccOfferBody')); set('ccAddMoreBtn', CU('ccAddMore'));
+  set('ccPayTitleEl', CU('ccPayTitle')); set('ccPayNoteEl', CU('ccPayNote')); set('ccFootNoteEl', CU('ccFootNote'));
+  const cp = document.getElementById('ccPass'); if (cp) cp.placeholder = CU('ccPassPh');
+  const ca = document.getElementById('ccAddress'); if (ca) ca.placeholder = CU('wzAddrPh');
+  const cw = document.getElementById('ccWhenText'); if (cw) cw.placeholder = CU('ccWhenPh');
+  const cn = document.getElementById('ccNotes'); if (cn) cn.placeholder = CU('wzAccessPh');
+  document.querySelectorAll('#ccWhenPick button').forEach(function(b){
+    if (b.getAttribute('data-w') === 'Today') b.textContent = CU('ccToday');
+    if (b.getAttribute('data-w') === 'Tomorrow') b.textContent = CU('ccTomorrow');
+  });
+}
+function wzPaint(){
+  const set = function(id, txt){ const el = document.getElementById(id); if (el && txt != null) el.textContent = txt; };
+  set('wzT1', CU('wzNeedTitle')); set('wzT2', CU('wzDetailsTitle')); set('wzT3', CU('wzWhereTitle')); set('wzT4', CU('wzInfoTitle'));
+  set('wzDescLbl', CU('wzDescLabel')); set('wzPhotosLbl', CU('wzPhotosLabel')); set('wzEstTypeLbl', CU('wzEstTypeLabel'));
+  set('wzEstPhotoBtn', CU('wzEstPhotoBtn')); set('wzEstInPersonBtn', CU('wzEstInPersonBtn')); set('wzEstNote', CU('wzEstNote'));
+  set('wzCityLbl', CU('wzCityLabel')); set('wzAddrLbl', CU('wzAddrLabel')); set('wzWhenLbl', CU('wzWhenLabel')); set('wzWhenNote', CU('wzWhenNote'));
+  set('wzAccessLbl', CU('wzAccessLabel'));
+  set('wzNameLbl', CU('wzNameLabel')); set('wzEmailLbl', CU('wzEmailLabel')); set('wzPhoneLbl', CU('lblPhone'));
+  set('wzMemberLbl', CU('wzMemberLabel')); set('wzMemberNoneBtn', CU('wzMemberNone')); set('wzMemberNewBtn', CU('wzMemberNew')); set('wzMemberMemberBtn', CU('wzMemberMember'));
+  set('wzBack', CU('wzBack')); set('wzNext', CU('wzNext')); set('cSendBtn', CU('wzSend')); set('cAck', CU('wzAck'));
+  set('cFeeTitle', CU('wzFeeTitleInPerson')); set('cFeeDesc', CU('wzFeeDesc'));
+  const rd = document.getElementById('rDesc'); if (rd) rd.placeholder = CU('wzDescPh');
+  const ra = document.getElementById('rAddr'); if (ra) ra.placeholder = CU('wzAddrPh');
+  const rn = document.getElementById('rName'); if (rn) rn.placeholder = CU('wzNamePh');
+  const rac = document.getElementById('rAccess'); if (rac) rac.placeholder = CU('wzAccessPh');
+  document.querySelectorAll('#cService button[data-cat]').forEach(function(b){ const s = b.querySelector('span'); const v = CU('wzCat_' + b.getAttribute('data-cat')); if (s && v) s.textContent = v; });
+}
 async function refreshPermCard(){
   const card = document.getElementById('permCard');
   if (!card) return;
@@ -4429,21 +4776,21 @@ let liveSig = '';
 let livePollTimer = null;
 let trackJobsCache = []; // last job list that fed initTrackMaps (v23: stream + poll share it)
 function agoText(iso){
-  if (!iso) return 'just now';
+  if (!iso) return CU('agoNow');
   const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
-  if (s < 45) return 'just now';
-  if (s < 90) return '1 min ago';
-  return Math.round(s / 60) + ' min ago';
+  if (s < 45) return CU('agoNow');
+  if (s < 90) return CU('agoMin1');
+  return CU('agoMinTpl').replace('{n}', Math.round(s / 60));
 }
 function trackBlockHtml(j, audience){
   if (!j || !j.liveLoc) return '';
-  const who = audience === 'admin' ? 'Technician is on the way' : 'Your technician is on the way';
+  const who = audience === 'admin' ? CU('trkTechAdmin') : CU('trkYourTech');
   return '<div class="trackbox" style="margin-top:10px">'
     + '<div id="trkmap-' + j.id + '" style="height:220px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
-    + '<div class="mut" style="margin-top:6px">🔨 <b>' + who + '</b>' + (j.address ? ' — heading to ' + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">updated ' + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
+    + '<div class="mut" style="margin-top:6px">🔨 <b>' + who + '</b>' + (j.address ? CU('trkHeadingTo') + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">' + CU('trkUpdated') + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
 }
 function trackFallbackHtml(j){
-  return '<div style="padding:20px 14px;text-align:center">📍<br><b>Your technician is on the way</b>' + (j.address ? '<br><span class="mut">Heading to ' + escHtml(j.address) + '</span>' : '') + '<br><span class="mut">Location updated ' + agoText(j.liveLoc.updatedAt) + '</span></div>';
+  return '<div style="padding:20px 14px;text-align:center">📍<br><b>' + CU('trkYourTech') + '</b>' + (j.address ? '<br><span class="mut">' + CU('trkHeadingTo2') + escHtml(j.address) + '</span>' : '') + '<br><span class="mut">' + CU('trkLocUpdated') + agoText(j.liveLoc.updatedAt) + '</span></div>';
 }
 // v80.6 TILES: both Leaflet surfaces draw from ONE helper on
 // tile.openstreetmap.de — the OSM chapter's keyless tile service,
@@ -4540,10 +4887,10 @@ function holdStatusHtml(r){
   const holds=holdsOf(r);
   if(!holds.length) return '';
   const parts=holds.map(function(h){
-    const st=h.status==='authorized'?'ON HOLD — not charged yet':(h.status==='captured'?'CHARGED '+moneyFmt((h.capturedCents||0)/100):h.status);
-    return escHtml(h.key)+' hold: '+moneyFmt((h.authorizedCents||0)/100)+' — '+st+(h.captureBefore&&h.status==='authorized'?' &bull; hold valid until '+escHtml(String(h.captureBefore).slice(0,10)):'');
+    const st=h.status==='authorized'?CU('holdOnHold'):(h.status==='captured'?CU('holdCharged')+moneyFmt((h.capturedCents||0)/100):h.status);
+    return escHtml(h.key)+CU('holdWord')+moneyFmt((h.authorizedCents||0)/100)+' — '+st+(h.captureBefore&&h.status==='authorized'?CU('holdValidUntil')+escHtml(String(h.captureBefore).slice(0,10)):'');
   });
-  return '<div class="pay-panel"><b>💳 Your payment:</b> '+parts.join('<br>')+'<br><span class="mut">A hold reserves the money but does not charge it. You are only charged the final amount when the work is done.</span></div>';
+  return '<div class="pay-panel"><b>'+CU('holdTitle')+'</b> '+parts.join('<br>')+'<br><span class="mut">'+CU('holdExplainer')+'</span></div>';
 }
 async function secureHold(idv){
   try{
@@ -4870,11 +5217,11 @@ async function loadMyYardVisits(){
     const today=new Date(); const tkey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
     const upcoming=(d.visits||[]).filter(function(v){ return ['scheduled','assigned','on_the_way','arrived'].includes(v.status) && v.date>=tkey; });
     let h='';
-    if(!upcoming.length){ h='<span class="mut">No yard visits scheduled yet — the Team schedules your included visits here.</span>'; }
-    else { h='<b>Next yard visit: '+escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">Also coming up: '+upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':''); }
+    if(!upcoming.length){ h='<span class="mut">' + CU('yardNone2') + '</span>'; }
+    else { h='<b>' + CU('yardNextPre') + escHtml(upcoming[0].date)+'</b>'+(upcoming.length>1?'<br><span class="mut">' + CU('yardAlso') + upcoming.slice(1,4).map(function(v){return escHtml(v.date);}).join(' • ')+'</span>':''); }
     // v25 (B1): proof of service — the last completed visit + its AFTER photo.
     if (d.lastCompleted) {
-      h+='<div style="margin-top:8px"><b>Last visit done: '+escHtml(d.lastCompleted.date)+'</b>'+(d.lastCompleted.afterPhoto?'<div class="photos"><img class="thumb" src="'+d.lastCompleted.afterPhoto+'" alt="Your yard after the visit"></div>':'')+'</div>';
+      h+='<div style="margin-top:8px"><b>' + CU('yardLastDone') + escHtml(d.lastCompleted.date)+'</b>'+(d.lastCompleted.afterPhoto?'<div class="photos"><img class="thumb" src="'+d.lastCompleted.afterPhoto+'" alt="' + CU('yardPhotoAlt') + '"></div>':'')+'</div>';
     }
     el.innerHTML=h;
   }catch(e){}
@@ -5436,7 +5783,7 @@ async function loadAdminMap(preloadedJobs, force){
   // no map element; the real paint below replaces it wholesale.
   let mapAliveNow = false;
   try { mapAliveNow = !!adminMasterMap && !!adminMasterMap.getContainer() && document.contains(adminMasterMap.getContainer()); } catch(e) {}
-  if (!mapAliveNow) box.innerHTML = '<h3>Mapa maestro / Master map</h3><div class="card"><p class="mut">Cargando mapa… / Loading map…</p></div>';
+  if (!mapAliveNow) box.innerHTML = '<h3>' + CU('mapTitle') + '</h3><div class="card"><p class="mut">' + CU('mapLoading') + '</p></div>';
   adminMapLoading = true;
   try {
     // v80.8: both reads fire together — the old sequential awaits made
@@ -5519,7 +5866,7 @@ async function loadAdminMap(preloadedJobs, force){
           tileLayer.on('tileerror', function(){ tilesErr++; });
         }
         tileLayer = ghsTileLayer().addTo(map); wireTileLayer();
-        mapEl.insertAdjacentHTML('beforeend', '<div class="map-loading-note" style="position:absolute;z-index:1200;left:10px;bottom:10px;background:rgba(255,255,255,.92);border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none">Cargando mapa… / Loading map…</div>');
+        mapEl.insertAdjacentHTML('beforeend', '<div class="map-loading-note" style="position:absolute;z-index:1200;left:10px;bottom:10px;background:rgba(255,255,255,.92);border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none">' + CU('mapLoading') + '</div>');
         tileSoftTimer = setTimeout(function(){
           if (tileGaveUp || tilesOk > 0 || adminMasterMap !== map) return;
           if (tilesErr > 0 && !tileRetried) { // genuine errors: ONE fresh-layer retry, then keep waiting
@@ -6103,7 +6450,7 @@ function cartCalc(){
 }
 function renderCart(){
   const host = document.getElementById('cartLines'); if (!host) return;
-  const title = document.getElementById('cartTitle'); if (title) title.textContent = 'Your cart';
+  const title = document.getElementById('cartTitle'); if (title) title.textContent = CU('cartTitle');
   const items = cartLoad();
   const t = cartCalc();
   const member = cartIsMember();
@@ -6121,31 +6468,31 @@ function renderCart(){
     const line = l.lineList;
     let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
-    s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
+    s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';
-    if (member && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">Members −$' + (l.lineList - l.lineMember) + '</span>';
+    if (member && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">' + CU('cartMembersSavePre') + (l.lineList - l.lineMember) + '</span>';
     // v80.3 (Gabriel 2026-10-25): the member price TEASES in green under
     // each line's regular price — only for non-members, and only when
     // the line actually carries a member discount (lineMember < lineList;
     // materials / nodisc lines never advertise a discount they don't get).
-    else if (!member && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">Members pay $' + l.lineMember + '</span>';
-    s += '<br><button type="button" class="cart-remove" onclick="cartRemove(' + i + ')">Remove</button></div></div>';
+    else if (!member && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">' + CU('cartMembersPayPre') + l.lineMember + '</span>';
+    s += '<br><button type="button" class="cart-remove" onclick="cartRemove(' + i + ')">' + CU('cartRemoveBtn') + '</button></div></div>';
     return s;
   }).join('');
   const th = document.getElementById('cartTotals'); if (!th) return;
   if (!items.length) { th.innerHTML = ''; return; }
-  let s = '<div style="margin-top:8px"><div class="cart-total-row"><span>Subtotal</span><span>$' + t.list + '</span></div>';
+  let s = '<div style="margin-top:8px"><div class="cart-total-row"><span>' + CU('cartSubtotal') + '</span><span>$' + t.list + '</span></div>';
   if (member) {
-    if (t.savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>HomeCare member savings (−20%)</span><span>−$' + t.savings + '</span></div>';
-    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.member + '</b></div><p class="mut">✓ Your HomeCare member price is applied.</p>';
+    if (t.savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>' + CU('cartSavingsRow') + '</span><span>−$' + t.savings + '</span></div>';
+    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>' + CU('cartTotalWord') + '</b><b>$' + t.member + '</b></div><p class="mut">' + CU('cartMemberApplied') + '</p>';
   } else {
-    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>Total</b><b>$' + t.list + '</b></div>';
+    s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>' + CU('cartTotalWord') + '</b><b>$' + t.list + '</b></div>';
     if (t.savings > 0) {
       // v80.3 (Gabriel 2026-10-25): the lower member total lives HERE, in
       // green, directly below the regular Total — the pink box below is
       // now only the join invitation (it no longer repeats the prices).
-      s += '<div class="cart-total-row cart-members-total"><span>Members pay $' + t.member + ' — save $' + t.savings + '</span></div>';
-      s += '<div class="auth-offer" style="margin-top:10px"><b>⭐ HomeCare — first month FREE</b><p class="mut" style="margin:4px 0 0">Join at checkout (first month FREE) and the member price applies to this order right away.</p></div>';
+      s += '<div class="cart-total-row cart-members-total"><span>' + CU('cartMembersPayTpl').replace('{member}', t.member).replace('{savings}', t.savings) + '</span></div>';
+      s += '<div class="auth-offer" style="margin-top:10px"><b>' + CU('cartOfferTitle') + '</b><p class="mut" style="margin:4px 0 0">' + CU('cartOfferBody') + '</p></div>';
     }
   }
   th.innerHTML = s + '</div>';
@@ -6169,15 +6516,15 @@ function renderCartTotalsDue(){
   const joinEl = document.getElementById('ccJoin');
   const joinOn = !member && !!(joinEl && joinEl.checked);
   const due = cartPayCtx ? cartPayCtx.due : ((member || joinOn) ? t.member : t.list);
-  let s = '<div class="cart-total-row"><span>Subtotal</span><span>$' + t.list + '</span></div>';
-  if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>HomeCare member price (−20%)</span><span>−$' + savings + '</span></div>';
-  if (joinOn) s += '<div class="cart-total-row"><span>HomeCare membership — first month</span><span><b>FREE</b></span></div>';
+  let s = '<div class="cart-total-row"><span>' + CU('cartSubtotal') + '</span><span>$' + t.list + '</span></div>';
+  if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>' + CU('cartMemberPriceRow') + '</span><span>−$' + savings + '</span></div>';
+  if (joinOn) s += '<div class="cart-total-row"><span>' + CU('cartJoinRow') + '</span><span><b>' + CU('cartFreeWord') + '</b></span></div>';
   const depOf79 = function (tot) { tot = Number(tot) || 0; return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100; };
   const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : depOf79(due);
   const bal79 = Math.max(0, Math.round((due - dep79) * 100) / 100);
-  s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><span>Total</span><span>$' + due + '</span></div>';
-  s += '<div class="cart-total-row"><b>Deposit due today</b><b>$' + dep79 + '</b></div>';
-  if (bal79 > 0) s += '<div class="cart-total-row"><span>Balance at completion</span><span>$' + bal79 + '</span></div>';
+  s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><span>' + CU('cartTotalWord') + '</span><span>$' + due + '</span></div>';
+  s += '<div class="cart-total-row"><b>' + CU('cartDepositDue') + '</b><b>$' + dep79 + '</b></div>';
+  if (bal79 > 0) s += '<div class="cart-total-row"><span>' + CU('cartBalanceRow') + '</span><span>$' + bal79 + '</span></div>';
   host.innerHTML = s;
 }
 // ---------- v78 refine (Gabriel 2026-10-25 21:57): the cart is FULLY
@@ -6217,7 +6564,7 @@ function renderCcLines(){
   const joinOn = !member && !!(joinEl && joinEl.checked);
   const mem = member || joinOn;
   if (!t.lines.length) { host.innerHTML = ''; return; }
-  host.innerHTML = '<h4 style="margin-bottom:6px">Your services — tap to fix anything</h4>' + t.lines.map(function(l, i){
+  host.innerHTML = '<h4 style="margin-bottom:6px">' + CU('ccLinesTitle') + '</h4>' + t.lines.map(function(l, i){
     // v80.4 AMENDS the v80.3 extension (Gabriel 2026-10-25 23:54):
     // wherever member pricing is APPLIED (verified member, or the
     // join box checked), the headline stays the FULL list price and
@@ -6228,11 +6575,11 @@ function renderCcLines(){
     const line = l.lineList;
     let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
-    s += '<br><span class="mut">$' + unit + ' each</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
+    s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';
-    if (mem && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">Members −$' + (l.lineList - l.lineMember) + '</span>';
-    else if (!mem && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">Members pay $' + l.lineMember + '</span>';
-    s += '<br><button type="button" class="cart-remove" onclick="ccRemove(' + i + ')">Remove</button></div></div>';
+    if (mem && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">' + CU('cartMembersSavePre') + (l.lineList - l.lineMember) + '</span>';
+    else if (!mem && l.lineMember < l.lineList) s += '<br><span class="cart-members-pay">' + CU('cartMembersPayPre') + l.lineMember + '</span>';
+    s += '<br><button type="button" class="cart-remove" onclick="ccRemove(' + i + ')">' + CU('cartRemoveBtn') + '</button></div></div>';
     return s;
   }).join('');
 }
@@ -6242,7 +6589,7 @@ function renderCcAddList(){
   al.innerHTML = Object.keys(MENU_CATALOG || {}).map(function(id){
     const s = MENU_CATALOG[id]; if (!s) return '';
     const inCart = items.filter(function(it){ return it.id === id; }).reduce(function(n, it){ return n + Math.max(1, Math.round(Number(it.q) || 1)); }, 0);
-    return '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(svcName(id)) + '</b><br><span class="mut">$' + s.price + ' · members $' + (s.member != null ? s.member : s.price) + '</span></div><div style="text-align:right">' + (inCart ? '<span class="mut">In cart ×' + inCart + '</span><br>' : '') + '<button type="button" onclick="ccAddMore(\'' + id + '\')">＋ Add</button></div></div>';
+    return '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(svcName(id)) + '</b><br><span class="mut">$' + s.price + CU('ccMembersWord') + (s.member != null ? s.member : s.price) + '</span></div><div style="text-align:right">' + (inCart ? '<span class="mut">' + CU('ccInCart') + inCart + '</span><br>' : '') + '<button type="button" onclick="ccAddMore(\'' + id + '\')">' + CU('ccAdd') + '</button></div></div>';
   }).join('');
 }
 function cartToggleAddMore(){
@@ -6347,9 +6694,9 @@ function cartDepositEstimate(){
 }
 function cartPayLabel(){
   const dep = cartDepositEstimate();
-  if (cartPayCtx && cartPayCtx.phase === 'join') return 'Join HomeCare — then pay $' + cartPayCtx.deposit + ' deposit for your order';
-  if (!cartPayCtx && cartJoinIntent()) return 'Join HomeCare — then pay $' + dep + ' deposit for your order';
-  return 'Pay $' + dep + ' deposit';
+  if (cartPayCtx && cartPayCtx.phase === 'join') return CU('cartPayJoinTpl').replace('{amt}', cartPayCtx.deposit);
+  if (!cartPayCtx && cartJoinIntent()) return CU('cartPayJoinTpl').replace('{amt}', dep);
+  return CU('cartPayDepositTpl').replace('{amt}', dep);
 }
 function cartFormValid(){
   if (!cartLoad().length) return false;
@@ -6490,7 +6837,7 @@ async function loadStripeJs(){
 function paintCartPayState(){
   const host = document.getElementById('cartPayElement'); if (!host) return;
   if (cartElements) return; // a mounted Payment Element owns the box
-  if (cartStripeState === 'loading') host.innerHTML = '<p class="mut" style="padding:10px 2px">⏳ Loading secure payment… · Cargando pago seguro…</p>';
+  if (cartStripeState === 'loading') host.innerHTML = '<p class="mut" style="padding:10px 2px">' + CU('cartPayLoading') + '</p>';
   // v80.2: idle means NO prepare is running — the box shows nothing,
   // never a stale "Loading secure payment…" left over from an
   // earlier, already-finished attempt (the v80.1 acceptance wart).
@@ -6499,7 +6846,7 @@ function paintCartPayState(){
   // Stripe page (no Stripe.js needed in this browser) — plus the
   // retry, plus the stage ref so a real-device test reports WHICH
   // stage failed (CFG config fetch / JS script load / INIT construct).
-  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">⚠️ The secure payment form could not load — check your connection. · El formulario de pago seguro no cargó — revisa tu conexión.<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">Pay on Stripe\'s secure page · Pagar en la página segura de Stripe</button><button type="button" onclick="cartRetryStripe()">↻ Try again · Reintentar</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#991b1b">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
+  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">' + CU('cartPayFailBody') + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">' + CU('cartPayHostedBtn') + '</button><button type="button" onclick="cartRetryStripe()">' + CU('cartPayRetryBtn') + '</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#991b1b">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
 }
 function cartRetryStripe(){ cartStripeState = 'idle'; paintCartPayState(); cartEagerMount(true); }
 // v80.1: the config fetch gets a HARD timeout. api() has none — the
@@ -6631,6 +6978,7 @@ function applyRecoveredCart(){
 // two doors can never drift apart.
 function cartBuildPayload(items){
   const payload = {
+    lang: menuLang(),
     items: (items || []).map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; }),
     address: document.getElementById('ccAddress').value.trim(),
     city: document.getElementById('ccCity').value.trim(),
@@ -6646,10 +6994,10 @@ function cartBuildPayload(items){
   return payload;
 }
 function cartValidatePayload(payload){
-  if (!payload.address) return 'Enter the service address — where the technician will do the work.';
+  if (!payload.address) return CU('cartValAddress');
   if (!me) {
-    if (!payload.name || !/.+@.+\..+/.test(payload.email)) return 'Add your name and a valid email — your account is created with this step.';
-    if (!payload.password || payload.password.length < 8) return 'Create a password of 8+ characters (or enter your account password).';
+    if (!payload.name || !/.+@.+\..+/.test(payload.email)) return CU('cartValNameEmail');
+    if (!payload.password || payload.password.length < 8) return CU('cartValPassword');
   }
   return '';
 }
@@ -6891,7 +7239,7 @@ function wzShow(step) {
   const done = document.getElementById('wzDone'); if (done) done.style.display = 'none';
   const nav = document.getElementById('wzNav'); if (nav) nav.style.display = 'flex';
   const fill = document.getElementById('wzBarFill'); if (fill) fill.style.width = (step * 25) + '%';
-  const lbl = document.getElementById('wzStepLabel'); if (lbl) lbl.textContent = 'Paso ' + step + ' de 4 · Step ' + step + ' of 4';
+  const lbl = document.getElementById('wzStepLabel'); if (lbl) lbl.textContent = CU('wzStepOfTpl').replace('{n}', step);
   const back = document.getElementById('wzBack'); if (back) back.style.visibility = step === 1 ? 'hidden' : 'visible';
   const next = document.getElementById('wzNext'); if (next) next.style.display = step === 4 ? 'none' : '';
   if (step === 4) wzBuildSummary();
@@ -6956,14 +7304,14 @@ function wzMemberState() {
 }
 function wzFee() {
   const est = pickOne('cEst') || wzState.est || 'inperson';
-  if (est === 'photo') return { label: 'FREE photo estimate', due: 0 };
+  if (est === 'photo') return { label: CU('feeFreePhoto'), due: 0 };
   const member = wzMemberState();
   // v80 P1-7 (Gabriel's law): the ASAP +25% applies to LABOR — never to
   // the estimate fee itself. The fee is flat: $75 regular / $50 member /
   // $0 for the member's free first estimate, urgent or not. (The server
   // has always computed estimateDue flat; the wizard display now agrees.)
   const base = member === 'new' ? 0 : (member === 'member' ? 50 : 75);
-  return { label: (member === 'new' ? 'FREE — first estimate with your membership' : (member === 'member' ? '$50 member estimate' : '$75 flat')), due: base };
+  return { label: (member === 'new' ? CU('feeFreeMember') : (member === 'member' ? CU('feeMember50') : CU('feeFlat75'))), due: base };
 }
 function wzBuildSummary() {
   const box = document.getElementById('wzSummary'); if (!box) return;
@@ -6972,7 +7320,7 @@ function wzBuildSummary() {
   const est = pickOne('cEst') || wzState.est || 'inperson';
   const f = wzFee();
   const wsel = pickOne('cWhen') || wzState.when;
-  const when = (wsel === 'Pick a date' && document.getElementById('rDate').value) ? 'On ' + document.getElementById('rDate').value : (wsel || '—');
+  const when = (wsel === 'Pick a date' && document.getElementById('rDate').value) ? CU('wizWhenOn') + document.getElementById('rDate').value : (wsel || '—');
   const city = pickOne('cCity') || wzState.city || '—';
   const addr = document.getElementById('rAddr').value.trim();
   const desc = document.getElementById('rDesc').value.trim();
@@ -6981,14 +7329,14 @@ function wzBuildSummary() {
   const nPhotos = files && files.length ? files.length : 0;
   const contact = me ? (me.name + ' · ' + (me.email || '')) : [document.getElementById('rName').value.trim(), document.getElementById('rEmail').value.trim(), document.getElementById('rPhone').value.trim()].filter(Boolean).join(' · ');
   let h = '<div class="wz-sum">';
-  h += '<div><span>Service · Servicio</span><b>' + escHtml(service) + '</b></div>';
-  if (desc) h += '<div><span>Details · Detalles</span><b>' + escHtml(desc.length > 140 ? desc.slice(0, 140) + '…' : desc) + '</b></div>';
-  h += '<div><span>Photos · Fotos</span><b>' + (nPhotos ? nPhotos + ' attached' : 'none') + '</b></div>';
-  h += '<div><span>Estimate · Estimado</span><b>' + escHtml(est === 'photo' ? 'FREE photo estimate' : ('In-person — ' + f.label)) + '</b></div>';
-  h += '<div><span>Where · Dónde</span><b>' + escHtml(city + (addr ? ' — ' + addr : '')) + '</b></div>';
-  h += '<div><span>When · Cuándo</span><b>' + escHtml(when) + '</b></div>';
-  if (access) h += '<div><span>Access · Acceso</span><b>' + escHtml(access) + '</b></div>';
-  if (contact) h += '<div><span>Contact · Contacto</span><b>' + escHtml(contact) + '</b></div>';
+  h += '<div><span>' + CU('sumService') + '</span><b>' + escHtml(service) + '</b></div>';
+  if (desc) h += '<div><span>' + CU('sumDetails') + '</span><b>' + escHtml(desc.length > 140 ? desc.slice(0, 140) + '…' : desc) + '</b></div>';
+  h += '<div><span>' + CU('sumPhotos') + '</span><b>' + (nPhotos ? nPhotos + CU('sumAttached') : CU('sumNone')) + '</b></div>';
+  h += '<div><span>' + CU('sumEstimate') + '</span><b>' + escHtml(est === 'photo' ? CU('feeFreePhoto') : (CU('feeTitleInPersonPre2') + f.label)) + '</b></div>';
+  h += '<div><span>' + CU('sumWhere') + '</span><b>' + escHtml(city + (addr ? ' — ' + addr : '')) + '</b></div>';
+  h += '<div><span>' + CU('sumWhen') + '</span><b>' + escHtml(when) + '</b></div>';
+  if (access) h += '<div><span>' + CU('sumAccess') + '</span><b>' + escHtml(access) + '</b></div>';
+  if (contact) h += '<div><span>' + CU('sumContact') + '</span><b>' + escHtml(contact) + '</b></div>';
   h += '</div>';
   box.innerHTML = h;
   if (typeof custSummary === 'function') custSummary();
@@ -6998,7 +7346,7 @@ function wzShowDone(req) {
   [1, 2, 3, 4].forEach(function (n) { const el = document.getElementById('wzStep' + n); if (el) el.style.display = 'none'; });
   const nav = document.getElementById('wzNav'); if (nav) nav.style.display = 'none';
   const fill = document.getElementById('wzBarFill'); if (fill) fill.style.width = '100%';
-  const lbl = document.getElementById('wzStepLabel'); if (lbl) lbl.textContent = '¡Listo! · Done';
+  const lbl = document.getElementById('wzStepLabel'); if (lbl) lbl.textContent = CU('wzDone');
   z.innerHTML = '<h3 style="margin-top:4px">✅ Request sent — ' + escHtml(req.id) + '</h3>'
     + '<p style="margin-bottom:2px"><b>Qué sigue · What happens next</b></p>'
     + '<ol class="wz-next-steps"><li>The Team reviews your request. · El Team revisa tu solicitud.</li><li>We send your quote and confirm your time. · Te mandamos el precio y confirmamos tu hora.</li><li>You approve it and we schedule your technician. · Lo apruebas y agendamos a tu técnico.</li></ol>'
@@ -7341,7 +7689,6 @@ function applyMenuFilter() {
     if (showNr) { const hui = HOME_UI[menuLang()]; nr.innerHTML = '<div class="card" style="text-align:center"><h3 style="margin-top:0">' + hui.noResH + '</h3><p class="mut">' + hui.noResP + '</p><a class="btn-link" href="' + PHOTO_EST_URL + '" target="_blank" rel="noopener">' + hui.noResB + '</a></div>'; }
   }
 }
-let _menuLang = null;
 function menuLang() {
   if (_menuLang) return _menuLang;
   try { _menuLang = localStorage.getItem('ghsMenuLang') === 'es' ? 'es' : 'en'; } catch (e) { _menuLang = 'en'; }
@@ -7349,10 +7696,17 @@ function menuLang() {
 }
 function setMenuLang(l) {
   _menuLang = (l === 'es') ? 'es' : 'en';
-  try { localStorage.setItem('ghsMenuLang', _menuLang); } catch (e) {}
+  // v80.19: ONE language at a time — the two toggles are the same
+  // switch, so both stores move together and the account remembers.
+  _workerLangChoice = _menuLang;
+  try { localStorage.setItem('ghsMenuLang', _menuLang); localStorage.setItem('ghsWorkerLang', _menuLang); localStorage.setItem('ghsCartLang', _menuLang); localStorage.setItem('ghsEstLang', _menuLang); } catch (e) {}
+  persistLangPref(_menuLang);
   applyMenuLang();
   renderMenu();
   if (typeof wzRenderMenuPanel === 'function' && wzState && wzState.cat) wzRenderMenuPanel();
+  if (typeof renderCart === 'function') renderCart();
+  if (me && typeof renderMyMembership === 'function') { try { renderMyMembership(); } catch (e) {} }
+  if (isWorkerEntry() && typeof applyWorkerLang === 'function') applyWorkerLang();
 }
 function applyMenuLang() {
   const L = menuLang(), ui = MENU_UI[L];
@@ -7370,6 +7724,7 @@ function applyMenuLang() {
   // v80.17 PUERTA PLUS: the promo hero follows the same toggle (its
   // strings live in JOIN_PROMO_UI / JOIN_PROMO_BENEFITS, both languages).
   if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
+  if (typeof paintStaticChrome === 'function') paintStaticChrome();
 }
 function svcName(id) { const s = MENU_CATALOG[id]; if (!s) return id; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][0] : s.name; }
 function svcMeta(id) { const s = MENU_CATALOG[id]; if (!s) return ''; return (menuLang() === 'es' && MENU_ES[id]) ? MENU_ES[id][1] : s.meta; }
@@ -7481,7 +7836,7 @@ try {
 <script>
 (function(){try{
  var btn=document.getElementById('ghsInstallBtn'),help=document.getElementById('ghsInstallHelp'),txt=document.getElementById('ghsInstallHelpTxt');
- var es=false; try{es=(localStorage.getItem('ghsCartLang')==='es'||localStorage.getItem('ghsEstLang')==='es');}catch(e){}
+ var es=false; try{es=(localStorage.getItem('ghsMenuLang')==='es'||localStorage.getItem('ghsCartLang')==='es'||localStorage.getItem('ghsEstLang')==='es');}catch(e){}
  if(es){btn.textContent='\uD83D\uDCF2 Instalar app';}
  var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;
  if(standalone)return;
