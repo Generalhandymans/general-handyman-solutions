@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-15', swSrc.includes("const CACHE = 'ghs-app-v80-15'"));
+t('static: SW cache is ghs-app-v80-16', swSrc.includes("const CACHE = 'ghs-app-v80-16'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4280,7 +4280,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.15: ghs-app-v80-15)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-15'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.16: ghs-app-v80-16)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-16'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5587,6 +5587,91 @@ await req3('PATCH', '/api/jobs/' + boardTv813.j.job.id, { token: wFar.token, bod
 const farMoney813 = await req3('GET', '/api/worker/money', { token: wFar.token });
 const boardEnt813 = (farMoney813.j.entries || []).find(e => e.jobId === boardTv813.j.job.id);
 t('v80.13 non-sold job: a board TV job claimed by another tech pays its STANDARD offer ($100, no commission, no 68%)', claimTv813.status === 200 && !!boardEnt813 && boardEnt813.amount === 100 && boardEnt813.payOffer === 100 && boardEnt813.salesCommission === 0);
+
+// ---------------- v80.16 BANCA (app3) ----------------
+// The technician bench: (1) the location opt-in + last known position
+// persist on the ACCOUNT (Ri Chen re-granted at every login — the only
+// record was a browser localStorage flag); (2) a real job DETAIL view
+// for techs over the same publicJob discipline; (3) the 50-mile rule
+// finished — a tech with no measurable profile city silently failed
+// open in v80.11 and saw ~100-mile jobs with no flag; his persisted
+// last known position is now the base fallback; (4) the Connect banner
+// also fires on HELD pay, and the admin Workers list names the three
+// Connect states from the stored fields.
+t('static v80.16: location opt-in + last known position persist on the user record (opt-in endpoint, feed stamps, pubUser surfaces both)', serverSrc.includes("p === '/api/me/location/opt-in'") && serverSrc.includes('user.lastLoc = ') && serverSrc.includes('user.locOptInAt') && serverSrc.includes("lastLoc: u.role === 'worker'"));
+t('static v80.16: the range base falls back to the tech last known position and the fail-open case is flagged baseUnmeasured (server + publicJob passthrough)', serverSrc.includes('baseUnmeasured: true') && serverSrc.includes('rangeBaseUnmeasured = true') && serverSrc.includes('w.lastLoc'));
+t('static v80.16: job detail endpoint + tech detail view exist on the publicJob path (no parallel data path)', serverSrc.includes('jobDetailMatch') && serverSrc.includes("error: 'not your job'") && htmlSrc.includes('function openJobDetail(') && htmlSrc.includes('id="jobDetail"') && htmlSrc.includes('function closeJobDetail('));
+t('static v80.16: the client records the opt-in server-side at ACTIVATE and heals the local flag from the account at login/session restore', htmlSrc.includes("api('/api/me/location/opt-in'") && htmlSrc.includes('function healWorkerLocFlag(') && htmlSrc.includes('healWorkerLocFlag();'));
+t('static v80.16: connect status carries held pay from stored stamps; the banner keys off it with the held line in EN+ES; the detail strings are in both dictionaries', serverSrc.includes('heldPay: heldPay816') && (htmlSrc.match(/connectHeldLine:/g) || []).length === 2 && (htmlSrc.match(/viewDetails:/g) || []).length === 2 && (htmlSrc.match(/detailUnavailable:/g) || []).length === 2);
+t('static v80.16: the admin Workers list names the Connect state per worker (Connected / Pending / Not started) from the stored payoutsSetup field', htmlSrc.includes('Stripe Connect: Connected') && htmlSrc.includes('Stripe Connect: Pending') && htmlSrc.includes('Stripe Connect: Not started') && htmlSrc.includes('w.payoutsSetup==='));
+// --- item 1+3: a tech with NO profile city — the Ri Chen shape ---
+const wNoCity = await mkWorker3('nocity@t.local', 'No City Ned', '(707) 555-0213', '', 'Fairfield');
+const jobFF816 = await mkJob3('Fairfield', '742 Evergreen Terrace, Fairfield, CA');
+const jobMV816 = await mkJob3('Mill Valley', '750 Redwood Hwy Frontage Rd, Mill Valley, CA');
+t('v80.16 setup: probe jobs posted for the no-city tech arc', jobFF816.status === 201 && jobMV816.status === 201);
+const boardNC1 = await req3('GET', '/api/jobs', { token: wNoCity.token });
+const ncFf1 = (boardNC1.j.jobs || []).find(x => x.id === jobFF816.j.job.id);
+const ncMv1 = (boardNC1.j.jobs || []).find(x => x.id === jobMV816.j.job.id);
+t('v80.16 range: with NO measurable base the tech fails open (both jobs visible) — but the board now FLAGS it (rangeBaseUnmeasured, no distance)', !!ncFf1 && ncFf1.rangeBaseUnmeasured === true && ncFf1.distanceMiles === undefined && !!ncMv1);
+const locNC = await req3('POST', '/api/me/location', { token: wNoCity.token, body: { lat: 38.4088, lng: -121.3716 } });
+t('v80.16 location: the duty post is accepted (Elk Grove coords)', locNC.status === 200 && locNC.j.sharing === true);
+const meNC = await req3('GET', '/api/me', { token: wNoCity.token });
+t('v80.16 location: the post stamped the opt-in + last known position ON THE ACCOUNT (pubUser surfaces both)', meNC.status === 200 && meNC.j.user.locOptIn === true && !!meNC.j.user.lastLoc && meNC.j.user.lastLoc.lat === 38.4088 && meNC.j.user.lastLoc.lng === -121.3716);
+const boardNC2 = await req3('GET', '/api/jobs', { token: wNoCity.token });
+const ncFf2 = (boardNC2.j.jobs || []).find(x => x.id === jobFF816.j.job.id);
+t('v80.16 range: with a last known position as base, the near Fairfield job shows its distance (~38 mi) and the flag clears', !!ncFf2 && typeof ncFf2.distanceMiles === 'number' && ncFf2.distanceMiles > 30 && ncFf2.distanceMiles < 50 && !ncFf2.rangeBaseUnmeasured);
+t('v80.16 range: the ~95-mile Mill Valley job is GONE from his board once his base is measurable (the filter is finished)', !(boardNC2.j.jobs || []).some(x => x.id === jobMV816.j.job.id));
+const claimNC = await req3('POST', '/api/jobs/' + jobMV816.j.job.id + '/claim', { token: wNoCity.token });
+t('v80.16 range: the claim gate enforces the same fallback (out-of-range claim refused 403)', claimNC.status === 403 && /50/.test(claimNC.j.error || ''));
+await req3('POST', '/api/logout', { token: wNoCity.token });
+const admLoc816 = await req3('GET', '/api/admin/worker-locations', { token: A3 });
+t('v80.16 location: logout still wipes the LIVE point (v41 rule — he vanishes from the master map)', !(admLoc816.j.workers || []).some(w => w.id === wNoCity.id));
+const ncTok2 = (await req3('POST', '/api/login', { body: { email: 'nocity@t.local', password: 'workpass1' } })).j.token;
+const meNC2 = await req3('GET', '/api/me', { token: ncTok2 });
+t('v80.16 location: after a fresh login the opt-in + last known position SURVIVE (no re-grant needed — the account remembers)', !!ncTok2 && meNC2.status === 200 && meNC2.j.user.locOptIn === true && !!meNC2.j.user.lastLoc && meNC2.j.user.lastLoc.lat === 38.4088);
+// --- item 1: the opt-in endpoint itself ---
+const wOpt = await mkWorker3('optin@t.local', 'Optin Olga', '(707) 555-0215', 'Fairfield', 'Fairfield');
+const oi1 = await req3('POST', '/api/me/location/opt-in', { token: wOpt.token, body: { optedIn: true } });
+const meOi = await req3('GET', '/api/me', { token: wOpt.token });
+t('v80.16 opt-in: the ACTIVATE tap records the opt-in on the account (visible on /api/me)', oi1.status === 200 && oi1.j.locOptIn === true && meOi.j.user.locOptIn === true);
+const oiCust = await req3('POST', '/api/me/location/opt-in', { token: CX, body: { optedIn: true } });
+const oiAnon = await req3('POST', '/api/me/location/opt-in', { body: { optedIn: true } });
+t('v80.16 opt-in: worker-only (customer 403, anonymous 401)', oiCust.status === 403 && oiAnon.status === 401);
+// --- item 2: the job detail view's fetch ---
+const detJob816 = await req3('POST', '/api/jobs', { token: A3, body: { service: 'Detail job', city: 'Fairfield', description: 'full scope: swap the disposal and re-seat the trap', when: 'Friday 9am', payOffer: 90, customerPrice: 150, customerName: 'Det Cust', customerPhone: '(707) 555-0143', address: '742 Evergreen Terrace, Fairfield, CA', assignedWorkerId: wSeller.id, silent: true } });
+t('v80.16 detail setup: a job was direct-assigned to the seller (Claimed, info NOT released)', detJob816.status === 201 && detJob816.j.job.assignedWorkerId === wSeller.id && detJob816.j.job.status === 'Claimed');
+const detOwn = await req3('GET', '/api/jobs/' + detJob816.j.job.id, { token: wSeller.token });
+t('v80.16 detail: the assigned tech opens his job — full scope + his pay, and NO customer name/phone/total rides the payload', detOwn.status === 200 && detOwn.j.job.mine === true && detOwn.j.job.description.includes('full scope') && detOwn.j.job.payOffer === 90 && !('customerPhone' in detOwn.j.job) && !('customerName' in detOwn.j.job) && !('customerPrice' in detOwn.j.job));
+t('v80.16 detail: before the Team release, the address is NOT in the detail (the intermediary rule holds in the new view)', detOwn.status === 200 && detOwn.j.job.infoReleased === false && detOwn.j.job.address === undefined);
+await req3('PATCH', '/api/jobs/' + detJob816.j.job.id, { token: A3, body: { infoReleased: true } });
+const detOwn2 = await req3('GET', '/api/jobs/' + detJob816.j.job.id, { token: wSeller.token });
+t('v80.16 detail: after the Team release, the SAME detail shows the address', detOwn2.status === 200 && detOwn2.j.job.address === '742 Evergreen Terrace, Fairfield, CA');
+const detOther = await req3('GET', '/api/jobs/' + detJob816.j.job.id, { token: wFar.token });
+t('v80.16 detail: another tech CANNOT open it (403)', detOther.status === 403);
+const detOpen = await req3('GET', '/api/jobs/' + jobFF816.j.job.id, { token: wFar.token });
+t('v80.16 detail: an Open in-range board job opens with its measured distance', detOpen.status === 200 && typeof detOpen.j.job.distanceMiles === 'number' && detOpen.j.job.distanceMiles > 30 && detOpen.j.job.distanceMiles < 50);
+const detFar = await req3('GET', '/api/jobs/' + jobMV816.j.job.id, { token: wFar.token });
+t('v80.16 detail: an Open OUT-of-range job refuses with the claim-gate message (403, 50-mile)', detFar.status === 403 && /50/.test(detFar.j.error || ''));
+const detCust = await req3('GET', '/api/jobs/' + detJob816.j.job.id, { token: CX });
+const detAnon = await req3('GET', '/api/jobs/' + detJob816.j.job.id);
+const detAdm = await req3('GET', '/api/jobs/' + detJob816.j.job.id, { token: A3 });
+const det404 = await req3('GET', '/api/jobs/JOB-nope816', { token: wSeller.token });
+t('v80.16 detail: gating — customer 403, anonymous 401, unknown id 404, admin gets the full record (customer phone included, his own surface)', detCust.status === 403 && detAnon.status === 401 && det404.status === 404 && detAdm.status === 200 && detAdm.j.job.customerPhone === '(707) 555-0143');
+// --- item 4: held pay on the connect status + admin Connect states ---
+const farMoney816 = await req3('GET', '/api/worker/money', { token: wFar.token });
+const farHeldEntries816 = (farMoney816.j.entries || []).filter(e => e.status === 'awaiting_worker_setup');
+const farHeldSum816 = farHeldEntries816.reduce((s, e) => s + Number(e.amount || 0), 0);
+const csFar816 = await req3('GET', '/api/worker/connect/status', { token: wFar.token });
+t('v80.16 connect: a tech with NO Connect sees his held pay on the status read (heldPay/heldJobs agree with the money view over the same stored stamps)', csFar816.status === 200 && csFar816.j.ready === false && farHeldSum816 > 0 && csFar816.j.heldPay === farHeldSum816 && csFar816.j.heldJobs === farHeldEntries816.length);
+let sellerClear816 = false;
+for (let i = 0; i < 14 && !sellerClear816; i++) { const mm = await req3('GET', '/api/worker/money', { token: wSeller.token }); sellerClear816 = !(mm.j.entries || []).some(e => e.status === 'awaiting_worker_setup'); if (!sellerClear816) await sleep(200); }
+const csSeller816 = await req3('GET', '/api/worker/connect/status', { token: wSeller.token });
+t('v80.16 connect: a connected, paid-up tech reads ready with ZERO held pay (the banner condition is off)', sellerClear816 && csSeller816.status === 200 && csSeller816.j.ready === true && csSeller816.j.heldPay === 0 && csSeller816.j.heldJobs === 0);
+const wPend = await mkWorker3('pend@t.local', 'Pend Pete', '(707) 555-0214', 'Fairfield', 'Fairfield');
+const csStart816 = await req3('POST', '/api/worker/connect/start', { token: wPend.token, body: {} });
+const wkList816 = await req3('GET', '/api/workers', { token: A3 });
+const wkRow816 = (idv) => (wkList816.j.workers || []).find(w => w.id === idv) || {};
+t('v80.16 connect states: the admin Workers payload carries all three states from stored fields — Not started (no account), Pending (account created, payouts not ready), Connected (payouts ready)', csStart816.status === 200 && wkRow816(wFar.id).payoutsSetup === 'none' && wkRow816(wPend.id).payoutsSetup === 'pending' && wkRow816(wSeller.id).payoutsSetup === 'ready');
 
 // ---------------- v80.14 RESPALDO Y SESIONES (app3) ----------------
 // Persistent sessions, the admin backup export, the internal daily
