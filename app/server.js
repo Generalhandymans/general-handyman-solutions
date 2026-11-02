@@ -1928,7 +1928,11 @@ async function homeCarePriceId() {
     } catch (e) { console.error('stripe: HomeCare price check failed, keeping cached price:', e.message); return cached; }
   }
   console.log('stripe: creating HomeCare $' + (HOMECARE_MONTHLY_CENTS / 100) + '/mo product + price (set STRIPE_PRICE_HOMECARE to skip this)');
-  const product = await stripeApi('/products', { name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $50 member estimates after, 20% off labor under $1,000, priority scheduling.' });
+  // v80.21: a membership's Checkout image lives on the Product — wire
+  // the plan artwork when the product is CREATED here (pre-existing
+  // products keep whatever the dashboard holds; see the build report).
+  const hcProdImg = publicImageUrl('stripe-homecare.png');
+  const product = await stripeApi('/products', Object.assign({ name: 'HomeCare Membership — General Handyman Solutions', description: 'Monthly HomeCare membership: one free estimate in month one, $50 member estimates after, 20% off labor under $1,000, priority scheduling.' }, hcProdImg ? { 'images[0]': hcProdImg } : {}));
   const price = await stripeApi('/prices', { product: product.id, unit_amount: HOMECARE_MONTHLY_CENTS, currency: 'usd', 'recurring[interval]': 'month' });
   db.settings.stripeHomeCarePrice = price.id;
   console.log('stripe: HomeCare price created: ' + price.id + ' — save it as STRIPE_PRICE_HOMECARE in Render env');
@@ -1974,7 +1978,22 @@ function appBase() { return APP_URL.replace(/\/$/, ''); }
 // it (the public cart/estimate/join pages send their current LANG; the
 // SPA sends menuLang()); the fallback is English, the language the
 // hosted pages historically rendered in.
-function checkoutLang(opts) { return opts && opts.lang === 'es' ? 'es' : 'en'; }
+// v80.21 CHECKOUT UNO: the customer's SAVED account language wins over
+// the surface's current toggle — resolved from the user object itself,
+// its db record (several callers pass an {id, email} stub), or the
+// account that owns the payer email (an invoice payer may hold an
+// account they never logged into on this device). No saved language ->
+// the v80 behavior above, untouched.
+function checkoutLang(opts, user) {
+  let saved = userLangOf(user);
+  if (!saved && user && user.id) saved = userLangOf(db.users.find(x => x.id === user.id));
+  if (!saved) {
+    const em = String((user && user.email) || (opts && opts.email) || '').toLowerCase();
+    if (em) saved = userLangOf(db.users.find(x => (x.email || '').toLowerCase() === em));
+  }
+  if (saved) return saved;
+  return opts && opts.lang === 'es' ? 'es' : 'en';
+}
 const CHECKOUT_TEXTS = {
   en: {
     paySubmit: 'This charges your card for the amount shown — no more, no less. The Team confirms your booking right after.',
@@ -1995,6 +2014,34 @@ const CHECKOUT_TEXTS = {
     holdAfter: 'Tu tarjeta quedó autorizada (solo retención, sin cargo). Puedes seguir tu pago en vivo desde tu página de estimado.'
   }
 };
+// v80.21 CHECKOUT UNO: product images on Checkout line items. Stripe
+// only accepts image URLs it can fetch, so every URL wired here is
+// (a) absolute on the app origin and (b) verified to exist in this
+// repo's public folder (checked on disk once, then cached) — a missing
+// file means NO image param, never a dead URL on a live checkout.
+// Subscription kinds ride pre-created Stripe Prices, whose images live
+// on the Product object (set at product creation — see homeCarePriceId);
+// session params cannot carry images for an existing price.
+const PUBLIC_DIR21 = path.join(__dirname, 'public');
+const imgOkCache21 = {};
+function publicImageUrl(rel) {
+  if (!(rel in imgOkCache21)) { try { imgOkCache21[rel] = fs.existsSync(path.join(PUBLIC_DIR21, rel)); } catch (e) { imgOkCache21[rel] = false; } }
+  return imgOkCache21[rel] ? appBase() + '/' + rel : '';
+}
+function brandCheckoutImage() { return publicImageUrl('og-image.jpg'); }
+function serviceCheckoutImage(serviceId) {
+  const sid = String(serviceId || '').replace(/[^\w-]/g, '');
+  return sid ? publicImageUrl('menu-img/' + sid + '.webp') : '';
+}
+// The image for a cart-shaped charge: the FIRST cart line's menu photo
+// (the service the customer sees first), else the brand image.
+function checkoutImageFor(opts) {
+  let svc = '';
+  if (opts && opts.cartId) { const c = cartsOf().find(x => x.id === opts.cartId); const it = c && (c.items || []).find(i => i && i.serviceId); if (it) svc = serviceCheckoutImage(it.serviceId); }
+  if (!svc && opts && opts.checkoutId) { const pc = cartCheckoutsOf().find(x => x.id === opts.checkoutId); const it = pc && (pc.items || []).find(i => i && i.serviceId); if (it) svc = serviceCheckoutImage(it.serviceId); }
+  return svc || brandCheckoutImage();
+}
+function setLineImage(params, idx, url) { if (url) params['line_items[' + idx + '][price_data][product_data][images][0]'] = url; }
 async function createCheckoutSession(kind, user, opts) {
   opts = opts || {};
   // Optional tip (added 2026-10-19): applies to every one-time charge on the
@@ -2014,7 +2061,7 @@ async function createCheckoutSession(kind, user, opts) {
   if (opts.cancelUrl) params.cancel_url = opts.cancelUrl;
   if (opts.metadata) for (const k of Object.keys(opts.metadata)) params['metadata[' + k + ']'] = opts.metadata[k];
   if (opts.subMetadata) for (const k of Object.keys(opts.subMetadata)) params['subscription_data[metadata][' + k + ']'] = opts.subMetadata[k];
-  const coLang = checkoutLang(opts); // v80: explicit locale on EVERY hosted session
+  const coLang = checkoutLang(opts, user); // v80: explicit locale on EVERY hosted session (v80.21: saved account language wins)
   params.locale = coLang;
   const CT = CHECKOUT_TEXTS[coLang];
   // Only send customer_email when we actually have one — Stripe rejects an
@@ -2180,6 +2227,11 @@ async function createCheckoutSession(kind, user, opts) {
   } else {
     throw new Error('unknown checkout kind');
   }
+  // v80.21: line-item images for every price_data kind (subscription
+  // prices are excluded — their images live on the Stripe Product).
+  if (kind === 'estimate' || kind === 'member-estimate' || kind === 'estimate-hold' || kind === 'invoice') setLineImage(params, 0, brandCheckoutImage());
+  else if (kind === 'cart-order' || kind === 'cart-checkout-hosted') setLineImage(params, 0, checkoutImageFor(opts));
+  else if (kind === 'cart-join' || kind === 'cart-checkout-join') setLineImage(params, 1, checkoutImageFor(opts));
   // v80: localized submit / after-submit text for every hosted session
   // that did not set its own (the estimate-hold branch sets its pair
   // above). Joins speak membership (trial-aware); payments speak charge.
@@ -3282,8 +3334,44 @@ async function startBalanceAuthorization(r, lang) {
   const missing = target - holdsPool(r);
   if (missing <= 0) throw new Error('the authorized pool already covers the approved total');
   if (requestHolds(r).some(h => h.key === 'balance' && h.status === 'authorized')) throw new Error('a balance authorization is already active on this request');
-  const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents: missing, requestId: r.id, holdKey: 'balance', label: 'Balance authorization (request ' + r.id + ') — General Handyman Solutions', lang });
+  const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents: missing, requestId: r.id, holdKey: 'balance', label: 'Balance authorization (request ' + r.id + ') — General Handyman Solutions', lang, successUrl: estimatePageLink(r) + '?hold=1&session_id={CHECKOUT_SESSION_ID}', cancelUrl: estimatePageLink(r) + '?cancelled=1' });
+  r.lastHoldSessionId = s.id; // v80.21: filed by the estimate page's ?hold=1 return (or the webhook)
+  save();
   return { url: s.url, amount: missing / 100 };
+}
+// v80.21 CHECKOUT UNO: ONE settle per money kind, shared by the
+// webhook and the customer-facing return pages (invoice ?paid=1,
+// estimate ?paid=1). The pages prove the session the strict cart-page
+// way (the recorded session id + Stripe says paid) and then run the
+// EXACT writes the webhook runs — idempotent by the state guards, so
+// whichever lands first wins and the second is a no-op.
+function settleInvoiceFromSession(inv, sess) {
+  if (!inv || inv.status === 'paid') return false;
+  const amount = Math.round(Number(sess.amount_total) || 0) / 100;
+  const tipCents = Math.max(0, Math.round(Number(sess.metadata && sess.metadata.tipCents) || 0));
+  inv.status = 'paid';
+  inv.paidAt = new Date().toISOString();
+  inv.paidAmount = amount;
+  inv.paidMethod = 'stripe';
+  inv.stripeSessionId = sess.id;
+  inv.tip = tipCents / 100;
+  notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + (tipCents > 0 ? ' (incl. $' + (tipCents / 100).toFixed(2) + ' tip)' : '') + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
+  const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
+  if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!', '/invoice/' + inv.id);
+  fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
+  return true;
+}
+function settleEstimateFromSession(r, sess, u) {
+  if (!r || r.estimatePaid) return false;
+  const amount = Math.round(Number(sess.amount_total) || 0) / 100;
+  const tipCents = Math.max(0, Math.round(Number(sess.metadata && sess.metadata.tipCents) || 0));
+  r.estimatePaid = { sessionId: sess.id, amount: amount, tip: tipCents / 100, at: new Date().toISOString() };
+  r.messages = r.messages || [];
+  r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: $' + amount.toFixed(2) + ' towards your estimate. Your appointment is secured — the Team will confirm your time here.', at: new Date().toISOString() });
+  notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.', '#req=' + r.id);
+  fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: amount }));
+  if (u) notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ') on request ' + r.id + '.');
+  return true;
 }
 async function handleStripeEvent(event) {
   const type = event && event.type;
@@ -3376,32 +3464,13 @@ async function handleStripeEvent(event) {
       }
     } else if (kind === 'estimate' || kind === 'member-estimate') {
       const r = db.requests.find(x => x.id === (obj.metadata && obj.metadata.requestId));
-      const amount = Math.round(Number(obj.amount_total) || 0) / 100;
-      const tipCents = Math.max(0, Math.round(Number(obj.metadata && obj.metadata.tipCents) || 0));
-      if (r) {
-        r.estimatePaid = { sessionId: obj.id, amount: amount, tip: tipCents / 100, at: new Date().toISOString() };
-        r.messages = r.messages || [];
-        r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Payment received: $' + amount.toFixed(2) + ' towards your estimate. Your appointment is secured — the Team will confirm your time here.', at: new Date().toISOString() });
-        notify(r.customerId, 'payment', 'Payment received ($' + amount.toFixed(2) + ') on request ' + r.id + '. Your appointment is secured.', '#req=' + r.id);
-        fireAutomation('payment_received', Object.assign(requestAutomationPayload(r), { paidAmount: amount }));
+      if (!settleEstimateFromSession(r, obj, u)) {
+        const amount = Math.round(Number(obj.amount_total) || 0) / 100;
+        notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ')' + (r ? ' on request ' + r.id : '') + '.');
       }
-      notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ')' + (r ? ' on request ' + r.id : '') + '.');
     } else if (kind === 'invoice') {
       const inv = (db.invoices || []).find(x => x.id === (obj.metadata && obj.metadata.invoiceId));
-      const amount = Math.round(Number(obj.amount_total) || 0) / 100;
-      const tipCents = Math.max(0, Math.round(Number(obj.metadata && obj.metadata.tipCents) || 0));
-      if (inv && inv.status !== 'paid') {
-        inv.status = 'paid';
-        inv.paidAt = new Date().toISOString();
-        inv.paidAmount = amount;
-        inv.paidMethod = 'stripe';
-        inv.stripeSessionId = obj.id;
-        inv.tip = tipCents / 100;
-        notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + (tipCents > 0 ? ' (incl. $' + (tipCents / 100).toFixed(2) + ' tip)' : '') + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
-        const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
-        if (cust) notify(cust.id, 'payment', 'Your invoice ' + inv.id + ' ($' + amount.toFixed(2) + ') was paid. Thank you!', '/invoice/' + inv.id);
-        fireAutomation('invoice_paid', { invoice: publicInvoice(inv) });
-      }
+      settleInvoiceFromSession(inv, obj);
     }
   } else if (type === 'customer.subscription.created') {
     // Record WHICH plan each subscription is (from its price/metadata) as
@@ -3807,33 +3876,77 @@ function invoiceReminderEmailText(inv, lang) {
   lines.push('', T.payLine + invoicePayLink(inv), T.rAlready + ' ' + T.questions);
   return lines.join('\n');
 }
-function invoicePageHtml(inv) {
+// v80.21 CHECKOUT UNO: the invoice page joins the IDIOMA rule — ONE
+// language at a time, from the IV dictionary (EN/ES parity pinned in
+// tests). Language resolution: ?lang= override, else the customer's
+// SAVED account language (invoiceMailLang — the same source the
+// invoice emails use), else English. The EN | ES switch re-renders
+// server-side, like the install page.
+function invoicePageHtml(inv, langOverride, notice) {
+  const IV = {
+    en: {
+      titleInv: 'Invoice', billedTo: 'Billed to', due: 'Due', thDesc: 'Description', thQty: 'Qty', thEach: 'Each', thLine: 'Line',
+      subtotal: 'Subtotal', discount: 'Discount', totalDue: 'Total due',
+      statusUnpaid: 'Unpaid', statusPaid: 'Paid', statusOverdue: 'Overdue', statusCancelled: 'Cancelled', isStatus: 'This invoice is {s}.',
+      tipH: 'Add a tip?', tipOpt: 'optional — thank you!', tipNone: 'No tip', tipCustom: 'Custom', tipWord: 'Tip',
+      payNow: 'Pay {amt} now', opening: 'Opening secure checkout…', failed: 'failed',
+      paidFull: '✅ This invoice was paid in full. Thank you!',
+      cancelledNote: 'Checkout was cancelled — nothing was charged. You can pay whenever you are ready, right here on this page.',
+      schedReceivedH: '📅 Scheduling request received', schedPreferred: 'Preferred:', schedConfirmed: 'Confirmed by the Team:',
+      schedConfirmNote: 'The Team will confirm your final date and time shortly — this is a request, not a booking yet.',
+      schedH: '📅 Schedule your job', schedIntro: 'Pick what works for you — the Team confirms the final date and time.',
+      schedDate: 'Preferred date', schedTime: 'Time window', optMorning: 'Morning (8am–12pm)', optAfternoon: 'Afternoon (12pm–5pm)', optEvening: 'Evening (5pm–8pm)',
+      schedNotes: 'Notes', schedNotesPh: 'Gate code, parking, anything we should know…', schedBtn: 'Request this time',
+      schedPickDate: 'Pick a preferred date first.', schedSending: 'Sending…',
+      questions: 'Questions? Text or call (707) 862-3773.'
+    },
+    es: {
+      titleInv: 'Factura', billedTo: 'Facturado a', due: 'Vence', thDesc: 'Descripción', thQty: 'Cant.', thEach: 'Precio', thLine: 'Importe',
+      subtotal: 'Subtotal', discount: 'Descuento', totalDue: 'Total a pagar',
+      statusUnpaid: 'Sin pagar', statusPaid: 'Pagada', statusOverdue: 'Vencida', statusCancelled: 'Cancelada', isStatus: 'Esta factura está {s}.',
+      tipH: '¿Agregar propina?', tipOpt: 'opcional — ¡gracias!', tipNone: 'Sin propina', tipCustom: 'Otro monto', tipWord: 'Propina',
+      payNow: 'Pagar {amt} ahora', opening: 'Abriendo el pago seguro…', failed: 'falló',
+      paidFull: '✅ Esta factura se pagó por completo. ¡Gracias!',
+      cancelledNote: 'El pago fue cancelado — no se hizo ningún cargo. Puedes pagar cuando quieras, aquí mismo en esta página.',
+      schedReceivedH: '📅 Solicitud de horario recibida', schedPreferred: 'Preferencia:', schedConfirmed: 'Confirmado por el Equipo:',
+      schedConfirmNote: 'El Equipo confirma tu fecha y hora finales muy pronto — esto es una solicitud, aún no una reserva.',
+      schedH: '📅 Agenda tu trabajo', schedIntro: 'Elige lo que te funcione — el Equipo confirma la fecha y la hora finales.',
+      schedDate: 'Fecha preferida', schedTime: 'Horario', optMorning: 'Mañana (8am–12pm)', optAfternoon: 'Tarde (12pm–5pm)', optEvening: 'Noche (5pm–8pm)',
+      schedNotes: 'Notas', schedNotesPh: 'Código de la puerta, estacionamiento, lo que debamos saber…', schedBtn: 'Pedir este horario',
+      schedPickDate: 'Elige primero una fecha preferida.', schedSending: 'Enviando…',
+      questions: '¿Preguntas? Manda un texto o llama al (707) 862-3773.'
+    }
+  };
+  const initLang = (langOverride === 'es' || langOverride === 'en') ? langOverride : invoiceMailLang(inv);
+  const S = IV[initLang];
+  const fillS = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
   const pub = publicInvoice(inv);
   const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
   // Customer-facing status (added 2026-10-19): the client never sees internal
   // workflow states — draft/sent both read as "Unpaid" on the public link.
   const displayStatus = (pub.status === 'draft' || pub.status === 'sent') ? 'unpaid' : pub.status;
+  const statusLabel = { unpaid: S.statusUnpaid, paid: S.statusPaid, overdue: S.statusOverdue, cancelled: S.statusCancelled }[displayStatus] || displayStatus;
   const badge = { unpaid: ['#fde2e2', '#c81e1e'], paid: ['#d3f0dd', '#1a7f37'], overdue: ['#fde2e2', '#c81e1e'], cancelled: ['#ececec', '#6b6762'] }[displayStatus] || ['#ececec', '#6b6762'];
   const payable = ['draft', 'sent', 'overdue'].includes(pub.status);
   const tipTotalCents = Math.round(pub.total * 100);
   const tipBtnStyle = 'padding:10px 16px;border:1px solid #ccc;border-radius:999px;background:#fff;font-weight:700;cursor:pointer;font-size:14px';
   const payBlock = payable
     ? '<div style="margin:14px 0;padding:14px;border:1px solid #e5e5e5;border-radius:12px;background:#fafafa">'
-    + '<p style="margin:0 0 10px;font-weight:700">Add a tip? <span style="font-weight:400;color:#666;font-size:13px">optional — thank you!</span></p>'
+    + '<p style="margin:0 0 10px;font-weight:700">' + S.tipH + ' <span style="font-weight:400;color:#666;font-size:13px">' + S.tipOpt + '</span></p>'
     + '<div id="tipBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
-    + '<button type="button" data-tip="0" class="tipBtn" style="' + tipBtnStyle + '">No tip</button>'
+    + '<button type="button" data-tip="0" class="tipBtn" style="' + tipBtnStyle + '">' + S.tipNone + '</button>'
     + '<button type="button" data-tip="10" class="tipBtn" style="' + tipBtnStyle + '">10%</button>'
     + '<button type="button" data-tip="15" class="tipBtn" style="' + tipBtnStyle + '">15%</button>'
     + '<button type="button" data-tip="20" class="tipBtn" style="' + tipBtnStyle + '">20%</button>'
-    + '<button type="button" data-tip="custom" class="tipBtn" style="' + tipBtnStyle + '">Custom</button>'
+    + '<button type="button" data-tip="custom" class="tipBtn" style="' + tipBtnStyle + '">' + S.tipCustom + '</button>'
     + '</div>'
     + '<div id="tipCustomWrap" style="display:none;margin-bottom:6px"><label style="font-size:14px;color:#555">$ <input id="tipCustom" type="number" min="0" step="0.01" placeholder="0.00" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:130px;font-size:15px"></label></div>'
     + '<p id="tipLine" style="margin:0;color:#666;font-size:14px"></p>'
     + '</div>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Pay ' + usd(pub.total) + ' now</button><p id="payMsg" style="color:#666"></p>'
-    + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + fillS(S.payNow, { amt: usd(pub.total) }) + '</button><p id="payMsg" style="color:#666"></p>'
+    + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;var PAYNOW=' + JSON.stringify(S.payNow) + ';var TIPWORD=' + JSON.stringify(S.tipWord) + ';var OPENING=' + JSON.stringify(S.opening) + ';var FAILED=' + JSON.stringify(S.failed) + ';'
     + 'function fmtC(c){return \"$\"+(c/100).toFixed(2);}'
-    + 'function refreshPay(){var t=document.getElementById(\"tipLine\");t.textContent=tipCents>0?(\"Tip: \"+fmtC(tipCents)):\"\";document.getElementById(\"payBtn\").textContent=\"Pay \"+fmtC(invCents+tipCents)+\" now\";}'
+    + 'function refreshPay(){var t=document.getElementById(\"tipLine\");t.textContent=tipCents>0?(TIPWORD+\": \"+fmtC(tipCents)):\"\";document.getElementById(\"payBtn\").textContent=PAYNOW.replace(\"{amt}\",fmtC(invCents+tipCents));}'
     + 'document.querySelectorAll(\".tipBtn\").forEach(function(b){b.onclick=function(){'
     + 'document.querySelectorAll(\".tipBtn\").forEach(function(x){x.style.background=\"#fff\";x.style.color=\"#111\";});'
     + 'b.style.background=\"#0b0b0b\";b.style.color=\"#fff\";'
@@ -3844,46 +3957,52 @@ function invoicePageHtml(inv) {
     + 'refreshPay();};});'
     + 'document.getElementById(\"tipCustom\").oninput=function(){tipCents=Math.max(0,Math.round(parseFloat(this.value||\"0\")*100)||0);if(tipCents>invCents)tipCents=invCents;refreshPay();};'
     + 'document.querySelector(\".tipBtn\").click();'
-    + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=\"Opening secure checkout…\";try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents})});var d=await r.json();if(!r.ok)throw new Error(d.error||\"failed\");location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
-    : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">✅ This invoice was paid in full. Thank you!</p>' : '<p style="color:#666">This invoice is ' + escMail(pub.status) + '.</p>');
+    + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=OPENING;try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents,lang:' + JSON.stringify(initLang) + '})});var d=await r.json();if(!r.ok)throw new Error(d.error||FAILED);location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
+    : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">' + S.paidFull + '</p>' : '<p style="color:#666">' + fillS(S.isStatus, { s: String(statusLabel).toLowerCase() }) + '</p>');
   // Scheduling request (added 2026-10-12): shown on the paid confirmation.
   // This is a REQUEST, not a booking — Gabriel confirms the final schedule
   // himself from the admin panel.
   let schedBlock = '';
   if (pub.status === 'paid') {
     if (pub.scheduleRequestedAt) {
-      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">📅 Scheduling request received</h3>'
-        + '<p>Preferred: <b>' + escMail(pub.preferredDate || '—') + '</b> • <b>' + escMail(pub.preferredTime || '—') + '</b></p>'
+      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedReceivedH + '</h3>'
+        + '<p>' + S.schedPreferred + ' <b>' + escMail(pub.preferredDate || '—') + '</b> • <b>' + escMail(pub.preferredTime || '—') + '</b></p>'
         + (pub.scheduleNotes ? '<p style="color:#555">' + escMail(pub.scheduleNotes) + '</p>' : '')
         + (pub.confirmedDate
-          ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px">✅ <b>Confirmed by the Team: ' + escMail(pub.confirmedDate) + (pub.confirmedTime ? ' • ' + escMail(pub.confirmedTime) : '') + '</b></p>'
-          : '<p style="color:#666;font-size:13px">The Team will confirm your final date and time shortly — this is a request, not a booking yet.</p>')
+          ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px">✅ <b>' + S.schedConfirmed + ' ' + escMail(pub.confirmedDate) + (pub.confirmedTime ? ' • ' + escMail(pub.confirmedTime) : '') + '</b></p>'
+          : '<p style="color:#666;font-size:13px">' + S.schedConfirmNote + '</p>')
         + '</div>';
     } else {
-      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">📅 Schedule your job</h3>'
-        + '<p style="color:#666;font-size:13px">Pick what works for you — the Team confirms the final date and time.</p>'
-        + '<label style="display:block;margin:8px 0">Preferred date<br><input type="date" id="schedDate" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box"></label>'
-        + '<label style="display:block;margin:8px 0">Time window<br><select id="schedTime" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%"><option value="morning">Morning (8am–12pm)</option><option value="afternoon">Afternoon (12pm–5pm)</option><option value="evening">Evening (5pm–8pm)</option></select></label>'
-        + '<label style="display:block;margin:8px 0">Notes<br><textarea id="schedNotes" placeholder="Gate code, parking, anything we should know…" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
-        + '<button id="schedBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">Request this time</button><p id="schedMsg" style="color:#666"></p></div>'
-        + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent="Pick a preferred date first.";return;}m.textContent="Sending…";try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
+      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedH + '</h3>'
+        + '<p style="color:#666;font-size:13px">' + S.schedIntro + '</p>'
+        + '<label style="display:block;margin:8px 0">' + S.schedDate + '<br><input type="date" id="schedDate" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box"></label>'
+        + '<label style="display:block;margin:8px 0">' + S.schedTime + '<br><select id="schedTime" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%"><option value="morning">' + S.optMorning + '</option><option value="afternoon">' + S.optAfternoon + '</option><option value="evening">' + S.optEvening + '</option></select></label>'
+        + '<label style="display:block;margin:8px 0">' + S.schedNotes + '<br><textarea id="schedNotes" placeholder="' + S.schedNotesPh + '" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
+        + '<button id="schedBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + S.schedBtn + '</button><p id="schedMsg" style="color:#666"></p></div>'
+        + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent=' + JSON.stringify(S.schedPickDate) + ';return;}m.textContent=' + JSON.stringify(S.schedSending) + ';try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
     }
   }
-  return '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice ' + escMail(pub.id) + ' — General Handyman Solutions</title>'
+  const other21 = initLang === 'es' ? 'en' : 'es';
+  const noticeHtml = notice === 'cancelled'
+    ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px">' + S.cancelledNote + '</div>'
+    : '';
+  return '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleInv + ' ' + escMail(pub.id) + ' — General Handyman Solutions</title>'
     + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0"><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
+    + '<div style="white-space:nowrap;padding-top:2px"><a href="?lang=' + other21 + '" style="color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;text-decoration:none">' + (initLang === 'es' ? 'EN' : 'ES') + '</a></div></div>'
     + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
-    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Invoice ' + escMail(pub.id) + '</h2><span style="background:' + badge[0] + ';color:' + badge[1] + ';border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(displayStatus) + '</span></div>'
-    + '<p style="color:#666">Billed to <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 Due <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
-    + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">Description</th><th style="padding:8px">Qty</th><th style="text-align:right;padding:8px">Each</th><th style="text-align:right;padding:8px">Line</th></tr>' + rows + '</table>'
-    + '<p>Subtotal: <b>' + usd(pub.subtotal) + '</b></p>'
-    + (pub.discount > 0 ? '<p>Discount: <b>-' + usd(pub.discount) + '</b></p>' : '')
-    + '<p style="font-size:22px">Total due: <b>' + usd(pub.total) + '</b></p>'
+    + noticeHtml
+    + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">' + S.titleInv + ' ' + escMail(pub.id) + '</h2><span style="background:' + badge[0] + ';color:' + badge[1] + ';border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(statusLabel) + '</span></div>'
+    + '<p style="color:#666">' + S.billedTo + ' <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 ' + S.due + ' <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">' + S.thDesc + '</th><th style="padding:8px">' + S.thQty + '</th><th style="text-align:right;padding:8px">' + S.thEach + '</th><th style="text-align:right;padding:8px">' + S.thLine + '</th></tr>' + rows + '</table>'
+    + '<p>' + S.subtotal + ': <b>' + usd(pub.subtotal) + '</b></p>'
+    + (pub.discount > 0 ? '<p>' + S.discount + ': <b>-' + usd(pub.discount) + '</b></p>' : '')
+    + '<p style="font-size:22px">' + S.totalDue + ': <b>' + usd(pub.total) + '</b></p>'
     + (pub.notes ? '<p style="color:#555">' + escMail(pub.notes) + '</p>' : '')
     + payBlock
     + schedBlock
-    + '<p style="color:#666;font-size:13px">Questions? Text or call (707) 862-3773.</p>'
-    + '</div></body>';
+    + '<p style="color:#666;font-size:13px">' + S.questions + '</p>'
+    + '</div></body></html>';
 }
 // ---------- Public estimate approval (added 2026-10-12) ----------
 // Customers review, approve, or decline an estimate from a public link — no
@@ -4018,6 +4137,8 @@ function estimatePageHtml(r, user, langOverride, notice) {
       errMemberPay: 'Your membership payment did not complete — check the card and try again.',
       joinedNote: '🎉 Your HomeCare membership is active — your member pricing is applied to this estimate.',
       cancelledNote: 'Checkout was cancelled — nothing was charged. You can join anytime from this page.',
+      paidNote: '✅ Payment received — your estimate fee is paid and your appointment is secured. The Team will confirm your time.',
+      holdNote: '✅ Your card was authorized — hold only, not charged. You are only charged the final amount when the work is done.',
       errEmail: 'Add a valid email for your account.'
     },
     es: {
@@ -4046,6 +4167,8 @@ function estimatePageHtml(r, user, langOverride, notice) {
       errMemberPay: 'El pago de tu membresía no se completó — revisa la tarjeta e inténtalo de nuevo.',
       joinedNote: '🎉 Tu membresía HomeCare está activa — tu precio de miembro ya está aplicado en este estimado.',
       cancelledNote: 'El pago fue cancelado — no se hizo ningún cargo. Puedes unirte cuando quieras desde esta página.',
+      paidNote: '✅ Pago recibido — la cuota de tu estimado está pagada y tu cita está apartada. El Equipo te confirma tu hora.',
+      holdNote: '✅ Tu tarjeta quedó autorizada — solo retención, sin cargo. Solo se te cobra el monto final cuando el trabajo esté terminado.',
       errEmail: 'Agrega un correo válido para tu cuenta.'
     }
   };
@@ -4171,9 +4294,13 @@ function estimatePageHtml(r, user, langOverride, notice) {
   // the subscription with Stripe on the GET handler (never from flags).
   const noticeHtml = notice === 'joined'
     ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
-    : notice === 'cancelled'
-      ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
-      : '';
+    : notice === 'paid'
+      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="paidNote">' + S.paidNote + '</div>'
+      : notice === 'hold'
+        ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="holdNote">' + S.holdNote + '</div>'
+        : notice === 'cancelled'
+          ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+          : '';
   return head
     + noticeHtml
     + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0"><span data-i18n="titleEst">' + S.titleEst + '</span> ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
@@ -4283,14 +4410,17 @@ function platformCards(T, ua) {
 // template + hammer + EN|ES, like the cart/estimate pages — and the copy
 // names what the customer actually just did (deposit / membership /
 // order) instead of one generic line from another era.
-function payResultPageHtml(kind, langOverride) {
+function payResultPageHtml(kind, langOverride, detail) {
   const lang = langOverride === 'es' ? 'es' : 'en';
   const ok = kind === 'success';
   const T = lang === 'es' ? (ok ? {
     title: 'Pago recibido', h: 'Pago <span style="color:#e42535">recibido</span> ✅',
     body: 'Gracias — tu pago se procesó. Qué sigue depende de lo que pagaste:',
     steps: ['<b>¿Apartaste con un depósito?</b> Tu trabajo quedó agendado — el Team te confirma el día y la hora exactos, y el resto se paga al terminar el trabajo.', '<b>¿Te uniste a una membresía?</b> Ya está activa — tus precios de miembro aplican desde ya, y tu primer estimado en persona es GRATIS.', '<b>¿Pagaste una orden del menú o un estimado?</b> Ya quedó apartado — el Team te confirma tu horario.'],
-    cta: 'Abrir la app', foot: '¿Preguntas? Texto o llamada al (707) 862-3773.', otherL: 'View in English'
+    cta: 'Abrir la app', foot: '¿Preguntas? Texto o llamada al (707) 862-3773.', otherL: 'View in English',
+    whatLabel: 'Pagaste por', amountLabel: 'Monto', refLabel: 'Referencia',
+    what_invoice: 'Factura {ref}', what_estimate: 'Pago de estimado — solicitud {ref}', what_hold: 'Autorización de tarjeta — solicitud {ref}', what_cart: 'Orden de carrito {ref}', what_member: 'Membresía {ref}',
+    view_invoice: 'Ver tu factura', view_estimate: 'Ver tu estimado', view_hold: 'Ver tu estimado', view_cart: 'Ver tu orden', view_member: 'Ver tu membresía'
   } : {
     title: 'Pago cancelado', h: 'Pago <span style="color:#e42535">cancelado</span>',
     body: 'No se hizo ningún cobro. Nada quedó agendado ni cobrado — puedes volver y terminar cuando quieras; tu carrito o solicitud sigue guardado.',
@@ -4299,13 +4429,30 @@ function payResultPageHtml(kind, langOverride) {
     title: 'Payment received', h: 'Payment <span style="color:#e42535">received</span> ✅',
     body: 'Thank you — your payment went through. What happens next depends on what you paid:',
     steps: ['<b>Booked with a deposit?</b> Your job is on the calendar — the Team confirms your exact day and time, and the balance is due when the work is done.', '<b>Joined a membership?</b> It is active now — member prices apply right away, and your first in-person estimate is FREE.', '<b>Paid a menu order or an estimate?</b> You are all set — the Team confirms your time with you.'],
-    cta: 'Open the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
+    cta: 'Open the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español',
+    whatLabel: 'You paid for', amountLabel: 'Amount', refLabel: 'Reference',
+    what_invoice: 'Invoice {ref}', what_estimate: 'Estimate payment — request {ref}', what_hold: 'Card authorization — request {ref}', what_cart: 'Cart order {ref}', what_member: '{ref} membership',
+    view_invoice: 'View your invoice', view_estimate: 'View your estimate', view_hold: 'View your estimate', view_cart: 'View your order', view_member: 'View your membership'
   } : {
     title: 'Payment cancelled', h: 'Payment <span style="color:#e42535">cancelled</span>',
     body: 'No charge was made. Nothing was booked or charged — you can come back and finish anytime; your cart or request is still saved.',
     steps: [], cta: 'Back to the app', foot: 'Questions? Text or call (707) 862-3773.', otherL: 'Ver en español'
   });
   const other = lang === 'es' ? 'en' : 'es';
+  // v80.21: the personalized detail card (what was paid, how much, its
+  // number, and the button back to that exact object) replaces the
+  // generic steps when the handler proved the session with Stripe.
+  const fillD = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
+  let detailHtml = '', ctaHref = '/', ctaLabel = T.cta;
+  if (ok && detail && detail.key) {
+    detailHtml = '<div class="card"><ul>'
+      + '<li><b>' + T.whatLabel + ':</b> ' + escMail(fillD(T['what_' + detail.key], detail)) + '</li>'
+      + '<li><b>' + T.amountLabel + ':</b> ' + usd(detail.amount) + '</li>'
+      + (detail.key !== 'member' ? '<li><b>' + T.refLabel + ':</b> ' + escMail(detail.ref) + '</li>' : '')
+      + '</ul></div>';
+    ctaHref = detail.back || '/';
+    ctaLabel = T['view_' + detail.key] || T.cta;
+  }
   return '<!doctype html><html lang="' + lang + '"><head><meta charset="utf-8">'
     + '<meta name="viewport" content="width=device-width, initial-scale=1">'
     + '<title>' + T.title + ' — General Handyman Solutions</title>'
@@ -4323,13 +4470,31 @@ function payResultPageHtml(kind, langOverride) {
     + '<body><div class="wrap">'
     + '<img class="icon" src="/icons/icon-512.png" alt="General Handyman Solutions">'
     + '<h1>' + T.h + '</h1><p class="body">' + T.body + '</p>'
-    + (T.steps.length ? '<div class="card"><ul>' + T.steps.map(s => '<li>' + s + '</li>').join('') + '</ul></div>' : '')
-    + '<a class="cta" href="/">' + T.cta + '</a>'
+    + (detailHtml || (T.steps.length ? '<div class="card"><ul>' + T.steps.map(s => '<li>' + s + '</li>').join('') + '</ul></div>' : ''))
+    + '<a class="cta" href="' + ctaHref + '">' + ctaLabel + '</a>'
     + '<div class="lang"><a href="?lang=' + other + '">' + T.otherL + '</a></div>'
     + '<p class="foot">' + T.foot + '</p>'
     + '</div></body></html>';
 }
 
+// v80.21: what a proven Checkout session paid, in success-page terms —
+// the kind + object id come from metadata WE stamped at creation; the
+// amount is Stripe's own amount_total. Kinds whose sessions return to
+// their own pages (the self-serve cart's SPA returns) get no detail.
+function successDetailFor(sess) {
+  const md = (sess && sess.metadata) || {};
+  const kind = md.kind || '';
+  const amount = Math.round(Number(sess.amount_total) || 0) / 100;
+  if (kind === 'invoice' && md.invoiceId) return { key: 'invoice', ref: md.invoiceId, amount, back: '/invoice/' + md.invoiceId };
+  if ((kind === 'estimate' || kind === 'member-estimate') && md.requestId) return { key: 'estimate', ref: md.requestId, amount, back: '/estimate/' + md.requestId };
+  if (kind === 'estimate-hold' && md.requestId) { const rq = db.requests.find(x => x.id === md.requestId); return { key: 'hold', ref: md.requestId, amount, back: (rq && rq.estimate) ? '/estimate/' + md.requestId : '/' }; }
+  if ((kind === 'cart-order' || kind === 'cart-join') && md.cartId) return { key: 'cart', ref: md.cartId, amount, back: '/cart/' + md.cartId };
+  if (kind === 'homecare' || kind === 'yardcare' || kind === 'homecare-plus') {
+    const plan = MEMBERSHIP_PLANS[md.plan] || (kind === 'homecare' ? MEMBERSHIP_PLANS.homecare : null);
+    return { key: 'member', ref: plan ? plan.name : 'Membership', amount, back: '/#memberships' };
+  }
+  return null;
+}
 function cartPageHtml(c, user, langOverride, notice) {
   const sessionMember = !!(user && user.role === 'customer' && user.homeCareStatus === 'active');
   // v57: a signed-in customer can hold an ACTIVE plan that is NOT a
@@ -7136,7 +7301,9 @@ async function handleRequest(req, res) {
         let tipCents = Math.round(Number(b.tipCents) || 0);
         if (tipCents < 0) tipCents = 0;
         if (tipCents > amountCents) tipCents = amountCents;
-        const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label, lang: b.lang });
+        const s = await createCheckoutSession(kind, user, { amountCents, tipCents: tipCents, requestId: r.id, label, lang: b.lang, successUrl: estimatePageLink(r) + '?paid=1&session_id={CHECKOUT_SESSION_ID}', cancelUrl: estimatePageLink(r) + '?cancelled=1' });
+        r.estimatePaySessionId = s.id; // v80.21: the estimate page verifies THIS session on its ?paid=1 return
+        save();
         return send(res, 200, { url: s.url, amount: (amountCents + tipCents) / 100, tip: tipCents / 100 });
       }
       if (b.kind === 'estimate-hold') {
@@ -7150,7 +7317,14 @@ async function handleRequest(req, res) {
         const amountCents = Math.round((Number(r.estimateDue) || 0) * 100);
         if (!(amountCents > 0)) return send(res, 400, { error: 'this request has no estimate fee to authorize (free estimate or already covered)' });
         if (requestHolds(r).some(h => h.key === 'visit' && h.status === 'authorized')) return send(res, 400, { error: 'an authorization hold is already active on this request' });
-        const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, { amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions', lang: b.lang });
+        // v80.21: the hold returns to the estimate page ONLY when an
+        // estimate exists to land on (a visit hold precedes it — the
+        // page would 404); otherwise the personalized success page
+        // carries the hold detail (successDetailFor 'hold').
+        const holdRet = r.estimate ? { successUrl: estimatePageLink(r) + '?hold=1&session_id={CHECKOUT_SESSION_ID}', cancelUrl: estimatePageLink(r) + '?cancelled=1' } : {};
+        const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, Object.assign({ amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions', lang: b.lang }, holdRet));
+        r.lastHoldSessionId = s.id; // v80.21: the estimate page files THIS hold on its ?hold=1 return
+        save();
         return send(res, 200, { url: s.url, amount: amountCents / 100, hold: true });
       }
       return send(res, 400, { error: 'unknown checkout kind' });
@@ -8233,7 +8407,9 @@ async function handleRequest(req, res) {
       const rawEmail = String(inv.customerEmail || '');
       const safeEmail = looksLikeEmail(rawEmail) ? rawEmail : '';
       if (rawEmail && !safeEmail && !inv.emailInvalid) { inv.emailInvalid = true; audit(null, 'invoice.email_invalid', inv.id, 'stored customerEmail is not an email — pay session created without it'); save(); }
-      const s = await createCheckoutSession('invoice', { email: safeEmail, id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: safeEmail, lang: body && body.lang });
+      const s = await createCheckoutSession('invoice', { email: safeEmail, id: inv.customerId || '' }, { amountCents: Math.round(inv.total * 100), tipCents: tipCents, invoiceId: inv.id, label: 'Invoice ' + inv.id + ' — General Handyman Solutions', email: safeEmail, lang: body && body.lang, successUrl: appBase() + '/invoice/' + inv.id + '?paid=1&session_id={CHECKOUT_SESSION_ID}', cancelUrl: appBase() + '/invoice/' + inv.id + '?cancelled=1' });
+      inv.paySessionId = s.id; // v80.21: the invoice page verifies THIS session on its ?paid=1 return
+      save();
       return send(res, 200, { url: s.url, amount: inv.total + tipCents / 100, tip: tipCents / 100 });
     } catch (e) { console.error('invoice checkout failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
   }
@@ -8257,7 +8433,28 @@ async function handleRequest(req, res) {
     } catch (e) { console.error('stripe webhook failed', e.message); return send(res, 500, { error: 'webhook handler failed' }); }
   }
   if (p === '/payment/success' && req.method === 'GET') {
-    return send(res, 200, payResultPageHtml('success', url.searchParams.get('lang')));
+    // v80.21 CHECKOUT UNO: personalize when Stripe can prove what was
+    // paid — the session names the kind + object in metadata stamped at
+    // creation. The page language follows the customer's saved account
+    // language, then the session's own locale, then ?lang=. No session
+    // id / unpaid / lookup failure -> the generic page, as before.
+    let detail = null;
+    let lang = url.searchParams.get('lang');
+    const sid = url.searchParams.get('session_id') || '';
+    if (sid && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(sid));
+        if (sess && sess.id === sid && (sess.payment_status === 'paid' || sess.payment_status === 'no_payment_required')) {
+          detail = successDetailFor(sess);
+          if (!lang) {
+            const md = sess.metadata || {};
+            const su = md.userId ? db.users.find(x => x.id === md.userId) : null;
+            lang = userLangOf(su) || ((sess.locale === 'es' || sess.locale === 'en') ? sess.locale : null);
+          }
+        }
+      } catch (e) { console.error('success page session lookup failed', e.message); }
+    }
+    return send(res, 200, payResultPageHtml('success', lang, detail));
   }
   if (p === '/payment/cancelled' && req.method === 'GET') {
     return send(res, 200, payResultPageHtml('cancelled', url.searchParams.get('lang')));
@@ -8267,7 +8464,20 @@ async function handleRequest(req, res) {
   if (invPageMatch && req.method === 'GET') {
     const inv = (db.invoices || []).find(x => x.id === invPageMatch[1]);
     if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invoice not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
-    return send(res, 200, invoicePageHtml(inv));
+    // v80.21 CHECKOUT UNO: paying an invoice returns HERE with ?paid=1 —
+    // verify the session this invoice recorded and settle through the
+    // webhook's own helper BEFORE rendering, so the customer lands on
+    // the paid invoice (with its scheduling block), not a generic page.
+    let invNotice = '';
+    const invRetSessionId = url.searchParams.get('session_id') || '';
+    if (url.searchParams.get('cancelled') === '1' && inv.status !== 'paid') invNotice = 'cancelled';
+    if (url.searchParams.get('paid') === '1' && invRetSessionId && inv.paySessionId && invRetSessionId === inv.paySessionId && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(invRetSessionId));
+        if (sess && sess.id === invRetSessionId && sess.payment_status === 'paid') { if (settleInvoiceFromSession(inv, sess)) save(); }
+      } catch (e) { console.error('invoice return verification failed', e.message); }
+    }
+    return send(res, 200, invoicePageHtml(inv, url.searchParams.get('lang'), invNotice));
   }
 
 
@@ -8401,7 +8611,29 @@ async function handleRequest(req, res) {
     // through the shared helper. Idempotent with the webhook.
     let notice = '';
     const retSessionId = url.searchParams.get('session_id') || '';
-    if (url.searchParams.get('cancelled') === '1' && r.status === 'Quoted') notice = 'cancelled';
+    if (url.searchParams.get('cancelled') === '1' && r.status !== 'Declined') notice = 'cancelled';
+    // v80.21 CHECKOUT UNO: the estimate-fee payment returns HERE, not to
+    // the generic success page — the same strict proof as the cart page
+    // (the session must be the one this estimate recorded, and Stripe
+    // must say paid), settled through the webhook's own helper.
+    if (url.searchParams.get('paid') === '1' && retSessionId && r.estimatePaySessionId && retSessionId === r.estimatePaySessionId && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+        if (sess && sess.id === retSessionId && sess.payment_status === 'paid') {
+          const mu = db.users.find(x => x.id === (sess.metadata && sess.metadata.userId)) || user;
+          if (settleEstimateFromSession(r, sess, mu)) save();
+        }
+      } catch (e) { console.error('estimate paid return verification failed', e.message); }
+      if (r.estimatePaid) notice = 'paid';
+    }
+    // v80.21: authorization holds return here too — the filing helper
+    // is the webhook's own and idempotent (upsert by session id).
+    if (url.searchParams.get('hold') === '1' && retSessionId && r.lastHoldSessionId && retSessionId === r.lastHoldSessionId && stripeReady()) {
+      try {
+        const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
+        if (sess && sess.id === retSessionId && sess.status === 'complete') { await holdFromCheckoutSession(sess); save(); notice = 'hold'; }
+      } catch (e) { console.error('estimate hold return verification failed', e.message); }
+    }
     if (url.searchParams.get('joined') === '1' && retSessionId && r.joinSessionId && retSessionId === r.joinSessionId && stripeReady()) {
       try {
         const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
