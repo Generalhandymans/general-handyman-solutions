@@ -31,12 +31,12 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-19-1', swSrc.includes("const CACHE = 'ghs-app-v80-19-1'"));
-t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
+t('static: SW cache is ghs-app-v80-20', swSrc.includes("const CACHE = 'ghs-app-v80-20'"));
+t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
-  htmlSrc.includes("'tv-mounting-large'") && htmlSrc.includes('price: 175, member: 140, addons: [{ id: \'raceway\'') &&
-  serverSrc.includes('"tv-mounting-large":{p:175,m:140') && serverSrc.includes('"mailbox-install":{p:175,m:140') && serverSrc.includes('"exhaust-fan-swap":{p:175,m:140'));
+  htmlSrc.includes("'tv-mounting-large'") && htmlSrc.includes('price: 215, member: 172, addons: [{ id: \'raceway\'') &&
+  serverSrc.includes('"tv-mounting-large":{p:215,m:172') && serverSrc.includes('"mailbox-install":{p:175,m:140') && serverSrc.includes('"exhaust-fan-swap":{p:175,m:140'));
 t('static v67: drain unclog + alternator are $175 / member $140 in BOTH catalogs (Gabriel 2026-10-25)',
   htmlSrc.includes("'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 175, member: 140") &&
   htmlSrc.includes("'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 175, member: 140") &&
@@ -586,13 +586,13 @@ run("fetch = async function(url, opts){"
   + " return window.__fetchBak(url, opts); };");
 run("me = { id: 'USR-ADM', role: 'admin', name: 'Team Admin' }; cartDraft = []; cartSave([]); location.hash = '';");
 run("document.getElementById('cartSearch').value = 'starter'; renderCartPicker();");
-t('v80.8 builder: picker search "starter" surfaces the Starter Replacement @ $225 (and filters the rest out)', elById.get('cartPicker').innerHTML.includes('Starter Replacement') && elById.get('cartPicker').innerHTML.includes('$225') && !elById.get('cartPicker').innerHTML.includes('TV Mounting'));
+t('v80.8 builder: picker search "starter" surfaces the Starter Replacement @ $250 (v80.20 floor; and filters the rest out)', elById.get('cartPicker').innerHTML.includes('Starter Replacement') && elById.get('cartPicker').innerHTML.includes('$250') && !elById.get('cartPicker').innerHTML.includes('TV Mounting'));
 run("builderCartAdd('starter-replacement');");
-t('v80.8 builder: + Add puts the starter in the draft at the $225 catalog floor and paints the line editor', run("cartDraft.length === 1 && cartDraft[0].unitPrice === 225 && cartDraft[0].name === 'Starter Replacement'") === true && elById.get('cartBuilderLines').innerHTML.includes('Starter Replacement'));
+t('v80.8 builder: + Add puts the starter in the draft at the $250 catalog floor (v80.20) and paints the line editor', run("cartDraft.length === 1 && cartDraft[0].unitPrice === 250 && cartDraft[0].name === 'Starter Replacement'") === true && elById.get('cartBuilderLines').innerHTML.includes('Starter Replacement'));
 run("builderCartAdd('starter-replacement');");
 t('v80.8 builder: adding the same service again merges qty (no duplicate line)', run('cartDraft.length === 1 && cartDraft[0].qty === 2') === true);
 run('cartSetQty(0, 1); cartSetPrice(0, 275);');
-t('v80.8 builder: qty + price edits land in the summary — list $275.00 / member $220.00 (the $225-$300 range is his to set)', run('cartDraft[0].qty === 1 && cartDraft[0].unitPrice === 275') === true && elById.get('cartSummary').innerHTML.includes('$275.00') && elById.get('cartSummary').innerHTML.includes('$220.00'));
+t('v80.8 builder: qty + price edits land in the summary — list $275.00 / member $220.00 (the $250-$300 range is his to set)', run('cartDraft[0].qty === 1 && cartDraft[0].unitPrice === 275') === true && elById.get('cartSummary').innerHTML.includes('$275.00') && elById.get('cartSummary').innerHTML.includes('$220.00'));
 run("document.getElementById('cartCustomName').value = 'Materials — serpent belt'; document.getElementById('cartCustomPrice').value = '60'; document.getElementById('cartCustomQty').value = '1'; cartAddCustomLine('other'); cartAddLabor75(); cartAddLabor75();");
 t('v80.8 builder: custom materials + Labor $75 lines — list $485.00 / member $400.00 (materials never discount, labor does)', run('cartDraft.length === 3') === true && elById.get('cartSummary').innerHTML.includes('$485.00') && elById.get('cartSummary').innerHTML.includes('$400.00'));
 run("document.getElementById('cartCustName').value = 'Starter Client'; document.getElementById('cartCustPhone').value = '7075550130'; document.getElementById('cartCustEmail').value = 'starter@client.com'; document.getElementById('cartNote').value = 'Mercedes GLK';");
@@ -1027,10 +1027,11 @@ sandbox.Stripe = function v78StripeFactory(pk) {
 // Scripted backend for the v78 endpoints (everything else delegates).
 const v78Calls = [];
 let v78JoinArmed = false;
-// v78 refine: the stub prices from the posted items (tv/fan are $125 /
-// member $100 — the same figures the canned 375/300 totals came from),
-// so at-checkout edits move the stubbed totals exactly like the server.
-const v78VmPrices = { 'tv-mounting': [125, 100], 'ceiling-fan': [125, 100] };
+// v78 refine: the stub prices from the posted items (tv/fan are $175 /
+// member $140 and $135 / $108 at the v80.20 catalog — the same figures
+// the canned 485/388 totals come from), so at-checkout edits move the
+// stubbed totals exactly like the server.
+const v78VmPrices = { 'tv-mounting': [175, 140], 'ceiling-fan': [135, 108] };
 function v78VmTotals(items){ let list = 0, member = 0; (items || []).forEach(function(it){ const p = v78VmPrices[it.serviceId] || [0, 0]; const q = Math.max(1, Math.round(Number(it.qty) || 1)); list += p[0] * q; member += p[1] * q; }); return { list, member }; }
 const v78Fetch = async (url, opts = {}) => {
   let body = null; try { body = opts && opts.body ? JSON.parse(opts.body) : null; } catch (e) {}
@@ -1062,22 +1063,22 @@ t('v78 cart: adds merge quantity (2x tv + 1x fan = 3 items)', run('cartCount()')
 t('v78 cart: the cart persists in localStorage ghsCart', (run("localStorage.getItem('ghsCart')") || '').includes('tv-mounting') && (run("localStorage.getItem('ghsCart')") || '').includes('ceiling-fan'));
 t('v78 cart: the header badge shows the count', el('cartBadge').textContent === '3' && el('cartBadge').style.display === 'block');
 const calc78 = JSON.parse(run('JSON.stringify(cartCalc())'));
-t('v78 cart math: guest list 375 / member 300 (2x $125 tv + $125 fan, member = x0.8)', calc78.list === 375 && calc78.member === 300 && calc78.savings === 75);
+t('v78 cart math: guest list 485 / member 388 (2x $175 tv + $135 fan at v80.20 prices, member = x0.8)', calc78.list === 485 && calc78.member === 388 && calc78.savings === 97);
 // guest view: BOTH totals + the member total as the savings hook
 run("location.hash = '#cart';"); run('render();');
 const cartHtmlGuest = el('cartLines').innerHTML + el('cartTotals').innerHTML;
-t('v78 cart view: guest sees list total AND member total as the savings hook', cartHtmlGuest.includes('$375') && cartHtmlGuest.includes('$300') && cartHtmlGuest.includes('save $75'));
+t('v78 cart view: guest sees list total AND member total as the savings hook', cartHtmlGuest.includes('$485') && cartHtmlGuest.includes('$388') && cartHtmlGuest.includes('save $97'));
 // verified member: the member price is applied live
 run("me = { id:'USR-V78M', role:'customer', name:'Mem Ber', email:'mem@t.local', homeCareStatus:'active' };"); run('renderCart();');
 const cartHtmlMem = el('cartLines').innerHTML + el('cartTotals').innerHTML;
-t('v78 cart view: a verified member sees the member price applied live', cartHtmlMem.includes('member price is applied') && cartHtmlMem.includes('$300'));
+t('v78 cart view: a verified member sees the member price applied live', cartHtmlMem.includes('member price is applied') && cartHtmlMem.includes('$388'));
 run('me = null;');
 // checkout WITHOUT membership: account fields filled at the END, prepare
 // creates the intent + mounts the Payment Element, pay confirms in-app.
 el('ccName').value = 'Cart Ana'; el('ccEmail').value = 'cartana@t.local'; el('ccPhone').value = '7075550100'; el('ccPass').value = 'cartpass12';
 el('ccAddress').value = '5 Oak St'; el('ccCity').value = 'Fairfield'; el('ccWhenText').value = ''; el('ccNotes').value = '';
 await run('cartPrepare()');
-t('v78 checkout: prepare hits step pay + mounts the Payment Element in-page', v78Calls.length === 1 && v78Calls[0].step === 'pay' && v78PeCreates >= 1 && run('!!cartPayCtx') === true && (el('cartPayBtn').textContent || '').includes('Pay $375'));
+t('v78 checkout: prepare hits step pay + mounts the Payment Element in-page', v78Calls.length === 1 && v78Calls[0].step === 'pay' && v78PeCreates >= 1 && run('!!cartPayCtx') === true && (el('cartPayBtn').textContent || '').includes('Pay $485'));
 await run('cartPayNow()');
 t('v78 checkout: success clears the cart + shows the themed in-app confirmation (no external page)', run("localStorage.getItem('ghsCart')") === '[]' && el('cartDone').style.display === 'block' && (el('cartDone').innerHTML || '').includes('GHS-V78OK') && (el('cartDone').innerHTML || '').includes('Paid in full'));
 t('v78 checkout: rail order is checkout(pay) then checkout-confirm', v78Calls.map(c => c.step).join(',') === 'pay,checkout-confirm');
@@ -1130,17 +1131,17 @@ el('ccJoin').checked = false;
 run('cartShowCheckout();');
 await new Promise(r => setTimeout(r, 20));
 if (!run('!!cartPayCtx')) await run('cartPrepare()');
-t('v78 refine: the checkout summary is EDITABLE — per-line qty + remove controls inside the checkout card', (el('ccLines').innerHTML || '').includes('ccQty(') && (el('ccLines').innerHTML || '').includes('ccRemove(') && (el('ccLines').innerHTML || '').includes('TV Mounting') && (el('cartPayBtn').textContent || '').includes('Pay $250'));
+t('v78 refine: the checkout summary is EDITABLE — per-line qty + remove controls inside the checkout card', (el('ccLines').innerHTML || '').includes('ccQty(') && (el('ccLines').innerHTML || '').includes('ccRemove(') && (el('ccLines').innerHTML || '').includes('TV Mounting') && (el('cartPayBtn').textContent || '').includes('Pay $310'));
 v78Calls.length = 0;
 await run('ccQty(0, 1)');
-t('v78 refine: a qty edit AT CHECKOUT re-quotes with the server + recreates the intent at the NEW total (Pay $375)', v78Calls.some(c => c.step === 'quote') && v78Calls.filter(c => c.step === 'pay').length === 1 && (el('cartPayBtn').textContent || '').includes('Pay $375') && run('cartPayCtx.due') === 375);
+t('v78 refine: a qty edit AT CHECKOUT re-quotes with the server + recreates the intent at the NEW total (Pay $485)', v78Calls.some(c => c.step === 'quote') && v78Calls.filter(c => c.step === 'pay').length === 1 && (el('cartPayBtn').textContent || '').includes('Pay $485') && run('cartPayCtx.due') === 485);
 v78Calls.length = 0;
 await run('ccRemove(1)');
-t('v78 refine: removing a line AT CHECKOUT drops it, re-quotes, and the pay button names the new total (Pay $250)', run('cartCount()') === 2 && v78Calls.some(c => c.step === 'quote') && (el('cartPayBtn').textContent || '').includes('Pay $250') && !(el('ccLines').innerHTML || '').includes('Ceiling Fan'));
+t('v78 refine: removing a line AT CHECKOUT drops it, re-quotes, and the pay button names the new total (Pay $350)', run('cartCount()') === 2 && v78Calls.some(c => c.step === 'quote') && (el('cartPayBtn').textContent || '').includes('Pay $350') && !(el('ccLines').innerHTML || '').includes('Ceiling Fan'));
 run('cartToggleAddMore();');
 t('v78 refine: add-more at checkout opens the catalog picker with Add buttons', el('ccAddList').style.display === 'block' && (el('ccAddList').innerHTML || '').includes('ccAddMore('));
 await run("ccAddMore('ceiling-fan')");
-t('v78 refine: add-more adds the service WITHOUT losing the typed checkout data (account, address, when, notes preserved)', el('ccName').value === 'Edit Eve' && el('ccEmail').value === 'eve@t.local' && el('ccAddress').value === '12 Vine St' && el('ccWhenText').value === 'after 3 PM' && el('ccNotes').value === 'gate 42' && run('cartCount()') === 3 && (el('cartPayBtn').textContent || '').includes('Pay $375'));
+t('v78 refine: add-more adds the service WITHOUT losing the typed checkout data (account, address, when, notes preserved)', el('ccName').value === 'Edit Eve' && el('ccEmail').value === 'eve@t.local' && el('ccAddress').value === '12 Vine St' && el('ccWhenText').value === 'after 3 PM' && el('ccNotes').value === 'gate 42' && run('cartCount()') === 3 && (el('cartPayBtn').textContent || '').includes('Pay $485'));
 await run('ccRemove(0)');
 await run('ccRemove(0)');
 t('v78 refine: removing the LAST item at checkout exits gracefully — checkout card hidden, empty state up, no payment surface, no stale intent', el('cartCheckoutCard').style.display === 'none' && el('cartEmpty').style.display === 'block' && run('cartPayCtx === null') === true && (el('cartPayElement').innerHTML || '') === '' && run('cartCount()') === 0);
@@ -2251,15 +2252,15 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const su = await req2('POST', '/api/signup', { body: { name: 'Menu Orderer', email: 'menuorderer@test.com', password: 'password123', phone: '7075550100', serviceAddress: '10 Menu St, Fairfield, CA', role: 'customer' } });
   t('v32 signup for menu checkout works', su.status === 201 && !!su.j.token);
   const TK = su.j.token;
-  const mk = await req2('POST', '/api/requests', { token: TK, body: { service: 'TV Mounting (up to 65")', description: 'TV Mounting — ordered from the menu.', address: '10 Menu St', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder: { serviceId: 'tv-mounting', extras: [{ name: 'Hide the cables (surface raceway)', price: 50 }], asap: false, joinedMembership: false, totals: { list: 175, member: 140, due: 175 } } } });
+  const mk = await req2('POST', '/api/requests', { token: TK, body: { service: 'TV Mounting (up to 65")', description: 'TV Mounting — ordered from the menu.', address: '10 Menu St', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder: { serviceId: 'tv-mounting', extras: [{ name: 'Hide the cables (surface raceway)', price: 50 }], asap: false, joinedMembership: false, totals: { list: 225, member: 180, due: 225 } } } });
   t('v32 menu request created (not estimate-priced)', mk.status === 201 && mk.j.request.estimateType === 'menu');
-  t('v32 menu request keeps the structured menuOrder', !!(mk.j.request.menuOrder && mk.j.request.menuOrder.totals.due === 175 && mk.j.request.menuOrder.extras.length === 1));
+  t('v32 menu request keeps the structured menuOrder', !!(mk.j.request.menuOrder && mk.j.request.menuOrder.totals.due === 225 && mk.j.request.menuOrder.extras.length === 1));
   const rid = mk.j.request.id;
   const gone = await req2('POST', '/api/orders/hold', { token: TK, body: { requestId: rid } });
   t('v44 the old $75 hold endpoint is gone (404)', gone.status === 404);
   const pay = await req2('POST', '/api/orders/pay', { token: TK, body: { requestId: rid } });
   const piRec = stripeState.pis[pay.j.paymentIntentId];
-  t('v44 menu pay PI charges the FULL total with automatic capture (no hold, no manual capture)', pay.status === 200 && !!pay.j.clientSecret && pay.j.amount === 175 && !!piRec && piRec.amount === 17500 && piRec.capture_method === 'automatic' && piRec.metadata.kind === 'menu-order');
+  t('v44 menu pay PI charges the FULL total with automatic capture (no hold, no manual capture)', pay.status === 200 && !!pay.j.clientSecret && pay.j.amount === 225 && !!piRec && piRec.amount === 22500 && piRec.capture_method === 'automatic' && piRec.metadata.kind === 'menu-order');
   const earlyConf = await req2('POST', '/api/orders/pay-confirm', { token: TK, body: { requestId: rid, paymentIntentId: pay.j.paymentIntentId } });
   t('v44 pay-confirm refuses before the charge completes', earlyConf.status === 400);
   await mockPiStatus(pay.j.paymentIntentId, 'succeeded'); // real Stripe lands here after confirmCardPayment
@@ -2267,7 +2268,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v44 menu pay-confirm records the payment', conf.status === 200 && conf.j.ok === true);
   const mine = await req2('GET', '/api/requests', { token: TK });
   const myReq = (mine.j.requests || []).find(x => x.id === rid);
-  t('v44 payment is on the request (paid in full, 17500, zero holds)', !!(myReq && myReq.payment && myReq.payment.status === 'paid' && myReq.payment.amountCents === 17500 && !(myReq.holds || []).length));
+  t('v44 payment is on the request (paid in full, 22500, zero holds)', !!(myReq && myReq.payment && myReq.payment.status === 'paid' && myReq.payment.amountCents === 22500 && !(myReq.holds || []).length));
   const pay2 = await req2('POST', '/api/orders/pay', { token: TK, body: { requestId: rid } });
   t('v44 a second payment on a paid order is refused', pay2.status === 400);
   const su2 = await req2('POST', '/api/signup', { body: { name: 'Other Person', email: 'otherperson@test.com', password: 'password123', role: 'customer' } });
@@ -2314,7 +2315,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 master<->catalog: all 98 service prices identical to the master list, post-cut', rows43.length === 98 && priceBad43.length === 0);
   const memBad43 = Object.entries(cat43).filter(([id, c]) => c.member !== Math.round(c.price * 0.8));
   t('v43 catalog: member == round(price x 0.8) for ALL 98 entries — oil/junk/green included, zero member:null left', Object.keys(cat43).length === 98 && memBad43.length === 0);
-  t('v43 master: the $135 tier is gone from the service tables', !/^\| [^|]*\| \$135 \|/m.test(masterSrc43));
+  t('v43 master: the $135 tier is gone from the service tables (v80.20 supersedes: $135 is BACK as exactly the approved 1.5h block — 17 table rows, Gabriel 2026-11-01)', (masterSrc43.match(/^\| [^|]*\| \$135 \|/gm) || []).length === 17);
   const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]] };
   const addonBad43 = [];
   for (const [sid, pairs] of Object.entries(ADDONS43)) {
@@ -2337,24 +2338,24 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 web (superseded by v72 W-1): the homepage demo sample-order bar is REMOVED — no Sample order / View · $250 / cartbar anywhere', !webIndex43.includes('Sample order') && !webIndex43.includes('View · $250') && !webIndex43.includes('cartbar'));
   t('v79 web: service.html is RETIRED (P0-5) — a themed redirect to the app; the fake demo page is gone', webService43.includes('http-equiv="refresh"') && webService43.includes('https://app.generalhandymans.app/') && !webService43.includes('bigPrice') && !webService43.includes('let base = 125'));
   t('v79 web: service.html carries no prices or demo checkout at all (redirect stub)', !webService43.includes('$135') && !webService43.includes('data-price='));
-  t('v43 zero-$135 proof: no $135 service price survives on any customer surface (app, server, homepage, checkout, tracking)', !htmlSrc.includes('$135') && !serverSrc.includes('$135') && !webIndex43.includes('$135') && !webCheckout43.includes('$135') && !fs.readFileSync(path.join(ROOT43, 'tracking.html'), 'utf8').includes('$135'));
+  t('v43 zero-$135 proof (v80.20 supersedes the app half: Gabriel restored $135 as the 1.5h block) — in app+server $135 exists ONLY as the 17 block entries at member $108; the website surfaces (homepage, checkout, tracking) still carry no $135', (htmlSrc.match(/price: 135, member: 108/g) || []).length === 17 && (serverSrc.match(/\{p:135,m:108/g) || []).length === 17 && !webIndex43.includes('$135') && !webCheckout43.includes('$135') && !fs.readFileSync(path.join(ROOT43, 'tracking.html'), 'utf8').includes('$135'));
   t('v43 zero-$135 proof: the 6 city pages carry no $135 either', ['handyman-fairfield', 'handyman-vacaville', 'handyman-vallejo', 'tv-mounting-vacaville', 'mobile-mechanic-vallejo', 'plumber-fairfield'].every(d => !fs.readFileSync(path.join(ROOT43, d, 'index.html'), 'utf8').includes('$135')));
   t('v79 web: checkout.html is RETIRED (P0-5) — a themed redirect to the app; the fake demo checkout is gone', webCheckout43.includes('http-equiv="refresh"') && webCheckout43.includes('https://app.generalhandymans.app/') && !webCheckout43.includes('Continue to secure checkout'));
   // Client totals in the VM (v79: through the CART — the #order page and
   // orderTotalsCalc are retired; cartCalc carries the same catalog math).
   run("location.hash = ''; me = null;"); run('render();');
   run("cartSave([]); cartAdd('oil-change');");
-  t('v43 totals (v79 cart): oil change — list $75 / member $60 (the $75 flats are discounted)', run('cartCalc().list') === 75 && run('cartCalc().member') === 60);
+  t('v43 totals (v79 cart): oil change — list $85 / member $68 (v80.20: the flat tier rose $75->$85 and is still discounted)', run('cartCalc().list') === 85 && run('cartCalc().member') === 68);
   run("cartSave([]); cartAdd('junk-minimum');");
-  t('v43 totals (v79 cart): junk minimum load — member pays $180 (was excluded)', run('cartCalc().list') === 225 && run('cartCalc().member') === 180);
+  t('v43 totals (v79 cart): junk minimum load — member pays $200 (v80.20: minimum rose $225->$250)', run('cartCalc().list') === 250 && run('cartCalc().member') === 200);
   run("cartSave([]); cartAdd('junk-full');");
   t('v43 totals (v79 cart): junk full load — member pays $520', run('cartCalc().member') === 520);
   run("cartSave([]); cartAdd('green-waste');");
-  t('v43 totals (v79 cart): green waste — member pays $180 (was excluded)', run('cartCalc().member') === 180);
+  t('v43 totals (v79 cart): green waste — member pays $200 (v80.20: hauling rose $225->$250)', run('cartCalc().member') === 200);
   run("cartSave([]); cartAddWithAddons('tv-mounting', ['raceway']);");
-  t('v43 totals (v79 cart): TV + raceway — list $175, member $100 + $40 (raceway discounted) = $140', run('cartCalc().list') === 175 && run('cartCalc().member') === 140);
+  t('v43 totals (v79 cart): TV + raceway — list $225, member $140 + $40 (raceway discounted) = $180 (v80.20: TV rose $125->$175)', run('cartCalc().list') === 225 && run('cartCalc().member') === 180);
   run("cartSave([]); cartAddWithAddons('toilet-replacement', ['haul-toilet']);");
-  t('v43 totals (v79 cart): haul-toilet ADD-ON keeps its nodisc — member pays $140 + $50 = $190', run('cartCalc().member') === 190);
+  t('v43 totals (v79 cart): haul-toilet ADD-ON keeps its nodisc — member pays $172 + $50 = $222 (v80.20: toilet rose $175->$215)', run('cartCalc().member') === 222);
   run("cartSave([]); location.hash = ''; me = null;"); run('render();');
 }
 
@@ -2516,17 +2517,19 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v44 cart: the admin list shows carts with their statuses', cartList.status === 200 && (cartList.j.carts || []).some(x => x.id === cartId && x.status === 'paid') && (cartList.j.carts || []).some(x => x.id === cart4.j.cart.id && x.status === 'cancelled'));
 
   // --- v80.8 builder hardening (API): the starter quote Gabriel actually
-  // tried to send — created at the $225 catalog floor, the deposit law on
-  // the public page + at guest checkout, and a price edit inside the
-  // $225-$300 range. Plus the server fact behind the builder's new
+  // tried to send — created at the catalog floor ($250 since v80.20; the
+  // builder posts the floor and the cart trusts his typed price), the
+  // deposit law on the public page + at guest checkout, and a price edit
+  // inside the $250-$300 range. Plus the server fact behind the
+  // builder's new
   // blank-name guard: the item filter drops nameless lines silently. ---
-  const cartStarter = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 225 }], customerName: 'Starter Client', customerEmail: 'starter@client.com' } });
-  t('v80.8 builder: the starter cart is created at the $225 floor (list $225 / member $180, one CRT link)', cartStarter.status === 201 && cartStarter.j.cart.listTotal === 225 && cartStarter.j.cart.memberTotal === 180 && /^CRT-/.test(cartStarter.j.cart.id) && cartStarter.j.cart.link.includes('/cart/' + cartStarter.j.cart.id));
+  const cartStarter = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 250 }], customerName: 'Starter Client', customerEmail: 'starter@client.com' } });
+  t('v80.8 builder: the starter cart is created at the $250 floor (list $250 / member $200, one CRT link)', cartStarter.status === 201 && cartStarter.j.cart.listTotal === 250 && cartStarter.j.cart.memberTotal === 200 && /^CRT-/.test(cartStarter.j.cart.id) && cartStarter.j.cart.link.includes('/cart/' + cartStarter.j.cart.id));
   const pageStarter = await (await fetch(BASE2 + '/cart/' + cartStarter.j.cart.id)).text();
-  t('v80.8 builder: the public starter page shows $225.00 with the $50 flat deposit + $175.00 balance', pageStarter.includes('Starter Replacement') && pageStarter.includes('$225.00') && pageStarter.includes('$50.00') && pageStarter.includes('$175.00'));
+  t('v80.8 builder: the public starter page shows $250.00 with the $50 flat deposit + $200.00 balance', pageStarter.includes('Starter Replacement') && pageStarter.includes('$250.00') && pageStarter.includes('$50.00') && pageStarter.includes('$200.00'));
   const cpStarter = await req2('POST', '/api/carts/' + cartStarter.j.cart.id + '/checkout', { body: { name: 'Starter Client', phone: '7075550130', email: 'starter@client.com', address: '9 Wrench Way', city: 'Fairfield', when: 'Today' } });
   const sessStarter = sessionForCart(cartStarter.j.cart.id, 'payment');
-  t('v80.8 builder: guest checkout on the $225 starter charges ONLY the $50 deposit (session 5000, balance $175)', cpStarter.status === 200 && cpStarter.j.amount === 50 && cpStarter.j.deposit === 50 && cpStarter.j.balance === 175 && cpStarter.j.total === 225 && !!sessStarter && sessStarter.amount_total === 5000);
+  t('v80.8 builder: guest checkout on the $250 starter charges ONLY the $50 deposit (session 5000, balance $200)', cpStarter.status === 200 && cpStarter.j.amount === 50 && cpStarter.j.deposit === 50 && cpStarter.j.balance === 200 && cpStarter.j.total === 250 && !!sessStarter && sessStarter.amount_total === 5000);
   const cartStarter275 = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: 'Starter Replacement', qty: 1, unitPrice: 275 }] } });
   t('v80.8 builder: a builder price edit inside the range holds server-side (list $275 / member $220)', cartStarter275.status === 201 && cartStarter275.j.cart.listTotal === 275 && cartStarter275.j.cart.memberTotal === 220);
   const cartBlank = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'starter-replacement', name: '', qty: 1, unitPrice: 225 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }] } });
@@ -2918,17 +2921,17 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const menuPost = (tk, menuOrder) => req2('POST', '/api/requests', { token: tk, body: { service: 'Menu order', description: 'audit', address: '9 Audit Way', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder } });
   const tkG = await mkCust46('audit-guest@t.local');
   const tamp = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 1, member: 1, due: 1 } });
-  t('v46 audit: a $1 tampered total is recomputed to the catalog $125 + flagged', tamp.status === 201 && tamp.j.request.menuOrder.totals.due === 125 && tamp.j.request.menuOrder.totalsCorrected === true && tamp.j.request.menuOrder.clientDue === 1);
+  t('v46 audit: a $1 tampered total is recomputed to the catalog $165 (v80.20) + flagged', tamp.status === 201 && tamp.j.request.menuOrder.totals.due === 165 && tamp.j.request.menuOrder.totalsCorrected === true && tamp.j.request.menuOrder.clientDue === 1);
   const tampPay = await req2('POST', '/api/orders/pay', { token: tkG, body: { requestId: tamp.j.request.id } });
-  t('v46 audit: payment charges the RECOMPUTED $125.00, not the tampered $1', tampPay.status === 200 && stripeState.pis[tampPay.j.paymentIntentId] && stripeState.pis[tampPay.j.paymentIntentId].amount === 12500);
-  const honest = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 125, member: 100, due: 125 } });
-  t('v46 audit: honest totals pass through uncorrected', honest.status === 201 && honest.j.request.menuOrder.totals.due === 125 && !honest.j.request.menuOrder.totalsCorrected);
+  t('v46 audit: payment charges the RECOMPUTED $165.00, not the tampered $1', tampPay.status === 200 && stripeState.pis[tampPay.j.paymentIntentId] && stripeState.pis[tampPay.j.paymentIntentId].amount === 16500);
+  const honest = await menuPost(tkG, { serviceId: 'garbage-disposal-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 165, member: 132, due: 165 } });
+  t('v46 audit: honest totals pass through uncorrected', honest.status === 201 && honest.j.request.menuOrder.totals.due === 165 && !honest.j.request.menuOrder.totalsCorrected);
   const badSvc = await menuPost(tkG, { serviceId: 'not-a-service', extras: [], asap: false, joinedMembership: false, totals: { list: 1, member: 1, due: 1 } });
   t('v46 audit: unknown service id is rejected (400)', badSvc.status === 400);
   const badAdd = await menuPost(tkG, { serviceId: 'toilet-replacement', extras: [{ id: 'free-stuff', name: 'Free stuff', price: 0 }], asap: false, joinedMembership: false, totals: { list: 250, member: 200, due: 250 } });
   t('v46 audit: unknown add-on id is rejected (400) — no invented extras', badAdd.status === 400);
   const staleAdd = await menuPost(tkG, { serviceId: 'toilet-replacement', extras: [{ name: 'Remove & haul away the old toilet', price: 9999 }], asap: false, joinedMembership: false, totals: { list: 1, member: 1, due: 1 } });
-  t('v46 audit: stale client add-on resolves BY NAME at the catalog $50 (nodisc) — due $225 ($175 + $50), not $9,999', staleAdd.status === 201 && staleAdd.j.request.menuOrder.totals.due === 225 && staleAdd.j.request.menuOrder.extras[0].price === 50);
+  t('v46 audit: stale client add-on resolves BY NAME at the catalog $50 (nodisc) — due $265 ($215 toilet at v80.20 + $50), not $9,999', staleAdd.status === 201 && staleAdd.j.request.menuOrder.totals.due === 265 && staleAdd.j.request.menuOrder.extras[0].price === 50);
   const asapOrd = await menuPost(tkG, { serviceId: 'water-heater', extras: [], asap: true, joinedMembership: false, totals: { list: 700, member: 560, due: 700 } });
   t('v46 audit: ASAP on a guest charges list + 25% ($700 -> $875)', asapOrd.status === 201 && asapOrd.j.request.menuOrder.totals.due === 875 && asapOrd.j.request.menuOrder.totals.asapFee === 175);
   // member status comes from the SERVER, and a bare joinedMembership flag grants nothing
@@ -3032,7 +3035,7 @@ t('v24 A3: Resend failure does NOT break the capture (still 200)', cap4.status =
   const fo = await req2('POST', '/api/signup', { body: { name: 'First Order', email: 'firstorder@test.com', password: 'password123', phone: '7075550111', serviceAddress: '22 First St, Fairfield, CA', role: 'customer' } });
   t('v33 E2E: new customer signup', fo.status === 201 && !!fo.j.token);
   const FT = fo.j.token;
-  const foReq = await req2('POST', '/api/requests', { token: FT, body: { service: 'Faucet Replacement', description: 'Faucet Replacement — ordered from the menu.', address: '22 First St', city: 'Fairfield', when: 'Tomorrow', estimateType: 'menu', menuOrder: { serviceId: 'faucet-replacement', extras: [], asap: false, joinedMembership: false, totals: { list: 125, member: 100, due: 125 } } } });
+  const foReq = await req2('POST', '/api/requests', { token: FT, body: { service: 'Faucet Replacement', description: 'Faucet Replacement — ordered from the menu.', address: '22 First St', city: 'Fairfield', when: 'Tomorrow', estimateType: 'menu', menuOrder: { serviceId: 'faucet-replacement', extras: [], asap: false, joinedMembership: false, totals: { list: 135, member: 108, due: 135 } } } });
   t('v33 E2E: first menu order created', foReq.status === 201 && foReq.j.request.estimateType === 'menu');
   const frid = foReq.j.request.id;
   const admList = await req2('GET', '/api/requests', { token: A2B });
@@ -3045,10 +3048,10 @@ t('v24 A3: Resend failure does NOT break the capture (still 200)', cap4.status =
   const foPay = await req2('POST', '/api/orders/pay', { token: FT, body: { requestId: frid } });
   await mockPiStatus(foPay.j.paymentIntentId, 'succeeded');
   const foConf = await req2('POST', '/api/orders/pay-confirm', { token: FT, body: { requestId: frid, paymentIntentId: foPay.j.paymentIntentId } });
-  t('v33 E2E: first order paid in full at checkout (v44 rails)', foPay.status === 200 && foPay.j.amount === 125 && foConf.status === 200 && foConf.j.ok === true);
+  t('v33 E2E: first order paid in full at checkout (v44 rails)', foPay.status === 200 && foPay.j.amount === 135 && foConf.status === 200 && foConf.j.ok === true);
   const foMine = await req2('GET', '/api/requests', { token: FT });
   const foPaid = (foMine.j.requests || []).find(x => x.id === frid);
-  t('v33 E2E: the paid-in-full payment shows on the customer order', !!foPaid && !!foPaid.payment && foPaid.payment.status === 'paid' && foPaid.payment.amountCents === 12500);
+  t('v33 E2E: the paid-in-full payment shows on the customer order', !!foPaid && !!foPaid.payment && foPaid.payment.status === 'paid' && foPaid.payment.amountCents === 13500);
   const auditList = await req2('GET', '/api/admin/audit', { token: A2B });
   const acts = (auditList.j.entries || []).map(e => e.action + '|' + e.target);
   t('v33 audit: admin actions are in the security log', acts.includes('request.update|' + frid));
@@ -3879,14 +3882,14 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const adminReqs78 = async () => (await req2('GET', '/api/requests', { token: A78 })).j.requests || [];
   // quote: display pricing from the server catalog — guest vs member
   const qGuest = await req2('POST', '/api/cart/quote', { body: { items: items78 } });
-  t('v78 quote: guest gets list 250 / member 200 / due 250 from SERVER_MENU', qGuest.status === 200 && qGuest.j.member === false && qGuest.j.totals.list === 250 && qGuest.j.totals.member === 200 && qGuest.j.totals.due === 250);
+  t('v78 quote: guest gets list 310 / member 248 / due 310 from SERVER_MENU (v80.20 prices)', qGuest.status === 200 && qGuest.j.member === false && qGuest.j.totals.list === 310 && qGuest.j.totals.member === 248 && qGuest.j.totals.due === 310);
   const qBad = await req2('POST', '/api/cart/quote', { body: { items: [{ serviceId: 'not-a-service', qty: 1, addons: [] }] } });
   t('v78 quote: an unknown service id is refused (400), never priced by guess', qBad.status === 400);
   // guest checkout, NO membership: account created at the END, a
   // tampered client total is ignored, and P0-4 — NO order exists
   // until the payment verifies.
   const coGuest = await req2('POST', '/api/cart/checkout', { body: { name: 'Cart Guest', email: 'cartguest@t.local', phone: '7075550178', password: 'guestpass1', address: '9 Pine St', city: 'Fairfield', when: 'Today', notes: '', items: items78, totals: { due: 1 } } });
-  t('v78 checkout: guest step pay returns an intent + the SERVER total 250 (tampered $1 ignored) + the new account', coGuest.status === 200 && coGuest.j.step === 'pay' && !!coGuest.j.clientSecret && !!coGuest.j.checkoutId && coGuest.j.totals.due === 250 && coGuest.j.user.email === 'cartguest@t.local');
+  t('v78 checkout: guest step pay returns an intent + the SERVER total 310 (tampered $1 ignored) + the new account', coGuest.status === 200 && coGuest.j.step === 'pay' && !!coGuest.j.clientSecret && !!coGuest.j.checkoutId && coGuest.j.totals.due === 310 && coGuest.j.user.email === 'cartguest@t.local');
   t('v78 P0-4: the intent exists but NO order was created before verified payment', (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 0);
   const cgTok = (await req2('POST', '/api/login', { body: { email: 'cartguest@t.local', password: 'guestpass1' } })).j.token;
   const confEarly = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
@@ -3894,7 +3897,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coGuest.j.paymentIntentId, 'succeeded');
   const confOk = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
   const orderGuest = (await adminReqs78()).find(r => r.id === (confOk.j && confOk.j.requestId));
-  t('v78 checkout (v79 deposit law): the verified DEPOSIT creates the order — DEPOSIT state ($50 of $250 in, $200 balance), cart lines attached', confOk.status === 200 && !!orderGuest && orderGuest.payment && orderGuest.payment.status === 'deposit' && orderGuest.payment.amountCents === 5000 && orderGuest.payment.balanceCents === 20000 && orderGuest.menuOrder.cart === true && orderGuest.menuOrder.totals.due === 250 && orderGuest.menuOrder.items.length === 2);
+  t('v78 checkout (v79 deposit law): the verified DEPOSIT creates the order — DEPOSIT state ($124 of $310 in, $186 balance; >$300 total = 40% tier), cart lines attached', confOk.status === 200 && !!orderGuest && orderGuest.payment && orderGuest.payment.status === 'deposit' && orderGuest.payment.amountCents === 12400 && orderGuest.payment.balanceCents === 18600 && orderGuest.menuOrder.cart === true && orderGuest.menuOrder.totals.due === 310 && orderGuest.menuOrder.items.length === 2);
   const confAgain = await req2('POST', '/api/cart/checkout-confirm', { token: cgTok, body: { checkoutId: coGuest.j.checkoutId, paymentIntentId: coGuest.j.paymentIntentId } });
   t('v78 checkout: re-confirm is idempotent (same order id, no duplicate)', confAgain.status === 200 && confAgain.j.requestId === confOk.j.requestId && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coGuest.j.checkoutId).length === 1);
   // existing email: wrong password refused (inline login), right one continues
@@ -3908,13 +3911,13 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockActivate(subM78.j.subscriptionId);
   const confM78 = await req2('POST', '/api/stripe/homecare-confirm', { token: mm78.token, body: {} });
   const qMem = await req2('POST', '/api/cart/quote', { token: mm78.token, body: { items: items78 } });
-  t('v78 quote: a verified member gets member=true and due = 200', confM78.j.active === true && qMem.status === 200 && qMem.j.member === true && qMem.j.totals.due === 200);
+  t('v78 quote: a verified member gets member=true and due = 248', confM78.j.active === true && qMem.status === 200 && qMem.j.member === true && qMem.j.totals.due === 248);
   const coMem = await req2('POST', '/api/cart/checkout', { token: mm78.token, body: { address: '3 Elm St', city: 'Fairfield', items: items78 } });
-  t('v78 checkout: member pays the MEMBER total (200), no account step needed', coMem.status === 200 && coMem.j.step === 'pay' && coMem.j.totals.due === 200);
+  t('v78 checkout: member pays the MEMBER total (248), no account step needed', coMem.status === 200 && coMem.j.step === 'pay' && coMem.j.totals.due === 248);
   // optional membership branch: join first (subscription rails), the
   // activation lands, THEN the order charges at the member total.
   const coJoin = await req2('POST', '/api/cart/checkout', { body: { step: 'join', name: 'Join Jenna', email: 'joiner@t.local', phone: '7075550180', password: 'joinpass12', address: '4 Birch St', city: 'Vacaville', items: items78 } });
-  t('v78 join: step join returns a subscription secret + member-priced preview (200), still NO order', coJoin.status === 200 && coJoin.j.step === 'join' && !!coJoin.j.clientSecret && coJoin.j.totals.due === 200);
+  t('v78 join: step join returns a subscription secret + member-priced preview (248), still NO order', coJoin.status === 200 && coJoin.j.step === 'join' && !!coJoin.j.clientSecret && coJoin.j.totals.due === 248);
   const jTok = (await req2('POST', '/api/login', { body: { email: 'joiner@t.local', password: 'joinpass12' } })).j.token;
   await mockActivate(coJoin.j.subscriptionId);
   const jConf = await req2('POST', '/api/stripe/homecare-confirm', { token: jTok, body: {} });
@@ -3922,12 +3925,12 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coJoinPay.j.paymentIntentId, 'succeeded');
   const jDone = await req2('POST', '/api/cart/checkout-confirm', { token: jTok, body: { checkoutId: coJoinPay.j.checkoutId, paymentIntentId: coJoinPay.j.paymentIntentId } });
   const jOrder = (await adminReqs78()).find(r => r.id === (jDone.j && jDone.j.requestId));
-  t('v78 join: after activation the order charges the MEMBER total and records joinedMembership', jConf.j.active === true && coJoinPay.status === 200 && coJoinPay.j.totals.due === 200 && jDone.status === 200 && !!jOrder && jOrder.menuOrder.joinedMembership === true && jOrder.payment.status === 'deposit');
+  t('v78 join: after activation the order charges the MEMBER total and records joinedMembership', jConf.j.active === true && coJoinPay.status === 200 && coJoinPay.j.totals.due === 248 && jDone.status === 200 && !!jOrder && jOrder.menuOrder.joinedMembership === true && jOrder.payment.status === 'deposit');
   // webhook parity: the tab dies after paying — the order is born from
   // payment_intent.succeeded with kind 'cart-checkout', exactly once.
   const coHook = await req2('POST', '/api/cart/checkout', { body: { name: 'Hook Hank', email: 'hook@t.local', phone: '7075550181', password: 'hookpass12', address: '8 Cedar St', city: 'Napa', items: items78 } });
   await mockPiStatus(coHook.j.paymentIntentId, 'succeeded');
-  const whPayload78 = JSON.stringify({ id: 'evt_wh_cart78', type: 'payment_intent.succeeded', data: { object: { id: coHook.j.paymentIntentId, amount: 5000, amount_received: 5000, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coHook.j.checkoutId, userId: coHook.j.user.id } } } });
+  const whPayload78 = JSON.stringify({ id: 'evt_wh_cart78', type: 'payment_intent.succeeded', data: { object: { id: coHook.j.paymentIntentId, amount: 12400, amount_received: 12400, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coHook.j.checkoutId, userId: coHook.j.user.id } } } });
   const whTs78 = Math.floor(Date.now() / 1000);
   const whSig78 = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(whTs78 + '.' + whPayload78, 'utf8').digest('hex');
   const whRes78 = await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + whTs78 + ',v1=' + whSig78 }, body: whPayload78 });
@@ -3939,10 +3942,10 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const edItems1 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }];
   const edItems2 = edItems1.concat([{ serviceId: 'ceiling-fan', name: 'Ceiling Fan Install', qty: 1, addons: [] }]);
   const coEd1 = await req2('POST', '/api/cart/checkout', { body: { name: 'Edit Ed', email: 'edited@t.local', phone: '7075550182', password: 'editpass12', address: '2 Ash St', city: 'Fairfield', items: edItems1 } });
-  t('v78 refine: the first checkout prices the cart as built (125)', coEd1.status === 200 && coEd1.j.totals.due === 125 && !!coEd1.j.paymentIntentId);
+  t('v78 refine: the first checkout prices the cart as built (175)', coEd1.status === 200 && coEd1.j.totals.due === 175 && !!coEd1.j.paymentIntentId);
   const edTok = (await req2('POST', '/api/login', { body: { email: 'edited@t.local', password: 'editpass12' } })).j.token;
   const coEd2 = await req2('POST', '/api/cart/checkout', { token: edTok, body: { address: '2 Ash St', city: 'Fairfield', items: edItems2 } });
-  t('v78 refine: re-checkout after the at-checkout edit prices the EDITED cart (250) under a NEW checkout id', coEd2.status === 200 && coEd2.j.checkoutId !== coEd1.j.checkoutId && coEd2.j.totals.due === 250);
+  t('v78 refine: re-checkout after the at-checkout edit prices the EDITED cart (310) under a NEW checkout id', coEd2.status === 200 && coEd2.j.checkoutId !== coEd1.j.checkoutId && coEd2.j.totals.due === 310);
   await mockPiStatus(coEd1.j.paymentIntentId, 'succeeded');
   const confStale = await req2('POST', '/api/cart/checkout-confirm', { token: edTok, body: { checkoutId: coEd1.j.checkoutId, paymentIntentId: coEd1.j.paymentIntentId } });
   t('v78 refine: the STALE checkout can never settle — confirm refused (superseded), no order at the old total', confStale.status === 400 && /replaced by a newer one/.test(confStale.j.error || '') && (await adminReqs78()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coEd1.j.checkoutId).length === 0);
@@ -3954,7 +3957,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   await mockPiStatus(coEd2.j.paymentIntentId, 'succeeded');
   const confEd = await req2('POST', '/api/cart/checkout-confirm', { token: edTok, body: { checkoutId: coEd2.j.checkoutId, paymentIntentId: coEd2.j.paymentIntentId } });
   const edOrder = (await adminReqs78()).find(r => r.id === (confEd.j && confEd.j.requestId));
-  t('v78 refine (v79): the EDITED checkout settles at the EDITED total — order booked on its deposit, both lines, $250', confEd.status === 200 && !!edOrder && edOrder.payment.status === 'deposit' && edOrder.menuOrder.totals.due === 250 && edOrder.menuOrder.items.length === 2);
+  t('v78 refine (v79): the EDITED checkout settles at the EDITED total — order booked on its deposit, both lines, $310', confEd.status === 200 && !!edOrder && edOrder.payment.status === 'deposit' && edOrder.menuOrder.totals.due === 310 && edOrder.menuOrder.items.length === 2);
   const cbBeforeE = await customersByEmail();
   const coEmpty = await req2('POST', '/api/cart/checkout', { body: { name: 'Empty Eve', email: 'empty@t.local', password: 'emptypass1', address: '1 Void St', items: [] } });
   const cbAfterE = await customersByEmail();
@@ -4012,18 +4015,18 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   // --- PIEZA 8: the self-serve cart books at the deposit + collects its balance ---
   const tvOnly = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }];
   const coB = await req2('POST', '/api/cart/checkout', { body: { name: 'Balance Bea', email: 'balance@t.local', phone: '7075550132', password: 'balance12', address: '9 Bal St', city: 'Fairfield', when: 'Today', items: tvOnly } });
-  t('v79 cart checkout: the pay step prices the DEPOSIT ($125 -> $50 today, $75 balance)', coB.status === 200 && coB.j.totals.due === 125 && coB.j.totals.deposit === 50 && coB.j.totals.balance === 75);
+  t('v79 cart checkout: the pay step prices the DEPOSIT ($175 -> $50 today, $125 balance)', coB.status === 200 && coB.j.totals.due === 175 && coB.j.totals.deposit === 50 && coB.j.totals.balance === 125);
   const balTok = (await req2('POST', '/api/login', { body: { email: 'balance@t.local', password: 'balance12' } })).j.token;
   await mockPiStatus(coB.j.paymentIntentId, 'succeeded');
   const confB = await req2('POST', '/api/cart/checkout-confirm', { token: balTok, body: { checkoutId: coB.j.checkoutId, paymentIntentId: coB.j.paymentIntentId } });
   const ordB = (await admReqs79()).find(r => r.id === (confB.j && confB.j.requestId));
-  t('v79 cart checkout: the order is born in DEPOSIT state ($50 of $125, balance $75) — NOT paid in full', confB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 7500 && ordB.payment.totalCents === 12500);
+  t('v79 cart checkout: the order is born in DEPOSIT state ($50 of $175, balance $125) — NOT paid in full', confB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 12500 && ordB.payment.totalCents === 17500);
   const payB = await req2('POST', '/api/orders/pay', { token: balTok, body: { requestId: ordB.id } });
-  t('v79 balance path: /api/orders/pay on a DEPOSIT order charges ONLY the balance ($75)', payB.status === 200 && payB.j.amount === 75 && !!payB.j.clientSecret);
+  t('v79 balance path: /api/orders/pay on a DEPOSIT order charges ONLY the balance ($125)', payB.status === 200 && payB.j.amount === 125 && !!payB.j.clientSecret);
   await mockPiStatus(payB.j.paymentIntentId, 'succeeded');
   const confBal = await req2('POST', '/api/orders/pay-confirm', { token: balTok, body: { requestId: ordB.id, paymentIntentId: payB.j.paymentIntentId } });
   const ordB2 = (await admReqs79()).find(r => r.id === ordB.id);
-  t('v79 balance path: pay-confirm flips DEPOSIT -> PAID IN FULL keeping both legs ($50 deposit + $75 balance = $125)', confBal.status === 200 && !!ordB2 && ordB2.payment.status === 'paid' && ordB2.payment.amountCents === 12500 && ordB2.payment.depositCents === 5000 && ordB2.payment.balancePi === payB.j.paymentIntentId);
+  t('v79 balance path: pay-confirm flips DEPOSIT -> PAID IN FULL keeping both legs ($50 deposit + $125 balance = $175)', confBal.status === 200 && !!ordB2 && ordB2.payment.status === 'paid' && ordB2.payment.amountCents === 17500 && ordB2.payment.depositCents === 5000 && ordB2.payment.balancePi === payB.j.paymentIntentId);
 
   // --- P0-1: the captain never sees the customer's charged total ---
   const capSlice = serverSrc.slice(serverSrc.indexOf("p === '/api/me/captain'"), serverSrc.indexOf("p === '/api/me/captain'") + 1600);
@@ -4275,7 +4278,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   const items801 = [
     { serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] },
     { serviceId: 'ceiling-fan', name: 'Ceiling Fan Install', qty: 1, addons: [] }
-  ]; // list $250 / member $200 — deposit law: $50 flat at either total
+  ]; // list $310 / member $248 at v80.20 prices — deposit law: 40% tier at $310 ($124), $50 flat at $248
   const whPost801 = async (evt) => {
     const raw = JSON.stringify(evt);
     const ts = Math.floor(Date.now() / 1000);
@@ -4283,14 +4286,14 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.19.1: ghs-app-v80-19-1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-19-1'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.20: ghs-app-v80-20)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-20'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
   const hGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { name: 'Hosted Hanna', email: 'hosted@t.local', phone: '7075550140', password: 'hostpass12', address: '7 Host St', city: 'Fairfield', when: 'Today', items: items801 } });
-  t('v80.1 hosted pay: a guest gets the hosted session URL + pending checkout (deposit $50 of $250)', hGuest.status === 200 && hGuest.j.hosted === true && !!hGuest.j.url && !!hGuest.j.checkoutId && hGuest.j.totals.deposit === 50 && hGuest.j.totals.due === 250);
+  t('v80.1 hosted pay: a guest gets the hosted session URL + pending checkout (deposit $124 of $310 — the >$300 tier)', hGuest.status === 200 && hGuest.j.hosted === true && !!hGuest.j.url && !!hGuest.j.checkoutId && hGuest.j.totals.deposit === 124 && hGuest.j.totals.due === 310);
   const hSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === hGuest.j.checkoutId);
-  t('v80.1 hosted pay: the session is payment-mode for the DEPOSIT amount with kind + checkoutId metadata', !!hSess && hSess.mode === 'payment' && hSess.amount_total === 5000 && hSess.metadata.kind === 'cart-checkout-hosted');
+  t('v80.1 hosted pay: the session is payment-mode for the DEPOSIT amount with kind + checkoutId metadata', !!hSess && hSess.mode === 'payment' && hSess.amount_total === 12400 && hSess.metadata.kind === 'cart-checkout-hosted');
   t('v80.1 P0-4: NO order exists before the hosted payment verifies', (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 0);
   const hTok = (await req2('POST', '/api/login', { body: { email: 'hosted@t.local', password: 'hostpass12' } })).j.token;
   const hEarly = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
@@ -4298,25 +4301,25 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   await mockSessionPaid(hSess.id);
   const hConf = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
   const hOrder = (await admReqs801()).find(r => r.id === (hConf.j && hConf.j.requestId));
-  t('v80.1 hosted pay: the verified settle births the DEPOSIT order ($50 of $250, $200 balance) — identical to an embedded payment', hConf.status === 200 && !!hOrder && hOrder.payment.status === 'deposit' && hOrder.payment.amountCents === 5000 && hOrder.payment.balanceCents === 20000 && hOrder.menuOrder.totals.due === 250);
+  t('v80.1 hosted pay: the verified settle births the DEPOSIT order ($124 of $310, $186 balance) — identical to an embedded payment', hConf.status === 200 && !!hOrder && hOrder.payment.status === 'deposit' && hOrder.payment.amountCents === 12400 && hOrder.payment.balanceCents === 18600 && hOrder.menuOrder.totals.due === 310);
   const hConf2 = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: hTok, body: { sessionId: hSess.id } });
   t('v80.1 hosted pay: re-confirm is idempotent (same order, no duplicate)', hConf2.status === 200 && hConf2.j.requestId === hConf.j.requestId && (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 1);
-  await whPost801({ id: 'evt_wh_hosted801', type: 'payment_intent.succeeded', data: { object: { id: hSess.payment_intent, amount: 5000, amount_received: 5000, status: 'succeeded', metadata: { kind: 'cart-checkout-hosted', checkoutId: hGuest.j.checkoutId, userId: hGuest.j.user.id } } } });
+  await whPost801({ id: 'evt_wh_hosted801', type: 'payment_intent.succeeded', data: { object: { id: hSess.payment_intent, amount: 12400, amount_received: 12400, status: 'succeeded', metadata: { kind: 'cart-checkout-hosted', checkoutId: hGuest.j.checkoutId, userId: hGuest.j.user.id } } } });
   t('v80.1 hosted pay: the payment_intent webhook after settle creates NO duplicate order', (await admReqs801()).filter(r => r.menuOrder && r.menuOrder.checkoutId === hGuest.j.checkoutId).length === 1);
   // --- hosted settle via the SESSION webhook (the return never lands) ---
   const h2 = await req2('POST', '/api/cart/checkout-hosted', { token: hTok, body: { address: '7 Host St', city: 'Fairfield', items: items801 } });
   const h2Sess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === h2.j.checkoutId);
   await mockSessionPaid(h2Sess.id);
-  const whSRes = await whPost801({ id: 'evt_wh_hsess801', type: 'checkout.session.completed', data: { object: { id: h2Sess.id, mode: 'payment', payment_status: 'paid', amount_total: 5000, payment_intent: h2Sess.payment_intent, customer: 'cus_mock_x', metadata: { kind: 'cart-checkout-hosted', checkoutId: h2.j.checkoutId, userId: hGuest.j.user.id } } } });
+  const whSRes = await whPost801({ id: 'evt_wh_hsess801', type: 'checkout.session.completed', data: { object: { id: h2Sess.id, mode: 'payment', payment_status: 'paid', amount_total: 12400, payment_intent: h2Sess.payment_intent, customer: 'cus_mock_x', metadata: { kind: 'cart-checkout-hosted', checkoutId: h2.j.checkoutId, userId: hGuest.j.user.id } } } });
   const h2Order = (await admReqs801()).find(r => r.menuOrder && r.menuOrder.checkoutId === h2.j.checkoutId);
-  t('v80.1 hosted webhook: checkout.session.completed settles the DEPOSIT order when the hosted return never lands', whSRes.status === 200 && !!h2Order && h2Order.payment.status === 'deposit' && h2Order.payment.amountCents === 5000);
+  t('v80.1 hosted webhook: checkout.session.completed settles the DEPOSIT order when the hosted return never lands', whSRes.status === 200 && !!h2Order && h2Order.payment.status === 'deposit' && h2Order.payment.amountCents === 12400);
   // --- worker refusal (v79 P0-2 guard family) ---
   const w801 = await req2('POST', '/api/signup', { body: { name: 'Worker 801', email: 'w801@t.local', phone: '(707) 555-0141', password: 'workpass801', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const wHosted = await req2('POST', '/api/cart/checkout-hosted', { token: w801.j.token, body: { address: '1 W St', items: items801 } });
   t('v80.1 hosted: a WORKER session is refused (403 WORKER_BLOCKED)', wHosted.status === 403 && wHosted.j.code === 'WORKER_BLOCKED');
   // --- JOIN, FIRST-CLASS (Gabriel 23:12): ONE session = trial subscription + deposit; settle = membership active + DEPOSIT order at MEMBER totals ---
   const jGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { step: 'join', name: 'Join Joana', email: 'hjoin@t.local', phone: '7075550142', password: 'joinpass801', address: '11 Join St', city: 'Vacaville', items: items801 } });
-  t('v80.1 hosted join: step join returns ONE hosted session URL priced at MEMBER totals ($200, deposit $50)', jGuest.status === 200 && jGuest.j.step === 'join' && !!jGuest.j.url && jGuest.j.totals.due === 200 && jGuest.j.totals.deposit === 50);
+  t('v80.1 hosted join: step join returns ONE hosted session URL priced at MEMBER totals ($248, deposit $50)', jGuest.status === 200 && jGuest.j.step === 'join' && !!jGuest.j.url && jGuest.j.totals.due === 248 && jGuest.j.totals.deposit === 50);
   const jSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === jGuest.j.checkoutId);
   t('v80.1 hosted join: the session is subscription-mode (plan + deposit in one), trial-aware — freeMonth flagged and amount = deposit only under the v74 trial', !!jSess && jSess.mode === 'subscription' && jSess.metadata.kind === 'cart-checkout-join' && jSess.metadata.plan === 'homecare' && jSess.metadata.freeMonth === '1' && jSess.amount_total === 5000);
   const jTok = (await req2('POST', '/api/login', { body: { email: 'hjoin@t.local', password: 'joinpass801' } })).j.token;
@@ -4326,7 +4329,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   const jConf = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: jTok, body: { sessionId: jSess.id } });
   const jOrder = (await admReqs801()).find(r => r.id === (jConf.j && jConf.j.requestId));
   const jMeAfter = await req2('GET', '/api/me', { token: jTok });
-  t('v80.1 hosted join: settle activates HomeCare (free month spent AT activation) AND births the DEPOSIT order at MEMBER totals ($200 — $50 in, $150 balance, joinedMembership)', jConf.status === 200 && jMeAfter.j.user.homeCareStatus === 'active' && jMeAfter.j.user.freeMonthAvailable === false && !!jOrder && jOrder.payment.status === 'deposit' && jOrder.payment.amountCents === 5000 && jOrder.payment.balanceCents === 15000 && jOrder.menuOrder.totals.due === 200 && jOrder.menuOrder.joinedMembership === true);
+  t('v80.1 hosted join: settle activates HomeCare (free month spent AT activation) AND births the DEPOSIT order at MEMBER totals ($248 — $50 in, $198 balance, joinedMembership)', jConf.status === 200 && jMeAfter.j.user.homeCareStatus === 'active' && jMeAfter.j.user.freeMonthAvailable === false && !!jOrder && jOrder.payment.status === 'deposit' && jOrder.payment.amountCents === 5000 && jOrder.payment.balanceCents === 19800 && jOrder.menuOrder.totals.due === 248 && jOrder.menuOrder.joinedMembership === true);
   // --- supersede across rails: hosted first, then an embedded checkout replaces it ---
   const sGuest = await req2('POST', '/api/cart/checkout-hosted', { body: { name: 'Sup Sue', email: 'sup@t.local', phone: '7075550143', password: 'suppass801', address: '3 Sup St', city: 'Fairfield', items: items801 } });
   const sSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === sGuest.j.checkoutId);
@@ -4377,7 +4380,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
 {
   const A802 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
   const admReqs802 = async () => (await req2('GET', '/api/requests', { token: A802 })).j.requests || [];
-  const items802 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }]; // list $125 / member $100 — deposit $50, balance $50 (Gabriel's acceptance case)
+  const items802 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }]; // list $175 / member $140 at v80.20 — deposit $50, balance $90 (Gabriel's acceptance case)
   const subsOf802 = (uid) => Object.values(stripeState.subs).filter(s => s.metadata && s.metadata.userId === uid);
   // --- statics ---
   const cartSlice802 = serverSrc.slice(serverSrc.indexOf("p === '/api/cart/checkout'"), serverSrc.indexOf("p === '/api/cart/checkout-confirm'"));
@@ -4399,7 +4402,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   await mockPiStatus(payA.j.paymentIntentId, 'succeeded');
   const ccA = await req2('POST', '/api/cart/checkout-confirm', { token: tokA, body: { checkoutId: payA.j.checkoutId, paymentIntentId: payA.j.paymentIntentId } });
   const ordA = (await admReqs802()).find(r => r.id === (ccA.j && ccA.j.requestId));
-  t('v80.2 join trial: the deposit settles a DEPOSIT order at MEMBER totals ($50 of $100) with joinedMembership — exactly ONE subscription exists', payA.status === 200 && payA.j.totals.due === 100 && payA.j.totals.deposit === 50 && ccA.status === 200 && !!ordA && ordA.payment.status === 'deposit' && ordA.payment.amountCents === 5000 && ordA.payment.balanceCents === 5000 && ordA.menuOrder.joinedMembership === true && subsOf802(jA.j.user.id).length === 1);
+  t('v80.2 join trial: the deposit settles a DEPOSIT order at MEMBER totals ($50 of $140) with joinedMembership — exactly ONE subscription exists', payA.status === 200 && payA.j.totals.due === 140 && payA.j.totals.deposit === 50 && ccA.status === 200 && !!ordA && ordA.payment.status === 'deposit' && ordA.payment.amountCents === 5000 && ordA.payment.balanceCents === 9000 && ordA.menuOrder.joinedMembership === true && subsOf802(jA.j.user.id).length === 1);
   // --- B: forced deposit-step failure AFTER activation (the pin):
   // the retry must complete the deposit AS A MEMBER, never error.
   const gB = { name: 'Retry Rob', email: 'rob802@t.local', phone: '7075550202', password: 'robpass802', address: '22 Rob St', city: 'Fairfield', when: 'Today', items: items802 };
@@ -4410,11 +4413,11 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   const payB1 = await req2('POST', '/api/cart/checkout', { token: tokB, body: { step: 'pay', address: '22 Rob St', city: 'Fairfield', when: 'Today', joinedMembership: true, items: items802 } });
   t('v80.2 forced failure: membership active + the deposit PI creation dies once -> 502 (the half-applied state, reproduced)', jB.status === 200 && confB.j.active === true && payB1.status === 502);
   const payB2 = await req2('POST', '/api/cart/checkout', { token: tokB, body: { step: 'join', address: '22 Rob St', city: 'Fairfield', when: 'Today', items: items802 } });
-  t('v80.2 retry: step join on the already-member account is NOT terminal — it answers the PAY step at member totals ($100 due, $50 deposit)', payB2.status === 200 && payB2.j.step === 'pay' && payB2.j.totals.due === 100 && payB2.j.totals.deposit === 50);
+  t('v80.2 retry: step join on the already-member account is NOT terminal — it answers the PAY step at member totals ($140 due, $50 deposit)', payB2.status === 200 && payB2.j.step === 'pay' && payB2.j.totals.due === 140 && payB2.j.totals.deposit === 50);
   await mockPiStatus(payB2.j.paymentIntentId, 'succeeded');
   const ccB = await req2('POST', '/api/cart/checkout-confirm', { token: tokB, body: { checkoutId: payB2.j.checkoutId, paymentIntentId: payB2.j.paymentIntentId } });
   const ordB = (await admReqs802()).find(r => r.id === (ccB.j && ccB.j.requestId));
-  t('v80.2 retry: the deposit completes as a member — DEPOSIT order $50/$100, joinedMembership, exactly ONE membership', ccB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 5000 && ordB.menuOrder.joinedMembership === true && subsOf802(jB.j.user.id).length === 1);
+  t('v80.2 retry: the deposit completes as a member — DEPOSIT order $50/$140, joinedMembership, exactly ONE membership', ccB.status === 200 && !!ordB && ordB.payment.status === 'deposit' && ordB.payment.amountCents === 5000 && ordB.payment.balanceCents === 9000 && ordB.menuOrder.joinedMembership === true && subsOf802(jB.j.user.id).length === 1);
   // --- D: the production ghost — join created the trialing sub but
   // the local activation never landed (webhook did it in production).
   // The retry must MIRROR the live subscription and proceed as member.
@@ -4424,14 +4427,14 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   const meD0 = await req2('GET', '/api/me', { token: tokD });
   const jD2 = await req2('POST', '/api/cart/checkout', { token: tokD, body: { step: 'join', address: '24 Gia St', city: 'Fairfield', when: 'Today', items: items802 } });
   const meD1 = await req2('GET', '/api/me', { token: tokD });
-  t('v80.2 half-applied: a live trialing sub with NO local activation is mirrored on retry — member pay step, free month spent at THIS activation, one subscription', jD.status === 200 && meD0.j.user.homeCareStatus !== 'active' && jD2.status === 200 && jD2.j.step === 'pay' && jD2.j.totals.due === 100 && meD1.j.user.homeCareStatus === 'active' && meD1.j.user.freeMonthAvailable === false && subsOf802(jD.j.user.id).length === 1);
+  t('v80.2 half-applied: a live trialing sub with NO local activation is mirrored on retry — member pay step, free month spent at THIS activation, one subscription', jD.status === 200 && meD0.j.user.homeCareStatus !== 'active' && jD2.status === 200 && jD2.j.step === 'pay' && jD2.j.totals.due === 140 && meD1.j.user.homeCareStatus === 'active' && meD1.j.user.freeMonthAvailable === false && subsOf802(jD.j.user.id).length === 1);
   // --- C: pre-existing active membership + join checked, both rails.
   const mC = await mkMember('pre802@t.local', '(707) 555-0203');
   const subC = await req2('POST', '/api/stripe/homecare-subscribe', { token: mC.token, body: {} });
   await mockActivate(subC.j.subscriptionId);
   const confC = await req2('POST', '/api/stripe/homecare-confirm', { token: mC.token, body: {} });
   const jC = await req2('POST', '/api/cart/checkout', { token: mC.token, body: { step: 'join', address: '1 Main St', city: 'Fairfield', items: items802 } });
-  t('v80.2 pre-existing member: step join proceeds as a MEMBER checkout (step pay, member totals) — never the old terminal 400', confC.j.active === true && jC.status === 200 && jC.j.step === 'pay' && jC.j.totals.due === 100 && jC.j.totals.deposit === 50);
+  t('v80.2 pre-existing member: step join proceeds as a MEMBER checkout (step pay, member totals) — never the old terminal 400', confC.j.active === true && jC.status === 200 && jC.j.step === 'pay' && jC.j.totals.due === 140 && jC.j.totals.deposit === 50);
   const hC = await req2('POST', '/api/cart/checkout-hosted', { token: mC.token, body: { step: 'join', address: '1 Main St', city: 'Fairfield', items: items802 } });
   const hCSess = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === (hC.j && hC.j.checkoutId));
   t('v80.2 pre-existing member (hosted): step join opens the PLAIN deposit session at member totals — no second subscription', hC.status === 200 && !!hCSess && hCSess.mode === 'payment' && hCSess.metadata.kind === 'cart-checkout-hosted' && hCSess.amount_total === 5000 && subsOf802(mC.id).length === 1);
@@ -4512,44 +4515,44 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
 {
   t('static v80.3 SPA: the green member-tease classes exist (WhatsApp family green darkened for the light card: #16a34a)', htmlSrc.includes('.cart-members-pay{color:#16a34a') && htmlSrc.includes('.cart-members-total{color:#16a34a'));
   t('static v80.3 SPA: the hook box headline is the join invitation only — the old price-carrying headline is gone', htmlSrc.includes('⭐ HomeCare — first month FREE') && !htmlSrc.includes('⭐ HomeCare members pay $'));
-  // guest — Gabriel's screenshot case: TV Mounting (over 65") $175 + Furniture Assembly $125 = $300 -> members $240, save $60
+  // guest — Gabriel's screenshot case: TV Mounting (over 65") $215 (v80.20) + Furniture Assembly $125 = $340 -> members $272, save $68
   run("me = null; location.hash = '#cart';");
   run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);");
   run('renderCart();');
   const lines803 = el('cartLines').innerHTML, totals803 = el('cartTotals').innerHTML;
-  t('v80.3 guest cart: each discountable line teases its member price in green under the regular price ($175->$140, $125->$100)', lines803.includes('Members pay $140') && lines803.includes('Members pay $100') && (lines803.match(/cart-members-pay/g) || []).length === 2);
-  t('v80.3 guest cart: BELOW the regular Total the green bold line reads Members pay $240 — save $60; the hook box invites the join without repeating prices', totals803.indexOf('<b>Total</b>') >= 0 && totals803.indexOf('Members pay $240 — save $60') > totals803.indexOf('<b>Total</b>') && totals803.includes('cart-members-total') && totals803.includes('⭐ HomeCare — first month FREE') && !totals803.includes('HomeCare members pay'));
+  t('v80.3 guest cart: each discountable line teases its member price in green under the regular price ($215->$172, $125->$100)', lines803.includes('Members pay $172') && lines803.includes('Members pay $100') && (lines803.match(/cart-members-pay/g) || []).length === 2);
+  t('v80.3 guest cart: BELOW the regular Total the green bold line reads Members pay $240 — save $60; the hook box invites the join without repeating prices', totals803.indexOf('<b>Total</b>') >= 0 && totals803.indexOf('Members pay $272 — save $68') > totals803.indexOf('<b>Total</b>') && totals803.includes('cart-members-total') && totals803.includes('⭐ HomeCare — first month FREE') && !totals803.includes('HomeCare members pay'));
   // quantity > 1: the green per-line price is the member LINE total
   run("cartSave([{ id: 'tv-mounting', q: 2 }]);"); run('renderCart();');
   const linesQty803 = el('cartLines').innerHTML;
-  t('v80.3 guest cart: quantity > 1 teases the member LINE total (2 x $125 service -> Members pay $200, not the $100 unit)', linesQty803.includes('Members pay $200') && !linesQty803.includes('Members pay $100'));
+  t('v80.3 guest cart: quantity > 1 teases the member LINE total (2 x $175 service -> Members pay $280, not the $140 unit)', linesQty803.includes('Members pay $280') && !linesQty803.includes('Members pay $140'));
   // a line with NO member discount (materials-style: member == list) teases NOTHING
   run("MENU_CATALOG['zz-materials-803'] = { name: 'Materials (test)', meta: '', price: 100, member: 100 };");
   run("cartSave([{ id: 'zz-materials-803', q: 1 }, { id: 'tv-mounting', q: 1 }]);"); run('renderCart();');
   const linesMat803 = el('cartLines').innerHTML, totalsMat803 = el('cartTotals').innerHTML;
-  t('v80.3 guest cart: a no-discount (materials/nodisc) line renders NO green line — only the discountable line teases; the totals save counts only the real discount ($225 -> $200, save $25)', (linesMat803.match(/cart-members-pay/g) || []).length === 1 && linesMat803.includes('Members pay $100') && totalsMat803.includes('Members pay $200 — save $25'));
+  t('v80.3 guest cart: a no-discount (materials/nodisc) line renders NO green line — only the discountable line teases; the totals save counts only the real discount ($275 -> $240, save $35)', (linesMat803.match(/cart-members-pay/g) || []).length === 1 && linesMat803.includes('Members pay $140') && totalsMat803.includes('Members pay $240 — save $35'));
   run("delete MENU_CATALOG['zz-materials-803']; cartSave([]);");
   // verified member: NO teasers anywhere — they already pay the member price
   run("me = { id:'USR-V803M', role:'customer', name:'Mem Ber', email:'mem803@t.local', homeCareStatus:'active' };");
   run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);"); run('renderCart();');
   const memHtml803 = el('cartLines').innerHTML + el('cartTotals').innerHTML;
-  t('v80.4 amendment (Gabriel 23:54): member cart headlines the FULL list price ($175/$125, each at list) — the member figure is never dressed as THE price, and there is NO tease', memHtml803.includes('<b>$175</b>') && memHtml803.includes('<b>$125</b>') && memHtml803.includes('$175 each') && !memHtml803.includes('Members pay'));
-  t('v80.4 amendment: the member saving rides as its own small green badge per discountable line (Members −$35 / −$25); the totals keep the savings row + the member total ($240 + the applied note)', memHtml803.includes('cart-member-save') && memHtml803.includes('Members −$35') && memHtml803.includes('Members −$25') && memHtml803.includes('member price is applied') && memHtml803.includes('$240'));
+  t('v80.4 amendment (Gabriel 23:54): member cart headlines the FULL list price ($215/$125, each at list) — the member figure is never dressed as THE price, and there is NO tease', memHtml803.includes('<b>$215</b>') && memHtml803.includes('<b>$125</b>') && memHtml803.includes('$215 each') && !memHtml803.includes('Members pay'));
+  t('v80.4 amendment: the member saving rides as its own small green badge per discountable line (Members −$43 / −$25); the totals keep the savings row + the member total ($272 + the applied note)', memHtml803.includes('cart-member-save') && memHtml803.includes('Members −$43') && memHtml803.includes('Members −$25') && memHtml803.includes('member price is applied') && memHtml803.includes('$272'));
   // --- extension (Gabriel 23:49, "igual aquí"): the CHECKOUT services list ---
   run("me = null;");
   run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);");
   el('ccJoin').checked = false; run('renderCcLines();');
   const ccOff803 = el('ccLines').innerHTML;
-  t('v80.3 checkout (join OFF): each discountable line teases Members pay $X in green under the regular price — figures themselves stay plain', ccOff803.includes('Members pay $140') && ccOff803.includes('Members pay $100') && (ccOff803.match(/cart-members-pay/g) || []).length === 2 && ccOff803.includes('<b>$175</b>') && ccOff803.includes('<b>$125</b>'));
+  t('v80.3 checkout (join OFF): each discountable line teases Members pay $X in green under the regular price — figures themselves stay plain', ccOff803.includes('Members pay $172') && ccOff803.includes('Members pay $100') && (ccOff803.match(/cart-members-pay/g) || []).length === 2 && ccOff803.includes('<b>$215</b>') && ccOff803.includes('<b>$125</b>'));
   el('ccJoin').checked = true; run('renderCcLines();');
   const ccOn803 = el('ccLines').innerHTML;
-  t('v80.4 amendment (Gabriel 23:54): checkout with join ON headlines the FULL list price too — figures AND each captions at list ($175/$125), NO green member figures, NO tease (supersedes the v80.3 green-figures pin)', ccOn803.includes('<b>$175</b>') && ccOn803.includes('<b>$125</b>') && ccOn803.includes('$175 each') && !ccOn803.includes('cart-members-pay') && !ccOn803.includes('Members pay') && !ccOn803.includes('$140'));
-  t('v80.4 amendment: join ON carries the green saving badge per discountable line (Members −$35 / −$25)', ccOn803.includes('cart-member-save') && ccOn803.includes('Members −$35') && ccOn803.includes('Members −$25'));
+  t('v80.4 amendment (Gabriel 23:54): checkout with join ON headlines the FULL list price too — figures AND each captions at list ($215/$125), NO green member figures, NO tease (supersedes the v80.3 green-figures pin)', ccOn803.includes('<b>$215</b>') && ccOn803.includes('<b>$125</b>') && ccOn803.includes('$215 each') && !ccOn803.includes('cart-members-pay') && !ccOn803.includes('Members pay') && !ccOn803.includes('$172'));
+  t('v80.4 amendment: join ON carries the green saving badge per discountable line (Members −$43 / −$25)', ccOn803.includes('cart-member-save') && ccOn803.includes('Members −$43') && ccOn803.includes('Members −$25'));
   // verified member AT CHECKOUT (no join involved): the rule is uniform
   run("me = { id:'USR-V804M', role:'customer', name:'Mem Ber', email:'mem804@t.local', homeCareStatus:'active' };");
   el('ccJoin').checked = false; run('renderCcLines();');
   const ccMem804 = el('ccLines').innerHTML;
-  t('v80.4 amendment: a VERIFIED MEMBER at checkout gets the same treatment — list headlines + green saving badges, no tease', ccMem804.includes('<b>$175</b>') && ccMem804.includes('Members −$35') && ccMem804.includes('cart-member-save') && !ccMem804.includes('Members pay'));
+  t('v80.4 amendment: a VERIFIED MEMBER at checkout gets the same treatment — list headlines + green saving badges, no tease', ccMem804.includes('<b>$215</b>') && ccMem804.includes('Members −$43') && ccMem804.includes('cart-member-save') && !ccMem804.includes('Members pay'));
   el('ccJoin').checked = false;
   run("me = null; cartSave([]); location.hash = '';");
 }
@@ -4586,7 +4589,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   // element at the deposit amount — BEFORE any field is filled, and
   // with NO server arm (no account, no pending checkout, no intent).
   await run('cartShowCheckout()');
-  t('v80.4 VM (a): entering checkout mounts the Payment Element AT ENTRY (deferred payment mode, deposit amount $50 for the $125 service) before any field is filled', elsOpts804.length >= 1 && elsOpts804[0].mode === 'payment' && elsOpts804[0].amount === 5000 && run('!!cartElements') === true);
+  t('v80.4 VM (a): entering checkout mounts the Payment Element AT ENTRY (deferred payment mode, deposit amount $50 for the $175 service) before any field is filled', elsOpts804.length >= 1 && elsOpts804[0].mode === 'payment' && elsOpts804[0].amount === 5000 && run('!!cartElements') === true);
   t('v80.4 VM (a): the eager mount arms NOTHING server-side and the Pay button is born gated OFF with empty fields', !v78Calls.some(c => c.step === 'pay' || c.step === 'join') && run('cartPayCtx === null') === true && el('cartPayBtn').disabled === true);
   el('ccName').value = 'Eager Eve'; el('ccEmail').value = 'eager@t.local'; el('ccPhone').value = '7075550199'; el('ccPass').value = 'eagerpass1';
   el('ccAddress').value = '7 Eager St'; el('ccCity').value = 'Fairfield';
@@ -4603,8 +4606,8 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   // (c) qty edits with NO armed context: re-quote + remount at the
   // new amount — the server arm still waits for the submit tap.
   v78Calls.length = 0;
-  await run('ccQty(0, 1)'); await run('ccQty(0, 1)'); // 3 x $125 = $375 -> deposit 40% = $150
-  t('v80.4 VM (c): qty edits re-quote with the server and REMOUNT at the NEW deposit amount ($375 -> $150) — no checkout arm, typed data intact, button names the new deposit', v78Calls.some(c => c.step === 'quote') && !v78Calls.some(c => c.step === 'pay') && elsOpts804[elsOpts804.length - 1].amount === 15000 && el('ccAddress').value === '7 Eager St' && (el('cartPayBtn').textContent || '') === 'Pay $150 deposit');
+  await run('ccQty(0, 1)'); await run('ccQty(0, 1)'); // 3 x $175 = $525 -> deposit 40% = $210
+  t('v80.4 VM (c): qty edits re-quote with the server and REMOUNT at the NEW deposit amount ($525 -> $210) — no checkout arm, typed data intact, button names the new deposit', v78Calls.some(c => c.step === 'quote') && !v78Calls.some(c => c.step === 'pay') && elsOpts804[elsOpts804.length - 1].amount === 21000 && el('ccAddress').value === '7 Eager St' && (el('cartPayBtn').textContent || '') === 'Pay $210 deposit');
   // submit: elements.submit() validates first, THEN the server arms,
   // then the confirm rides the mounted element with the fresh secret.
   await run('cartPayNow()');
@@ -4879,14 +4882,14 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const menuPost807 = (tk, menuOrder) => req2('POST', '/api/requests', { token: tk, body: { service: 'Menu order', description: 'v80.7 asap pin', address: '9 Audit Way', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder } });
   const guest807 = (await req2('POST', '/api/signup', { body: { name: 'Guest 807', email: 'guest807@t.local', password: 'password123', phone: '7075550286', role: 'customer' } })).j.token;
   const haulExtras807 = [{ id: 'haul-toilet', name: 'Remove & haul away the old toilet', price: 50 }];
-  const asapG = await menuPost807(guest807, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 225, member: 190, due: 225 } });
-  t('v80.7 #31: guest ASAP fee is 25% of LABOR $175 = $44 (the $50 haul add-on is NOT multiplied) — due $269, not $281', asapG.status === 201 && asapG.j.request.menuOrder.totals.asapFee === 44 && asapG.j.request.menuOrder.totals.due === 269);
+  const asapG = await menuPost807(guest807, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 265, member: 222, due: 265 } });
+  t('v80.7 #31: guest ASAP fee is 25% of LABOR $215 = $54 (the $50 haul add-on is NOT multiplied) — due $319, not $331', asapG.status === 201 && asapG.j.request.menuOrder.totals.asapFee === 54 && asapG.j.request.menuOrder.totals.due === 319);
   const m807 = await mkMember('member807@t.local', '(707) 555-0287');
   const sub807 = await req2('POST', '/api/stripe/homecare-subscribe', { token: m807.token, body: {} });
   await mockActivate(sub807.j.subscriptionId);
   const conf807 = await req2('POST', '/api/stripe/homecare-confirm', { token: m807.token, body: {} });
-  const asapM = await menuPost807(m807.token, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 225, member: 190, due: 190 } });
-  t('v80.7 #31: member ASAP fee is 25% of the DISCOUNTED labor $140 = $35 — due $225, not $238', conf807.status === 200 && conf807.j.active === true && asapM.status === 201 && asapM.j.request.menuOrder.totals.asapFee === 35 && asapM.j.request.menuOrder.totals.due === 225);
+  const asapM = await menuPost807(m807.token, { serviceId: 'toilet-replacement', extras: haulExtras807, asap: true, joinedMembership: false, totals: { list: 265, member: 222, due: 222 } });
+  t('v80.7 #31: member ASAP fee is 25% of the DISCOUNTED labor $172 = $43 — due $265, not $277', conf807.status === 200 && conf807.j.active === true && asapM.status === 201 && asapM.j.request.menuOrder.totals.asapFee === 43 && asapM.j.request.menuOrder.totals.due === 265);
 
   // --- #21 (client): typed money parses with comma stripping ---
   t('static v80.7 #21: parseMoneyInput exists and BOTH hold actions use it (the raw parseFloat form is gone)', htmlSrc.includes('function parseMoneyInput(') && htmlSrc.includes('const cents=parseMoneyInput(v);') && !htmlSrc.includes('Math.round(parseFloat(v)*100)'));
@@ -5018,23 +5021,23 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const BANNED809 = ['you pay in full when you order', 'You pay in full when you order', 'Paid in full when you order', 'pay in full today', 'Pay in full today', 'pagas completo al ordenar', 'Pagas completo al ordenar', 'pagas completo hoy', 'paid in full when you order'];
   t('static v80.9 FUSION: NONE of the website\u2019s banned pay-in-full lines (audit §2a, EN+ES) exists in the app',
     BANNED809.every(s => !htmlSrc.includes(s)));
-  t('static v80.9 FUSION: Popular group pinned with the 6 verified services at catalog prices',
+  t('static v80.9 FUSION: Popular group pinned with the 6 verified services at catalog prices (v80.20 figures)',
     htmlSrc.includes("const POPULAR_IDS = ['tv-mounting', 'gutter-cleaning', 'toilet-replacement', 'oil-change', 'yard-cleanup', 'water-heater']") &&
     htmlSrc.includes('Popular right now') && htmlSrc.includes('popularAvail') &&
-    htmlSrc.includes("'tv-mounting': { name: 'TV Mounting (up to 65\")', meta: '~2 h · Mount & level', price: 125, member: 100") &&
-    htmlSrc.includes("'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 150, member: 120 }") &&
-    htmlSrc.includes("'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 175, member: 140") &&
-    htmlSrc.includes("'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 75, member: 60") &&
-    htmlSrc.includes("'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 150, member: 120 }") &&
+    htmlSrc.includes("'tv-mounting': { name: 'TV Mounting (up to 65\")', meta: '~2 h · Mount & level', price: 175, member: 140") &&
+    htmlSrc.includes("'gutter-cleaning': { name: 'Gutter Cleaning', meta: '~2 h · Single story', price: 175, member: 140 }") &&
+    htmlSrc.includes("'toilet-replacement': { name: 'Toilet Replacement', meta: '~2.5 h · Full swap', price: 215, member: 172") &&
+    htmlSrc.includes("'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 85, member: 68") &&
+    htmlSrc.includes("'yard-cleanup': { name: 'Yard Cleanup', meta: '~2 h · One-time rescue', price: 175, member: 140 }") &&
     htmlSrc.includes("'water-heater': { name: 'Water Heater Install', meta: 'Haul-away included', price: 700, member: 560 }"));
-  t('static v80.9 FUSION: 3 promo boxes present (holiday lights / save 20% / haul from $225), EN+ES',
-    htmlSrc.includes('Holiday lights, handled') && htmlSrc.includes('Save 20% on services') && htmlSrc.includes('We haul it, from $225') &&
-    htmlSrc.includes("orderNow(\\'holiday-lights\\')") && htmlSrc.includes('Luces navideñas, resueltas') && htmlSrc.includes('Lo recogemos, desde $225'));
+  t('static v80.9 FUSION: 3 promo boxes present (holiday lights / save 20% / haul from $250 — v80.20: junk minimum rose), EN+ES',
+    htmlSrc.includes('Holiday lights, handled') && htmlSrc.includes('Save 20% on services') && htmlSrc.includes('We haul it, from $250') &&
+    htmlSrc.includes("orderNow(\\'holiday-lights\\')") && htmlSrc.includes('Luces navideñas, resueltas') && htmlSrc.includes('Lo recogemos, desde $250'));
   t('static v80.9 FUSION: footer present with Team phone, Stripe deposit line and master-list fine print',
     htmlSrc.includes('id="appFooter"') && htmlSrc.includes('Call the Team · (707) 862-3773') &&
     htmlSrc.includes('Secure payment by Stripe — deposit books it, balance at completion') &&
     htmlSrc.includes('confirmed master service list (Oct 22, 2026)') &&
-    htmlSrc.includes('20% off every menu service — including junk removal, hauling and $75 services') &&
+    htmlSrc.includes('20% off every menu service — including junk removal, hauling and $85 services') &&
     htmlSrc.includes('Materials are customer-supplied unless noted') && htmlSrc.includes("href=\"#terms\">' + ui.footTerms") && htmlSrc.includes("href=\"#privacy\">' + ui.footPrivacy"));
   t('static v80.9 FUSION: plan comparison table + cities grid + corrected trust band + before/after slider wired',
     htmlSrc.includes('id="planCompare"') && htmlSrc.includes('Compare the plans') && htmlSrc.includes('First in-person estimate FREE, then $50') &&
@@ -5086,7 +5089,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('static v80.10.1: the sticky technician door follows the SESSION — the boot bounce is marked, loadMe heals a stale flag for a logged-out visitor, the flag arms only on a worker session and clears at logout (a mere #worker visit no longer arms it)',
     htmlSrc.includes('window.__ghsBootBounce = true') && htmlSrc.includes('function syncEntryFlag()') && htmlSrc.includes('if (!me && window.__ghsBootBounce)') && !htmlSrc.includes("try{ if (w) localStorage.setItem('ghs_entry','worker'); }catch(e){}"));
   t('static v80.10.1 micro-copy: the city lines are single text nodes (no fused "Today·"), the compare card\u2019s FREE line lost its tag boundary, and the starter price range has no stray space after the dash',
-    htmlSrc.includes('● Today · Home base · from $75') && !htmlSrc.includes('<b>● Today</b>') && htmlSrc.includes('<li>First month FREE — for everyone (one per account)</li>') && htmlSrc.includes('$225<small>–$300</small>'));
+    htmlSrc.includes('● Today · Home base · from $75') && !htmlSrc.includes('<b>● Today</b>') && htmlSrc.includes('<li>First month FREE — for everyone (one per account)</li>') && htmlSrc.includes('$250<small>–$300</small>'));
   t('static v80.10.5 LINKS: the before/after caption link "See yard services" lands on the Yard Care plans view (#yard-care), not on a yard-cleanup order; the real Yard Cleanup Order CTAs keep their #order route',
     htmlSrc.includes('<a href="#yard-care">See yard services →</a>') && !htmlSrc.includes('<a href="#order/yard-cleanup">See yard services') && htmlSrc.includes('href="#order/yard-cleanup"'));
   t('static v80.10.5 LINKS: the six restored city cards are real links to the app menu (#menu -> goMenu, the hero CTA path) and the .city rule renders the anchor as a block',
@@ -5296,14 +5299,14 @@ t('v80.11 referrals: a fresh tech starts with zero signups and zero bounties', (
 const sm = await req3('GET', '/api/worker/sales-menu', { token: wSeller.token });
 const smTv = (sm.j.items || []).find(i => i.serviceId === 'tv-mounting');
 const smGw = (sm.j.items || []).find(i => i.serviceId === 'green-waste');
-t('v80.11→v80.13 sales menu: the whole catalog with LIST price + his take (68% of the price) — TV Mounting $125 -> take $85 (pay $75 + $10), green waste $225 -> take $153', sm.status === 200 && (sm.j.items || []).length >= 90 && !!smTv && smTv.price === 125 && smTv.pay === 75 && smTv.take === 85 && !!smGw && smGw.pay === 143 && smGw.take === 153);
+t('v80.11→v80.13 sales menu: the whole catalog with LIST price + his take (68% of the price) — TV Mounting $175 -> take $119 (pay $109 + $10), green waste $250 -> take $170 (v80.20 prices)', sm.status === 200 && (sm.j.items || []).length >= 90 && !!smTv && smTv.price === 175 && smTv.pay === 109 && smTv.take === 119 && !!smGw && smGw.pay === 160 && smGw.take === 170);
 t('v80.11 sales menu: NO member price, margin or internal fields leak to the tech', !!smTv && !('member' in smTv) && !('m' in smTv) && !('margin' in smTv) && !('memberTotal' in smTv));
 const smCust = await req3('GET', '/api/worker/sales-menu', { token: CX });
 t('v80.11 role law: customers never see the sales tools (403)', smCust.status === 403);
 const sc = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
-t('v80.11 sales cart: the tech builds a catalog-priced checkout cart + link (the seller stamp itself is proven end-to-end by the sold-job chain below)', sc.status === 201 && sc.j.cart.listTotal === 125 && sc.j.link.includes('/cart/' + sc.j.cart.id));
+t('v80.11 sales cart: the tech builds a catalog-priced checkout cart + link (the seller stamp itself is proven end-to-end by the sold-job chain below)', sc.status === 201 && sc.j.cart.listTotal === 175 && sc.j.link.includes('/cart/' + sc.j.cart.id));
 const scForged = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1, unitPrice: 1 }] } });
-t('v80.11 sales cart: a forged unitPrice in the tech input is ignored — the catalog price rules', scForged.status === 201 && scForged.j.cart.listTotal === 125);
+t('v80.11 sales cart: a forged unitPrice in the tech input is ignored — the catalog price rules', scForged.status === 201 && scForged.j.cart.listTotal === 175);
 const scBad = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'not-a-service', qty: 1 }] } });
 t('v80.11 sales cart: an unknown service is rejected 400', scBad.status === 400);
 const scCust = await req3('POST', '/api/worker/carts', { token: CX, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
@@ -5483,7 +5486,7 @@ const sess2 = Object.values(stripeState.sessions).filter(s => s.metadata && s.me
 await mockSessionPaid(sess2.id);
 await fetch(BASE3 + '/cart/' + cart2.j.cart.id + '?paid=1&session_id=' + sess2.id);
 const M1 = await req3('GET', '/api/admin/money', { token: A3 });
-t('v80.12 dinero: a paid deposit with its balance out moves deposits-waiting (+1 order, +$50 in, +$75 owed) and receivables', co2.status === 200 && M1.j.depositsWaiting.count === M0.j.depositsWaiting.count + 1 && M1.j.depositsWaiting.collected === M0.j.depositsWaiting.collected + 50 && M1.j.depositsWaiting.balance === M0.j.depositsWaiting.balance + 75 && M1.j.receivables.total === M0.j.receivables.total + 75 && M1.j.receivables.orderBalances === M0.j.receivables.orderBalances + 75);
+t('v80.12 dinero: a paid deposit with its balance out moves deposits-waiting (+1 order, +$50 in, +$125 owed) and receivables', co2.status === 200 && M1.j.depositsWaiting.count === M0.j.depositsWaiting.count + 1 && M1.j.depositsWaiting.collected === M0.j.depositsWaiting.collected + 50 && M1.j.depositsWaiting.balance === M0.j.depositsWaiting.balance + 125 && M1.j.receivables.total === M0.j.receivables.total + 125 && M1.j.receivables.orderBalances === M0.j.receivables.orderBalances + 125);
 const T6 = await req3('GET', '/api/admin/traffic?range=7d', { token: A3 });
 const codeRow6 = tRow812(T6.j, ref0.j.code), codeRow0 = tRow812(T0.j, ref0.j.code);
 t('v80.12 funnel: the deposit attributes to the seller code stamped on the cart', codeRow6.deposits === codeRow0.deposits + 1);
@@ -5522,15 +5525,15 @@ const MInst1 = await req('GET', '/api/admin/money', { token: A });
 t('v80.12 dinero: without a Stripe key the Stripe box degrades to not-available and the page still answers', MInst1.status === 200 && MInst1.j.stripe.available === false && !!MInst1.j.receivables);
 
 // ---------------- v80.13 AJUSTE VENTA 68% (app3) ----------------
-// Gabriel's law end-to-end on the v80.11 sold TV job (cj811): the $125
-// order was born with a $50 deposit in and a $75 balance out. The
-// seller's take is 68% of $125 = $85 — pay $75 + the $10 commission.
+// Gabriel's law end-to-end on the v80.11 sold TV job (cj811): the $175
+// order was born with a $50 deposit in and a $125 balance out. The
+// seller's take is 68% of $175 = $119 — pay $109 + the $10 commission.
 const admJobs813 = await req3('GET', '/api/jobs', { token: A3 });
 const soldJob813 = (admJobs813.j.jobs || []).find(x => x.id === cj811.j.job.id);
-t('v80.13 sold job: create-job stamped the 68% take on the $125 TV sale (pay $75 + $10 commission — NOT the admin-entered $100 standard pay)', !!soldJob813 && soldJob813.payOffer === 75 && soldJob813.salesCommission === 10 && soldJob813.customerPrice === 125);
+t('v80.13 sold job: create-job stamped the 68% take on the $175 TV sale (pay $109 + $10 commission — NOT the admin-entered $100 standard pay)', !!soldJob813 && soldJob813.payOffer === 109 && soldJob813.salesCommission === 10 && soldJob813.customerPrice === 175);
 const sellerJobs813 = await req3('GET', '/api/jobs', { token: wSeller.token });
 const sj813 = (sellerJobs813.j.jobs || []).find(x => x.id === cj811.j.job.id);
-t('v80.13 sold job: the seller sees the guaranteed take in his own pay breakdown (pay $75 + $10 commission)', !!sj813 && sj813.payOffer === 75 && sj813.salesCommission === 10);
+t('v80.13 sold job: the seller sees the guaranteed take in his own pay breakdown (pay $109 + $10 commission)', !!sj813 && sj813.payOffer === 109 && sj813.salesCommission === 10);
 // Complete it with NO Connect on file: the $85 must wait — and Dinero
 // must already count it at exactly $85 (the same math as the payout).
 const M813a = await req3('GET', '/api/admin/money', { token: A3 });
@@ -5540,31 +5543,31 @@ const doneJob813 = (admJobs813b.j.jobs || []).find(x => x.id === cj811.j.job.id)
 const M813b = await req3('GET', '/api/admin/money', { token: A3 });
 const sRow813a = (M813a.j.techPayouts.perTech || []).find(w => w.workerId === wSeller.id) || { amount: 0, awaitingSetup: 0 };
 const sRow813b = (M813b.j.techPayouts.perTech || []).find(w => w.workerId === wSeller.id) || { amount: 0, awaitingSetup: 0 };
-t('v80.13 dinero: the completed sold job waits as EXACTLY $85 in the pending tech payouts (per-tech row + total, awaiting setup)', doneSold813.status === 200 && doneSold813.j.job.status === 'Done — photos sent' && !!doneJob813 && doneJob813.payoutStatus === 'awaiting_worker_setup' && !doneJob813.payoutTransferId && sRow813b.amount === sRow813a.amount + 85 && sRow813b.awaitingSetup === sRow813a.awaitingSetup + 85 && M813b.j.techPayouts.amount === M813a.j.techPayouts.amount + 85);
-// The customer pays the $75 balance on the same cart link: the order
-// is paid in full — the $85 still cannot move (no Connect yet).
+t('v80.13 dinero: the completed sold job waits as EXACTLY $119 in the pending tech payouts (per-tech row + total, awaiting setup)', doneSold813.status === 200 && doneSold813.j.job.status === 'Done — photos sent' && !!doneJob813 && doneJob813.payoutStatus === 'awaiting_worker_setup' && !doneJob813.payoutTransferId && sRow813b.amount === sRow813a.amount + 119 && sRow813b.awaitingSetup === sRow813a.awaitingSetup + 119 && M813b.j.techPayouts.amount === M813a.j.techPayouts.amount + 119);
+// The customer pays the $125 balance on the same cart link: the order
+// is paid in full — the $119 still cannot move (no Connect yet).
 const balCo813 = await req3('POST', '/api/carts/' + soldCart.j.cart.id + '/checkout', { body: { balance: true } });
 const balSess813 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === soldCart.j.cart.id && s.metadata.payStep === 'balance').slice(-1)[0];
 await mockSessionPaid(balSess813.id);
 await fetch(BASE3 + '/cart/' + soldCart.j.cart.id + '?paid=1&session_id=' + balSess813.id);
 const admReqs813 = await req3('GET', '/api/requests', { token: A3 });
 const soldReq813 = (admReqs813.j.requests || []).find(r => r.id === soldReq.id);
-t('v80.13 sold job: the balance settles the $125 order in full ($50 deposit + $75 balance)', balCo813.status === 200 && balCo813.j.amount === 75 && !!balSess813 && !!soldReq813 && !!soldReq813.payment && soldReq813.payment.status === 'paid');
+t('v80.13 sold job: the balance settles the $175 order in full ($50 deposit + $125 balance)', balCo813.status === 200 && balCo813.j.amount === 125 && !!balSess813 && !!soldReq813 && !!soldReq813.payment && soldReq813.payment.status === 'paid');
 // The seller connects Stripe: the held $85 releases in ONE transfer.
 const trBefore813 = stripeState.connectTransfers.length;
 await req3('POST', '/api/worker/connect/start', { token: wSeller.token, body: {} });
 const cs813 = await req3('GET', '/api/worker/connect/status', { token: wSeller.token });
 let paidJob813 = null;
 for (let i = 0; i < 14; i++) { const aj = await req3('GET', '/api/jobs', { token: A3 }); paidJob813 = (aj.j.jobs || []).find(x => x.id === cj811.j.job.id); if (paidJob813 && paidJob813.payoutStatus === 'paid') break; await sleep(200); }
-t('v80.13 payout: ONE transfer of EXACTLY $85 (8500 cents) releases to the seller when he connects', cs813.status === 200 && cs813.j.ready === true && !!paidJob813 && paidJob813.payoutStatus === 'paid' && /^tr_mock/.test(paidJob813.payoutTransferId || '') && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 8500).length === 1);
+t('v80.13 payout: ONE transfer of EXACTLY $119 (11900 cents) releases to the seller when he connects', cs813.status === 200 && cs813.j.ready === true && !!paidJob813 && paidJob813.payoutStatus === 'paid' && /^tr_mock/.test(paidJob813.payoutTransferId || '') && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 11900).length === 1);
 const again813 = await req3('POST', '/api/admin/jobs/' + cj811.j.job.id + '/pay-worker', { token: A3, body: {} });
-t('v80.13 payout: the pay-worker override never double-pays the sold take', again813.status === 200 && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 8500).length === 1);
+t('v80.13 payout: the pay-worker override never double-pays the sold take', again813.status === 200 && stripeState.connectTransfers.slice(trBefore813).filter(x => x.amount === 11900).length === 1);
 const money813 = await req3('GET', '/api/worker/money', { token: wSeller.token });
 const mEnt813 = (money813.j.entries || []).find(e => e.jobId === cj811.j.job.id);
-t('v80.13 money view: the seller paid row reads $85 total (pay $75 + $10 commission), status paid', !!mEnt813 && mEnt813.amount === 85 && mEnt813.payOffer === 75 && mEnt813.salesCommission === 10 && mEnt813.status === 'paid');
+t('v80.13 money view: the seller paid row reads $119 total (pay $109 + $10 commission), status paid', !!mEnt813 && mEnt813.amount === 119 && mEnt813.payOffer === 109 && mEnt813.salesCommission === 10 && mEnt813.status === 'paid');
 // Member sale: a Plus member buys the same TV service through the
-// seller's link — the FINAL total is the $100 member price, so the
-// seller's take is 68% of $100 = $68 (pay $58 + $10).
+// seller's link — the FINAL total is the $140 member price, so the
+// seller's take is 68% of $140 = $95 (pay $85 + $10).
 const memCart813 = await req3('POST', '/api/worker/carts', { token: wSeller.token, body: { items: [{ serviceId: 'tv-mounting', qty: 1 }] } });
 const memCo813 = await req3('POST', '/api/carts/' + memCart813.j.cart.id + '/checkout', { body: { name: 'Iggy Cust', phone: '7075550411', email: 'igcust@t.local', address: '12 Vine St', city: 'Fairfield', when: 'Monday' } });
 const memSess813 = Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === memCart813.j.cart.id && s.mode === 'payment').slice(-1)[0];
@@ -5573,7 +5576,7 @@ await fetch(BASE3 + '/cart/' + memCart813.j.cart.id + '?paid=1&session_id=' + me
 const admReqs813b = await req3('GET', '/api/requests', { token: A3 });
 const memReq813 = (admReqs813b.j.requests || []).find(r => r.menuOrder && r.menuOrder.cartId === memCart813.j.cart.id);
 const memCj813 = await req3('POST', '/api/requests/' + (memReq813 ? memReq813.id : 'none') + '/create-job', { token: A3, body: { payOffer: 100 } });
-t('v80.13 member sale: the member final total is $100 and the seller take is 68% of it (pay $58 + $10 = $68)', memCo813.status === 200 && memCo813.j.total === 100 && memCo813.j.memberApplied === true && !!memReq813 && memReq813.menuOrder.totals.due === 100 && memCj813.status === 201 && memCj813.j.job.payOffer === 58 && memCj813.j.job.salesCommission === 10 && memCj813.j.job.assignedWorkerId === wSeller.id);
+t('v80.13 member sale: the member final total is $140 and the seller take is 68% of it (pay $85 + $10 = $95)', memCo813.status === 200 && memCo813.j.total === 140 && memCo813.j.memberApplied === true && !!memReq813 && memReq813.menuOrder.totals.due === 140 && memCj813.status === 201 && memCj813.j.job.payOffer === 85 && memCj813.j.job.salesCommission === 10 && memCj813.j.job.assignedWorkerId === wSeller.id);
 // His own estimate is a sale too: 4h at the $75/hr suggestion = $300,
 // and the job that lands on him carries pay $194 + $10 = $204.
 const est300 = await req3('POST', '/api/worker/estimates', { token: wSeller.token, body: { customerName: 'Est Eve', customerEmail: 'esteve@t.local', description: 'Build a custom pantry shelf wall', hours: 4, city: 'Fairfield' } });
@@ -6163,6 +6166,56 @@ let trEs819 = [];
 for (let i = 0; i < 30 && !trEs819.length; i++) { trEs819 = await bySubj819('Tu mes gratis de HomeCare termina pronto'); if (!trEs819.length) await sleep(200); }
 await sleep(400);
 t('v80.19 trial email: the es trial member gets the Spanish trial-ending email only (no bilingual twin)', trEs819.length === 1 && JSON.stringify(trEs819[0].to) === JSON.stringify(['v819-trial@t.local']) && (await bySubj819('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-trial@t.local'])).length === 0);
+// ---------------- v80.20 PRECIOS Y VIAJE: the admin travel line + no repricing ----------------
+{
+  const tCart = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Travel Tess', customerEmail: 'travel@t.local' } });
+  const tCid = tCart.j.cart.id;
+  t('v80.20 prices: the faucet cart prices at the new $135 (member $108)', tCart.status === 201 && tCart.j.cart.listTotal === 135 && tCart.j.cart.memberTotal === 108);
+  const tPage0 = await (await fetch(BASE2 + '/cart/' + tCid)).text();
+  const tAdm0 = await req2('GET', '/api/admin/carts', { token: A2 });
+  const tCart0 = (tAdm0.j.carts || []).find(c => c.id === tCid);
+  t('v80.20 travel: a fresh cart carries NO travel line and no payment state at all (the line exists ONLY when an admin adds it)', !tPage0.includes('Travel —') && !!tCart0 && tCart0.payState === null);
+  const tCust = await req2('POST', '/api/signup', { body: { name: 'Travel Tess', email: 'travel@t.local', password: 'password123', phone: '7075550201', role: 'customer' } });
+  const tForbidden = await req2('POST', '/api/admin/carts/' + tCid + '/adjust-balance', { token: tCust.j.token, body: { travel: true } });
+  t('v80.20 travel: a customer token cannot add the travel line (403)', tForbidden.status === 403);
+  const tCo = await req2('POST', '/api/carts/' + tCid + '/checkout', { body: { name: 'Travel Tess', phone: '7075550201', email: 'travel@t.local', address: '3 Trip St', city: 'Fairfield', when: 'Today' } });
+  const tSess = sessionForCart(tCid, 'payment');
+  await mockSessionPaid(tSess.id);
+  await fetch(BASE2 + '/cart/' + tCid + '?paid=1&session_id=' + tSess.id);
+  const tAdm1 = await req2('GET', '/api/admin/carts', { token: A2 });
+  const tCart1 = (tAdm1.j.carts || []).find(c => c.id === tCid);
+  t('v80.20 travel setup: the deposit is in ($50 of $135, $85 balance, still no travel line)', !!tCart1 && !!tCart1.payState && tCart1.payState.deposit === 50 && tCart1.payState.balance === 85 && tCart1.payState.total === 135 && (tCart1.payState.adjustments || []).length === 0);
+  const tAdj = await req2('POST', '/api/admin/carts/' + tCid + '/adjust-balance', { token: A2, body: { travel: true, delta: 999 } });
+  t('v80.20 travel: the admin travel tap adds EXACTLY $25 to the balance due (a forged delta in the same body is ignored)', tAdj.status === 200 && tAdj.j.cart.payState.balance === 110 && tAdj.j.cart.payState.adjustments.length === 1 && tAdj.j.cart.payState.adjustments[0].kind === 'travel' && tAdj.j.cart.payState.adjustments[0].delta === 25);
+  const tPage1 = await (await fetch(BASE2 + '/cart/' + tCid)).text();
+  t('v80.20 travel: the customer balance page shows the visible line "Travel — $25" and the new $110.00 balance', tPage1.includes('Travel</span> — <b>$25.00') && tPage1.includes('$110.00'));
+  const tMat = await req2('POST', '/api/admin/carts/' + tCid + '/adjust-balance', { token: A2, body: { delta: 10, note: 'Materials — pipe' } });
+  t('v80.20 travel: the materials adjustment still rides the same flow untouched (+$10 -> $120, its own untyped line)', tMat.status === 200 && tMat.j.cart.payState.balance === 120 && tMat.j.cart.payState.adjustments.length === 2 && tMat.j.cart.payState.adjustments[1].delta === 10 && !tMat.j.cart.payState.adjustments[1].kind);
+  // member cart: the travel line is STILL exactly $25 (a trip cost, never discounted)
+  const tMem = await mkMember('travelmember@t.local', '(707) 555-0202');
+  const tSub = await req2('POST', '/api/stripe/homecare-subscribe', { token: tMem.token, body: {} });
+  await mockActivate(tSub.j.subscriptionId);
+  await req2('POST', '/api/stripe/homecare-confirm', { token: tMem.token, body: {} });
+  const tmCart = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Travel Member', customerEmail: 'travelmember@t.local' } });
+  const tmCo = await req2('POST', '/api/carts/' + tmCart.j.cart.id + '/checkout', { token: tMem.token, body: { name: 'Travel Member', phone: '7075550202', email: 'travelmember@t.local', address: '4 Trip St', city: 'Fairfield', when: 'Today' } });
+  const tmSess = sessionForCart(tmCart.j.cart.id, 'payment');
+  await mockSessionPaid(tmSess.id);
+  await fetch(BASE2 + '/cart/' + tmCart.j.cart.id + '?paid=1&session_id=' + tmSess.id);
+  const tmAdj = await req2('POST', '/api/admin/carts/' + tmCart.j.cart.id + '/adjust-balance', { token: A2, body: { travel: true } });
+  t('v80.20 travel: on a MEMBER cart (member total $108, $58 balance) travel adds the full $25 — NO member discount on the trip cost', tmCo.status === 200 && tmCo.j.memberApplied === true && tmAdj.status === 200 && tmAdj.j.cart.payState.balance === 83 && tmAdj.j.cart.payState.adjustments[0].delta === 25);
+  // ES cart: the line speaks the customer's language
+  const teCart = await req2('POST', '/api/admin/carts', { token: A2, body: { lang: 'es', items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Viaje Vera', customerEmail: 'viaje@t.local' } });
+  const teCo = await req2('POST', '/api/carts/' + teCart.j.cart.id + '/checkout', { body: { name: 'Viaje Vera', phone: '7075550203', email: 'viaje@t.local', address: '5 Via St', city: 'Fairfield', when: 'Hoy' } });
+  const teSess = sessionForCart(teCart.j.cart.id, 'payment');
+  await mockSessionPaid(teSess.id);
+  await fetch(BASE2 + '/cart/' + teCart.j.cart.id + '?paid=1&session_id=' + teSess.id);
+  const teAdj = await req2('POST', '/api/admin/carts/' + teCart.j.cart.id + '/adjust-balance', { token: A2, body: { travel: true } });
+  const tePage = await (await fetch(BASE2 + '/cart/' + teCart.j.cart.id)).text();
+  t('v80.20 travel: an ES cart shows the line as "Viaje — $25"', teAdj.status === 200 && teAdj.j.cart.payState.balance === 110 && tePage.includes('Viaje</span> — <b>$25.00'));
+  // no repricing: a cart quoted at the OLD price keeps it (bombas keep their quoted price)
+  const tOld = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, unitPrice: 125 }], customerName: 'Quoted Quinn', customerEmail: 'quinn@t.local' } });
+  t('v80.20 no-repricing: a cart quoted at $125 KEEPS $125 after the catalog moved to $175 (sent quotes are never repriced)', tOld.status === 201 && tOld.j.cart.listTotal === 125 && tOld.j.cart.memberTotal === 100);
+}
 try { child5.kill('SIGTERM'); } catch (e) {}
 
 
@@ -6176,6 +6229,7 @@ try { geo3.close(); } catch (e) {}
 try { child2.kill('SIGTERM'); } catch (e) {}
 try { stripeMock.close(); } catch (e) {}
 try { resendMock.close(); } catch (e) {}
+
 
 // ---------------- summary ----------------
 console.log('');
