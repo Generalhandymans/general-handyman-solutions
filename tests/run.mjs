@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-23', swSrc.includes("const CACHE = 'ghs-app-v80-23'"));
+t('static: SW cache is ghs-app-v80-24', swSrc.includes("const CACHE = 'ghs-app-v80-24'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1312,6 +1312,24 @@ const pay1 = await req('POST', '/api/admin/captains/payout', { token: A, body: {
 t('v40 captains: mark-paid records who/when/amount and zeroes the balance', pay1.status === 200 && pay1.j.payout.amount === 15 && !!pay1.j.payout.at && pay1.j.payout.byEmail === 'admin@t.local' && pay1.j.totals.accrued === 0 && pay1.j.totals.paidOut === 15);
 const audCap = await req('GET', '/api/admin/audit', { token: A });
 t('v40 captains: assign + payout are audit-logged', audCap.j.entries.some(e => e.action === 'captain.assign' && e.target === vacArea.id) && audCap.j.entries.some(e => e.action === 'captain.payout' && e.target === capWid));
+// ---------------- v80.24 FRONTERA DE ROLES (audit P0-1 + P0-2, runtime pins) ----------------
+// flow1 is a job with a KNOWN customer total: $300 charged, $15 override
+// accrued and already paid out above. The captain must see HIS $15 — and
+// never the $300, in no field, in no value, in no notification.
+const meCap24 = await req('GET', '/api/me/captain', { token: CAP });
+const entry24 = (meCap24.j.override.entries || []).find(e => e.jobId === flow1.jid);
+t('v80.24 P0-1: /api/me/captain entries carry NO customer-total field (no charged/total/customerPrice key anywhere in the payload)', meCap24.status === 200 && meCap24.j.captain === true && !!entry24 && entry24.charged === undefined && (meCap24.j.override.entries || []).every(e => !('charged' in e) && !('total' in e) && !('customerPrice' in e) && !('customerTotal' in e)) && !JSON.stringify(meCap24.j).includes('"charged"'));
+t('v80.24 P0-1: the captain\'s own override figure SURVIVES — the $300 job\'s entry shows HIS $15 accrued and $15 paid, paidOut $15', !!entry24 && entry24.amount === 15 && entry24.paidAmount === 15 && meCap24.j.override.paidOut === 15);
+const capNotifs24 = await notifTexts(CAP);
+t('v80.24 P0-1: captain notifications carry NO customer total — the accrual note names only his $15.00 (no $300.00, no "5% of")', capNotifs24.some(x => x.includes('Captain override accrued') && x.includes('$15.00')) && !capNotifs24.some(x => x.includes('$300')) && !capNotifs24.some(x => x.includes('5% of')) && !capNotifs24.some(x => x.includes('charged on job')));
+const meCapCust24 = await req('GET', '/api/me/captain', { token: C1 });
+t('v80.24 P0-2: a CUSTOMER session is refused captain data (captain:false, no override/jobs/team keys)', meCapCust24.status === 200 && meCapCust24.j.captain === false && meCapCust24.j.override === undefined && meCapCust24.j.jobs === undefined && meCapCust24.j.team === undefined);
+const meCapAnon24 = await req('GET', '/api/me/captain', {});
+t('v80.24 P0-2: an anonymous caller gets 401 on /api/me/captain', meCapAnon24.status === 401);
+const capAdmin24 = await req('GET', '/api/admin/captains', { token: CAP });
+t('v80.24 P0-2: a CAPTAIN session cannot reach the admin captains payload (403 — the ledger with charged stays admin-only)', capAdmin24.status === 403);
+const capProps24 = await req('GET', '/api/me/proposals', { token: CAP });
+t('v80.24 P0-2: vice versa — a CAPTAIN (worker) session is refused on the customer-only proposals surface (403)', capProps24.status === 403);
 const newArea = await req('POST', '/api/admin/captains/areas', { token: A, body: { name: 'Richmond', cities: ['Richmond', 'El Cerrito'] } });
 t('v40 captains: admin can add an area to the registry', newArea.status === 201 && newArea.j.area.cities.length === 2 && newArea.j.area.captainId === null);
 const move1 = await req('POST', '/api/admin/captains/assign', { token: A, body: { areaId: napaArea.id, workerId: capWid } });
@@ -4289,7 +4307,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.23: ghs-app-v80-23)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-23'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.24: ghs-app-v80-24)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-24'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
