@@ -1484,7 +1484,7 @@ function minTotalForMargin(pay) { return ((Number(pay) || 0) + STRIPE_FEE_FLAT) 
 // When a tech SELLS a job through the app (his sales-menu cart link or
 // his own estimate), his guaranteed TOTAL take is 68% of the job's
 // FINAL customer total (post member discount — what the customer
-// actually pays), sales commission INCLUDED: TV Mounting $125 -> $85.
+// actually pays), sales commission INCLUDED: TV Mounting $175 -> $119.
 // The house keeps ~29% after Stripe fees on every sold job. The take
 // keeps the two-line breakdown the money views already show: the $10
 // commission line (clamped to the take itself, so neither line ever
@@ -2725,7 +2725,7 @@ function workerBlockedPage(res, what) {
 }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', at: a.at || '' })) } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -4370,7 +4370,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
       depositDueLabel: 'Due today — booking deposit to book', balanceDueLabel: 'Balance at completion',
-      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
+      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', travelLine: 'Travel', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
       joinOrderNote: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
@@ -4418,7 +4418,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
       depositDueLabel: 'Hoy — anticipo para agendar', balanceDueLabel: 'Resto al terminar',
-      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
+      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', travelLine: 'Viaje', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
       joinOrderNote: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
@@ -4524,8 +4524,13 @@ function cartPageHtml(c, user, langOverride, notice) {
     // v69: materials adjustments (admin, append-only) render as their
     // own signed lines under the items — the customer sees exactly
     // what changed and why, in his page language.
+    // v80.20: a kind:'travel' adjustment renders as its own sealed
+    // line — "Travel — $25" / "Viaje — $25" — localized by the same
+    // data-i18n repaint as every other string on this page.
     const adjRows = (c.payment && Array.isArray(c.payment.adjustments) && c.payment.adjustments.length)
-      ? c.payment.adjustments.map(a => '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#555">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
+      ? c.payment.adjustments.map(a => a.kind === 'travel'
+        ? '<p style="font-size:15px;margin:2px 0"><span data-i18n="travelLine">' + S.travelLine + '</span> — <b>' + usd(a.deltaCents / 100) + '</b></p>'
+        : '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#555">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
       : '';
     // v62: a cart in DEPOSIT state (40% in, balance outstanding) shows
     // the booked state + the balance with its own Pay button on this
@@ -4781,103 +4786,103 @@ function jobWorkerAutomationPayload(j, workerList) {
 // catalog — a tampered or stale client can neither raise nor lower it.
 // Add-on tuple: [price, nodisc(1|0), name].
 const SERVER_MENU = {
-  "closet-doors":{p:175,m:140},
-  "door-slab-swap":{p:125,m:100,a:{"knob":[75,0,"Install a knob/lever on the new slab"],"deadbolt":[75,0,"Install a deadbolt on the new slab"],"haul-door":[50,1,"Haul away the old door"]}},
-  "door-knob-install":{p:75,m:60},
-  "deadbolt-install":{p:75,m:60},
+  "closet-doors":{p:215,m:172},
+  "door-slab-swap":{p:165,m:132,a:{"knob":[75,0,"Install a knob/lever on the new slab"],"deadbolt":[75,0,"Install a deadbolt on the new slab"],"haul-door":[50,1,"Haul away the old door"]}},
+  "door-knob-install":{p:85,m:68},
+  "deadbolt-install":{p:85,m:68},
   "deadbolt-knob-combo":{p:125,m:100},
-  "smart-lock-install":{p:125,m:100},
-  "door-adjustment":{p:75,m:60},
-  "weatherstripping":{p:75,m:60},
-  "screen-door-install":{p:125,m:100},
-  "sliding-door-service":{p:125,m:100},
-  "window-screen-repair":{p:75,m:60,a:{"extra-screen":[25,0,"Additional screen rescreen — same visit"]}},
-  "pet-door-install":{p:125,m:100},
+  "smart-lock-install":{p:135,m:108},
+  "door-adjustment":{p:85,m:68},
+  "weatherstripping":{p:85,m:68},
+  "screen-door-install":{p:165,m:132},
+  "sliding-door-service":{p:135,m:108},
+  "window-screen-repair":{p:85,m:68,a:{"extra-screen":[25,0,"Additional screen rescreen — same visit"]}},
+  "pet-door-install":{p:165,m:132},
   "furniture-assembly":{p:125,m:100},
-  "furniture-assembly-large":{p:175,m:140},
-  "closet-organizer":{p:225,m:180},
+  "furniture-assembly-large":{p:215,m:172},
+  "closet-organizer":{p:250,m:200},
   "floating-shelves":{p:125,m:100},
   "cabinet-hardware-install":{p:125,m:100},
   "baby-gate-install":{p:125,m:100},
   "picture-mirror-hanging":{p:125,m:100},
   "mirror-cabinet-install":{p:125,m:100},
-  "curtain-rod-install":{p:75,m:60},
-  "blinds-install":{p:75,m:60},
+  "curtain-rod-install":{p:85,m:68},
+  "blinds-install":{p:85,m:68},
   "blinds-install-deal":{p:55,m:44},
-  "baseboard-install":{p:225,m:180},
-  "baseboard-repair":{p:125,m:100},
-  "laminate-floor-repair":{p:225,m:180},
-  "carpet-repair":{p:175,m:140},
+  "baseboard-install":{p:250,m:200},
+  "baseboard-repair":{p:135,m:108},
+  "laminate-floor-repair":{p:250,m:200},
+  "carpet-repair":{p:215,m:172},
   "transition-strip-install":{p:125,m:100},
   "drywall-patch-small":{p:150,m:120,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
   "drywall-patch-medium":{p:250,m:200,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
   "drywall-holes-set":{p:125,m:100,a:{"paint-touchup":[75,0,"Primer / paint touch-up return visit"]}},
   "paint-room":{p:325,m:260},
-  "paint-room-large":{p:450,m:360},
-  "paint-room-large-ceiling":{p:600,m:480},
+  "paint-room-large":{p:500,m:400},
+  "paint-room-large-ceiling":{p:675,m:540},
   "accent-wall-painting":{p:225,m:180},
-  "interior-door-painting":{p:75,m:60},
-  "fence-picket-repair":{p:125,m:100},
+  "interior-door-painting":{p:85,m:68},
+  "fence-picket-repair":{p:165,m:132},
   "fence-post-replacement":{p:125,m:100},
   "deck-board-replacement":{p:175,m:140},
-  "gate-repair":{p:125,m:100},
-  "tv-mounting":{p:125,m:100,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
-  "tv-mounting-large":{p:175,m:140,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
+  "gate-repair":{p:135,m:108},
+  "tv-mounting":{p:175,m:140,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
+  "tv-mounting-large":{p:215,m:172,a:{"raceway":[50,0,"Hide the cables (surface raceway)"],"soundbar":[75,0,"Mount my soundbar too"]}},
   "soundbar-mounting":{p:125,m:100},
-  "ceiling-fan":{p:125,m:100},
-  "chandelier-swap":{p:125,m:100},
+  "ceiling-fan":{p:135,m:108},
+  "chandelier-swap":{p:135,m:108},
   "light-fixture-swap":{p:125,m:100},
   "exhaust-fan-swap":{p:175,m:140},
   "dimmer-switch-swap":{p:125,m:100,a:{"extra-dimmer":[75,0,"Additional dimmer / switch — same visit"]}},
   "smoke-co-detector-install":{p:125,m:100},
   "ring-doorbell":{p:125,m:100},
-  "smart-thermostat-install":{p:125,m:100},
+  "smart-thermostat-install":{p:135,m:108},
   "security-camera-install":{p:125,m:100,a:{"extra-camera":[75,0,"Additional wireless camera — same visit"]}},
   "garage-opener":{p:375,m:300},
-  "holiday-lights":{p:175,m:140},
-  "holiday-lights-two-story":{p:250,m:200},
-  "holiday-lights-takedown":{p:75,m:60},
-  "holiday-lights-takedown-two-story":{p:150,m:120},
+  "holiday-lights":{p:215,m:172},
+  "holiday-lights-two-story":{p:295,m:236},
+  "holiday-lights-takedown":{p:85,m:68},
+  "holiday-lights-takedown-two-story":{p:225,m:180},
   "window-ac-install":{p:250,m:200},
-  "faucet-replacement":{p:125,m:100},
-  "toilet-replacement":{p:175,m:140,a:{"haul-toilet":[50,1,"Remove & haul away the old toilet"]}},
+  "faucet-replacement":{p:135,m:108},
+  "toilet-replacement":{p:215,m:172,a:{"haul-toilet":[50,1,"Remove & haul away the old toilet"]}},
   "toilet-repair":{p:125,m:100},
-  "garbage-disposal-swap":{p:125,m:100,a:{"haul-disposal":[50,1,"Haul away the old disposal"]}},
-  "showerhead-swap":{p:75,m:60},
-  "tub-shower-recaulk":{p:125,m:100},
+  "garbage-disposal-swap":{p:165,m:132,a:{"haul-disposal":[50,1,"Haul away the old disposal"]}},
+  "showerhead-swap":{p:85,m:68},
+  "tub-shower-recaulk":{p:135,m:108},
   "grab-bar-install":{p:125,m:100,a:{"extra-grab-bar":[75,0,"Additional grab bar — same visit"]}},
-  "p-trap-swap":{p:125,m:100},
-  "bidet-seat-install":{p:125,m:100},
-  "dryer-vent-cleaning":{p:125,m:100},
-  "washer-dryer-hookup":{p:125,m:100},
+  "p-trap-swap":{p:135,m:108},
+  "bidet-seat-install":{p:135,m:108},
+  "dryer-vent-cleaning":{p:135,m:108},
+  "washer-dryer-hookup":{p:135,m:108},
   "drain-unclog":{p:175,m:140,a:{"extra-drain":[75,0,"Additional drain unclog — same visit"]}},
   "dishwasher-swap":{p:200,m:160},
   "vanity-swap":{p:250,m:200,a:{"haul-vanity":[50,1,"Haul away the old vanity"]}},
   "bathroom-accessories-install":{p:125,m:100},
-  "hose-bibb-swap":{p:125,m:100},
+  "hose-bibb-swap":{p:135,m:108},
   "water-heater":{p:700,m:560},
-  "gutter-cleaning":{p:150,m:120},
+  "gutter-cleaning":{p:175,m:140},
   "gutter-cleaning-two-story":{p:250,m:200},
-  "pressure-washing":{p:150,m:120,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
-  "pressure-washing-large":{p:225,m:180,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
-  "yard-cleanup":{p:150,m:120},
-  "sprinkler-irrigation":{p:125,m:100},
-  "green-waste":{p:225,m:180},
-  "junk-minimum":{p:225,m:180},
+  "pressure-washing":{p:175,m:140,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
+  "pressure-washing-large":{p:250,m:200,a:{"trash-bin-cleaning":[50,0,"Trash bin cleaning (2 bins)"]}},
+  "yard-cleanup":{p:175,m:140},
+  "sprinkler-irrigation":{p:135,m:108},
+  "green-waste":{p:250,m:200},
+  "junk-minimum":{p:250,m:200},
   "junk-medium":{p:325,m:260},
   "junk-large":{p:425,m:340},
   "junk-full":{p:650,m:520},
   "mailbox-install":{p:175,m:140},
-  "fuel-pump-replacement":{p:300,m:240},
+  "fuel-pump-replacement":{p:350,m:280},
   "battery-replacement":{p:125,m:100},
-  "check-engine-diagnostics":{p:75,m:60},
-  "oil-change":{p:75,m:60,a:{"filter-swap":[50,0,"Air / cabin filter swap"]}},
+  "check-engine-diagnostics":{p:85,m:68},
+  "oil-change":{p:85,m:68,a:{"filter-swap":[50,0,"Air / cabin filter swap"]}},
   "brake-pads":{p:100,m:80,a:{"rotors":[85,0,"Add rotors (per pair)"]}},
   "alternator-replacement":{p:175,m:140},
-  "starter-replacement":{p:225,m:180},
-  "belt-hose-replacement":{p:125,m:100},
-  "spark-plug-replacement":{p:125,m:100},
-  "headlight-replacement":{p:75,m:60},
+  "starter-replacement":{p:250,m:200},
+  "belt-hose-replacement":{p:135,m:108},
+  "spark-plug-replacement":{p:135,m:108},
+  "headlight-replacement":{p:85,m:68},
   "heavy-furniture-move":{p:200,m:160}
 };
 function serverMenuTotals(serviceId, addonIds, isMember, asap) {
@@ -6179,8 +6184,8 @@ async function handleRequest(req, res) {
     // v80.13 (Gabriel's 68% law): a SOLD job's pay is NOT the admin's
     // input — the seller's guaranteed take is 68% of the job's FINAL
     // customer total, stamped here as payOffer + the $10 commission
-    // line inside it (TV Mounting: customer $125 -> pay $75 + $10 =
-    // $85). Only when no final total can be read off the request does
+    // line inside it (TV Mounting: customer $175 -> pay $109 + $10 =
+    // $119). Only when no final total can be read off the request does
     // a sold job fall back to the admin's payOffer + the flat $10
     // commission stamp, and only a non-sold job requires the admin's
     // payOffer as before.
@@ -7873,15 +7878,34 @@ async function handleRequest(req, res) {
     const rDead805 = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
     if (orderBalanceDead(rDead805)) return send(res, 400, { error: 'this order was cancelled — its balance can no longer be adjusted' });
     const b = await readBody(req);
-    const deltaCents = Math.round(Number(b.delta) * 100);
-    if (!Number.isFinite(deltaCents) || deltaCents === 0) return send(res, 400, { error: 'give the adjustment in dollars (e.g. 35 or -20) — it cannot be 0' });
-    if (Math.abs(deltaCents) > 200000) return send(res, 400, { error: 'that adjustment is over $2,000 — check the number' });
-    const note = cleanText(b.note, 200);
+    // v80.20 TRAVEL (Gabriel, 2026-11-01 — his own mechanic): the +$25
+    // trip charge is NEVER automatic and NEVER charged upfront. Gabriel
+    // decides case by case, HERE, at the final balance: { travel: true }
+    // forces the exact sealed line — the delta is always +$25 (any
+    // client-sent delta is ignored), the note is the customer's own
+    // language word, and kind:'travel' marks the line so the balance
+    // page renders "Travel — $25" / "Viaje — $25". It rides the SAME
+    // append-only adjustments as materials, landing AFTER the totals
+    // (and any member discount) were sealed: travel is a trip cost,
+    // not labor, so it never takes the −20%.
+    const isTravel = b.travel === true;
+    let deltaCents, note;
+    if (isTravel) {
+      deltaCents = 2500;
+      note = c.lang === 'es' ? 'Viaje' : 'Travel';
+    } else {
+      deltaCents = Math.round(Number(b.delta) * 100);
+      if (!Number.isFinite(deltaCents) || deltaCents === 0) return send(res, 400, { error: 'give the adjustment in dollars (e.g. 35 or -20) — it cannot be 0' });
+      if (Math.abs(deltaCents) > 200000) return send(res, 400, { error: 'that adjustment is over $2,000 — check the number' });
+      note = cleanText(b.note, 200);
+    }
     const newBalance = Math.round(Number(c.payment.balanceCents) || 0) + deltaCents;
     if (newBalance < 0) return send(res, 400, { error: 'the balance cannot go below $0 — the deposit already paid is ' + usd(Number(c.payment.depositCents) / 100) });
     await expireCartSessions(c);
     if (!Array.isArray(c.payment.adjustments)) c.payment.adjustments = [];
-    c.payment.adjustments.push({ at: new Date().toISOString(), by: user.email || user.id, deltaCents, note });
+    const adjRec = { at: new Date().toISOString(), by: user.email || user.id, deltaCents, note };
+    if (isTravel) adjRec.kind = 'travel';
+    c.payment.adjustments.push(adjRec);
     c.payment.amountCents = Math.round(Number(c.payment.amountCents) || 0) + deltaCents;
     c.payment.balanceCents = newBalance;
     const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
@@ -7889,8 +7913,10 @@ async function handleRequest(req, res) {
       if (r.payment && r.payment.status === 'deposit') { r.payment.totalCents = c.payment.amountCents; r.payment.balanceCents = newBalance; }
       if (r.menuOrder && r.menuOrder.totals) r.menuOrder.totals.due = c.payment.amountCents / 100;
       r.messages = r.messages || [];
-      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.', at: new Date().toISOString() });
-      if (r.customerId) notify(r.customerId, 'payment', 'Materials update on order ' + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.', '#req=' + r.id);
+      r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: isTravel
+        ? 'Travel charge on your order ' + r.id + ': +' + usd(deltaCents / 100) + ' — the trip charge for this job (travel is a trip cost, never discounted). New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '.'
+        : 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.', at: new Date().toISOString() });
+      if (r.customerId) notify(r.customerId, 'payment', (isTravel ? 'Travel charge on order ' : 'Materials update on order ') + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.', '#req=' + r.id);
     }
     audit(user, 'cart.adjust-balance', c.id, (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + ' · new balance ' + usd(newBalance / 100));
     if (newBalance === 0) {
