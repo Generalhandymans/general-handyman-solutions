@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v80-10-4', swSrc.includes("const CACHE = 'ghs-app-v80-10-4'"));
+t('static: SW cache is ghs-app-v80-10-5', swSrc.includes("const CACHE = 'ghs-app-v80-10-5'"));
 t('static v68: NO service remains at $185 in either catalog — the whole tier is $175 / member $140 (Gabriel 2026-10-25)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4277,7 +4277,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10.4: ghs-app-v80-10-4)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10-4'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v80.10.5: ghs-app-v80-10-5)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v80-10-5'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5081,6 +5081,20 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('window.__ghsBootBounce = true') && htmlSrc.includes('function syncEntryFlag()') && htmlSrc.includes('if (!me && window.__ghsBootBounce)') && !htmlSrc.includes("try{ if (w) localStorage.setItem('ghs_entry','worker'); }catch(e){}"));
   t('static v80.10.1 micro-copy: the city lines are single text nodes (no fused "Today·"), the compare card\u2019s FREE line lost its tag boundary, and the starter price range has no stray space after the dash',
     htmlSrc.includes('● Today · Home base · from $75') && !htmlSrc.includes('<b>● Today</b>') && htmlSrc.includes('<li>First month FREE — for everyone (one per account)</li>') && htmlSrc.includes('$225<small>–$300</small>'));
+  t('static v80.10.5 LINKS: the before/after caption link "See yard services" lands on the Yard Care plans view (#yard-care), not on a yard-cleanup order; the real Yard Cleanup Order CTAs keep their #order route',
+    htmlSrc.includes('<a href="#yard-care">See yard services →</a>') && !htmlSrc.includes('<a href="#order/yard-cleanup">See yard services') && htmlSrc.includes('href="#order/yard-cleanup"'));
+  t('static v80.10.5 LINKS: the six restored city cards are real links to the app menu (#menu -> goMenu, the hero CTA path) and the .city rule renders the anchor as a block',
+    (htmlSrc.match(/<a class="city" href="#menu">/g) || []).length === 6 && !htmlSrc.includes('<div class="city">') && htmlSrc.includes('display:block; color:inherit; text-decoration:none; cursor:pointer;'));
+  t('static v80.10.5 LINKS: the top logo banner links home with the header Inicio item target (the apex URL)',
+    htmlSrc.includes('<a href="https://generalhandymans.app"><img src="/logo-header.png"'));
+  t('static v80.10.5 LINKS: the fragment membership buttons distinguish the visit counts while the join preselection hrefs stay unchanged',
+    htmlSrc.includes('class="ghs-mem-btn" href="#join-plus1">Join Plus — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-plus2">Join Plus — 2 visits/mo</a>') &&
+    htmlSrc.includes('class="ghs-mem-btn" href="#join-yard1">Join Yard Care — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-yard2">Join Yard Care — 2 visits/mo</a>') &&
+    !htmlSrc.includes('class="ghs-mem-btn" href="#join-plus1">Join Plus</a>') && !htmlSrc.includes('class="ghs-mem-btn" href="#join-plus2">Join Plus</a>') &&
+    !htmlSrc.includes('class="ghs-mem-btn" href="#join-yard1">Join Yard Care</a>') && !htmlSrc.includes('class="ghs-mem-btn" href="#join-yard2">Join Yard Care</a>'));
+  t('static v80.10.5 LINKS: the app footer carries a Follow-us row (Instagram + the Facebook business Page + a Google Maps search link, new tab, EN+ES labels)',
+    htmlSrc.includes('footFollow') && htmlSrc.includes('class="foot-social"') && htmlSrc.includes('https://www.instagram.com/generalhandymans') &&
+    htmlSrc.includes('https://www.facebook.com/generalhandymans') && htmlSrc.includes('https://www.google.com/maps/search/?api=1&query=General+Handyman+Solutions+Fairfield+CA'));
 
   const raw809 = (port, method, pth, hostHdr, body) => new Promise((resolve, reject) => {
     const r = http.request({ host: '127.0.0.1', port, path: pth, method, setHost: false, headers: { Host: hostHdr, 'Content-Type': 'application/json' } }, (res) => {
