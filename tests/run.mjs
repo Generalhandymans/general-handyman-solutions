@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v83.1', swSrc.includes("const CACHE = 'ghs-app-v83.1'"));
+t('static: SW cache is ghs-app-v83.2', swSrc.includes("const CACHE = 'ghs-app-v83.2'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4322,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83.1: ghs-app-v83.1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83.1'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83.2: ghs-app-v83.2)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83.2'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4941,7 +4941,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const goodPay807 = await req2('POST', '/api/jobs', { token: A807, body: { service: 'Form fix pin OK', city: 'Fairfield', payOffer: 75 } });
   t('v80.7 form: POST /api/jobs with payOffer 75 succeeds and the created job shows payOffer 75', goodPay807.status === 201 && !!goodPay807.j.job && goodPay807.j.job.payOffer === 75);
   if (goodPay807.j && goodPay807.j.job) await req2('DELETE', '/api/jobs/' + goodPay807.j.job.id, { token: A807 });
-  t('static v80.7 form: Create-a-job money placeholders are marked as examples (Ej:) and the client pay guard exists', htmlSrc.includes('id="jPay" placeholder="Ej: 75"') && htmlSrc.includes('id="jCustPrice" placeholder="Ej: 150"') && htmlSrc.includes('the example is not a value'));
+  t('static v80.7 form: Create-a-job money placeholders are marked as examples (Ex: — v83.2: language-neutral, was the Spanish-only "Ej:") and the client pay guard exists', htmlSrc.includes('id="jPay" placeholder="Ex: 75"') && htmlSrc.includes('id="jCustPrice" placeholder="Ex: 150"') && htmlSrc.includes('the example is not a value'));
 }
 
 
@@ -5142,6 +5142,24 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('#oldhome .promos::-webkit-scrollbar') && htmlSrc.includes('#oldhome .chips::-webkit-scrollbar') &&
     htmlSrc.includes('#oldhome .cats::-webkit-scrollbar') && htmlSrc.includes('#oldhome .members::-webkit-scrollbar') &&
     htmlSrc.includes('#oldhome .quotes::-webkit-scrollbar{display:none}'));
+  t('static v83.2 AUDIT FIX 1: the How-ordering-works example mirrors a REAL $300 order (Gabriel 2026-11-03: 100% realistic) — TV Mounting at the true $175 (was the fake $125), the real raceway $50 + soundbar $75 add-ons, total $300, then the deposit-law split the app itself shows: $50 deposit due today (flat tier, total ≤ $300) + $250 balance at completion; EN+ES howRows carry the two new rows so the painter labels them in both languages',
+    htmlSrc.includes('<div class="orow"><span>📺 TV Mounting (up to 65")</span><b>$175</b></div>') &&
+    htmlSrc.includes('<div class="orow tot"><span>Total — a deposit books it, balance at completion</span><span>$300</span></div>') &&
+    htmlSrc.includes('<div class="orow"><span>Deposit due today</span><b>$50</b></div>') &&
+    htmlSrc.includes('<div class="orow"><span>Balance at completion</span><b>$250</b></div>') &&
+    htmlSrc.includes("'Deposit due today', 'Balance at completion'") && htmlSrc.includes("'Depósito a pagar hoy', 'Saldo al terminar'") &&
+    !htmlSrc.includes('<span>📺 TV Mounting (up to 65")</span><b>$125</b>') && !htmlSrc.includes('balance at completion</span><span>$250</span>'));
+  t('static v83.2 AUDIT FIX 2: the vitrina FEATURED block carries NO decorative per-service ratings and NO popularity badges (Gabriel v81 rule: verified reviews only) — the six cards keep only the factual ● Available today tail, the Most-ordered / Top-rated badges are gone from the static cards AND both OH_UI dicts, the section is renamed FEATURED SERVICES / SERVICIOS DESTACADOS, and the generic favorites strip no longer claims "Booked again & again" (price kept)',
+    (function () { const blk = htmlSrc.slice(htmlSrc.indexOf('id="sec-popular"'), htmlSrc.indexOf('id="sec-carpentry"')); return blk.includes('⭐ FEATURED SERVICES') && !/★<\/i> [0-9]/.test(blk) && !blk.includes('Most ordered') && !blk.includes('Top rated'); })() &&
+    !htmlSrc.includes('Most ordered') && !htmlSrc.includes('El más ordenado') && !htmlSrc.includes('Mejor calificado') &&
+    !htmlSrc.includes('Booked again & again') && !htmlSrc.includes('Ordenado una y otra vez') &&
+    htmlSrc.includes("popH: '⭐ FEATURED SERVICES', popSub: 'Flat prices, booked in minutes — Solano County'") &&
+    htmlSrc.includes("popH: '⭐ SERVICIOS DESTACADOS', popSub: 'Precios fijos, reserva en minutos — Solano County'"));
+  t('static v83.2 AUDIT FIX 3: the Terms clause 5 and the captain-override texts (admin ES + worker-area EN/ES) no longer name the dead "$75 services" category — the bottom flat tier is $85 now; the override RULE itself is unchanged ($0 on flat services and junk/hauling)',
+    !htmlSrc.includes('flat $75 services') && !htmlSrc.includes('$75 services') && !htmlSrc.includes('Servicios de $75') &&
+    htmlSrc.includes('hauling / green-waste loads and flat services — and priority scheduling') &&
+    htmlSrc.includes('Servicios flat, junk removal y hauling/green waste no acumulan') &&
+    htmlSrc.includes('Flat services, junk and hauling don') && htmlSrc.includes('Servicios flat, junk y hauling no acumulan'));
   t('static v80.10.5 LINKS: the fragment membership buttons distinguish the visit counts while the join preselection hrefs stay unchanged',
     htmlSrc.includes('class="ghs-mem-btn" href="#join-plus1">Join Plus — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-plus2">Join Plus — 2 visits/mo</a>') &&
     htmlSrc.includes('class="ghs-mem-btn" href="#join-yard1">Join Yard Care — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-yard2">Join Yard Care — 2 visits/mo</a>') &&
@@ -6106,7 +6124,7 @@ t('static v80.19.1: OH_UI (the restored-homepage dictionary) is in full EN|ES pa
 t('static v80.19.1: paintOldHome is wired into the shared language pass and the hero + section headers resolve through OH_UI in both languages',
   htmlSrc.includes('function paintOldHome()') && htmlSrc.includes("if (typeof paintOldHome === 'function') paintOldHome();") &&
   !!ohUi191 && ohUi191.en.heroH1Html.includes('Home repairs,') && ohUi191.es.heroH1Html.includes('Reparaciones del hogar,') &&
-  ohUi191.en.popH === '🔥 Popular right now' && ohUi191.es.popH === '🔥 Popular ahora' &&
+  ohUi191.en.popH === '⭐ FEATURED SERVICES' && ohUi191.es.popH === '⭐ SERVICIOS DESTACADOS' &&
   ohUi191.en.meetH === 'Meet your technician' && ohUi191.es.meetH === 'Conoce a tu técnico' &&
   ohUi191.en.memTitle === 'Memberships' && ohUi191.es.memTitle === 'Membresías' &&
   ohUi191.en.citiesH === '📍 Serving all of Solano County' && ohUi191.es.citiesH === '📍 Servimos todo el condado de Solano');
