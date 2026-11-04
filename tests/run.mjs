@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v83', swSrc.includes("const CACHE = 'ghs-app-v83'"));
+t('static: SW cache is ghs-app-v83.1', swSrc.includes("const CACHE = 'ghs-app-v83.1'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4322,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83: ghs-app-v83)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83.1: ghs-app-v83.1)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83.1'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5136,6 +5136,12 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.indexOf('id="brandBar"') > htmlSrc.indexOf('<header>') && htmlSrc.indexOf('id="brandBar"') < htmlSrc.indexOf('id="homeSearchWrap"') &&
     htmlSrc.includes('<span class="brand-txt"><b><i>General</i> <em>Handyman</em> Solutions</b><span>Handyman · Mobile mechanic · Yard care — Solano County</span></span>') &&
     htmlSrc.includes('#authBox .auth-hero{display:none}') && htmlSrc.includes('<div class="auth-hero">'));
+  t('static v83.1 FRANJA: the white band above the vitrina dies ONLY in the vitrina state — the wrap top padding collapses while #customerBox is display:block with the login and reset cards both down (every replacing route hides #customerBox first; the worker/admin zones never show it, so no other screen can re-render), and the five sideways vitrina rows hide their scrollbars exactly like .menu-chips (the scroll stays, only the bar goes)',
+    htmlSrc.includes('body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="display: block"])):not(:has(#resetBox[style*="display: block"])) .wrap{padding-top:0}') &&
+    htmlSrc.includes('#oldhome .promos, #oldhome .chips, #oldhome .cats, #oldhome .members, #oldhome .quotes{scrollbar-width:none}') &&
+    htmlSrc.includes('#oldhome .promos::-webkit-scrollbar') && htmlSrc.includes('#oldhome .chips::-webkit-scrollbar') &&
+    htmlSrc.includes('#oldhome .cats::-webkit-scrollbar') && htmlSrc.includes('#oldhome .members::-webkit-scrollbar') &&
+    htmlSrc.includes('#oldhome .quotes::-webkit-scrollbar{display:none}'));
   t('static v80.10.5 LINKS: the fragment membership buttons distinguish the visit counts while the join preselection hrefs stay unchanged',
     htmlSrc.includes('class="ghs-mem-btn" href="#join-plus1">Join Plus — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-plus2">Join Plus — 2 visits/mo</a>') &&
     htmlSrc.includes('class="ghs-mem-btn" href="#join-yard1">Join Yard Care — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-yard2">Join Yard Care — 2 visits/mo</a>') &&
