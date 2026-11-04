@@ -355,6 +355,29 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
    Copy lives in HOME_UI (EN/ES); markup is painted by paintHomeBlocks(). */
 #homeSearch{background:#1a1a1a;border:1px solid #333;color:#fff;font-size:14.5px}
 #homeSearch::placeholder{color:#9a968f}
+/* ===== v83 CABECERA (Gabriel, 2026-11-03) — the giant logo banner is
+   GONE from the top of the page (the asset stays in the repo; only its
+   homepage placement died). The compact brand bar now rides IN the
+   header, beside the search: hammer + GENERAL HANDYMAN SOLUTIONS +
+   tagline on one side, "What do you need today?" on the other, and
+   everything below pulls up — the page starts at the top. On narrow
+   screens the tagline drops, the name shrinks and the controls wrap
+   under: the strip stays slim either way (a fraction of the old hero).
+   The auth card's own .auth-hero strip is the SAME brand bar doubled
+   right below the header, so it no longer paints — its markup and the
+   whole login/signup flow stay exactly as they were. */
+#brandBar{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;flex:none;min-width:0}
+#brandBar img{width:40px;height:40px;border-radius:11px;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+#brandBar .brand-txt{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+#brandBar .brand-txt b{font-size:15.5px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+#brandBar .brand-txt b i{font-style:normal}
+#brandBar .brand-txt>span{color:#9a968f;font-size:11.5px;white-space:nowrap}
+#authBox .auth-hero{display:none}
+@media (max-width:700px){
+  #brandBar img{width:34px;height:34px;border-radius:9px}
+  #brandBar .brand-txt b{font-size:13.5px}
+  #brandBar .brand-txt>span{display:none}
+}
 .hero-car{position:relative;border-radius:18px;overflow:hidden;background:#0b0b0b;margin:14px 0 0}
 .hero-track{display:flex;width:200%;transition:transform .55s ease}
 .hero-slide{width:50%;flex:0 0 50%;position:relative;min-height:252px;display:flex;flex-direction:column;justify-content:center;padding:26px 24px;box-sizing:border-box}
@@ -419,10 +442,10 @@ table.cmp button{white-space:nowrap}
 </style>
 </head>
 <body>
-<div style="background:#000;text-align:center;padding:8px 16px 4px"><a href="https://generalhandymans.app"><img src="/logo-header.png" alt="General Handyman Solutions" style="width:min(880px,96%);height:auto"></a></div>
 <header>
+  <a id="brandBar" href="https://generalhandymans.app" aria-label="General Handyman Solutions — home"><img src="/icons/icon-192.png" alt="General Handyman Solutions"><span class="brand-txt"><b><i>General</i> <em>Handyman</em> Solutions</b><span>Handyman · Mobile mechanic · Yard care — Solano County</span></span></a>
   <span id="homeSearchWrap" style="flex:1 1 200px;max-width:420px;display:flex;min-width:150px"><input id="homeSearch" type="search" placeholder="What do you need today?" oninput="menuSearch(this.value)" style="width:100%;border-radius:999px;padding:9px 14px" aria-label="Search services"></span>
-  <span style="display:flex;align-items:center;gap:10px">
+  <span style="display:flex;align-items:center;gap:10px;margin-left:auto">
     <nav style="display:flex;gap:8px;align-items:center"><a href="https://generalhandymans.app" id="navHomeLink">Home</a><a href="#" id="menuNavLink" onclick="goMenu();return false;">Menu</a><a href="#memberships" id="navMembershipsLink">Memberships</a><a href="#yard-care" id="navYardLink">Yard Care</a></nav>
     <a href="/instalar" id="installNavLink" style="color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a">📱 Install app</a>
     <span class="menu-lang" role="group" aria-label="Language / Idioma"><button type="button" id="globLangEn" onclick="setMenuLang('en')">EN</button><button type="button" id="globLangEs" onclick="setMenuLang('es')">ES</button></span>
