@@ -497,7 +497,7 @@ const MENU_TRADE = {
   'tv-mounting': 'electrical', 'tv-mounting-large': 'electrical', 'soundbar-mounting': 'electrical', 'chandelier-swap': 'electrical', 'light-fixture-swap': 'electrical', 'exhaust-fan-swap': 'electrical', 'dimmer-switch-swap': 'electrical', 'smoke-co-detector-install': 'electrical', 'smart-thermostat-install': 'electrical', 'security-camera-install': 'electrical', 'garage-opener': 'electrical', 'holiday-lights': 'electrical', 'holiday-lights-two-story': 'electrical', 'holiday-lights-takedown': 'electrical', 'holiday-lights-takedown-two-story': 'electrical', 'window-ac-install': 'electrical',
   'toilet-repair': 'plumbing', 'garbage-disposal-swap': 'plumbing', 'showerhead-swap': 'plumbing', 'tub-shower-recaulk': 'plumbing', 'grab-bar-install': 'plumbing', 'p-trap-swap': 'plumbing', 'bidet-seat-install': 'plumbing', 'dryer-vent-cleaning': 'plumbing', 'washer-dryer-hookup': 'plumbing', 'bathroom-accessories-install': 'plumbing', 'hose-bibb-swap': 'plumbing',
   'gutter-cleaning': 'gardening', 'gutter-cleaning-two-story': 'gardening', 'pressure-washing': 'gardening', 'pressure-washing-large': 'gardening', 'sprinkler-irrigation': 'gardening', 'junk-minimum': 'gardening', 'junk-medium': 'gardening', 'junk-large': 'gardening', 'junk-full': 'gardening', 'mailbox-install': 'gardening',
-  'fuel-pump-replacement': 'mechanic', 'check-engine-diagnostics': 'mechanic', 'belt-hose-replacement': 'mechanic', 'spark-plug-replacement': 'mechanic', 'headlight-replacement': 'mechanic',
+  'fuel-pump-replacement': 'mechanic', 'fuel-pump-tank-drop': 'mechanic', 'alternator-difficult': 'mechanic', 'spark-plug-v6v8': 'mechanic', 'turbo-replacement': 'mechanic', 'check-engine-diagnostics': 'mechanic', 'belt-hose-replacement': 'mechanic', 'spark-plug-replacement': 'mechanic', 'headlight-replacement': 'mechanic',
   'heavy-furniture-move': 'handyman'
 };
 function tradeForService(service, serviceId) {
@@ -1604,7 +1604,7 @@ function minTotalForSoldMargin() { return STRIPE_FEE_FLAT / (1 - MARGIN_FLOOR - 
 // Typical hours per catalog service — the SAME hours the prices were
 // built from (menu metas + MASTER-SERVICE-LIST). Standard tech pay for
 // a service is $50/hr × these hours, min $50 (Gabriel's pay model).
-const SERVICE_HOURS = { 'closet-doors': 2.5, 'door-slab-swap': 2, 'door-knob-install': 1, 'deadbolt-install': 0.75, 'deadbolt-knob-combo': 1, 'smart-lock-install': 1.5, 'door-adjustment': 1, 'weatherstripping': 1, 'screen-door-install': 2, 'sliding-door-service': 1.5, 'window-screen-repair': 1, 'pet-door-install': 2, 'furniture-assembly': 1.5, 'furniture-assembly-large': 2.5, 'closet-organizer': 3, 'floating-shelves': 1, 'cabinet-hardware-install': 1, 'baby-gate-install': 1, 'picture-mirror-hanging': 1, 'mirror-cabinet-install': 1, 'curtain-rod-install': 0.75, 'blinds-install': 0.5, 'blinds-install-deal': 0.5, 'baseboard-install': 3, 'baseboard-repair': 1.5, 'laminate-floor-repair': 3, 'carpet-repair': 2.5, 'transition-strip-install': 1, 'drywall-patch-small': 1.5, 'drywall-patch-medium': 3, 'drywall-holes-set': 1, 'paint-room': 4, 'paint-room-large': 6, 'paint-room-large-ceiling': 8, 'accent-wall-painting': 2.5, 'interior-door-painting': 1, 'fence-picket-repair': 2, 'fence-post-replacement': 1.25, 'deck-board-replacement': 2, 'gate-repair': 1.5, 'tv-mounting': 2, 'tv-mounting-large': 2.5, 'soundbar-mounting': 1, 'ceiling-fan': 1.5, 'chandelier-swap': 1.5, 'light-fixture-swap': 1, 'exhaust-fan-swap': 2, 'dimmer-switch-swap': 0.75, 'smoke-co-detector-install': 1, 'ring-doorbell': 1, 'smart-thermostat-install': 1.5, 'security-camera-install': 1, 'garage-opener': 3, 'holiday-lights': 2.5, 'holiday-lights-two-story': 3.5, 'holiday-lights-takedown': 1, 'holiday-lights-takedown-two-story': 3, 'window-ac-install': 1.5, 'faucet-replacement': 1.5, 'toilet-replacement': 2.5, 'toilet-repair': 1, 'garbage-disposal-swap': 2, 'showerhead-swap': 0.75, 'tub-shower-recaulk': 1.5, 'grab-bar-install': 1, 'p-trap-swap': 1.5, 'bidet-seat-install': 1.5, 'dryer-vent-cleaning': 1.5, 'washer-dryer-hookup': 1.5, 'drain-unclog': 1, 'dishwasher-swap': 2, 'vanity-swap': 3, 'bathroom-accessories-install': 1, 'hose-bibb-swap': 1.5, 'water-heater': 3.5, 'gutter-cleaning': 2, 'gutter-cleaning-two-story': 3, 'pressure-washing': 2, 'pressure-washing-large': 3, 'yard-cleanup': 2, 'sprinkler-irrigation': 1.5, 'green-waste': 1.5, 'junk-minimum': 1.5, 'junk-medium': 2, 'junk-large': 2.5, 'junk-full': 3, 'mailbox-install': 1.5, 'fuel-pump-replacement': 4, 'battery-replacement': 1, 'check-engine-diagnostics': 1, 'oil-change': 1, 'brake-pads': 1, 'alternator-replacement': 2, 'starter-replacement': 2.5, 'belt-hose-replacement': 1.5, 'spark-plug-replacement': 1.5, 'headlight-replacement': 0.75, 'heavy-furniture-move': 1 };
+const SERVICE_HOURS = { 'closet-doors': 2.5, 'door-slab-swap': 2, 'door-knob-install': 1, 'deadbolt-install': 0.75, 'deadbolt-knob-combo': 1, 'smart-lock-install': 1.5, 'door-adjustment': 1, 'weatherstripping': 1, 'screen-door-install': 2, 'sliding-door-service': 1.5, 'window-screen-repair': 1, 'pet-door-install': 2, 'furniture-assembly': 1.5, 'furniture-assembly-large': 2.5, 'closet-organizer': 3, 'floating-shelves': 1, 'cabinet-hardware-install': 1, 'baby-gate-install': 1, 'picture-mirror-hanging': 1, 'mirror-cabinet-install': 1, 'curtain-rod-install': 0.75, 'blinds-install': 0.5, 'blinds-install-deal': 0.5, 'baseboard-install': 3, 'baseboard-repair': 1.5, 'laminate-floor-repair': 3, 'carpet-repair': 2.5, 'transition-strip-install': 1, 'drywall-patch-small': 1.5, 'drywall-patch-medium': 3, 'drywall-holes-set': 1, 'paint-room': 4, 'paint-room-large': 6, 'paint-room-large-ceiling': 8, 'accent-wall-painting': 2.5, 'interior-door-painting': 1, 'fence-picket-repair': 2, 'fence-post-replacement': 1.25, 'deck-board-replacement': 2, 'gate-repair': 1.5, 'tv-mounting': 2, 'tv-mounting-large': 2.5, 'soundbar-mounting': 1, 'ceiling-fan': 1.5, 'chandelier-swap': 1.5, 'light-fixture-swap': 1, 'exhaust-fan-swap': 2, 'dimmer-switch-swap': 0.75, 'smoke-co-detector-install': 1, 'ring-doorbell': 1, 'smart-thermostat-install': 1.5, 'security-camera-install': 1, 'garage-opener': 3, 'holiday-lights': 2.5, 'holiday-lights-two-story': 3.5, 'holiday-lights-takedown': 1, 'holiday-lights-takedown-two-story': 3, 'window-ac-install': 1.5, 'faucet-replacement': 1.5, 'toilet-replacement': 2.5, 'toilet-repair': 1, 'garbage-disposal-swap': 2, 'showerhead-swap': 0.75, 'tub-shower-recaulk': 1.5, 'grab-bar-install': 1, 'p-trap-swap': 1.5, 'bidet-seat-install': 1.5, 'dryer-vent-cleaning': 1.5, 'washer-dryer-hookup': 1.5, 'drain-unclog': 1, 'dishwasher-swap': 2, 'vanity-swap': 3, 'bathroom-accessories-install': 1, 'hose-bibb-swap': 1.5, 'water-heater': 3.5, 'gutter-cleaning': 2, 'gutter-cleaning-two-story': 3, 'pressure-washing': 2, 'pressure-washing-large': 3, 'yard-cleanup': 2, 'sprinkler-irrigation': 1.5, 'green-waste': 1.5, 'junk-minimum': 1.5, 'junk-medium': 2, 'junk-large': 2.5, 'junk-full': 3, 'mailbox-install': 1.5, 'fuel-pump-replacement': 4, 'battery-replacement': 1, 'check-engine-diagnostics': 1, 'oil-change': 1, 'brake-pads': 1, 'alternator-replacement': 2, 'starter-replacement': 2.5, 'belt-hose-replacement': 1.5, 'spark-plug-replacement': 1.5, 'fuel-pump-tank-drop': 5.5, 'alternator-difficult': 3, 'spark-plug-v6v8': 2.5, 'turbo-replacement': 3, 'headlight-replacement': 0.75, 'heavy-furniture-move': 1 };
 // Documented flat pays that beat the hours model (hauling: the worker
 // is paid per trip — Gabriel's green-waste split, $120/trip).
 const SERVICE_PAY_FLAT = { 'green-waste': 120 };
@@ -5287,17 +5287,30 @@ const SERVER_MENU = {
   "junk-full":{p:650,m:520},
   "mailbox-install":{p:175,m:140},
   "fuel-pump-replacement":{p:350,m:280},
+  "fuel-pump-tank-drop":{p:450,m:360},
   "battery-replacement":{p:125,m:100},
   "check-engine-diagnostics":{p:85,m:68},
   "oil-change":{p:85,m:68,a:{"filter-swap":[50,0,"Air / cabin filter swap"]}},
   "brake-pads":{p:100,m:80,a:{"rotors":[85,0,"Add rotors (per pair)"]}},
   "alternator-replacement":{p:175,m:140},
+  "alternator-difficult":{p:250,m:200},
   "starter-replacement":{p:250,m:200},
   "belt-hose-replacement":{p:135,m:108},
   "spark-plug-replacement":{p:135,m:108},
+  "spark-plug-v6v8":{p:215,m:172},
+  "turbo-replacement":{p:450,m:360},
   "headlight-replacement":{p:85,m:68},
   "heavy-furniture-move":{p:200,m:160}
 };
+// v82: ESTIMATE-FIRST services — they live in the catalog (and in the
+// master list) carrying a FROM price, but they are NEVER orderable at
+// that price: no cart, no checkout, no menu order and no tech sales
+// cart may price one. The customer books them through the free
+// photo-estimate / estimate request flow and the Team confirms the
+// exact price on the estimate. (Gabriel 2026-11-03: the turbo is
+// "desde $450" — nunca plano sin estimado; the Land Rover lesson.)
+const ESTIMATE_FIRST_SERVICES = { 'turbo-replacement': true };
+function isEstimateFirst(serviceId) { return !!ESTIMATE_FIRST_SERVICES[serviceId]; }
 // v80.28 BÚSQUEDA: the account's menu favorites / recents only ever
 // hold REAL catalog ids — validated here against SERVER_MENU (the one
 // price source), deduped, order preserved, capped. Anything else a
@@ -5315,6 +5328,7 @@ function cleanMenuIdList(v, cap) {
 function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   const svc = SERVER_MENU[serviceId];
   if (!svc) return null;
+  if (isEstimateFirst(serviceId)) return null; // v82: estimate-first is never priced as a menu order
   const addons = svc.a || {};
   let extrasSum = 0, discSum = 0, nodiscSum = 0;
   const extras = [];
@@ -6200,7 +6214,7 @@ async function handleRequest(req, res) {
     // itself computes on the job's FINAL total (the member total when
     // the buyer is a member). No member prices, no margins, no other
     // internal math beyond his own.
-    const items = Object.keys(SERVER_MENU).map(serviceId => {
+    const items = Object.keys(SERVER_MENU).filter(serviceId => !isEstimateFirst(serviceId)).map(serviceId => {
       const st = soldTakeForTotal(SERVER_MENU[serviceId].p);
       return { serviceId, price: SERVER_MENU[serviceId].p, pay: st.pay, commission: st.commission, take: st.take };
     });
@@ -6221,6 +6235,7 @@ async function handleRequest(req, res) {
       const sid = cleanText(raw && raw.serviceId, 60);
       const svc = SERVER_MENU[sid];
       if (!svc) return send(res, 400, { error: 'unknown service: ' + (sid || '(blank)') });
+      if (isEstimateFirst(sid)) return send(res, 400, { error: 'estimate-first service — it is quoted on an estimate, never sold at a menu price: ' + sid });
       const qty = Math.max(1, Math.min(99, Math.round(Number(raw.qty) || 1)));
       items.push({ serviceId: sid, name: cleanText(raw.name, 120) || sid, qty, unitPrice: svc.p, lineTotal: money(qty * svc.p), memberUnit: svc.m });
     }
