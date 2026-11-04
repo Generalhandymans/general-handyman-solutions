@@ -31,15 +31,15 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v81', swSrc.includes("const CACHE = 'ghs-app-v81'"));
+t('static: SW cache is ghs-app-v82', swSrc.includes("const CACHE = 'ghs-app-v82'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
   htmlSrc.includes("'tv-mounting-large'") && htmlSrc.includes('price: 215, member: 172, addons: [{ id: \'raceway\'') &&
   serverSrc.includes('"tv-mounting-large":{p:215,m:172') && serverSrc.includes('"mailbox-install":{p:175,m:140') && serverSrc.includes('"exhaust-fan-swap":{p:175,m:140'));
-t('static v67: drain unclog + alternator are $175 / member $140 in BOTH catalogs (Gabriel 2026-10-25)',
+t('static v67: drain unclog + alternator are $175 / member $140 in BOTH catalogs (Gabriel 2026-10-25; v82: the client display name is now "Alternator Replacement — Easy" — same id, price and member, Gabriel 2026-11-03)',
   htmlSrc.includes("'drain-unclog': { name: 'Drain Unclog — Basic', meta: 'One drain · Machine clean', price: 175, member: 140") &&
-  htmlSrc.includes("'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 175, member: 140") &&
+  htmlSrc.includes("'alternator-replacement': { name: 'Alternator Replacement — Easy', meta: '~2 h · Standard access', price: 175, member: 140") &&
   serverSrc.includes('"drain-unclog":{p:175,m:140') && serverSrc.includes('"alternator-replacement":{p:175,m:140'));
 t('static v32: app has the green WhatsApp photo-estimate FAB on customer views', htmlSrc.includes('id="photoFab"') && htmlSrc.includes('wa.me/17078623773') && htmlSrc.includes('📸 Free estimate'));
 t('static v32: checkout 20% gate is HomeCare/Plus only (homeCareStatus), never any-plan', htmlSrc.includes('function cartIsMember()') && htmlSrc.includes("me.homeCareStatus === 'active'") && !htmlSrc.includes("(d.plan && d.plan.status === 'active') || me.homeCareStatus"));
@@ -87,7 +87,7 @@ const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSr
 const catalogIds42 = [...catBlock.matchAll(/'([a-z0-9-]+)': \{ name:/g)].map(m => m[1]);
 const grpBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_GROUPS = ['), htmlSrc.indexOf('const wzState'));
 const groupIds42 = [...grpBlock.matchAll(/services: \[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z0-9-]+)'/g)].map(x => x[1]));
-t('static v42: MENU_GROUPS covers the whole catalog exactly once (98 services, no dupes, no extras)', catalogIds42.length === 98 && groupIds42.length === 98 && new Set(groupIds42).size === 98 && catalogIds42.every(id => groupIds42.includes(id)));
+t('static v42: MENU_GROUPS covers the whole catalog exactly once (102 services since v82, no dupes, no extras)', catalogIds42.length === 102 && groupIds42.length === 102 && new Set(groupIds42).size === 102 && catalogIds42.every(id => groupIds42.includes(id)));
 const wzBlock = htmlSrc.slice(htmlSrc.indexOf('id="wizardCard"'), htmlSrc.indexOf('id="menuBox"'));
 t('static v42: wizard customer copy says technician, never worker', !/worker/i.test(wzBlock) && htmlSrc.includes('we schedule your technician'));
 t('static v42: stale "50% deposit" copy is gone from the request flow', !htmlSrc.includes('50% deposit locks approved work'));
@@ -1178,10 +1178,10 @@ run("setMenuLang('en');"); // v80.19: the EN|ES toggle is ONE switch now — the
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
-t('v42 menu: renders all 98 catalog services as cards (full master list since v43) + the 6 pinned Popular cards since v80.9 = 104', (menuHtml42.match(/class="menu-card"/g) || []).length === 104);
+t('v42 menu: renders all 102 catalog services as cards (full master list since v43; +4 mechanic lines in v82) + the 6 pinned Popular cards since v80.9 = 108', (menuHtml42.match(/class="menu-card"/g) || []).length === 108);
 t('v42 menu: cards order into the CART (v79: orderNow → #cart; the #order page is retired)', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("orderNow('" + id + "')")));
 t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the v43 cut, water heater $700 / $560)', menuHtml42.includes('$125') && menuHtml42.includes('Members $100') && menuHtml42.includes('$700') && menuHtml42.includes('Members $560'));
-t('v42 menu: EVERY card shows a member price — the discount is universal (104 of 104 since the v80.9 Popular row)', (menuHtml42.match(/Members \$/g) || []).length === 104);
+t('v42 menu: EVERY card shows a member price — the discount is universal (108 of 108 since the v80.9 Popular row; the v82 turbo card shows its member FROM price like every other card)', (menuHtml42.match(/Members \$/g) || []).length === 108);
 // wizard navigation + progress
 run('wzGo(2);');
 t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label shows step 2 of 4 (v80.19: single-language label — EN here; was the bilingual composite)', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Step 2 of 4'));
@@ -2327,7 +2327,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
     'Faucet swap': 'faucet-replacement', 'Toilet replacement (full swap)': 'toilet-replacement', 'Toilet repair (fill valve / flapper)': 'toilet-repair', 'Garbage disposal swap': 'garbage-disposal-swap', 'Showerhead swap': 'showerhead-swap', 'Tub / shower re-caulk': 'tub-shower-recaulk', 'Grab bar install': 'grab-bar-install', 'P-trap / drain assembly swap': 'p-trap-swap', 'Bidet seat install': 'bidet-seat-install', 'Dryer vent cleaning': 'dryer-vent-cleaning', 'Washer & dryer hookup / install (existing connections)': 'washer-dryer-hookup', 'Drain unclog — basic (sink / shower, 1 drain)': 'drain-unclog', 'Dishwasher swap (existing hookups)': 'dishwasher-swap', 'Vanity swap': 'vanity-swap', 'Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces)': 'bathroom-accessories-install', 'Hose bibb / outdoor faucet swap': 'hose-bibb-swap', 'Water heater installation': 'water-heater',
     'Gutter cleaning (single story)': 'gutter-cleaning', 'Gutter cleaning (two-story house)': 'gutter-cleaning-two-story', 'Pressure washing — standard area (2-car driveway OR patio)': 'pressure-washing', 'Pressure washing — large area (long driveway, large patio or deck)': 'pressure-washing-large', 'Yard cleanup (general)': 'yard-cleanup', 'Sprinkler & drip irrigation basics (heads, timers, small leaks)': 'sprinkler-irrigation', 'Green waste hauling': 'green-waste', 'Junk removal — minimum load': 'junk-minimum', 'Junk removal — medium load': 'junk-medium', 'Junk removal — large load': 'junk-large', 'Junk removal — full load (truck + trailer)': 'junk-full', 'Mailbox install': 'mailbox-install',
-    'Fuel pump replacement': 'fuel-pump-replacement', 'Battery replacement': 'battery-replacement', 'Check-engine diagnostics / scan': 'check-engine-diagnostics', 'Oil change & fluid service': 'oil-change', 'Brake pads': 'brake-pads', 'Alternator replacement': 'alternator-replacement', 'Starter replacement': 'starter-replacement', 'Belt / hose replacement (basics)': 'belt-hose-replacement', 'Spark plug replacement (4-cylinder)': 'spark-plug-replacement', 'Headlight / bulb replacement': 'headlight-replacement',
+    'Fuel pump replacement': 'fuel-pump-replacement', 'Fuel pump replacement — tank-drop (sin panel de acceso)': 'fuel-pump-tank-drop', 'Battery replacement': 'battery-replacement', 'Check-engine diagnostics / scan': 'check-engine-diagnostics', 'Oil change & fluid service': 'oil-change', 'Brake pads': 'brake-pads', 'Alternator replacement — Easy': 'alternator-replacement', 'Alternator replacement — Difficult (enterrado)': 'alternator-difficult', 'Starter replacement': 'starter-replacement', 'Belt / hose replacement (basics)': 'belt-hose-replacement', 'Spark plug replacement (4-cylinder)': 'spark-plug-replacement', 'Spark plug replacement (V6 / V8)': 'spark-plug-v6v8', 'Turbo replacement': 'turbo-replacement', 'Headlight / bulb replacement': 'headlight-replacement',
     'Heavy furniture move (2 workers)': 'heavy-furniture-move'
   };
   const SKIP43 = ['In-person estimate', 'Labor help', 'Old toilet removal'];
@@ -2347,9 +2347,9 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 master: every orderable master row maps to a catalog id (plan rows live outside the service sections; estimate + hourly labor excluded by design)', unmapped43.length === 0);
   if (unmapped43.length) console.log('  unmapped master rows:', unmapped43.map(r => r.name).join(' | '));
   const priceBad43 = rows43.filter(r => { const c = cat43[NAME_TO_ID43[r.name]]; return !c || c.price !== r.price; });
-  t('v43 master<->catalog: all 98 service prices identical to the master list, post-cut', rows43.length === 98 && priceBad43.length === 0);
+  t('v43 master<->catalog: all 102 service prices identical to the master list, post-cut (v82: +4 mechanic rows — tank-drop $450, alternator difficult $250, plugs V6/V8 $215, turbo from $450)', rows43.length === 102 && priceBad43.length === 0);
   const memBad43 = Object.entries(cat43).filter(([id, c]) => c.member !== Math.round(c.price * 0.8));
-  t('v43 catalog: member == round(price x 0.8) for ALL 98 entries — oil/junk/green included, zero member:null left', Object.keys(cat43).length === 98 && memBad43.length === 0);
+  t('v43 catalog: member == round(price x 0.8) for ALL 102 entries — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 102 && memBad43.length === 0);
   t('v43 master: the $135 tier is gone from the service tables (v80.20 supersedes: $135 is BACK as exactly the approved 1.5h block — 17 table rows, Gabriel 2026-11-01)', (masterSrc43.match(/^\| [^|]*\| \$135 \|/gm) || []).length === 17);
   const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]] };
   const addonBad43 = [];
@@ -2912,7 +2912,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     }
   }
   const catIds = Object.keys(catEntries);
-  t('v46 audit: catalog parsed — 98 services on both sides', catIds.length === 98 && Object.keys(srvEntries).length === 98);
+  t('v46 audit: catalog parsed — 102 services on both sides (v82: +4 mechanic)', catIds.length === 102 && Object.keys(srvEntries).length === 102);
   let drift = [];
   for (const id of catIds) {
     const c = catEntries[id], s = srvEntries[id];
@@ -2938,6 +2938,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   let matrixBad = [];
   run('cartSave([]);');
   for (const id of catIds) {
+    if (id === 'turbo-replacement') continue; // v82: estimate-first — never in a cart (cartLoad drops it client-side; serverMenuTotals refuses it server-side), so the cart formula matrix covers the 101 orderable services
     const addonIds = Object.keys(catEntries[id].addons);
     const combos = [[false, false], [true, false], [false, true], [true, true]];
     for (const [mem, extras] of combos) {
@@ -2948,7 +2949,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     }
   }
   run('cartSave([]);');
-  t('v46 matrix (v79): client cartCalc matches the catalog formula for all 98 services x member x add-ons (ASAP combos retired with the #order page — the cart has no ASAP)', matrixBad.length === 0);
+  t('v46 matrix (v79): client cartCalc matches the catalog formula for all 101 orderable services x member x add-ons (ASAP combos retired with the #order page — the cart has no ASAP; v82: turbo-replacement excluded by design, it is estimate-first)', matrixBad.length === 0);
   if (matrixBad.length) console.log('  matrix mismatches:', matrixBad.slice(0, 6).join(' | '));
 
   // --- server recompute: tampered totals can no longer set the price ---
@@ -2980,14 +2981,14 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const fakeJoin = await menuPost(tkG, { serviceId: 'water-heater', extras: [], asap: false, joinedMembership: true, totals: { list: 700, member: 560, due: 560 } });
   t('v46 audit: joinedMembership flag ALONE (no subscription) does NOT grant member pricing', fakeJoin.status === 201 && fakeJoin.j.request.menuOrder.totals.due === 700);
 
-  // --- menu PRO: images wired + present for all 98 ---
+  // --- menu PRO: images wired + present for all 102 ---
   t('v46 menu: every service has a real photo file on disk (v80.18: WebP files)', catIds.every(id => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.webp'))));
   t('v46 menu: cards + wizard rows load /menu-img/<id>.webp with the category photo as fallback (v80.18)', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
   run("location.hash = ''; render(); setMenuLang('en');");
   const menuEn = elById.get('menuGroups').innerHTML;
-  t('v46 menu EN: per-service photos on the cards (98 catalog + 6 Popular = 104 imgs since v80.9)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 104 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
+  t('v46 menu EN: per-service photos on the cards (102 catalog + 6 Popular = 108 imgs since v80.9; v82 catalog)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 108 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
   // --- menu EN|ES: one language at a time, persisted ---
-  t('v46 i18n: MENU_ES covers all 98 services', run('Object.keys(MENU_ES).length') === 98 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
+  t('v46 i18n: MENU_ES covers all 102 services', run('Object.keys(MENU_ES).length') === 102 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
   run("setMenuLang('es');");
   const menuEs = elById.get('menuGroups').innerHTML;
   t('v46 menu ES: names + group titles + buttons switch fully to Spanish', menuEs.includes('Cambio de mezcladora / llave') && menuEs.includes('Plomería') && !menuEs.includes('Plomería · Plumbing') && menuEs.includes('Miembros $100') && menuEs.includes('>Ordenar<') && !menuEs.includes('Faucet Replacement'));
@@ -4321,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v81: ghs-app-v81)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v81'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v82: ghs-app-v82)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v82'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6993,14 +6994,14 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   t('v80.28 VM (2): category + search combine — plumbing keeps the toilets, carpentry loses them, nothing else moves',
     run("menuVisibleIds('toilet', 'plumbing').includes('toilet-replacement')") === true && run("menuVisibleIds('toilet', 'plumbing').includes('toilet-repair')") === true
     && run("menuVisibleIds('toilet', 'carpentry').length") === 0 && run("menuVisibleIds('toilet', 'all').includes('faucet-replacement')") === false);
-  t('v80.28 VM (2): clearing the filters restores the whole catalog (98 ids; per-trade counts intact, prices untouched)',
-    run("menuVisibleIds('', 'all').length") === 98 && run("menuVisibleIds('', 'mechanic').length") === 10 && run("menuVisibleIds('', 'plumbing').length") === 17
+  t('v80.28 VM (2): clearing the filters restores the whole catalog (102 ids since v82; per-trade counts intact — mechanic 14 with the v82 lines, prices untouched)',
+    run("menuVisibleIds('', 'all').length") === 102 && run("menuVisibleIds('', 'mechanic').length") === 14 && run("menuVisibleIds('', 'plumbing').length") === 17
     && run("MENU_CATALOG['water-heater'].price") === 700 && run("MENU_CATALOG['toilet-replacement'].price") === 215);
   run("toggleFav('oil-change');");
-  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (104)',
+  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (108 since v82)',
     run("favsLoad().join(',')") === 'oil-change' && (run("localStorage.getItem('ghsMenuFavs')") || '').includes('oil-change')
     && elById.get('menuGroups').innerHTML.includes('data-group="favorites"') && elById.get('menuGroups').innerHTML.includes('My favorites')
-    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 104);
+    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 108);
   run("noteRecent('gutter-cleaning'); renderMenu();");
   t('v80.28 VM (3): a noted recent renders its strip (EN), newest first',
     run("recentsLoad()[0]") === 'gutter-cleaning' && elById.get('menuGroups').innerHTML.includes('data-group="recents"') && elById.get('menuGroups').innerHTML.includes('Gutter Cleaning'));
@@ -7192,6 +7193,75 @@ try { child5.kill('SIGTERM'); } catch (e) {}
 
 
 try { child4.kill('SIGTERM'); } catch (e) {}
+
+// ---------------- v82 MECÁNICA NUEVA: las 5 líneas de Gabriel 2026-11-03 ----------------
+{
+  t('static v82: the client catalog carries the 4 new mechanic lines (tank-drop $450, alternator difficult $250, plugs V6/V8 $215, turbo from $450 estimate-first)',
+    htmlSrc.includes("'fuel-pump-tank-drop': { name: 'Fuel Pump Replacement — Tank Drop', meta: '~5–6 h · No access panel — the tank comes down', price: 450, member: 360 }") &&
+    htmlSrc.includes("'alternator-difficult': { name: 'Alternator Replacement — Difficult', meta: '~3 h · Buried — tight access', price: 250, member: 200 }") &&
+    htmlSrc.includes("'spark-plug-v6v8': { name: 'Spark Plug Replacement (V6 / V8)', meta: '~2.5 h · Flat', price: 215, member: 172 }") &&
+    htmlSrc.includes("'turbo-replacement': { name: 'Turbo Replacement — from $450 (estimate first)', meta: 'We inspect it and confirm the exact price first', price: 450, member: 360, est: true }"));
+  t('static v82: the $350 fuel pump and the $135 4-cylinder plugs are UNTOUCHED in both catalogs (the alternator $175 only changed its display name)',
+    htmlSrc.includes("'fuel-pump-replacement': { name: 'Fuel Pump Replacement', meta: '~4 h · Flat', price: 350, member: 280 }") &&
+    htmlSrc.includes("'spark-plug-replacement': { name: 'Spark Plug Replacement (4-Cylinder)', meta: '~1.5 h · Flat', price: 135, member: 108 }") &&
+    serverSrc.includes('"fuel-pump-replacement":{p:350,m:280}') && serverSrc.includes('"spark-plug-replacement":{p:135,m:108}'));
+  t('static v82: SERVER_MENU carries the new lines at the same prices + the estimate-first guard is wired at every money door (totals refuse it, the sales menu filters it, seller carts reject it)',
+    serverSrc.includes('"fuel-pump-tank-drop":{p:450,m:360}') && serverSrc.includes('"alternator-difficult":{p:250,m:200}') && serverSrc.includes('"spark-plug-v6v8":{p:215,m:172}') && serverSrc.includes('"turbo-replacement":{p:450,m:360}') &&
+    serverSrc.includes("const ESTIMATE_FIRST_SERVICES = { 'turbo-replacement': true };") && serverSrc.includes('if (isEstimateFirst(serviceId)) return null;') &&
+    serverSrc.includes('filter(serviceId => !isEstimateFirst(serviceId))') && serverSrc.includes('estimate-first service — it is quoted on an estimate'));
+  t('static v82: the client routes the turbo tap to the estimate wizard (orderNow branch + orderEstimate preselects mechanic + photo estimate) and the cart functions refuse it',
+    htmlSrc.includes('function orderEstimate(id)') && htmlSrc.includes('if (svc0 && svc0.est) { orderEstimate(id); return; }') && htmlSrc.includes("wzPickCat('mechanic')") &&
+    htmlSrc.includes('if (MENU_CATALOG[id].est) return; // v82: estimate-first never carts') && htmlSrc.includes('if (svc.est) return false; // v82: estimate-first never carts'));
+  t('static v82: every new line has its own menu photo on disk + full ES strings (the EN|ES toggle covers them)',
+    ['fuel-pump-tank-drop', 'alternator-difficult', 'spark-plug-v6v8', 'turbo-replacement'].every(id => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.webp'))) &&
+    htmlSrc.includes("'turbo-replacement': ['Reemplazo de turbo — desde $450 (estimado primero)'") && htmlSrc.includes("'alternator-replacement': ['Reemplazo de alternador — Fácil'") &&
+    htmlSrc.includes("'fuel-pump-tank-drop': ['Reemplazo de bomba de gasolina — bajando el tanque'") && htmlSrc.includes("'alternator-difficult': ['Reemplazo de alternador — Difícil'") && htmlSrc.includes("'spark-plug-v6v8': ['Reemplazo de bujías (V6 / V8)'"));
+
+  // --- VM: card rendering + cart refusal ---
+  run("setMenuLang('en'); cartSave([]);");
+  const turboCard82 = run("menuCardHtml('turbo-replacement', 'mechanic', MENU_UI.en)");
+  t('v82 VM: the turbo card renders ONE button — the estimate flow (no Order, no Add-to-cart), its From $450 price and its own photo',
+    turboCard82.includes('orderEstimate(') && !turboCard82.includes('orderNow(') && !turboCard82.includes('cartAdd(') && turboCard82.includes('From $450') && turboCard82.includes('/menu-img/turbo-replacement.webp'));
+  run("setMenuLang('es');");
+  const turboCardEs82 = run("menuCardHtml('turbo-replacement', 'mechanic', MENU_UI.es)");
+  t('v82 VM: the turbo card in Spanish names the service + Desde $450 + the estimate button in Spanish',
+    turboCardEs82.includes('Reemplazo de turbo — desde $450 (estimado primero)') && turboCardEs82.includes('Desde $450') && turboCardEs82.includes('Pedir mi estimado'));
+  run("setMenuLang('en');");
+  const altDiffCard82 = run("menuCardHtml('alternator-difficult', 'mechanic', MENU_UI.en)");
+  t('v82 VM: the difficult alternator card is a normal orderable card ($250, Members $200, Order button)',
+    altDiffCard82.includes('orderNow(') && altDiffCard82.includes('$250') && altDiffCard82.includes('Members $200'));
+  run("cartSave([]); cartAdd('turbo-replacement');");
+  t('v82 VM: cartAdd refuses the turbo (the cart stays empty) while a new flat line adds normally',
+    run('cartLoad().length') === 0 && (run("cartAdd('alternator-difficult'); cartLoad().length") === 1));
+  run('cartSave([]);');
+
+  // --- HTTP on app2: money doors ---
+  const A82 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const su82 = await req2('POST', '/api/signup', { body: { name: 'V82 Customer', email: 'v82@t.local', password: 'password123', phone: '7075550182', role: 'customer' } });
+  const menuPost82 = (menuOrder) => req2('POST', '/api/requests', { token: su82.j.token, body: { service: 'Menu order', description: 'v82 pins', address: '9 Audit Way', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder } });
+  const turboOrder82 = await menuPost82({ serviceId: 'turbo-replacement', extras: [], asap: false, joinedMembership: false, totals: { list: 450, member: 360, due: 450 } });
+  t('v82: a menu order for the turbo is REFUSED (400) — estimate-first is never priced as a menu order', turboOrder82.status === 400);
+  const altDiffOrder82 = await menuPost82({ serviceId: 'alternator-difficult', extras: [], asap: false, joinedMembership: false, totals: { list: 250, member: 200, due: 250 } });
+  t('v82: the difficult alternator orders at exactly $250 / member $200 through the normal menu path', altDiffOrder82.status === 201 && altDiffOrder82.j.request.menuOrder.totals.due === 250 && altDiffOrder82.j.request.menuOrder.totals.member === 200);
+  const qGuest82 = await req2('POST', '/api/cart/quote', { body: { items: [{ serviceId: 'fuel-pump-tank-drop', qty: 1, addons: [] }, { serviceId: 'spark-plug-v6v8', qty: 1, addons: [] }] } });
+  t('v82: a guest cart quote prices the new flat lines from the catalog ($450 + $215 = $665 list / $532 member)', qGuest82.status === 200 && qGuest82.j.totals.list === 665 && qGuest82.j.totals.member === 532 && qGuest82.j.totals.due === 665);
+  const qTurbo82 = await req2('POST', '/api/cart/quote', { body: { items: [{ serviceId: 'turbo-replacement', qty: 1, addons: [] }] } });
+  t('v82: a cart containing the turbo cannot be priced (400) — no checkout path exists for it', qTurbo82.status === 400);
+  const m82 = await mkMember('v82-member@t.local', '(707) 555-0182');
+  const sub82 = await req2('POST', '/api/stripe/homecare-subscribe', { token: m82.token, body: {} });
+  await mockActivate(sub82.j.subscriptionId);
+  const conf82 = await req2('POST', '/api/stripe/homecare-confirm', { token: m82.token, body: {} });
+  const qMem82 = await req2('POST', '/api/cart/quote', { token: m82.token, body: { items: [{ serviceId: 'fuel-pump-tank-drop', qty: 1, addons: [] }, { serviceId: 'alternator-difficult', qty: 1, addons: [] }, { serviceId: 'spark-plug-v6v8', qty: 1, addons: [] }] } });
+  t('v82: a verified member pays the −20% member total on ALL three new flat lines ($915 list -> $732 due)', conf82.status === 200 && qMem82.status === 200 && qMem82.j.member === true && qMem82.j.totals.list === 915 && qMem82.j.totals.due === 732);
+  const wsu82 = await req2('POST', '/api/signup', { body: { name: 'V82 Worker', email: 'v82w@t.local', phone: '(707) 555-0183', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Mechanic'] } } });
+  await req2('PATCH', '/api/workers/' + wsu82.j.user.id, { token: A82, body: { status: 'active' } });
+  const wli82 = await req2('POST', '/api/login', { body: { email: 'v82w@t.local', password: 'workpass1' } });
+  const sm82 = await req2('GET', '/api/worker/sales-menu', { token: wli82.j.token });
+  t('v82: the tech sales menu EXCLUDES the turbo (estimate-first is never sold) and carries the difficult alternator at $250',
+    sm82.status === 200 && !sm82.j.items.some(it => it.serviceId === 'turbo-replacement') && sm82.j.items.some(it => it.serviceId === 'alternator-difficult' && it.price === 250));
+  const wCartTurbo82 = await req2('POST', '/api/worker/carts', { token: wli82.j.token, body: { items: [{ serviceId: 'turbo-replacement', qty: 1 }] } });
+  t('v82: a seller cart with the turbo is rejected (400, estimate-first)', wCartTurbo82.status === 400 && String(wCartTurbo82.j.error || '').includes('estimate-first'));
+}
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
 
