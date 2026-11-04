@@ -313,14 +313,18 @@ transmisión, y todo trabajo de **$1,000 o más**, va por la ruta de estimado
 | Service | Price | Unit | Typical time | Mark |
 |---|---|---|---|---|
 | Fuel pump replacement | $350 | flat | ~4 h | CONFIRMADO |
+| Fuel pump replacement — tank-drop (sin panel de acceso) | $450 | flat | ~5–6 h | CONFIRMADO (Gabriel 2026-11-03; el $350 con acceso queda intacto) |
 | Battery replacement | $125 | flat | ~1 h | CONFIRMADO |
 | Check-engine diagnostics / scan | $85 | flat | ~1 h | CONFIRMADO |
 | Oil change & fluid service | $85 | flat | ~1 h | CONFIRMADO |
 | Brake pads | $100 | per pair | ~1 h | CONFIRMADO |
-| Alternator replacement | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
+| Alternator replacement — Easy | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
+| Alternator replacement — Difficult (enterrado) | $250 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-03; bloque 3 h de la constitución — el $175 plano regalaba los alternadores enterrados) |
 | Starter replacement | $250–$300 | range (from $225) | ~2–3 h | CONFIRMADO |
 | Belt / hose replacement (basics) | $135 | flat | ~1.5 h | CONFIRMADO |
 | Spark plug replacement (4-cylinder) | $135 | flat | ~1.5 h | CONFIRMADO |
+| Spark plug replacement (V6 / V8) | $215 | flat | ~2.5 h | CONFIRMADO (Gabriel 2026-11-03; bloque 2.5 h de la constitución) |
+| Turbo replacement | desde $450 | estimate-first | varía | CONFIRMADO (Gabriel 2026-11-03; lección del Land Rover: el de $300 salió valiendo $450 — nunca plano sin estimado) |
 | Headlight / bulb replacement | $85 | flat | ~45 min | CONFIRMADO |
 
 ## Ayuda general / por hora
