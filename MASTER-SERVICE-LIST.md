@@ -396,8 +396,10 @@ Estos trabajos se cotizan con el estimado en persona de $75, no con precio fijo:
    grande o deck), ambos CONFIRMADO por Gabriel (2026-10-21).
    **Gutter cleaning quedó resuelto:** $150 single-story y $250
    two-story, ambos CONFIRMADO por Gabriel (2026-10-21).
-3. **Holiday lights quedó resuelto:** $175 single-story y $250
-   two-story, ambos CONFIRMADO por Gabriel (2026-10-21). Gabriel
+3. **Holiday lights quedó resuelto:** instalación $215 single-story
+   y $295 two-story; retiro (take-down) $85 single-story y $225
+   two-story, CONFIRMADO por Gabriel (cifras del ajuste de la
+   auditoría 2026-11-01; superan las de 2026-10-21). Gabriel
    quiere PROMOCIONAR este servicio en la temporada.
 4. **TV mounting quedó resuelto:** pequeña (hasta 65") $135 y grande
    (más de 65") $185, ambos CONFIRMADO por Gabriel (2026-10-21) —
