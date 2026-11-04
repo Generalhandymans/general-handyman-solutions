@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v82', swSrc.includes("const CACHE = 'ghs-app-v82'"));
+t('static: SW cache is ghs-app-v83', swSrc.includes("const CACHE = 'ghs-app-v83'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4322,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v82: ghs-app-v82)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v82'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83: ghs-app-v83)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5130,8 +5130,12 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
     htmlSrc.includes('<a href="#yard-care">See yard services →</a>') && !htmlSrc.includes('<a href="#order/yard-cleanup">See yard services') && htmlSrc.includes('href="#order/yard-cleanup"'));
   t('static v80.10.5 LINKS: the six restored city cards are real links to the app menu (#menu -> goMenu, the hero CTA path) and the .city rule renders the anchor as a block',
     (htmlSrc.match(/<a class="city" href="#menu">/g) || []).length === 6 && !htmlSrc.includes('<div class="city">') && htmlSrc.includes('display:block; color:inherit; text-decoration:none; cursor:pointer;'));
-  t('static v80.10.5 LINKS: the top logo banner links home with the header Inicio item target (the apex URL)',
-    htmlSrc.includes('<a href="https://generalhandymans.app"><img src="/logo-header.png"'));
+  t('static v83 CABECERA: the giant top logo banner is GONE (Gabriel 2026-11-03: "ese logo elimínalo y sube la página hasta ahí arriba") and the slim header brand bar is now the top home link (same apex target the banner had) — this REPLACES the v80.10.5 banner pin because the placement it pinned was deleted by his order; the logo-header.png asset itself stays in the repo',
+    !htmlSrc.includes('<img src="/logo-header.png"') && htmlSrc.includes('<a id="brandBar" href="https://generalhandymans.app"'));
+  t('static v83 CABECERA: the brand bar rides IN the header BESIDE the search (brand first, then #homeSearchWrap), carrying the hammer icon, the name lockup and the Solano County tagline; the auth card keeps its .auth-hero markup and login flow but no longer paints the doubled strip',
+    htmlSrc.indexOf('id="brandBar"') > htmlSrc.indexOf('<header>') && htmlSrc.indexOf('id="brandBar"') < htmlSrc.indexOf('id="homeSearchWrap"') &&
+    htmlSrc.includes('<span class="brand-txt"><b><i>General</i> <em>Handyman</em> Solutions</b><span>Handyman · Mobile mechanic · Yard care — Solano County</span></span>') &&
+    htmlSrc.includes('#authBox .auth-hero{display:none}') && htmlSrc.includes('<div class="auth-hero">'));
   t('static v80.10.5 LINKS: the fragment membership buttons distinguish the visit counts while the join preselection hrefs stay unchanged',
     htmlSrc.includes('class="ghs-mem-btn" href="#join-plus1">Join Plus — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-plus2">Join Plus — 2 visits/mo</a>') &&
     htmlSrc.includes('class="ghs-mem-btn" href="#join-yard1">Join Yard Care — 1 visit/mo</a>') && htmlSrc.includes('class="ghs-mem-btn" href="#join-yard2">Join Yard Care — 2 visits/mo</a>') &&
