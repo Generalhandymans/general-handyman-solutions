@@ -6631,14 +6631,18 @@ const MENU_CATALOG = {
   'mailbox-install': { name: 'Mailbox Install', meta: '~1.5 h · Flat', price: 175, member: 140 },
   // ---------- Mecánica (master list section 5) ----------
   'fuel-pump-replacement': { name: 'Fuel Pump Replacement', meta: '~4 h · Flat', price: 350, member: 280 },
+  'fuel-pump-tank-drop': { name: 'Fuel Pump Replacement — Tank Drop', meta: '~5–6 h · No access panel — the tank comes down', price: 450, member: 360 },
   'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 125, member: 100 },
   'check-engine-diagnostics': { name: 'Check-Engine Diagnostics / Scan', meta: '~1 h · Flat', price: 85, member: 68 },
   'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 85, member: 68, addons: [{ id: 'filter-swap', name: 'Air / cabin filter swap', price: 50 }] },
   'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 100, member: 80, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
-  'alternator-replacement': { name: 'Alternator Replacement', meta: '~2 h · Standard access', price: 175, member: 140 },
+  'alternator-replacement': { name: 'Alternator Replacement — Easy', meta: '~2 h · Standard access', price: 175, member: 140 },
+  'alternator-difficult': { name: 'Alternator Replacement — Difficult', meta: '~3 h · Buried — tight access', price: 250, member: 200 },
   'starter-replacement': { name: 'Starter Replacement', meta: 'By make & difficulty — final price $250–$300', price: 250, member: 200, from: true },
   'belt-hose-replacement': { name: 'Belt / Hose Replacement (Basics)', meta: '~1.5 h · Flat', price: 135, member: 108 },
   'spark-plug-replacement': { name: 'Spark Plug Replacement (4-Cylinder)', meta: '~1.5 h · Flat', price: 135, member: 108 },
+  'spark-plug-v6v8': { name: 'Spark Plug Replacement (V6 / V8)', meta: '~2.5 h · Flat', price: 215, member: 172 },
+  'turbo-replacement': { name: 'Turbo Replacement — from $450 (estimate first)', meta: 'We inspect it and confirm the exact price first', price: 450, member: 360, est: true },
   'headlight-replacement': { name: 'Headlight / Bulb Replacement', meta: '~45 min · Flat', price: 85, member: 68 },
   // ---------- Ayuda general (master list, secondary section) ----------
   'heavy-furniture-move': { name: 'Heavy Furniture Move (2 Technicians)', meta: '~1 h · Per job', price: 200, member: 160 }
@@ -6663,6 +6667,7 @@ function parseOrderHash(){
 }
 function cartAddWithAddons(id, extras){
   const svc = MENU_CATALOG[id]; if (!svc) return false;
+  if (svc.est) return false; // v82: estimate-first never carts (the server refuses it too)
   // v80.8 SEAL: the legacy #order converter rides the SAME role gate as
   // cartAdd — an admin's converted service lands in the cart BUILDER
   // (base service; add-ons do not carry into a draft line), a worker is
@@ -6681,14 +6686,35 @@ function cartAddWithAddons(id, extras){
   return true;
 }
 function orderNow(id){
+  const svc0 = MENU_CATALOG[id];
+  if (svc0 && svc0.est) { orderEstimate(id); return; } // v82: estimate-first never enters the cart
   if (cartRoleGate(id)) return; // v80.8 cart gate: admin/worker never land on #cart (see cartRoleGate)
   cartAdd(id);
   try { sessionStorage.removeItem('ghsCcPrefill'); } catch (e) {}
   location.hash = '#cart';
 }
+// v82: estimate-first services (the turbo) — the tap opens the free
+// photo-estimate wizard the way goFreeEstimate opens it (photo estimate
+// preselected), with the mechanic category picked and the service named
+// at the top of the description, so the request IS the turbo estimate
+// and the Team confirms the exact price on it (Gabriel 2026-11-03:
+// desde $450, nunca plano sin estimado).
+function orderEstimate(id){
+  const s = MENU_CATALOG[id]; if (!s) return;
+  if (location.hash) location.hash = ''; else render();
+  wzPickCat('mechanic');
+  const g = document.getElementById('cEst');
+  if (g) g.querySelectorAll('button').forEach(b => b.classList.toggle('sel', b.dataset.v === 'photo'));
+  wzState.est = 'photo';
+  const ta = document.getElementById('rDesc');
+  if (ta && !ta.value.trim()) ta.value = svcName(id) + ' — ';
+  if (typeof custSummary === 'function') custSummary();
+  wzGo(2);
+}
 function retireOrderRoute(){
   const p = parseOrderHash();
   const svc = MENU_CATALOG[p.id];
+  if (svc && svc.est) { orderEstimate(p.id); return; } // v82: an old #order link for an estimate-first service opens the estimate flow, never the cart
   if (svc) {
     const valid = {};
     (svc.addons || []).forEach(function (a) { valid[a.id] = true; });
@@ -6732,7 +6758,7 @@ function applyCcPrefill(){
 // module is referenced from the worker or admin boxes.
 const CART_LS_KEY = 'ghsCart';
 let cartBusy = false, cartPayCtx = null, cartElements = null, cartElementsMode = null, cartElementsAmount = 0, cartElementReady = false, cartWhenVal = 'Today', cartJoinedOnce = false, cartQuote = null;
-function cartLoad(){ try { const v = JSON.parse(localStorage.getItem(CART_LS_KEY) || '[]'); return Array.isArray(v) ? v.filter(function(it){ return it && typeof it.id === 'string' && typeof MENU_CATALOG !== 'undefined' && MENU_CATALOG[it.id]; }) : []; } catch (e) { return []; } }
+function cartLoad(){ try { const v = JSON.parse(localStorage.getItem(CART_LS_KEY) || '[]'); return Array.isArray(v) ? v.filter(function(it){ return it && typeof it.id === 'string' && typeof MENU_CATALOG !== 'undefined' && MENU_CATALOG[it.id] && !MENU_CATALOG[it.id].est; }) : []; } catch (e) { return []; } }
 function cartSave(items){ try { localStorage.setItem(CART_LS_KEY, JSON.stringify(items)); } catch (e) {} paintCartBtn(); }
 function cartCount(){ return cartLoad().reduce(function(s, it){ return s + Math.max(1, Math.round(Number(it.q) || 1)); }, 0); }
 function cartIsMember(){ return !!(me && me.homeCareStatus === 'active'); }
@@ -6787,6 +6813,7 @@ function cartRoleGate(id){
 }
 function cartAdd(id){
   if (typeof MENU_CATALOG === 'undefined' || !MENU_CATALOG[id]) return;
+  if (MENU_CATALOG[id].est) return; // v82: estimate-first never carts
   if (cartRoleGate(id)) return;
   const items = cartLoad();
   const ex = items.find(function(it){ return it.id === id && !(it.x && it.x.length); });
@@ -7603,7 +7630,7 @@ const MENU_GROUPS = [
   { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener', 'soundbar-mounting', 'chandelier-swap', 'light-fixture-swap', 'exhaust-fan-swap', 'dimmer-switch-swap', 'smoke-co-detector-install', 'smart-thermostat-install', 'security-camera-install', 'holiday-lights-two-story', 'holiday-lights-takedown', 'holiday-lights-takedown-two-story', 'window-ac-install'] },
   { key: 'plumbing', es: 'Plomería', en: 'Plumbing', services: ['toilet-replacement', 'water-heater', 'drain-unclog', 'faucet-replacement', 'dishwasher-swap', 'vanity-swap', 'toilet-repair', 'garbage-disposal-swap', 'showerhead-swap', 'tub-shower-recaulk', 'grab-bar-install', 'p-trap-swap', 'bidet-seat-install', 'dryer-vent-cleaning', 'washer-dryer-hookup', 'bathroom-accessories-install', 'hose-bibb-swap'] },
   { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste', 'gutter-cleaning-two-story', 'pressure-washing', 'pressure-washing-large', 'sprinkler-irrigation', 'mailbox-install'] },
-  { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'starter-replacement', 'fuel-pump-replacement', 'check-engine-diagnostics', 'belt-hose-replacement', 'spark-plug-replacement', 'headlight-replacement'] }
+  { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'alternator-difficult', 'starter-replacement', 'fuel-pump-replacement', 'fuel-pump-tank-drop', 'check-engine-diagnostics', 'belt-hose-replacement', 'spark-plug-replacement', 'spark-plug-v6v8', 'turbo-replacement', 'headlight-replacement'] }
 ];
 const wzState = { step: 1, cat: '', est: 'inperson', city: '', when: '' };
 function wzCatOf(key) { return WZ_CATS.find(function (c) { return c.key === key; }) || null; }
@@ -7658,7 +7685,7 @@ function wzRenderMenuPanel() {
     return;
   }
   let h = '<p class="mut" style="margin:12px 0 6px"><b>' + ui.wzHead + '</b></p>';
-  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-mini" title="' + ui.addCart + '" onclick="cartAdd(\'' + id + '\');return false;">＋🛒</button></div>'; }).join('');
+  h += grp.services.map(function (id) { const s = MENU_CATALOG[id]; if (!s) return ''; if (s.est) return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">' + (L === 'es' ? 'Desde ' : 'From ') + '$' + s.price + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="orderEstimate(\'' + id + '\')">' + ui.estBtn + '</button></div>'; return '<div class="wz-mi">' + svcImgHtml(id, grp.key, 'wz-mi-img') + '<span class="wz-mi-main"><b>' + escHtml(svcName(id)) + '</b> <span class="mut">' + escHtml(svcMeta(id)) + '</span></span><span class="wz-mi-price">$' + s.price + (s.from ? '–$300' : '') + (s.member ? ' · <span class="wz-mem">' + ui.members + ' $' + s.member + '</span>' : '') + '</span><button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-mini" title="' + ui.addCart + '" onclick="cartAdd(\'' + id + '\');return false;">＋🛒</button></div>'; }).join('');
   h += '<p class="mut" style="margin:8px 0 0">' + ui.wzFoot + '</p>';
   p.innerHTML = h;
 }
@@ -7858,20 +7885,24 @@ const MENU_ES = {
   'junk-full': ['Retiro de basura — carga completa (camión y remolque)', 'Garaje completo o limpieza de casa'],
   'mailbox-install': ['Instalación de buzón', '~1.5 h · Precio fijo'],
   'fuel-pump-replacement': ['Cambio de bomba de gasolina', '~4 h · Precio fijo'],
+  'fuel-pump-tank-drop': ['Reemplazo de bomba de gasolina — bajando el tanque', '~5–6 h · Sin panel de acceso — se baja el tanque'],
   'battery-replacement': ['Cambio de batería de auto', '~1 h · Probada en el lugar'],
   'check-engine-diagnostics': ['Diagnóstico de check-engine / escaneo', '~1 h · Precio fijo'],
   'oil-change': ['Cambio de aceite y fluidos', '~1 h · En tu casa'],
   'brake-pads': ['Balatas (frenos) — por par', '~1 h · Delanteras o traseras'],
-  'alternator-replacement': ['Cambio de alternador', '~2 h · Acceso estándar'],
+  'alternator-replacement': ['Reemplazo de alternador — Fácil', '~2 h · Acceso estándar'],
+  'alternator-difficult': ['Reemplazo de alternador — Difícil', '~3 h · Enterrado — acceso apretado'],
   'starter-replacement': ['Cambio de marcha (arranque)', 'Por marca y dificultad — precio final $250–$300'],
   'belt-hose-replacement': ['Cambio de banda / manguera (básico)', '~1.5 h · Precio fijo'],
   'spark-plug-replacement': ['Cambio de bujías (4 cilindros)', '~1.5 h · Precio fijo'],
+  'spark-plug-v6v8': ['Reemplazo de bujías (V6 / V8)', '~2.5 h · Precio fijo'],
+  'turbo-replacement': ['Reemplazo de turbo — desde $450 (estimado primero)', 'Lo revisamos y confirmamos el precio exacto primero'],
   'headlight-replacement': ['Cambio de foco / faro', '~45 min · Precio fijo'],
   'heavy-furniture-move': ['Mover mueble pesado (2 técnicos)', '~1 h · Por trabajo']
 };
 const MENU_UI = {
-  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.', popular: '🔥 Popular right now', popularAvail: '● Available today', favs: '★ My favorites', recents: '🕘 Recent', all: 'All', goesWell: 'Goes well with:', addShort: '+ Add', menuSearchPh: 'Search the menu — try “toilet”, “montaje”, “plomería”…' },
-  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.', popular: '🔥 Popular ahora', popularAvail: '● Disponible hoy', favs: '★ Mis favoritos', recents: '🕘 Recientes', all: 'Todo', goesWell: 'Va bien con:', addShort: '+ Agregar', menuSearchPh: 'Busca en el menú — prueba “inodoro”, “tv mounting”, “plumbing”…' }
+  en: { title: 'Menu — order & pay right here', intro: 'Fixed prices, ordered in the app — book with a deposit ($50 on jobs up to $300, 40% on jobs over $300) and pay the balance when the work is done (cancel before a technician is dispatched: full refund). HomeCare / HomeCare Plus members: your member price is on every card.', order: 'Order', members: 'Members', addCart: '＋ Add to cart', wzHead: 'Fixed prices — order in one tap, or keep going for a custom estimate:', wzFoot: 'Not your job? Tap <b>Continue</b> below for a custom estimate.', wzOther: 'No problem — describe it in the next step and the Team will price it.', popular: '🔥 Popular right now', popularAvail: '● Available today', favs: '★ My favorites', recents: '🕘 Recent', all: 'All', goesWell: 'Goes well with:', addShort: '+ Add', menuSearchPh: 'Search the menu — try “toilet”, “montaje”, “plomería”…', estBtn: 'Get my estimate' },
+  es: { title: 'Menú — ordena y paga aquí mismo', intro: 'Precios fijos, ordenados en la app — agenda con un anticipo ($50 en trabajos de hasta $300, 40% si pasan de $300) y paga el resto al terminar el trabajo (cancela antes de que se despache el técnico: reembolso completo).', order: 'Ordenar', members: 'Miembros', addCart: '＋ Al carrito', wzHead: 'Precios fijos — ordena con un toque, o sigue para un estimado personalizado:', wzFoot: '¿No es tu trabajo? Toca <b>Continuar</b> abajo para un estimado personalizado.', wzOther: 'Sin problema: descríbelo en el siguiente paso y el Team te da precio.', popular: '🔥 Popular ahora', popularAvail: '● Disponible hoy', favs: '★ Mis favoritos', recents: '🕘 Recientes', all: 'Todo', goesWell: 'Va bien con:', addShort: '+ Agregar', menuSearchPh: 'Busca en el menú — prueba “inodoro”, “tv mounting”, “plumbing”…', estBtn: 'Pedir mi estimado' }
 };
 // v80.9 FUSIÓN — the merged homepage's copy (EN/ES, one language at a time,
 // swapped with the same toggle as the menu). Every price/claim here is
@@ -8588,19 +8619,26 @@ function svcImgHtml(id, groupKey, cls) {
   return '<img' + (cls ? ' class="' + cls + '"' : '') + ' src="/menu-img/' + id + '.webp?v=4" alt="" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=CAT_IMGS[\'' + groupKey + '\']">';
 }
 function menuPriceHtml(s) {
-  let h = '<span class="menu-price">$' + s.price + (s.from ? '–$300' : '') + '</span>';
+  let h = '<span class="menu-price">' + (s.est ? (menuLang() === 'es' ? 'Desde ' : 'From ') : '') + '$' + s.price + (s.from ? '–$300' : '') + '</span>';
   if (s.member) h += '<span class="menu-member">' + MENU_UI[menuLang()].members + ' $' + s.member + '</span>';
   return h;
 }
 function menuCardHtml(id, groupKey, ui) {
   const s = MENU_CATALOG[id]; if (!s) return '';
-  return '<div class="menu-card" data-sid="' + id + '">' + svcImgHtml(id, groupKey, '') + '<div class="menu-card-body"><div class="menu-card-top"><b>' + escHtml(svcName(id)) + '</b><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button></div><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div>' + pairsHtml(id, ui) + '<button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button></div></div>';
+  // v82: an estimate-first card (turbo) gets ONE button — the estimate
+  // flow. It never renders Order / Add-to-cart: there is no fixed price
+  // to check out, the Team confirms the exact price on the estimate.
+  const btns = s.est
+    ? '<button type="button" onclick="orderEstimate(\'' + id + '\')">' + ui.estBtn + '</button>'
+    : '<button type="button" onclick="orderNow(\'' + id + '\')">' + ui.order + '</button><button type="button" class="ghost cart-add-btn" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addCart + '</button>';
+  return '<div class="menu-card" data-sid="' + id + '">' + svcImgHtml(id, groupKey, '') + '<div class="menu-card-body"><div class="menu-card-top"><b>' + escHtml(svcName(id)) + '</b><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button></div><span class="mut">' + escHtml(svcMeta(id)) + '</span><div class="grow"></div><div class="menu-prices">' + menuPriceHtml(s) + '</div>' + pairsHtml(id, ui) + btns + '</div></div>';
 }
 // v80.28: favorites/recents render as compact rows (name + list price
 // + one-tap add) — deliberately NOT .menu-card, so the strips stay a
 // shortcut layer over the one catalog, never a second menu.
 function menuMiniHtml(id, ui) {
   const s = MENU_CATALOG[id]; if (!s) return '';
+  if (s.est) return '<div class="menu-mini" data-sid="' + id + '"><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button><span class="mm-name">' + escHtml(svcName(id)) + '</span><span class="mm-price">' + (menuLang() === 'es' ? 'Desde ' : 'From ') + '$' + s.price + '</span><button type="button" class="mm-add" onclick="orderEstimate(\'' + id + '\');return false;">' + ui.estBtn + '</button></div>';
   return '<div class="menu-mini" data-sid="' + id + '"><button type="button" class="fav-btn' + (isFav(id) ? ' on' : '') + '" onclick="toggleFav(\'' + id + '\');return false;" aria-label="Favorite">' + (isFav(id) ? '★' : '☆') + '</button><span class="mm-name">' + escHtml(svcName(id)) + '</span><span class="mm-price">$' + s.price + (s.from ? '–$300' : '') + '</span><button type="button" class="mm-add" onclick="cartAdd(\'' + id + '\');return false;">' + ui.addShort + '</button></div>';
 }
 // v80.9: "Popular right now" — the website's six most-ordered services,
