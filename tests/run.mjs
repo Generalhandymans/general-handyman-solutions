@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v83.2', swSrc.includes("const CACHE = 'ghs-app-v83.2'"));
+t('static: SW cache is ghs-app-v84', swSrc.includes("const CACHE = 'ghs-app-v84'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -172,8 +172,8 @@ const c1Login = await req('POST', '/api/login', { body: { email: 'c1@t.local', p
 const c2Login = await req('POST', '/api/login', { body: { email: 'c2@t.local', password: 'custpass2' } });
 const C1 = c1Login.j.token, C1COOKIE = c1Login.cookie, C2COOKIE = c2Login.cookie;
 
-const w1 = await req('POST', '/api/signup', { body: { name: 'Worker One', email: 'w1@t.local', phone: '(707) 555-0201', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
-const w2 = await req('POST', '/api/signup', { body: { name: 'Worker Two', email: 'w2@t.local', phone: '(707) 555-0202', password: 'workpass2', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: [] } } });
+const w1 = await req('POST', '/api/signup', { body: { name: 'Worker One', email: 'w1@t.local', phone: '(707) 555-0201', password: 'workpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+const w2 = await req('POST', '/api/signup', { body: { name: 'Worker Two', email: 'w2@t.local', phone: '(707) 555-0202', password: 'workpass2', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: [] } } });
 t('worker signups start on review', w1.status === 201 && w1.j.user.status === 'review' && w2.status === 201);
 const w1Id = w1.j.user.id, w2Id = w2.j.user.id;
 const act1 = await req('PATCH', '/api/workers/' + w1Id, { token: A, body: { status: 'active' } });
@@ -1247,9 +1247,9 @@ t('v42 confirmation: making another request resets to step 1', run('wzState.step
 // ---------------- v40 area captains ----------------
 t('static v40: server has the captain system (seed areas, 5% override, ledger, endpoints)', serverSrc.includes('CAPTAIN_OVERRIDE_RATE = 0.05') && serverSrc.includes("p === '/api/admin/captains'") && serverSrc.includes("p === '/api/me/captain'") && serverSrc.includes('function accrueCaptainOverride(') && serverSrc.includes('db.captainLedger'));
 t('static v40: client has the Capitanes admin section + Mi área worker section', htmlSrc.includes('id="adminCaptains"') && htmlSrc.includes('id="workerCaptain"') && htmlSrc.includes('loadAdminCaptains') && htmlSrc.includes('loadCaptainArea') && htmlSrc.includes("areaTitle: 'Mi área'") && htmlSrc.includes("areaTitle: 'My area'"));
-const capW = await req('POST', '/api/signup', { body: { name: 'Cap Walter', email: 'capw@t.local', phone: '(707) 555-0301', password: 'cappass1', role: 'worker', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Plumbing'] } } });
-const techW = await req('POST', '/api/signup', { body: { name: 'Tech Tony', email: 'techt@t.local', phone: '(707) 555-0302', password: 'techpass1', role: 'worker', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Electrical'] } } });
-const revW = await req('POST', '/api/signup', { body: { name: 'Review Rita', email: 'revr@t.local', phone: '(707) 555-0303', password: 'revpass1', role: 'worker', profile: { city: 'Napa', areas: 'Napa', skills: [] } } });
+const capW = await req('POST', '/api/signup', { body: { name: 'Cap Walter', email: 'capw@t.local', phone: '(707) 555-0301', password: 'cappass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Plumbing'] } } });
+const techW = await req('POST', '/api/signup', { body: { name: 'Tech Tony', email: 'techt@t.local', phone: '(707) 555-0302', password: 'techpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Vacaville', areas: 'Vacaville', skills: ['Electrical'] } } });
+const revW = await req('POST', '/api/signup', { body: { name: 'Review Rita', email: 'revr@t.local', phone: '(707) 555-0303', password: 'revpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Napa', areas: 'Napa', skills: [] } } });
 t('v40 captains: worker signups 201', capW.status === 201 && techW.status === 201 && revW.status === 201);
 const capWid = capW.j.user.id, techWid = techW.j.user.id, revWid = revW.j.user.id;
 await req('PATCH', '/api/workers/' + capWid, { token: A, body: { status: 'active' } });
@@ -1352,7 +1352,7 @@ t('static v41: server has trade skills + worker self-service + candidates + mone
 t('static v41: direct offers email the one worker via the job_direct_offer template', serverSrc.includes("type === 'job_direct_offer'") && serverSrc.includes("fireAutomation('job_direct_offer'"));
 t('static v41: client has Mis oficios, Mi dinero, the skill banner and the dispatch picker', htmlSrc.includes("tradesTitle: 'Mis oficios'") && htmlSrc.includes("moneyTitle: 'Mi dinero'") && htmlSrc.includes('id="workerSkillBanner"') && htmlSrc.includes("skillBannerTitle: '⚠️ Califica tus oficios'") && htmlSrc.includes('id="jWorker"') && htmlSrc.includes('refreshJobCandidates') && htmlSrc.includes('workerTradesHtml'));
 // Signup WITH the 7 boxes filled (new-model account).
-const w41 = await req('POST', '/api/signup', { body: { name: 'Trades Tara', email: 'w41@t.local', phone: '(707) 555-0411', password: 'workpass41', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'], tradeSkills: { plumbing: { level: 4, tools: true }, handyman: { level: 3, tools: false } } } } });
+const w41 = await req('POST', '/api/signup', { body: { name: 'Trades Tara', email: 'w41@t.local', phone: '(707) 555-0411', password: 'workpass41', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'], tradeSkills: { plumbing: { level: 4, tools: true }, handyman: { level: 3, tools: false } } } } });
 t('v41 trades: signup stores the trade boxes (level + tools, effective = self)', w41.status === 201 && w41.j.user.tradeSkills.plumbing.level === 4 && w41.j.user.tradeSkills.plumbing.tools === true && w41.j.user.tradeSkills.plumbing.effective === 4 && w41.j.user.tradeSkills.carpentry === null && w41.j.user.skillsRated === 2);
 const w41Id = w41.j.user.id;
 await req('PATCH', '/api/workers/' + w41Id, { token: A, body: { status: 'active' } });
@@ -1883,7 +1883,7 @@ t('v25 B2: cancelled membership — proposals stay visible, flagged with the mem
 
 // ---- B1: worker yard flow (app2) ----
 async function mkWorker2(email, phone, password) {
-  const su = await req2('POST', '/api/signup', { body: { name: 'Worker ' + email, email, phone, password, role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Landscaping / yard'] } } });
+  const su = await req2('POST', '/api/signup', { body: { name: 'Worker ' + email, email, phone, password, role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Landscaping / yard'] } } });
   return su.j.user.id;
 }
 const wAId = await mkWorker2('wa@t.local', '(707) 555-0401', 'workpassA');
@@ -2141,7 +2141,7 @@ t('v26 delete: other users can still log in', m1Login.status === 200 && !!m1Logi
 
 // ---------------- v29/v30: Stripe Connect worker payouts (app2, mock Stripe) ----------------
 async function mkConnectWorker2(email, phone, pw) {
-  const su = await req2('POST', '/api/signup', { body: { name: 'Worker ' + email, email, phone, password: pw, role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const su = await req2('POST', '/api/signup', { body: { name: 'Worker ' + email, email, phone, password: pw, role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const li = await req2('POST', '/api/login', { body: { email, password: pw } });
   await req2('PATCH', '/api/workers/' + su.j.user.id, { token: A2, body: { status: 'active' } });
   return { id: su.j.user.id, token: li.j.token };
@@ -2261,7 +2261,7 @@ let j7paid = null; for (let i = 0; i < 14; i++) { j7paid = await adminJob2(gateJ
 t('v80.8 (b3): the held payout releases once the worker connects Stripe', !!j7paid && j7paid.payoutStatus === 'paid' && !!j7paid.payoutTransferId);
 // (d) Phone guard: applying without a phone is fine (review), but
 //     ACTIVATION is refused until a number is on file.
-const noPhone = await req2('POST', '/api/signup', { body: { name: 'No Phone Worker', email: 'nophone@t.local', phone: '', password: 'workpass8', role: 'worker', profile: { city: 'Fairfield' } } });
+const noPhone = await req2('POST', '/api/signup', { body: { name: 'No Phone Worker', email: 'nophone@t.local', phone: '', password: 'workpass8', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield' } } });
 t('v75 phone setup: a phoneless worker can still apply (lands on review)', noPhone.status === 201 && noPhone.j.user.status === 'review');
 const noPhoneAct = await req2('PATCH', '/api/workers/' + noPhone.j.user.id, { token: A2, body: { status: 'active' } });
 t('v75 phone: activation without a phone is refused PHONE_REQUIRED', noPhoneAct.status === 400 && noPhoneAct.j.code === 'PHONE_REQUIRED');
@@ -2273,10 +2273,10 @@ t('v75 phone: phone + activation in ONE patch succeeds', phoneFix.status === 200
 // (e) Availability checkboxes round-trip: the structured payload lands
 //     cleaned on the record; the free-text history stays untouched; an
 //     old payload without the object defaults cleanly.
-const avSign = await req2('POST', '/api/signup', { body: { name: 'Avail Worker', email: 'avail@t.local', phone: '(707) 555-0209', password: 'workpass9', role: 'worker', profile: { city: 'Fairfield', availability: 'Mon Wed Fri · morning · on-demand OK' }, availability: { preset: 'custom', days: [5, 1, 3], shifts: ['morning', 'bogus'], onDemand: true } } });
+const avSign = await req2('POST', '/api/signup', { body: { name: 'Avail Worker', email: 'avail@t.local', phone: '(707) 555-0209', password: 'workpass9', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', availability: 'Mon Wed Fri · morning · on-demand OK' }, availability: { preset: 'custom', days: [5, 1, 3], shifts: ['morning', 'bogus'], onDemand: true } } });
 t('v75 availability: checkbox payload lands structured (days sorted, bogus shift dropped)', avSign.status === 201 && !!avSign.j.user.availability && JSON.stringify(avSign.j.user.availability.days) === '[1,3,5]' && JSON.stringify(avSign.j.user.availability.shifts) === '["morning"]' && avSign.j.user.availability.onDemand === true && avSign.j.user.availability.preset === 'custom');
 t('v75 availability: the free-text profile history is untouched', !!avSign.j.user.profile && avSign.j.user.profile.availability === 'Mon Wed Fri · morning · on-demand OK');
-const avOld = await req2('POST', '/api/signup', { body: { name: 'Legacy Worker', email: 'legacy@t.local', phone: '(707) 555-0210', password: 'workpass0', role: 'worker', profile: { city: 'Fairfield', availability: 'Weekends' } } });
+const avOld = await req2('POST', '/api/signup', { body: { name: 'Legacy Worker', email: 'legacy@t.local', phone: '(707) 555-0210', password: 'workpass0', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', availability: 'Weekends' } } });
 t('v75 availability: an old payload (no availability object) defaults cleanly', avOld.status === 201 && !!avOld.j.user.availability && avOld.j.user.availability.preset === 'anytime' && avOld.j.user.availability.onDemand === false && JSON.stringify(avOld.j.user.availability.shifts) === '[]');
 
 // ---------------- v24 A3: receipt email on capture ----------------
@@ -3112,7 +3112,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
     return (al.j.entries || []).find(e => e.action === action && e.target === target);
   }
   async function mkWorker36(name, email) {
-    const su = await req2('POST', '/api/signup', { body: { name, email, phone: '(707) 555-0400', password: 'workpass36', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+    const su = await req2('POST', '/api/signup', { body: { name, email, phone: '(707) 555-0400', password: 'workpass36', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
     return su.j.user.id;
   }
   // (d) the existing activation email is unaffected by the new removal hook
@@ -3174,7 +3174,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
 {
   const adm41 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
   const A41 = adm41.j.token;
-  const dan = await req2('POST', '/api/signup', { body: { name: 'Direct Dan', email: 'direct@t.local', phone: '(707) 555-0141', password: 'workpass42', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const dan = await req2('POST', '/api/signup', { body: { name: 'Direct Dan', email: 'direct@t.local', phone: '(707) 555-0141', password: 'workpass42', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const danId = dan.j.user.id;
   await req2('PATCH', '/api/workers/' + danId, { token: A41, body: { status: 'active' } });
   const directMailFor = async (frag) => (await mockEmails()).filter(e => String(e.subject || '').includes('Direct job offer') && String(e.subject || '').includes(frag));
@@ -4068,7 +4068,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   const capSlice = serverSrc.slice(serverSrc.indexOf("p === '/api/me/captain'"), serverSrc.indexOf("p === '/api/me/captain'") + 1600);
   t('v79 P0-1 static: captain notification names only the override; /api/me/captain entries carry NO charged total', serverSrc.includes('Captain override accrued:') && !serverSrc.includes('of the job total charged') && !capSlice.includes('charged:'));
   // --- P0-2: role enforcement, server side ---
-  const w79 = await req2('POST', '/api/signup', { body: { name: 'Worker 79', email: 'w79@t.local', phone: '(707) 555-0133', password: 'workpass79', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const w79 = await req2('POST', '/api/signup', { body: { name: 'Worker 79', email: 'w79@t.local', phone: '(707) 555-0133', password: 'workpass79', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const wTok79 = w79.j.token;
   const openCart79 = await req2('POST', '/api/admin/carts', { token: A79, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, unitPrice: 125 }] } });
   const cid79 = openCart79.j.cart.id;
@@ -4179,7 +4179,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   await req2('PATCH', '/api/requests/' + rqNotif.j.request.id, { token: A80, body: { estimate: { items: [{ description: 'Faucet swap — labor', qty: 1, unitPrice: 125, type: 'labor' }] } } });
   const notifsC = await req2('GET', '/api/notifications', { token: suNotif.j.token });
   t('v80 targets: the estimate notification carries the exact target /estimate/<id>', notifsC.j.notifications.some(n => n.target === '/estimate/' + rqNotif.j.request.id));
-  const suWork = await req2('POST', '/api/signup', { body: { name: 'Worker Wally', email: 'wally@t.local', phone: '(707) 555-0144', password: 'wallypass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const suWork = await req2('POST', '/api/signup', { body: { name: 'Worker Wally', email: 'wally@t.local', phone: '(707) 555-0144', password: 'wallypass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   await req2('PATCH', '/api/workers/' + suWork.j.user.id, { token: A80, body: { status: 'active' } });
   const jobW = await req2('POST', '/api/jobs', { token: A80, body: { service: 'Gate fix', city: 'Fairfield', when: 'Today', payOffer: 100, customerPrice: 150, customerName: 'Some Customer', customerPhone: '(707) 555-0999', address: '7 Elm St, Fairfield, CA', assignedWorkerId: suWork.j.user.id, silent: true } });
   const notifsW = await req2('GET', '/api/notifications', { token: suWork.j.token });
@@ -4322,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v83.2: ghs-app-v83.2)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v83.2'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v84: ghs-app-v84)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v84'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4350,7 +4350,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   const h2Order = (await admReqs801()).find(r => r.menuOrder && r.menuOrder.checkoutId === h2.j.checkoutId);
   t('v80.1 hosted webhook: checkout.session.completed settles the DEPOSIT order when the hosted return never lands', whSRes.status === 200 && !!h2Order && h2Order.payment.status === 'deposit' && h2Order.payment.amountCents === 12400);
   // --- worker refusal (v79 P0-2 guard family) ---
-  const w801 = await req2('POST', '/api/signup', { body: { name: 'Worker 801', email: 'w801@t.local', phone: '(707) 555-0141', password: 'workpass801', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const w801 = await req2('POST', '/api/signup', { body: { name: 'Worker 801', email: 'w801@t.local', phone: '(707) 555-0141', password: 'workpass801', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
   const wHosted = await req2('POST', '/api/cart/checkout-hosted', { token: w801.j.token, body: { address: '1 W St', items: items801 } });
   t('v80.1 hosted: a WORKER session is refused (403 WORKER_BLOCKED)', wHosted.status === 403 && wHosted.j.code === 'WORKER_BLOCKED');
   // --- JOIN, FIRST-CLASS (Gabriel 23:12): ONE session = trial subscription + deposit; settle = membership active + DEPOSIT order at MEMBER totals ---
@@ -5033,7 +5033,7 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const tA808 = await req2('POST', '/api/signup', { body: { name: 'Test A', email: 'test808a@t.local', phone: '(707) 555-0811', password: 'password123', role: 'customer' } });
   await req2('POST', '/api/signup', { body: { name: 'Test B', email: 'test808b@t.local', phone: '(707) 555-0812', password: 'password123', role: 'customer' } });
   await req2('POST', '/api/signup', { body: { name: 'Keep Me', email: 'keep808@t.local', phone: '(707) 555-0813', password: 'password123', role: 'customer' } });
-  await req2('POST', '/api/signup', { body: { name: 'Worker Keep', email: 'worker808@t.local', phone: '(707) 555-0814', password: 'password123', role: 'worker' } });
+  await req2('POST', '/api/signup', { body: { name: 'Worker Keep', email: 'worker808@t.local', phone: '(707) 555-0814', password: 'password123', role: 'worker', workerClass: 'tecnico' } });
   const purgeCart808 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'oil-change', name: 'Oil Change', qty: 1, unitPrice: 75 }] } });
   await req2('POST', '/api/admin/carts/' + purgeCart808.j.cart.id + '/cancel', { token: A808, body: {} });
   const liveCart808 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'oil-change', name: 'Oil Change', qty: 1, unitPrice: 75 }] } });
@@ -5330,7 +5330,7 @@ const adm3 = await req3('POST', '/api/setup-admin', { body: { name: 'Team Admin'
 const A3 = (await req3('POST', '/api/login', { body: { email: 'admin3@t.local', password: 'adminpass1' } })).j.token;
 t('v80.11 app3: admin ready', adm3.status === 201 && !!A3);
 async function mkWorker3(email, name, phone, city, areas) {
-  const su = await req3('POST', '/api/signup', { body: { name, email, phone, password: 'workpass1', role: 'worker', profile: { city, areas, skills: ['Plumbing'] } } });
+  const su = await req3('POST', '/api/signup', { body: { name, email, phone, password: 'workpass1', role: 'worker', workerClass: 'tecnico', profile: { city, areas, skills: ['Plumbing'] } } });
   await req3('PATCH', '/api/workers/' + su.j.user.id, { token: A3, body: { status: 'active' } });
   const li = await req3('POST', '/api/login', { body: { email, password: 'workpass1' } });
   return { id: su.j.user.id, token: li.j.token };
@@ -5860,7 +5860,7 @@ t('v80.15 app4: the SEGUIMIENTO instance boots', await waitUp4());
 await req4('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin4@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
 const A4 = (await req4('POST', '/api/login', { body: { email: 'admin4@t.local', password: 'adminpass1' } })).j.token;
 const ADM4ID = (await req4('GET', '/api/me', { token: A4 })).j.user.id;
-const wsu815 = await req4('POST', '/api/signup', { body: { name: 'Seller 815', email: 'seller815@t.local', phone: '(707) 555-0815', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+const wsu815 = await req4('POST', '/api/signup', { body: { name: 'Seller 815', email: 'seller815@t.local', phone: '(707) 555-0815', password: 'workpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
 const W815ID = wsu815.j.user.id;
 const csu815 = await req4('POST', '/api/signup', { body: { name: 'Review Rita', email: 'v815-review@t.local', phone: '(707) 555-0816', password: 'custpass1', role: 'customer', serviceAddress: '1 Main St, Fairfield, CA' } });
 const CUST815ID = csu815.j.user.id;
@@ -6180,7 +6180,7 @@ t('v80.19 toggle rail: POST /api/me/lang flips the saved preference, junk values
 const suPlain819 = await req5('POST', '/api/signup', { body: { name: 'Plain Pat', email: 'v819-plain@t.local', phone: '(707) 555-1820', password: 'custpass1', role: 'customer', serviceAddress: '2 Main St, Fairfield, CA' } });
 t('v80.19 signup: no language in the body -> NO preference saved (null, never guessed)', suPlain819.status === 201 && (suPlain819.j.user.lang === null || suPlain819.j.user.lang === undefined));
 // --- worker activation email follows the worker's saved language ---
-const wsu819 = await req5('POST', '/api/signup', { body: { name: 'Tomás Técnico', email: 'v819-worker@t.local', phone: '(707) 555-1821', password: 'workpass1', role: 'worker', lang: 'es', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+const wsu819 = await req5('POST', '/api/signup', { body: { name: 'Tomás Técnico', email: 'v819-worker@t.local', phone: '(707) 555-1821', password: 'workpass1', role: 'worker', workerClass: 'tecnico', lang: 'es', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
 const W819ID = wsu819.j.user.id;
 await req5('PATCH', '/api/workers/' + W819ID, { token: A5, body: { status: 'active' } });
 const bySubj819 = async (s) => (await mockEmails()).filter(e => (e.subject || '') === s);
@@ -6632,7 +6632,7 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   const m26Notifs0 = await req2('GET', '/api/notifications', { token: m26.token });
   t('v80.26 P1-4: a legacy route-string target is stored as structured data too (welcome -> targetType membership, route #memberships)',
     (m26Notifs0.j.notifications || []).some(n => n.type === 'membership' && n.target === '#memberships' && n.targetType === 'membership' && n.targetId === ''));
-  const wSu26 = await req2('POST', '/api/signup', { body: { name: 'Tomas Yardtech', email: 'tomas26@t.local', phone: '(707) 555-0427', password: 'workpass26', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Landscaping / yard'] } } });
+  const wSu26 = await req2('POST', '/api/signup', { body: { name: 'Tomas Yardtech', email: 'tomas26@t.local', phone: '(707) 555-0427', password: 'workpass26', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Landscaping / yard'] } } });
   const W26ID = wSu26.j.user.id;
   await req2('PATCH', '/api/workers/' + W26ID, { token: A2, body: { status: 'active' } });
   const W26 = (await req2('POST', '/api/login', { body: { email: 'tomas26@t.local', password: 'workpass26' } })).j.token;
@@ -7091,7 +7091,7 @@ const suC81 = await req8('POST', '/api/signup', { body: { name: 'Marisol Vega', 
 const C81 = (await req8('POST', '/api/login', { body: { email: 'marisol81@t.local', password: 'custpass81' } })).j.token;
 const suD81 = await req8('POST', '/api/signup', { body: { name: 'Other Person', email: 'other81@t.local', phone: '(707) 555-0182', password: 'custpass81', role: 'customer' } });
 const D81 = (await req8('POST', '/api/login', { body: { email: 'other81@t.local', password: 'custpass81' } })).j.token;
-const suW81 = await req8('POST', '/api/signup', { body: { name: 'Tech Tim', email: 'tim81@t.local', phone: '(707) 555-0281', password: 'workpass81', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Handyman'] } } });
+const suW81 = await req8('POST', '/api/signup', { body: { name: 'Tech Tim', email: 'tim81@t.local', phone: '(707) 555-0281', password: 'workpass81', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Handyman'] } } });
 await req8('PATCH', '/api/workers/' + suW81.j.user.id, { token: A81, body: { status: 'active' } });
 const W81 = (await req8('POST', '/api/login', { body: { email: 'tim81@t.local', password: 'workpass81' } })).j.token;
 t('v81 setup: admin + two customers + one active tech', !!A81 && !!C81 && !!D81 && !!W81);
@@ -7281,7 +7281,7 @@ try { child4.kill('SIGTERM'); } catch (e) {}
   const conf82 = await req2('POST', '/api/stripe/homecare-confirm', { token: m82.token, body: {} });
   const qMem82 = await req2('POST', '/api/cart/quote', { token: m82.token, body: { items: [{ serviceId: 'fuel-pump-tank-drop', qty: 1, addons: [] }, { serviceId: 'alternator-difficult', qty: 1, addons: [] }, { serviceId: 'spark-plug-v6v8', qty: 1, addons: [] }] } });
   t('v82: a verified member pays the −20% member total on ALL three new flat lines ($915 list -> $732 due)', conf82.status === 200 && qMem82.status === 200 && qMem82.j.member === true && qMem82.j.totals.list === 915 && qMem82.j.totals.due === 732);
-  const wsu82 = await req2('POST', '/api/signup', { body: { name: 'V82 Worker', email: 'v82w@t.local', phone: '(707) 555-0183', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Mechanic'] } } });
+  const wsu82 = await req2('POST', '/api/signup', { body: { name: 'V82 Worker', email: 'v82w@t.local', phone: '(707) 555-0183', password: 'workpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Mechanic'] } } });
   await req2('PATCH', '/api/workers/' + wsu82.j.user.id, { token: A82, body: { status: 'active' } });
   const wli82 = await req2('POST', '/api/login', { body: { email: 'v82w@t.local', password: 'workpass1' } });
   const sm82 = await req2('GET', '/api/worker/sales-menu', { token: wli82.j.token });
@@ -7289,6 +7289,94 @@ try { child4.kill('SIGTERM'); } catch (e) {}
     sm82.status === 200 && !sm82.j.items.some(it => it.serviceId === 'turbo-replacement') && sm82.j.items.some(it => it.serviceId === 'alternator-difficult' && it.price === 250));
   const wCartTurbo82 = await req2('POST', '/api/worker/carts', { token: wli82.j.token, body: { items: [{ serviceId: 'turbo-replacement', qty: 1 }] } });
   t('v82: a seller cart with the turbo is rejected (400, estimate-first)', wCartTurbo82.status === 400 && String(wCartTurbo82.j.error || '').includes('estimate-first'));
+}
+
+// ---------------- v84: worker classification (tecnico / ayudante) ----------------
+{
+  // statics: the doors, the required-class rail, the migration, the SPA pieces
+  t('static v84: server has the /tecnico + /ayudante application doors (class preselected inside the #worker fragment)',
+    serverSrc.includes("p === '/tecnico'") && serverSrc.includes("Location: '/#worker?class=tecnico'") && serverSrc.includes("p === '/ayudante'") && serverSrc.includes("Location: '/#worker?class=ayudante'"));
+  t('static v84: signup requires the class (WORKER_CLASS_REQUIRED), pubUser exposes it, boot migration + PATCH acceptance exist',
+    serverSrc.includes("code: 'WORKER_CLASS_REQUIRED'") && serverSrc.includes("workerClass: u.role === 'worker' ? (u.workerClass === 'ayudante' ? 'ayudante' : 'tecnico') : undefined") && serverSrc.includes('function ensureWorkerClasses(') && serverSrc.includes("error: 'workerClass must be tecnico or ayudante'"));
+  t('static v84: the sales menu is tecnico-only on BOTH rails (server TECH_ONLY + SPA gate)',
+    serverSrc.includes("code: 'TECH_ONLY'") && htmlSrc.includes("me.workerClass==='ayudante'"));
+  t('static v84: SPA carries the class cards, the SOLO TÉCNICOS block, the door capture and the admin badge/filter controls',
+    htmlSrc.includes('id="workerClassRow"') && htmlSrc.includes('id="wClassTecnico"') && htmlSrc.includes('id="wClassAyudante"') && htmlSrc.includes('id="wTechOnly"') && htmlSrc.includes('function captureWorkerDoorClass(') && htmlSrc.includes('function selectWorkerClass(') && htmlSrc.includes('id="adminWorkerClassFilter"') && htmlSrc.includes('function setWorkerClassAdmin('));
+
+  // doors over HTTP
+  const doorT = await fetch(BASE2 + '/tecnico', { redirect: 'manual' });
+  const doorA = await fetch(BASE2 + '/ayudante', { redirect: 'manual' });
+  const doorTech = await fetch(BASE2 + '/tech', { redirect: 'manual' });
+  t('v84: GET /tecnico 302s into the SAME registration with tecnico preselected (/#worker?class=tecnico)',
+    doorT.status === 302 && (doorT.headers.get('location') || '') === '/#worker?class=tecnico');
+  t('v84: GET /ayudante 302s with ayudante preselected; /tech stays the plain technician login door',
+    doorA.status === 302 && (doorA.headers.get('location') || '') === '/#worker?class=ayudante' && doorTech.status === 302 && (doorTech.headers.get('location') || '') === '/#worker');
+
+  // signup: class required + validated + stored + returned via pubUser
+  const noClass84 = await req2('POST', '/api/signup', { body: { name: 'No Class Ned', email: 'noclass84@t.local', phone: '(707) 555-8400', password: 'workpass1', role: 'worker', profile: { city: 'Fairfield' } } });
+  t('v84: a worker signup WITHOUT workerClass is rejected (400 WORKER_CLASS_REQUIRED)', noClass84.status === 400 && noClass84.j.code === 'WORKER_CLASS_REQUIRED');
+  const badClass84 = await req2('POST', '/api/signup', { body: { name: 'Boss Man', email: 'boss84@t.local', phone: '(707) 555-8401', password: 'workpass1', role: 'worker', workerClass: 'boss', profile: { city: 'Fairfield' } } });
+  t('v84: a worker signup with an invalid class is rejected (400)', badClass84.status === 400 && badClass84.j.code === 'WORKER_CLASS_REQUIRED');
+  const tec84 = await req2('POST', '/api/signup', { body: { name: 'Tec Tito', email: 'tec84@t.local', phone: '(707) 555-8402', password: 'workpass1', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', primaryTrade: 'plumbing', ownTools: true, ownTransport: false } } });
+  t('v84: a tecnico signup lands On review WITH its class (and the SOLO TÉCNICOS profile fields survive sanitized)',
+    tec84.status === 201 && tec84.j.user.workerClass === 'tecnico' && tec84.j.user.status === 'review' && tec84.j.user.profile.primaryTrade === 'plumbing' && tec84.j.user.profile.ownTools === true && tec84.j.user.profile.ownTransport === false);
+  const ayu84 = await req2('POST', '/api/signup', { body: { name: 'Ayudante Ana', email: 'ayu84@t.local', phone: '(707) 555-8403', password: 'workpass1', role: 'worker', workerClass: 'ayudante', profile: { city: 'Napa' } } });
+  t('v84: an ayudante signup stores + returns ayudante', ayu84.status === 201 && ayu84.j.user.workerClass === 'ayudante');
+  const cust84 = await req2('POST', '/api/signup', { body: { name: 'Customer Cora', email: 'cora84@t.local', phone: '(707) 555-8404', password: 'custpass1', role: 'customer' } });
+  t('v84: customer signup is untouched by the class rule (201, no class)', cust84.status === 201 && cust84.j.user.workerClass === undefined);
+
+  // admin: the list exposes the class; PATCH reclassifies + validates
+  const list84 = await req2('GET', '/api/workers', { token: A2 });
+  const tecRow84 = (list84.j.workers || []).find(w => w.email === 'tec84@t.local');
+  const ayuRow84 = (list84.j.workers || []).find(w => w.email === 'ayu84@t.local');
+  t('v84: the admin workers list carries each worker class', !!tecRow84 && tecRow84.workerClass === 'tecnico' && !!ayuRow84 && ayuRow84.workerClass === 'ayudante');
+  const flip84 = await req2('PATCH', '/api/workers/' + ayu84.j.user.id, { token: A2, body: { workerClass: 'tecnico' } });
+  t('v84: admin PATCH reclassifies a worker (ayudante -> tecnico)', flip84.status === 200 && flip84.j.worker.workerClass === 'tecnico');
+  const badFlip84 = await req2('PATCH', '/api/workers/' + ayu84.j.user.id, { token: A2, body: { workerClass: 'chief' } });
+  t('v84: admin PATCH rejects an invalid class (400)', badFlip84.status === 400);
+  const back84 = await req2('PATCH', '/api/workers/' + ayu84.j.user.id, { token: A2, body: { workerClass: 'ayudante' } });
+  t('v84: admin PATCH can move him back to ayudante', back84.status === 200 && back84.j.worker.workerClass === 'ayudante');
+
+  // sales-menu gate: activate both workers, log both in, compare
+  await req2('PATCH', '/api/workers/' + tec84.j.user.id, { token: A2, body: { status: 'active' } });
+  await req2('PATCH', '/api/workers/' + ayu84.j.user.id, { token: A2, body: { status: 'active' } });
+  const tecLi84 = await req2('POST', '/api/login', { body: { email: 'tec84@t.local', password: 'workpass1' } });
+  const ayuLi84 = await req2('POST', '/api/login', { body: { email: 'ayu84@t.local', password: 'workpass1' } });
+  const smTec84 = await req2('GET', '/api/worker/sales-menu', { token: tecLi84.j.token });
+  const smAyu84 = await req2('GET', '/api/worker/sales-menu', { token: ayuLi84.j.token });
+  t('v84: an active TECNICO sees the sales menu (200 + items)', smTec84.status === 200 && Array.isArray(smTec84.j.items) && smTec84.j.items.length > 0);
+  t('v84: an active AYUDANTE is refused the sales menu (403 TECH_ONLY)', smAyu84.status === 403 && smAyu84.j.code === 'TECH_ONLY');
+
+  // VM: the class pick drives the SOLO TÉCNICOS block in the real form
+  run("workerClassSel=''; selectWorkerClass('ayudante');");
+  t('v84 VM: picking AYUDANTE hides the SOLO TÉCNICOS block', run('workerClassSel') === 'ayudante' && elById.get('wTechOnly').style.display === 'none');
+  run("selectWorkerClass('tecnico');");
+  t('v84 VM: picking TÉCNICO shows the SOLO TÉCNICOS block again', run('workerClassSel') === 'tecnico' && elById.get('wTechOnly').style.display === '');
+
+  // boot migration: seed classless workers straight into the data file,
+  // restart app2, and read the classes back via the admin list + the file
+  try { child2.kill('SIGTERM'); } catch (e) {}
+  await sleep(400);
+  const seed84 = JSON.parse(fs.readFileSync(DATA_FILE2, 'utf8'));
+  const iso84 = new Date().toISOString();
+  seed84.users.push({ id: 'USR-V84KEOTIS', name: 'Keotis Patterson', email: 'keotis84@t.local', phone: '(707) 555-8410', role: 'worker', status: 'active', profile: {}, skills: [], createdAt: iso84 });
+  seed84.users.push({ id: 'USR-V84JESUS', name: 'Jesús Lopez Barajaa', email: 'jesus84@t.local', phone: '(707) 555-8411', role: 'worker', status: 'review', profile: {}, skills: [], createdAt: iso84 });
+  seed84.users.push({ id: 'USR-V84JESUS2', name: 'JESUS LOPEZ', email: 'jesus2-84@t.local', phone: '(707) 555-8412', role: 'worker', status: 'active', profile: {}, skills: [], createdAt: iso84 });
+  seed84.users.push({ id: 'USR-V84REG', name: 'Regular Rick', email: 'rick84@t.local', phone: '(707) 555-8413', role: 'worker', status: 'active', profile: {}, skills: [], createdAt: iso84 });
+  fs.writeFileSync(DATA_FILE2, JSON.stringify(seed84));
+  child2 = spawnApp2();
+  child2.stderr.on('data', d => process.stderr.write('[app2] ' + d));
+  await waitHealth2();
+  const adm84 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const list84b = await req2('GET', '/api/workers', { token: adm84.j.token });
+  const byEmail84 = {}; (list84b.j.workers || []).forEach(w => { byEmail84[w.email] = w; });
+  t('v84 migration: Keotis Patterson classifies as AYUDANTE at boot', !!byEmail84['keotis84@t.local'] && byEmail84['keotis84@t.local'].workerClass === 'ayudante');
+  t('v84 migration: Jesús Lopez Barajaa (accented) AND JESUS LOPEZ (plain caps) classify as AYUDANTE', !!byEmail84['jesus84@t.local'] && byEmail84['jesus84@t.local'].workerClass === 'ayudante' && !!byEmail84['jesus2-84@t.local'] && byEmail84['jesus2-84@t.local'].workerClass === 'ayudante');
+  t('v84 migration: every other classless worker classifies as TECNICO', !!byEmail84['rick84@t.local'] && byEmail84['rick84@t.local'].workerClass === 'tecnico');
+  const file84 = JSON.parse(fs.readFileSync(DATA_FILE2, 'utf8'));
+  const fileRick84 = file84.users.find(u => u.email === 'rick84@t.local');
+  const fileCust84 = file84.users.find(u => u.email === 'cora84@t.local');
+  t('v84 migration: the class is PERSISTED to the data file (and customers stay classless)', !!fileRick84 && fileRick84.workerClass === 'tecnico' && !!fileCust84 && !('workerClass' in fileCust84));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

@@ -78,7 +78,7 @@ function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUp
 // never throw on shape; handlers additionally reject non-strings.
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
 function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
-function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, favorites: cleanMenuIdList(u.favorites, 24), recents: cleanMenuIdList(u.recents, 8), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
+function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', workerClass: u.role === 'worker' ? (u.workerClass === 'ayudante' ? 'ayudante' : 'tecnico') : undefined, skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, favorites: cleanMenuIdList(u.favorites, 24), recents: cleanMenuIdList(u.recents, 8), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
@@ -536,6 +536,28 @@ const CAPTAIN_AREA_SEED = [
   { name: 'Santa Rosa / Marin', cities: ['Santa Rosa', 'Petaluma', 'San Rafael', 'Novato'] },
   { name: 'San Jose', cities: ['San Jose', 'Sunnyvale'] }
 ];
+// v84 (Gabriel, 2026-11-07): worker CLASSIFICATION — every worker in the
+// data is a TÉCNICO or an AYUDANTE, nobody unclassified. New applications
+// must self-select the class at signup (enforced in /api/signup); this
+// idempotent backfill classifies the EXISTING bench the one time the
+// field is missing: the two standing helpers (Keotis Patterson and Jesús
+// Lopez Barajaa — matched case/accent-insensitively, first + last name)
+// land as 'ayudante', every other worker (active or on review) as
+// 'tecnico'. Gabriel can reclassify anyone from the admin at any time
+// (PATCH /api/workers/:id), so the default is safe.
+function workerClassNameKey(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+function ensureWorkerClasses() {
+  let changed = false;
+  for (const u of db.users) {
+    if (!u || u.role !== 'worker') continue;
+    if (u.workerClass === 'tecnico' || u.workerClass === 'ayudante') continue;
+    const nm = workerClassNameKey(u.name);
+    const isHelper = (nm.includes('keotis') && nm.includes('patterson')) || (nm.includes('jesus') && nm.includes('lopez'));
+    u.workerClass = isHelper ? 'ayudante' : 'tecnico';
+    changed = true;
+  }
+  if (changed) save();
+}
 function ensureCaptainState() {
   if (!Array.isArray(db.captainLedger)) db.captainLedger = [];
   if (!Array.isArray(db.captainPayouts)) db.captainPayouts = [];
@@ -5685,6 +5707,7 @@ async function handleRequest(req, res) {
   if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const user = auth(req);
   ensureCaptainState();
+  ensureWorkerClasses(); // v84: idempotent worker-class backfill (no-op once every worker carries a class)
   // v80.8 (audit #2): on the public credential-link surface, unresolved
   // ids count against the caller's miss budget; a caller over budget is
   // locked out of the surface for a while (429). Resolved links — old
@@ -5698,9 +5721,19 @@ async function handleRequest(req, res) {
   // ---------- static ----------
   // v63: the technicians' direct door. Gabriel texts ONE link —
   // app.generalhandymans.app/tecnico — and the worker lands straight on
-  // the technician login (the SPA's #worker entry), never on the customer
+  // the technician entry (the SPA's #worker entry), never on the customer
   // door. /tech is the English twin.
-  if (req.method === 'GET' && (p === '/tecnico' || p === '/tech')) { res.writeHead(302, { Location: '/#worker' }); return res.end(); }
+  // v84 (Gabriel, 2026-11-07): /tecnico is now the APPLICATION door — it
+  // lands a logged-out visitor on the SAME existing worker registration
+  // (the #worker entry's application tab) with his class PRESELECTED:
+  // the class rides inside the fragment (?class=tecnico), the SPA's
+  // door capture reads it once and strips it, exactly like the campaign
+  // source. /ayudante is the helper twin. A worker who is already logged
+  // in just lands on his zone, as before. /tech stays the plain login
+  // door for existing technicians.
+  if (req.method === 'GET' && p === '/tecnico') { res.writeHead(302, { Location: '/#worker?class=tecnico' }); return res.end(); }
+  if (req.method === 'GET' && p === '/ayudante') { res.writeHead(302, { Location: '/#worker?class=ayudante' }); return res.end(); }
+  if (req.method === 'GET' && p === '/tech') { res.writeHead(302, { Location: '/#worker' }); return res.end(); }
   // v80.9 FUSIÓN — the promo's direct door (Gabriel, 2026-11-01): the bio/QR
   // link generalhandymans.app/plus lands the customer straight on the
   // HomeCare Plus $100 join (#join-plus1), never on the homepage. Any query
@@ -5849,6 +5882,12 @@ async function handleRequest(req, res) {
     if (db.users.some(u => u.email === email)) return send(res, 409, { error: 'email already registered' });
     // Worker accounts are created instantly at signup, but start on review: no job claiming until Gabriel activates (2026-10-07).
     const role = b.role === 'worker' ? 'worker' : 'customer';
+    // v84 (Gabriel, 2026-11-07): the worker CLASSIFICATION is step 1 of
+    // the application — the worker classifies HIMSELF as 'tecnico' or
+    // 'ayudante' at registration, and an application without a valid
+    // class is rejected, so nobody enters the data unclassified.
+    const workerClass = role === 'worker' ? (b.workerClass === 'tecnico' || b.workerClass === 'ayudante' ? b.workerClass : null) : null;
+    if (role === 'worker' && !workerClass) return send(res, 400, { error: 'worker class required: tecnico or ayudante', code: 'WORKER_CLASS_REQUIRED' });
     const prof = (b.profile && typeof b.profile === 'object') ? b.profile : {};
     // Worker self-ratings 1-10 per skill: the worker's own self-assessment at signup. Visible to the worker and the Team (unlike the Team's private 1-5 ranks).
     if (prof.selfRatings && typeof prof.selfRatings === 'object' && !Array.isArray(prof.selfRatings)) {
@@ -5865,6 +5904,14 @@ async function handleRequest(req, res) {
       : ((prof.tradeSkills && typeof prof.tradeSkills === 'object' && !Array.isArray(prof.tradeSkills)) ? prof.tradeSkills : null);
     delete prof.tradeSkills;
     delete prof.photo; // v41: the profile photo is set ONLY from the worker's profile editor, never at signup
+    // v84: the SOLO TÉCNICOS application fields ride the profile — keep
+    // them clean: the main trade is one of the six application trades,
+    // and the own-tools / own-transport answers are plain booleans.
+    if (role === 'worker') {
+      if (!['handyman', 'plumbing', 'electrical', 'carpentry', 'painting', 'mechanic'].includes(prof.primaryTrade)) delete prof.primaryTrade;
+      if (prof.ownTools !== undefined) prof.ownTools = !!prof.ownTools;
+      if (prof.ownTransport !== undefined) prof.ownTransport = !!prof.ownTransport;
+    }
     const tradeSkills = role === 'worker' ? mergeTradeSkills(null, tradeSkillsIn) : {};
     // v75: the application's availability CHECKBOXES (days / shifts /
     // on-demand) land STRUCTURED on the record as u.availability. Old
@@ -5881,7 +5928,7 @@ async function handleRequest(req, res) {
     // required — ZIP included: Gabriel's "no obligatorio" rule).
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, workerClass: workerClass || undefined, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     if (cleanLang(b.lang)) u.lang = b.lang; // v80.19: the UI language at registration becomes the account's saved preference
     stampUserSource(u, b); // v79 P0-7: acquisition source on the record from day one
     db.users.push(u); claimOrphanRecords(u); // v80 P1-1: guest history under this email becomes theirs at signup
@@ -6208,6 +6255,9 @@ async function handleRequest(req, res) {
   if (p === '/api/worker/sales-menu' && req.method === 'GET') {
     if (!requireRole(user, ['worker'], res)) return;
     if (user.status !== 'active') return send(res, 403, { error: 'worker not active yet — the Team reviews and activates workers first' });
+    // v84: the sell-a-job sales menu lives in the TECHNICIAN zone only —
+    // a helper (workerClass 'ayudante') never sees it, here or in the SPA.
+    if (user.workerClass === 'ayudante') return send(res, 403, { error: 'the sales menu is for technicians', code: 'TECH_ONLY' });
     // TECH ZONE ONLY: the customer LIST price (public) + HIS guaranteed
     // take — v80.13: 68% of the list price (Gabriel's sold-take law),
     // broken out as pay + the $10 commission line inside it. The payout
@@ -6897,6 +6947,13 @@ async function handleRequest(req, res) {
       if (b.status === 'active' && w.status !== 'active' && !effectivePhone) return send(res, 400, { error: 'worker has no phone on file — add a phone number before activating (incomplete record)', code: 'PHONE_REQUIRED' });
       const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status, lang: userLangOf(w) } }); }
     }
+    // v84: the worker's CLASS (tecnico / ayudante) — Gabriel can
+    // reclassify a worker at any time (a helper who proves himself moves
+    // up to technician). Only the two class values are accepted.
+    if (b.workerClass !== undefined) {
+      if (b.workerClass !== 'tecnico' && b.workerClass !== 'ayudante') return send(res, 400, { error: 'workerClass must be tecnico or ayudante' });
+      w.workerClass = b.workerClass;
+    }
     // Private Team-only skill ranks (1-5 per skill). Stored outside profile so workers never see them.
     if (b.skillRanks && typeof b.skillRanks === 'object' && !Array.isArray(b.skillRanks)) {
       w.internal = w.internal || {};
@@ -6944,7 +7001,7 @@ async function handleRequest(req, res) {
     // unprofessional one) — body photo: null clears it. Setting a photo
     // is the worker's own action in his profile editor, never the admin's.
     if (b.photo === null) { w.profile = w.profile || {}; delete w.profile.photo; }
-    { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.skillRanks) parts.push('skill ranks'); if (b.tradeVerified) parts.push('verified skills'); if (b.photo === null) parts.push('photo removed'); if (b.email || b.name || b.profile) parts.push('profile edit'); audit(user, 'worker.update', w.id, parts.join(' · ') || 'update'); }
+    { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.workerClass) parts.push('class ' + b.workerClass); if (b.skillRanks) parts.push('skill ranks'); if (b.tradeVerified) parts.push('verified skills'); if (b.photo === null) parts.push('photo removed'); if (b.email || b.name || b.profile) parts.push('profile edit'); audit(user, 'worker.update', w.id, parts.join(' · ') || 'update'); }
     save(); return send(res, 200, { worker: pubUser(w) });
   }
   if (workerMatch && req.method === 'DELETE') {
@@ -9758,4 +9815,4 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
   return send(res, 404, { error: 'not found' });
 }
 
-loadFromSupabase().then(() => { if (pruneExpiredSessions()) save(); server.listen(PORT, () => console.log('GHS app running on port ' + PORT)); });
+loadFromSupabase().then(() => { ensureWorkerClasses(); if (pruneExpiredSessions()) save(); server.listen(PORT, () => console.log('GHS app running on port ' + PORT)); });

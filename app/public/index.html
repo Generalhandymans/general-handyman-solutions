@@ -60,6 +60,15 @@ h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
 .pick{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px}
 .pick button{background:#fff;color:var(--ink);border:1px solid var(--line);padding:8px 12px;font-size:13.5px;font-weight:600}
 .pick button.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.wclass-step{color:var(--red);font-weight:800;text-transform:uppercase;font-size:14.5px;letter-spacing:.03em;margin:12px 0 4px}
+.wclass-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 10px}
+.wclass-card{position:relative;background:var(--panel);color:var(--panel-ink);border:2px solid var(--panel-line);border-radius:14px;padding:16px 12px 14px;text-align:center;cursor:pointer}
+.wclass-card.sel{border-color:var(--red)}
+.wclass-card .wc-check{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-weight:800;font-size:14px;line-height:24px;display:none}
+.wclass-card.sel .wc-check{display:block}
+.wclass-card .wc-title{font-size:21px;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+.wclass-card .wc-sub{font-weight:700;font-size:14.5px;margin-top:6px}
+.wclass-card .wc-lines{color:var(--panel-mut);font-size:13px;line-height:1.55;margin-top:5px}
 .thread{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;display:grid;gap:8px}
 .msg{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:14px;line-height:1.4}
 .photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.thumb{width:92px;height:92px;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
@@ -505,6 +514,19 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <button id="tabWorker" onclick="mode('worker')" data-w="tabWorker">New technician application</button>
     </div>
     <div id="authErr" class="err"></div>
+    <!-- v84 (Gabriel, 2026-11-07): STEP 1 of the worker application —
+         the class cards. The applicant classifies HIMSELF: TÉCNICO or
+         AYUDANTE. Shown only in worker mode (mode() toggles it); the
+         /tecnico and /ayudante doors preselect a card. The pick is
+         REQUIRED — doAuth refuses to submit without it, and the server
+         refuses an application without workerClass. -->
+    <div id="workerClassRow" style="display:none">
+      <div class="wclass-step" data-w="classStep">1 · Elige tu clase</div>
+      <div class="wclass-grid">
+        <div class="wclass-card" id="wClassTecnico" onclick="selectWorkerClass('tecnico')" role="button" tabindex="0"><span class="wc-check">✓</span><div class="wc-title" data-w="classTecnico">Técnico</div><div class="wc-sub" data-w="classTecnicoSub">Tengo oficio y experiencia</div><div class="wc-lines" data-w="classTecnicoLines">Handyman · Plomería · Electricidad · Carpintería · Pintura · Mecánica</div></div>
+        <div class="wclass-card" id="wClassAyudante" onclick="selectWorkerClass('ayudante')" role="button" tabindex="0"><span class="wc-check">✓</span><div class="wc-title" data-w="classAyudante">Ayudante</div><div class="wc-sub" data-w="classAyudanteSub">Quiero trabajar y aprender</div><div class="wc-lines" data-w="classAyudanteLines">Ayuda general · Limpieza · Yarda · Apoyo en trabajos · Sin experiencia — aprende aquí</div></div>
+      </div>
+    </div>
     <div id="planSelRow" style="display:none">
       <label>Choose your plan</label>
       <select id="aPlanSel" onchange="joinPlanChanged()">
@@ -517,6 +539,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <p class="mut" style="font-size:12.5px;margin:4px 0 0">Switch plans right here — every price in this form follows the plan you pick.</p>
     </div>
     <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
+    <div id="workerDatosRow" class="wclass-step" style="display:none" data-w="datosStep">2 · Tus datos</div>
     <div id="nameRow"><label id="authFullNameLbl">Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
     <div id="phoneRow"><label id="authPhoneLbl">Phone</label><input id="aPhone" placeholder="707-___-____"></div>
@@ -572,6 +595,21 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <div class="pick" id="wRole"><button type="button" data-v="Skilled subcontractor" data-w="roleSkilled">Skilled subcontractor</button><button type="button" data-v="Helper" data-w="roleHelper">Helper</button></div>
       <label data-w="cityLive">City you live in</label><input id="wCity" placeholder="Fairfield">
       <label data-w="areasWork">Areas you can work</label><input id="wAreas" placeholder="Fairfield, Vacaville, Vallejo...">
+      <!-- v84: SOLO TÉCNICOS — this whole block renders only for the
+           TÉCNICO class (paintWorkerClass hides it for AYUDANTE, and its
+           fields are never required from a helper). The main trade,
+           experience, own-tools and own-transport answers land on the
+           application profile (primaryTrade / experience / ownTools /
+           ownTransport); the skills, trades and gear below are the
+           existing application fields, unchanged. -->
+      <div id="wTechOnly">
+      <div class="wclass-step" data-w="techOnlyStep">Solo técnicos</div>
+      <label data-w="primaryTradeLabel">Oficio principal</label>
+      <select id="wPrimaryTrade"><option value="" data-w="primaryTradePh">Selecciona tu oficio</option><option value="handyman" data-wt="handyman">Handyman (general)</option><option value="plumbing" data-wt="plumbing">Plomería</option><option value="electrical" data-wt="electrical">Electricidad</option><option value="carpentry" data-wt="carpentry">Carpintería</option><option value="painting" data-w="primaryTradePainting">Pintura</option><option value="mechanic" data-wt="mechanic">Mecánica</option></select>
+      <div class="row">
+        <div><label data-w="ownToolsLabel">¿Herramientas propias?</label><div class="pick" id="wOwnTools"><button type="button" data-v="yes" data-w="classYes">Sí</button><button type="button" data-v="no" data-w="classNo">No</button></div></div>
+        <div><label data-w="ownTransportLabel">¿Transporte propio?</label><div class="pick" id="wOwnTransport"><button type="button" data-v="yes" data-w="classYes">Sí</button><button type="button" data-v="no" data-w="classNo">No</button></div></div>
+      </div>
       <label data-w="skillsTap">Skills — tap all that apply</label>
       <div class="pick multi" id="wSkills">
         <button type="button" data-v="General handyman" data-w="skGeneral">General handyman</button><button type="button" data-v="Carpentry" data-w="skCarpentry">Carpentry</button><button type="button" data-v="Paint & drywall" data-w="skPaint">Paint &amp; drywall</button><button type="button" data-v="Electrical swaps" data-w="skElectrical">Electrical swaps</button><button type="button" data-v="Plumbing help" data-w="skPlumbing">Plumbing help</button><button type="button" data-v="Mobile mechanic" data-w="skMechanic">Mobile mechanic</button><button type="button" data-v="Installs & assembly" data-w="skInstalls">Installs &amp; assembly</button><button type="button" data-v="Landscaping / yard" data-w="skYard">Landscaping / yard</button>
@@ -593,6 +631,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <div class="row">
         <div><label data-w="expLabel">Experience</label><select id="wExp"><option value="Less than 1 year" data-w="expLt1">Less than 1 year</option><option value="1–2 years" data-w="exp12">1–2 years</option><option value="3–5 years" data-w="exp35">3–5 years</option><option value="5+ years" data-w="exp5p">5+ years</option></select></div>
       </div>
+      </div><!-- /wTechOnly (v84) -->
       <div class="row">
         <div><label data-w="vehicleLabel">Vehicle style</label><select id="wVehicle"><option value="Pickup truck" data-w="vehPickup">Pickup truck</option><option value="Work van" data-w="vehVan">Work van</option><option value="SUV" data-w="vehSuv">SUV</option><option value="Sedan/hatchback" data-w="vehSedan">Sedan/hatchback</option><option value="E-bike" data-w="vehEbike">E-bike</option><option value="No vehicle / need a ride" data-w="vehNone">No vehicle / need a ride</option><option value="Other" data-w="vehOther">Other</option></select></div>
         <div><label data-w="haulLabel">Can your vehicle haul materials?</label><select id="wHaul"><option value="Yes — truck/van/trailer loads" data-w="haulYes">Yes — truck/van/trailer loads</option><option value="Small materials only" data-w="haulSmall">Small materials only</option><option value="No hauling" data-w="haulNo">No hauling</option><option value="Not applicable" data-w="haulNa">Not applicable</option></select></div>
@@ -1503,6 +1542,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
     </div>
     <div id="adminInvites"></div>
     <h3 id="admSecWorkers">Workers (activate after review)</h3>
+    <div style="margin:4px 0 8px"><span class="mut">Class:</span> <select id="adminWorkerClassFilter" onchange="loadAdminWorkers()" style="width:auto;display:inline-block;margin:0"><option value="">All classes</option><option value="tecnico">Técnicos</option><option value="ayudante">Ayudantes</option></select></div>
     <div id="adminWorkers"></div>
     <h3 id="admSecCaptains">Capitanes — Area Captains</h3>
     <p class="mut">Un capitán por área (solo técnicos ACTIVE). El override del capitán es 5% fijo del labor cobrado, lo paga la casa — nunca sale del pago del técnico — y solo se acumula cuando el trabajo termina (Done — photos sent) con el pago capturado. Servicios flat, junk removal y hauling/green waste no acumulan. Fairfield lo comanda El General — no se asigna.</p>
@@ -1704,6 +1744,14 @@ function mode(m){ curMode=m;
     ? CU('saHintPlan')
     : CU('saHintPlain');
   document.getElementById('workerExtra').style.display = m==='worker' ? 'block':'none';
+  // v84: the class cards (step 1) + the "tus datos" step label belong to
+  // the worker application only; entering worker mode consumes a pending
+  // door preselect (/tecnico · /ayudante) and repaints the pick.
+  const wcr84 = document.getElementById('workerClassRow');
+  if (wcr84) wcr84.style.display = m==='worker' ? 'block':'none';
+  const wdr84 = document.getElementById('workerDatosRow');
+  if (wdr84) wdr84.style.display = m==='worker' ? 'block':'none';
+  if (m === 'worker') { consumeDoorClass(false); paintWorkerClass(); }
   const homeGroupEl = document.getElementById('homeGroup');
   if (homeGroupEl) homeGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
   const startGroupEl = document.getElementById('startGroup');
@@ -1735,6 +1783,10 @@ const W_I18N = {
     rescueBtn: 'First time or forgot your password? Tap here', rescueNote: 'First time or forgot your password? Tap the button — we email you a link to set it. Type your email above first.', rescueNoEmail: 'No access to that email anymore? Call or text the Team: (707) 862-3773',
     agreeApplyPre: 'By applying you agree to the', termsLink: 'Terms & Conditions', custLinkQ: 'Are you a customer?', loginHere: 'Log in here →', forgotPw: 'Forgot my password',
     forgotNeedEmail: 'Type your email above first, then tap "Forgot my password".',
+    classStep: '1 · Pick your class', datosStep: '2 · Your info', classTecnico: 'Technician', classTecnicoSub: 'I have a trade and experience', classTecnicoLines: 'Handyman · Plumbing · Electrical · Carpentry · Painting · Mechanic',
+    classAyudante: 'Helper', classAyudanteSub: 'I want to work and learn', classAyudanteLines: 'General help · Cleanup · Yard work · Job support · No experience needed — learn here',
+    classRequired: 'First pick your class in step 1: Technician or Helper.', techOnlyStep: 'Technicians only', primaryTradeLabel: 'Main trade', primaryTradePh: 'Select your trade', primaryTradePainting: 'Painting',
+    ownToolsLabel: 'Your own tools?', ownTransportLabel: 'Your own transportation?', classYes: 'Yes', classNo: 'No',
     applyingAs: 'Applying as', roleSkilled: 'Skilled subcontractor', roleHelper: 'Helper', cityLive: 'City you live in', areasWork: 'Areas you can work',
     skillsTap: 'Skills — tap all that apply', skGeneral: 'General handyman', skCarpentry: 'Carpentry', skPaint: 'Paint & drywall', skElectrical: 'Electrical swaps', skPlumbing: 'Plumbing help', skMechanic: 'Mobile mechanic', skInstalls: 'Installs & assembly', skYard: 'Landscaping / yard',
     tradesAppLabel: 'Your trades — your level in each (1 = knows nothing · 3 = good, works solo · 5 = master) — and check if you have the tools',
@@ -1799,6 +1851,10 @@ const W_I18N = {
     rescueBtn: '¿Primera vez o no recuerdas tu contraseña? Toca aquí', rescueNote: '¿Primera vez o no recuerdas tu contraseña? Toca el botón — te mandamos un correo con un link para crearla. Escribe tu correo arriba primero.', rescueNoEmail: '¿Ya no tienes acceso a ese correo? Llama o textea al Team: (707) 862-3773',
     agreeApplyPre: 'Al aplicar aceptas los', termsLink: 'Términos y Condiciones', custLinkQ: '¿Eres cliente?', loginHere: 'Entra aquí →', forgotPw: 'Olvidé mi contraseña',
     forgotNeedEmail: 'Escribe tu correo arriba primero, luego toca "Olvidé mi contraseña".',
+    classStep: '1 · Elige tu clase', datosStep: '2 · Tus datos', classTecnico: 'Técnico', classTecnicoSub: 'Tengo oficio y experiencia', classTecnicoLines: 'Handyman · Plomería · Electricidad · Carpintería · Pintura · Mecánica',
+    classAyudante: 'Ayudante', classAyudanteSub: 'Quiero trabajar y aprender', classAyudanteLines: 'Ayuda general · Limpieza · Yarda · Apoyo en trabajos · Sin experiencia — aprende aquí',
+    classRequired: 'Primero elige tu clase en el paso 1: Técnico o Ayudante.', techOnlyStep: 'Solo técnicos', primaryTradeLabel: 'Oficio principal', primaryTradePh: 'Selecciona tu oficio', primaryTradePainting: 'Pintura',
+    ownToolsLabel: '¿Herramientas propias?', ownTransportLabel: '¿Transporte propio?', classYes: 'Sí', classNo: 'No',
     applyingAs: 'Aplicando como', roleSkilled: 'Subcontratista calificado', roleHelper: 'Ayudante', cityLive: 'Ciudad donde vives', areasWork: 'Áreas donde puedes trabajar',
     skillsTap: 'Habilidades — toca todas las que apliquen', skGeneral: 'Handyman general', skCarpentry: 'Carpintería', skPaint: 'Pintura y drywall', skElectrical: 'Cambios eléctricos', skPlumbing: 'Ayuda de plomería', skMechanic: 'Mecánico móvil', skInstalls: 'Instalaciones y armado', skYard: 'Jardinería / yarda',
     tradesAppLabel: 'Tus oficios — tu nivel en cada uno (1 = no sabe nada · 3 = bueno, trabaja solo · 5 = master) — y marca si tienes la herramienta',
@@ -1956,6 +2012,9 @@ function applyWorkerEntry(){
   const lon = document.getElementById('loginOnlyNote');
   if (lon) lon.style.display = w ? 'none' : 'block';
   if (!w && curMode === 'worker') mode('login');
+  // v84: a logged-out visitor who arrived through /tecnico or /ayudante
+  // lands straight on the application with his class preselected.
+  if (w && !me) consumeDoorClass(true);
   applyWorkerLang();
 }
 window.addEventListener('hashchange', applyWorkerEntry);
@@ -2610,6 +2669,63 @@ function scrollToJoinDoor(){
 // sessionStorage 'ghsSrc', forwarded as `source` on the join calls, and
 // recorded server-side at activation. The hash query is stripped right
 // away so the deep-link router keeps matching the bare hash exactly.
+// ---------- Worker class doors + selection (v84) ----------
+// The /tecnico and /ayudante server doors land on #worker?class=<cls> —
+// the SAME existing worker entry and registration, with the applicant's
+// class preselected. The class is captured ONCE at load, BEFORE the
+// campaign-source capture below strips the hash query (same contract as
+// src), and consumed by applyWorkerEntry()/mode(): a logged-out visitor
+// lands straight on the application with his card already picked. The
+// pick is still the applicant's — he can tap the other card any time
+// before submitting.
+let workerDoorClass = '';
+function captureWorkerDoorClass(){
+  try {
+    const h = location.hash || '';
+    const qi = h.indexOf('?');
+    if (qi < 0 || h.slice(0, qi) !== '#worker') return;
+    const parts = h.slice(qi + 1).split('&');
+    for (const part of parts) {
+      const eq = part.indexOf('=');
+      if (eq > 0 && part.slice(0, eq) === 'class') {
+        const v = part.slice(eq + 1);
+        if (v === 'tecnico' || v === 'ayudante') workerDoorClass = v;
+      }
+    }
+    if (workerDoorClass) { try { sessionStorage.setItem('ghsWorkerClass', workerDoorClass); } catch (e) {} }
+  } catch (e) {}
+}
+captureWorkerDoorClass();
+// Step 1 of the application: the two class cards. The state lives in
+// workerClassSel ('' until the applicant picks — doAuth refuses to
+// submit without it, mirroring the server's WORKER_CLASS_REQUIRED).
+let workerClassSel = '';
+let _doorClassApplied = false;
+function paintWorkerClass(){
+  const t = document.getElementById('wClassTecnico'), a = document.getElementById('wClassAyudante');
+  if (t) t.classList.toggle('sel', workerClassSel === 'tecnico');
+  if (a) a.classList.toggle('sel', workerClassSel === 'ayudante');
+  const tech = document.getElementById('wTechOnly');
+  if (tech) tech.style.display = workerClassSel === 'ayudante' ? 'none' : '';
+}
+function selectWorkerClass(cls){
+  workerClassSel = (cls === 'ayudante') ? 'ayudante' : 'tecnico';
+  // The class IS the application type now: keep the legacy "applying as"
+  // pick in sync so the stored profile keeps its historical shape.
+  setPickSelection('wRole', workerClassSel === 'tecnico' ? 'Skilled subcontractor' : 'Helper');
+  paintWorkerClass();
+}
+function consumeDoorClass(openForm){
+  if (_doorClassApplied) return;
+  let dc = workerDoorClass;
+  if (!dc) { try { dc = sessionStorage.getItem('ghsWorkerClass') || ''; } catch (e) { dc = ''; } }
+  if (dc !== 'tecnico' && dc !== 'ayudante') return;
+  _doorClassApplied = true;
+  workerDoorClass = '';
+  try { sessionStorage.removeItem('ghsWorkerClass'); } catch (e) {}
+  if (openForm && curMode !== 'worker') mode('worker');
+  selectWorkerClass(dc);
+}
 function parseSrcParam(str){
   if (!str) return '';
   const parts = String(str).split('&');
@@ -3205,7 +3321,7 @@ async function doAuth(){
   const email=document.getElementById('aEmail').value.trim(), password=document.getElementById('aPass').value;
   try{
     if(curMode==='login'){ const d=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=d.user; syncEntryFlag(); healWorkerLocFlag(); healLangFromAccount(); }
-    else { const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills() } : {};
+    else { if (curMode==='worker' && !workerClassSel) { showErr(WT('classRequired')); return; } const availCbs = workerAvailFromForm(); const profile = curMode==='worker' ? { applyingAs:pickOne('wRole'), city:document.getElementById('wCity').value.trim(), areas:document.getElementById('wAreas').value.trim(), skills:pickVals('wSkills'), gear:pickVals('wGear'), experience:document.getElementById('wExp').value, vehicleStyle:document.getElementById('wVehicle').value, haul:document.getElementById('wHaul').value, license:document.getElementById('wLicense').value, insurance:document.getElementById('wInsurance').value, availability:availCbs.summary, notes:document.getElementById('wNotes').value.trim(), tradeSkills:pickTradeSkills(), primaryTrade:(document.getElementById('wPrimaryTrade')||{}).value || '', ownTools: pickOne('wOwnTools') ? pickOne('wOwnTools')==='yes' : undefined, ownTransport: pickOne('wOwnTransport') ? pickOne('wOwnTransport')==='yes' : undefined } : {};
       const serviceAddress = (curMode==='customer' || curMode==='join') ? document.getElementById('aServiceAddress').value.trim() : '';
       // v77: a plan picked in the plain form's OPTIONAL membership picker
       // arms the standard resume — after the account exists, submit
@@ -3217,7 +3333,7 @@ async function doAuth(){
       if (curMode==='join' && pendingJoin && pendingJoin.kind !== 'homecare' && !serviceAddress) { showErr(CU('errAddressReq')); return; }
       const role = (curMode==='homecare' || curMode==='join') ? 'customer' : curMode;
       const homePayload = (curMode==='customer' || curMode==='join' || curMode==='homecare') ? readHomeForm() : {};
-      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({source: campaignSource(), lang: curMode === 'worker' ? workerLang() : menuLang(), name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, profile, availability: curMode==='worker' ? availCbs.value : undefined}, homePayload))});
+      const d=await api('/api/signup',{method:'POST', body:JSON.stringify(Object.assign({source: campaignSource(), lang: curMode === 'worker' ? workerLang() : menuLang(), name:document.getElementById('aName').value.trim(), email, password, phone:document.getElementById('aPhone').value.trim(), serviceAddress: (curMode==='customer' || curMode==='join') ? serviceAddress : undefined, role:role, workerClass: curMode==='worker' ? workerClassSel : undefined, profile, availability: curMode==='worker' ? availCbs.value : undefined}, homePayload))});
       const l=await api('/api/login',{method:'POST', body:JSON.stringify({email,password})}); me=l.user; syncEntryFlag();
       if(curMode==='homecare' && !(pendingMembershipPlan && pendingMembershipPlan.kind !== 'homecare')){ await chargeHomeCare(email); return; } // legacy homecare-mode submit: inline charge, then welcome — but a pending yard/plus join (Stripe.js fallback) outranks it: never let it become a default-price HomeCare charge; the resume below takes the user to the selected plan's checkout instead
       if(curMode==='join' && pendingJoin){
@@ -4140,7 +4256,7 @@ async function loadPayouts(){ const box=document.getElementById('workerPayouts')
 }
 async function startConnect(){ try{ const r=await api('/api/worker/connect/start',{method:'POST'}); if(r&&r.url){ location.href=r.url; } else alert(WT('connectFail')); }catch(e){ alert(e.message); } }
 // ---------- v80.11 ALCANCE: Menú de venta (tech zone only) ----------
-async function loadWorkerSales(){ const box=document.getElementById('workerSales'); if(!box||!me||me.role!=='worker'||me.status!=='active'){ if(box) box.innerHTML=''; return; }
+async function loadWorkerSales(){ const box=document.getElementById('workerSales'); if(!box||!me||me.role!=='worker'||me.status!=='active'||me.workerClass==='ayudante'){ if(box) box.innerHTML=''; return; } // v84: ayudantes never see the sales menu (the server refuses it too)
   let d=null; try{ d=await api('/api/worker/sales-menu'); }catch(e){}
   if(!d||!d.items){ box.innerHTML=''; return; }
   const langEs = workerLang()==='es';
@@ -5698,7 +5814,11 @@ async function loadAdminRequests(){
 async function loadAdminWorkers(){
   const wk=await api('/api/workers').catch(()=>({workers:[]}));
   adminWorkersCache = wk.workers||[];
-  document.getElementById('adminWorkers').innerHTML = wk.workers.map(function(w){ const pf=w.profile||{};
+  // v84: the class filter narrows the RENDERED list only — the cache
+  // always keeps every worker (dispatch pickers read it).
+  const classFilter84 = (document.getElementById('adminWorkerClassFilter') || {}).value || '';
+  const list84 = adminWorkersCache.filter(function(w){ return !classFilter84 || (w.workerClass === 'ayudante' ? 'ayudante' : 'tecnico') === classFilter84; });
+  document.getElementById('adminWorkers').innerHTML = list84.map(function(w){ const pf=w.profile||{};
     function row(k,v){ return v ? '<br><span class="mut">'+k+':</span> '+escHtml(v) : ''; }
     // v72 (A-1): compact card by default — photo, name, status, payouts
     // and the top trades; the full profile rows + Team ranks + trade
@@ -5710,18 +5830,22 @@ async function loadAdminWorkers(){
     // structured availability from his application checkboxes reads in
     // one line (days · shifts · ⚡ on-demand).
     const noPhonePill = w.phone ? '' : ' <span class="pill" style="background:#7a1616;color:#fff">⚠ Incomplete — no phone</span>';
+    // v84: the class badge — every worker is TÉCNICO or AYUDANTE.
+    const classPill = ' <span class="pill" style="background:' + (w.workerClass === 'ayudante' ? '#8a6d1a' : '#0b0b0b') + ';color:#fff">' + (w.workerClass === 'ayudante' ? 'AYUDANTE' : 'TÉCNICO') + '</span>';
     const AV_DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     const avW = w.availability || {};
     const availLine = ((avW.days||[]).length || (avW.shifts||[]).length || avW.onDemand) ? '<br><span class="mut">Availability:</span> ' + (avW.days||[]).map(function(d){ return AV_DAY_NAMES[d] || ''; }).filter(Boolean).join(' ') + ((avW.shifts||[]).length ? ' · ' + avW.shifts.join(', ') : '') + (avW.onDemand ? ' · ⚡ on-demand' : '') : '';
-    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+escHtml(w.name)+'</b> ('+escHtml(w.email)+(w.phone?' • '+escHtml(w.phone):'')+') <span class="pill">'+escHtml(w.status)+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Stripe Connect: Connected':(w.payoutsSetup==='pending'?'\u{1F4B3} Stripe Connect: Pending':'\u{1F4B3} Stripe Connect: Not started'))+'</span>' + noPhonePill
+    return '<div class="card">'+avatarHtml(w.photo, w.name, 38)+' <b>'+escHtml(w.name)+'</b> ('+escHtml(w.email)+(w.phone?' • '+escHtml(w.phone):'')+') <span class="pill">'+escHtml(w.status)+'</span> <span class="pill">'+(w.payoutsSetup==='ready'?'\u{1F4B3} Stripe Connect: Connected':(w.payoutsSetup==='pending'?'\u{1F4B3} Stripe Connect: Pending':'\u{1F4B3} Stripe Connect: Not started'))+'</span>' + noPhonePill + classPill
     + (pf.city ? '<br><span class="mut">City:</span> '+escHtml(pf.city) : '') + (topTrades ? '<br><span class="mut">Top trades:</span> '+topTrades : '') + availLine
     + '<br><button onclick="setWorker(\''+w.id+'\',\'active\')">Make ACTIVE</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'review\')">On review</button> <button class="ghost" onclick="setWorker(\''+w.id+'\',\'notfit\')">Not a fit</button> <button class="ghost" onclick="toggleWorkerDetail(\''+w.id+'\',this)">Ver detalle ▾</button> <button class="ghost" onclick="delWorker(\''+w.id+'\',\''+w.name.replace(/'/g,"\\'")+'\')">Delete worker</button>'+(w.photo?' <button class="ghost" onclick="removeWorkerPhoto(\''+w.id+'\')">Remove photo</button>':'')
     + '<div id="wdetail-'+w.id+'" style="display:none">'
-    + row('Applying as', pf.applyingAs) + row('City', pf.city) + row('Areas', pf.areas)
+    + row('Applying as', pf.applyingAs) + row('Class', w.workerClass === 'ayudante' ? 'Ayudante' : 'Técnico') + row('Main trade', pf.primaryTrade) + row('Own tools', pf.ownTools === true ? 'Yes' : (pf.ownTools === false ? 'No' : '')) + row('Own transport', pf.ownTransport === true ? 'Yes' : (pf.ownTransport === false ? 'No' : ''))
+    + row('City', pf.city) + row('Areas', pf.areas)
     + row('Skills', (pf.skills||w.skills||[]).join(', ')) + row('Has', (pf.gear||[]).join(', '))
     + row('Experience', pf.experience) + row('Tools', pf.toolsLevel) + row('Vehicle', pf.vehicleStyle||w.vehicle)
     + row('Haul', pf.haul) + row('Transport', pf.transport) + row('License/ID', pf.license) + row('Insurance', pf.insurance)
     + row('Availability', pf.availability) + row('Notes', pf.notes) + skillRankHtml(w) + workerTradesHtml(w)
+    + '<br><span class="mut">Class:</span> <button class="ghost" onclick="setWorkerClassAdmin(\''+w.id+'\',\'tecnico\')">Make TÉCNICO</button> <button class="ghost" onclick="setWorkerClassAdmin(\''+w.id+'\',\'ayudante\')">Make AYUDANTE</button>'
     + '<br><button class="ghost" onclick="editWorkerForm(\''+w.id+'\')">Edit</button><div id="editWorker-'+w.id+'"></div></div></div>'; }).join('') || '<div class="empty"><p class="mut">No workers yet.</p></div>';
 }
 async function loadAdminJobs(){
@@ -6474,6 +6598,7 @@ async function adminSetVerified(wid, key, val){
   loadAdminWorkers();
 }
 async function setWorker(idv, status){ try{ await api('/api/workers/'+idv,{method:'PATCH', body:JSON.stringify({status})}); }catch(e){ alert(e.message); } loadAdminWorkers(); loadAdminCaptains(); loadAdminMap(); }
+async function setWorkerClassAdmin(wid, cls){ try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({workerClass:cls})}); }catch(e){ alert(e.message); } loadAdminWorkers(); }
 async function removeWorkerPhoto(wid){ if(!await appConfirm('Remove this worker\u2019s profile photo? He can upload a new one from his profile.')) return; try{ await api('/api/workers/'+wid,{method:'PATCH', body:JSON.stringify({photo:null})}); loadAdminWorkers(); loadAdminMap(); }catch(e){ alert(e.message); } }
 function escAttr(v){ return (''+(v||'')).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 function editWorkerForm(idv){
