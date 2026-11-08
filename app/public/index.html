@@ -319,9 +319,9 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset
 .cart-qty button{background:none;border:0;color:var(--ink);font-size:17px;font-weight:800;padding:2px 8px;box-shadow:none;cursor:pointer}
 .cart-remove{background:none;border:0;color:#b91c1c;font-weight:700;box-shadow:none;padding:4px;cursor:pointer}
 .cart-total-row{display:flex;justify-content:space-between;padding:3px 0}
-.cart-members-pay{color:#16a34a;font-weight:700;white-space:nowrap}
-.cart-members-total{color:#16a34a;font-weight:800}
-.cart-member-save{color:#16a34a;font-weight:700;font-size:13px;white-space:nowrap}
+.cart-members-pay{color:#2fbf71;font-weight:700;white-space:nowrap}
+.cart-members-total{color:#2fbf71;font-weight:800}
+.cart-member-save{color:#2fbf71;font-weight:700;font-size:13px;white-space:nowrap}
 #cartPayElement{border:1px solid #d4d4d8;border-radius:12px;padding:12px;background:#fff;min-height:52px}
 .wz-mi .cart-add-mini{flex:none;padding:8px 10px}
 .menu-price{font-size:19px;font-weight:800;color:#fff}
@@ -710,7 +710,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
       </select>
       <p class="mut" style="font-size:12.5px;margin:4px 0 0">Switch plans right here — every price in this form follows the plan you pick.</p>
     </div>
-    <p class="mut" id="joinChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
+    <p class="mut" id="joinChargeNote" style="display:none;background:#1c0e11;border:1px solid #e42535;border-radius:8px;padding:10px"></p>
     <div id="workerDatosRow" class="wclass-step" style="display:none" data-w="datosStep">2 · Tus datos</div>
     <div id="nameRow"><label id="authFullNameLbl">Full name</label><input id="aName" placeholder="First & last name"></div>
     <label>Email</label><input id="aEmail" placeholder="you@email.com">
@@ -836,7 +836,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
       <label style="display:block;font-weight:400;margin:2px 0 10px"><input type="checkbox" id="wOnDemand"> <span data-w="availOnDemand">⚡ Available for on-demand / urgent jobs</span></label>
       <label data-w="notesLabel">Anything the Team should know?</label><textarea id="wNotes" data-wp="notesPh" placeholder="Your experience, specialties, anything important"></textarea>
     </div>
-    <p class="mut" id="hcChargeNote" style="display:none;background:#fff5f5;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px">HomeCare — $29/mo total. Your first month is FREE — $0 charged today, then $29/mo (one free month per account). 20% off any job • Free first in-person estimate • Cancel anytime.</p>
+    <p class="mut" id="hcChargeNote" style="display:none;background:#1c0e11;border:1px solid #e42535;border-radius:8px;padding:10px;margin:12px 0 4px">HomeCare — $29/mo total. Your first month is FREE — $0 charged today, then $29/mo (one free month per account). 20% off any job • Free first in-person estimate • Cancel anytime.</p>
     <p class="mut" id="joinAgreeRow" style="display:none;text-align:center;margin-top:8px">By joining you agree to the <a href="#terms">Terms &amp; Conditions</a></p>
     <button id="authBtn" onclick="doAuth()">Log in</button>
     <!-- v77 (Gabriel, 2026-10-25): CUSTOMER-FIRST — the technician door
@@ -857,7 +857,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
     </div>
     <p class="mut" id="loginOnlyNote">Login is email + password only — your phone is just saved on your account, never used to log in.</p>
     <p class="mut" id="authHint">No account needed to request a quote — just send it and we reply by email. Create an account to track jobs, pay invoices online, or join HomeCare.</p>
-    <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e42535;border-radius:12px;background:#fff5f5">
+    <div id="hcPromo" style="margin-top:14px;padding:14px;border:2px solid #e42535;border-radius:12px;background:#17171b">
       <b>Join HomeCare — $29/mo</b><br>
       <span class="mut" style="font-size:13px">20% off any job • Free first in-person estimate • Cancel anytime</span><br>
       <button onclick="joinHomeCare()" style="margin-top:10px;background:#e42535;color:#fff;border:0;border-radius:999px;padding:12px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%">Join now — $29/mo</button>
@@ -991,7 +991,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
       <button type="button" style="margin-top:8px" onclick="location.hash='#yard-care'">View Yard Care memberships</button>
     </div>
     <div id="membershipPageState"></div>
-    <div id="membershipAddressBox" class="card" style="display:none;border-color:#e42535;background:#fff5f5">
+    <div id="membershipAddressBox" class="card" style="display:none;border-color:#e42535;background:#17171b">
       <h3 style="margin-top:0" id="memAddrTitle">Service address needed</h3>
       <p class="mut" id="memAddrNote">Before payment, add the address where our technician will do the work. The Team uses it to schedule your included visits.</p>
       <label id="serviceAddressLbl2">Service address — where we'll do the work</label>
@@ -1100,7 +1100,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
       <h4 id="ccPayTitleEl">Payment</h4>
       <p class="mut" id="ccPayNoteEl">You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
       <div id="cartPayElement"></div>
-      <p id="cartPayErr" style="display:none;color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px"></p>
+      <p id="cartPayErr" style="display:none;color:#ff9aa2;background:#2a0d10;border:1px solid #7a2027;border-radius:10px;padding:10px"></p>
       <button id="cartPayBtn" onclick="cartPayNow()" style="margin-top:10px;width:100%" disabled>Pay</button>
       <p class="mut" id="ccFootNoteEl" style="text-align:center">One card, one tap · Secured by Stripe · Deposit today, balance at completion</p>
     </div>
@@ -1189,15 +1189,15 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
        Shows for any signed-in account until BOTH permissions are granted;
        each ACTIVATE button fires the browser's own permission popup from
        the tap, the way browsers require. -->
-  <div id="permCard" style="display:none;background:#fff8e6;border:2px solid #f5a623;border-radius:14px;padding:14px 16px;margin:12px 0">
+  <div id="permCard" style="display:none;background:#221a05;border:2px solid #6b5518;border-radius:14px;padding:14px 16px;margin:12px 0">
     <div style="font-weight:800;font-size:16.5px" data-w="permTitle">⚙️ Termina de activar tu app · Finish setting up your app</div>
     <p class="mut" id="permWhy" style="margin:6px 0 10px"></p>
-    <div id="permNotifRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f0dcae">
+    <div id="permNotifRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #6b5518">
       <div style="flex:1"><b data-w="permNotif">🔔 Notificaciones</b><br><span class="mut" data-w="permNotifSub">Avisos con el sonido del martillo 🔨 · Alerts with the hammer sound</span></div>
       <span id="permNotifState" class="mut"></span>
       <button type="button" id="permNotifBtn" data-w="activate" onclick="activarNotifs()" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;cursor:pointer">ACTIVAR</button>
     </div>
-    <div id="permLocRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #f0dcae">
+    <div id="permLocRow" style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #6b5518">
       <div style="flex:1"><b data-w="permLoc">📍 Tu ubicación</b><br><span class="mut" data-w="permLocSub">Trabajos y ruta en vivo · Jobs and live route</span></div>
       <span id="permLocState" class="mut"></span>
       <button type="button" id="permLocBtn" data-w="activate" onclick="activarUbicacion()" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;cursor:pointer">ACTIVAR</button>
@@ -1585,7 +1585,7 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
           <button type="button" data-v="none" class="sel" id="wzMemberNoneBtn">Not a member — $75</button><button type="button" data-v="new" id="wzMemberNewBtn">New member — first estimate FREE</button><button type="button" data-v="member" id="wzMemberMemberBtn">Member — $50 estimate</button>
         </div>
         <div id="wzSummary"></div>
-        <div class="card" style="background:#faf9f7;margin:10px 0">
+        <div class="card" style="background:#17171b;margin:10px 0">
           <b id="cFeeTitle">In-person estimate — $75 flat</b>
           <p class="mut" id="cFeeDesc" style="margin:4px 0">Due to book the visit — and it goes credited toward your repair when you approve the work the same day. Final labor is quoted after the Team sees the job (or from clear photos). Labor-only — you buy materials/parts. ASAP / Emergency adds 25%.</p>
           <button type="button" id="cAck" class="ghost" style="width:100%;text-align:left">☐ I understand the estimate charge + labor-only (I buy materials/parts)</button>
@@ -4113,7 +4113,7 @@ async function checkStripeHealth(){
   try{
     const h=await api('/api/admin/stripe/health');
     el.innerHTML = h.ok
-      ? '<span class="pill" style="border-color:#1a7f37;color:#1a7f37">💳 Stripe: payments live'+(h.live?'':' (test mode)')+'</span>' + (h.cached ? ' <span class="mut">(checked ' + (h.ageSec || 0) + 's ago)</span>' : '')
+      ? '<span class="pill" style="border-color:#2fbf71;color:#2fbf71">💳 Stripe: payments live'+(h.live?'':' (test mode)')+'</span>' + (h.cached ? ' <span class="mut">(checked ' + (h.ageSec || 0) + 's ago)</span>' : '')
       : '<span class="pill" style="border-color:#e42535;color:#e42535">💳 Stripe: NOT WORKING</span><br><span class="mut">'+escHtml(h.reason||'unknown')+'</span>';
   }catch(e){ el.innerHTML='<span class="mut">💳 Stripe status unknown.</span>'; }
 }
@@ -4160,7 +4160,7 @@ async function loadInvoices(){
     btns.push('<button class="ghost" onclick="copyInvoiceLink(\''+inv.id+'\')">Copy payment link</button>');
     const remindLine=(inv.reminderCount?'<div class="mut">⏰ Reminded '+inv.reminderCount+'x'+(inv.remindedAt?' • last '+new Date(inv.remindedAt).toLocaleString():'')+'</div>':'');
     const schedLine=inv.scheduleRequestedAt
-      ? '<div style="margin-top:8px;border-top:1px dashed #33333b;padding-top:8px"><b>📅 Scheduling request:</b> '+escHtml(inv.preferredDate||'—')+' • '+escHtml(inv.preferredTime||'—')+(inv.scheduleNotes?'<br><span class="mut">'+escHtml(inv.scheduleNotes)+'</span>':'')+(inv.confirmedDate?'<br><span style="color:#1a7f37"><b>✅ Confirmed: '+escHtml(inv.confirmedDate)+(inv.confirmedTime?' • '+escHtml(inv.confirmedTime):'')+'</b></span>':'<div class="row" style="margin-top:6px"><input type="date" id="cfd-'+inv.id+'" value="'+escHtml(inv.confirmedDate||'')+'" style="width:150px"><select id="cft-'+inv.id+'" style="width:150px"><option value="">Time…</option><option value="morning"'+(inv.confirmedTime==='morning'?' selected':'')+'>Morning</option><option value="afternoon"'+(inv.confirmedTime==='afternoon'?' selected':'')+'>Afternoon</option><option value="evening"'+(inv.confirmedTime==='evening'?' selected':'')+'>Evening</option></select><button class="black" onclick="confirmSchedule(\''+inv.id+'\')">Confirm schedule</button></div>')
+      ? '<div style="margin-top:8px;border-top:1px dashed #33333b;padding-top:8px"><b>📅 Scheduling request:</b> '+escHtml(inv.preferredDate||'—')+' • '+escHtml(inv.preferredTime||'—')+(inv.scheduleNotes?'<br><span class="mut">'+escHtml(inv.scheduleNotes)+'</span>':'')+(inv.confirmedDate?'<br><span style="color:#2fbf71"><b>✅ Confirmed: '+escHtml(inv.confirmedDate)+(inv.confirmedTime?' • '+escHtml(inv.confirmedTime):'')+'</b></span>':'<div class="row" style="margin-top:6px"><input type="date" id="cfd-'+inv.id+'" value="'+escHtml(inv.confirmedDate||'')+'" style="width:150px"><select id="cft-'+inv.id+'" style="width:150px"><option value="">Time…</option><option value="morning"'+(inv.confirmedTime==='morning'?' selected':'')+'>Morning</option><option value="afternoon"'+(inv.confirmedTime==='afternoon'?' selected':'')+'>Afternoon</option><option value="evening"'+(inv.confirmedTime==='evening'?' selected':'')+'>Evening</option></select><button class="black" onclick="confirmSchedule(\''+inv.id+'\')">Confirm schedule</button></div>')
       : '';
     return '<div class="card"><b>'+inv.id+'</b> '+invStatusBadge(inv.status)+'<br><span class="mut">'+escHtml(inv.customerName)+(inv.customerEmail?' • '+escHtml(inv.customerEmail):'')+(inv.jobId?' • Job '+escHtml(inv.jobId):'')+(inv.dueDate?' • Due '+escHtml(inv.dueDate):'')+'</span>'+remindLine+'<div style="margin:8px 0">'+items+'</div>'+(inv.discount?'<div class="mut">Discount: −'+moneyFmt(inv.discount)+'</div>':'')+'<div><b>Total: <span class="st">'+moneyFmt(inv.total)+'</span></b>'+(inv.paidMethod?' <span class="mut">• paid via '+escHtml(inv.paidMethod)+'</span>':'')+'</div>'+(inv.notes?'<div class="mut">Note: '+escHtml(inv.notes)+'</div>':'')+schedLine+'<div class="row" style="margin-top:10px">'+btns.join('')+'</div><div id="invEdit-'+inv.id+'"></div></div>';
   }).join('') || '<div class="empty"><p class="mut">No invoices yet.</p></div>';
@@ -4279,7 +4279,7 @@ async function loadProposals(){
   let h = '<h2>' + CU('propTitle') + '</h2>';
   ps.forEach(function (pr) {
     h += '<div class="card" style="margin:8px 0"><b>' + escHtml(pr.title) + '</b>'
-      + '<div class="mut">' + (pr.kind === 'cart' ? CU('propCartWord') + escHtml(pr.id) : CU('propEstimateWord')) + CU('propTotalWord') + money(pr.total) + (pr.state === 'booked' ? ' · <b style="color:#16a34a">' + CU('propBookedTag') + '</b>' : '') + (pr.saved ? CU('propSavedTag') : '') + '</div>'
+      + '<div class="mut">' + (pr.kind === 'cart' ? CU('propCartWord') + escHtml(pr.id) : CU('propEstimateWord')) + CU('propTotalWord') + money(pr.total) + (pr.state === 'booked' ? ' · <b style="color:#2fbf71">' + CU('propBookedTag') + '</b>' : '') + (pr.saved ? CU('propSavedTag') : '') + '</div>'
       + (pr.state === 'booked' ? '<div style="margin-top:4px">' + CU('propBalanceLine') + '<b>' + money(pr.balanceDue) + '</b></div>' : '<div style="margin-top:4px">' + CU('propBookToday') + '<b>' + money(pr.depositDue) + '</b>' + CU('propBalanceAt') + '<b>' + money(pr.balanceDue) + '</b></div>')
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">'
       + '<button onclick="location.href=\'' + pr.url + '\'">' + (pr.state === 'booked' ? CU('propPayBalance') : CU('propAccept')) + '</button>'
@@ -5604,7 +5604,7 @@ function adminHoldPanelHtml(r){
   if(r.estimate){
     if(pool<target) diff='<div style="color:#b26a00"><b>Still to authorize: '+moneyFmt((target-pool)/100)+'</b> <span class="mut">(authorized '+moneyFmt(pool/100)+' of '+moneyFmt(target/100)+' approved total)</span></div>';
     else if(pool>target) diff='<div style="color:#b26a00"><b>Authorized exceeds the total by '+moneyFmt((pool-target)/100)+'</b> <span class="mut">— charge only the final amount; the rest releases.</span></div>';
-    else diff='<div style="color:#1a7f37"><b>Authorized pool covers the approved total exactly.</b></div>';
+    else diff='<div style="color:#2fbf71"><b>Authorized pool covers the approved total exactly.</b></div>';
   }
   const visit=holds.find(function(h){ return h.key==='visit' && h.status==='authorized'; });
   const anyActive=holds.some(function(h){ return h.status==='authorized'; });
@@ -7331,7 +7331,7 @@ function renderCart(){
   if (!items.length) { th.innerHTML = ''; return; }
   let s = '<div style="margin-top:8px"><div class="cart-total-row"><span>' + CU('cartSubtotal') + '</span><span>$' + t.list + '</span></div>';
   if (member) {
-    if (t.savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>' + CU('cartSavingsRow') + '</span><span>−$' + t.savings + '</span></div>';
+    if (t.savings > 0) s += '<div class="cart-total-row" style="color:#2fbf71"><span>' + CU('cartSavingsRow') + '</span><span>−$' + t.savings + '</span></div>';
     s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>' + CU('cartTotalWord') + '</b><b>$' + t.member + '</b></div><p class="mut">' + CU('cartMemberApplied') + '</p>';
   } else {
     s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><b>' + CU('cartTotalWord') + '</b><b>$' + t.list + '</b></div>';
@@ -7365,7 +7365,7 @@ function renderCartTotalsDue(){
   const joinOn = !member && !!(joinEl && joinEl.checked);
   const due = cartPayCtx ? cartPayCtx.due : ((member || joinOn) ? t.member : t.list);
   let s = '<div class="cart-total-row"><span>' + CU('cartSubtotal') + '</span><span>$' + t.list + '</span></div>';
-  if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#16a34a"><span>' + CU('cartMemberPriceRow') + '</span><span>−$' + savings + '</span></div>';
+  if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#2fbf71"><span>' + CU('cartMemberPriceRow') + '</span><span>−$' + savings + '</span></div>';
   if (joinOn) s += '<div class="cart-total-row"><span>' + CU('cartJoinRow') + '</span><span><b>' + CU('cartFreeWord') + '</b></span></div>';
   const depOf79 = function (tot) { tot = Number(tot) || 0; return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100; };
   const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : depOf79(due);

@@ -3178,11 +3178,11 @@ function invitePageHtml(inv, user, lang, notice) {
   const firstName = escMail(String(inv.name || '').split(' ')[0] || '');
   const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
   const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleInvite + ' — General Handyman Solutions</title>'
-    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+    + '<style>html,body{background:#0a0a0c}</style><body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#e8e8ea;background:#0a0a0c">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#e42535;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
     + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
-    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
-  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">';
+  const foot = '<p style="color:#a49d93;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
     + '<script>var I18N=' + JSON.stringify(JI) + ';var LANG=' + JSON.stringify(initLang) + ';'
     + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
     + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsCartLang", l); }catch(e){}'
@@ -3194,37 +3194,37 @@ function invitePageHtml(inv, user, lang, notice) {
     + 'try{ var sv=localStorage.getItem("ghsCartLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
     + '</scr' + 'ipt></body>';
   if (status === 'accepted') {
-    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="joinedH">' + S.joinedH + '</h2><p data-i18n="joinedBody">' + S.joinedBody + '</p>'
+    return head + '<h2 style="margin-top:0;color:#2fbf71" data-i18n="joinedH">' + S.joinedH + '</h2><p data-i18n="joinedBody">' + S.joinedBody + '</p>'
       + '<p><a href="/" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block" data-i18n="openApp">' + S.openApp + '</a></p>' + foot;
   }
   if (status === 'expired') {
-    return head + '<h2 style="margin-top:0" data-i18n="expiredH">' + S.expiredH + '</h2><p style="color:#666" data-i18n="expiredBody">' + S.expiredBody + '</p>' + foot;
+    return head + '<h2 style="margin-top:0" data-i18n="expiredH">' + S.expiredH + '</h2><p style="color:#a49d93" data-i18n="expiredBody">' + S.expiredBody + '</p>' + foot;
   }
   if (status === 'revoked') {
-    return head + '<h2 style="margin-top:0" data-i18n="goneH">' + S.goneH + '</h2><p style="color:#666" data-i18n="goneBody">' + S.goneBody + '</p>' + foot;
+    return head + '<h2 style="margin-top:0" data-i18n="goneH">' + S.goneH + '</h2><p style="color:#a49d93" data-i18n="goneBody">' + S.goneBody + '</p>' + foot;
   }
   if (isMember) {
-    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="alreadyH">' + S.alreadyH + '</h2><p data-i18n="alreadyBody">' + S.alreadyBody + '</p>'
+    return head + '<h2 style="margin-top:0;color:#2fbf71" data-i18n="alreadyH">' + S.alreadyH + '</h2><p data-i18n="alreadyBody">' + S.alreadyBody + '</p>'
       + '<p><a href="/" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block" data-i18n="openApp">' + S.openApp + '</a></p>' + foot;
   }
-  const input = 'width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font-size:15px;box-sizing:border-box';
-  const cancelled = notice === 'cancelled' ? '<p style="background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:10px 12px;font-size:14px" data-i18n="cancelledNote">' + S.cancelledNote + '</p>' : '';
+  const input = 'width:100%;padding:11px;background:#1b1b1f;border:1px solid #33333b;color:#e8e8ea;border-radius:8px;font-size:15px;box-sizing:border-box';
+  const cancelled = notice === 'cancelled' ? '<p style="background:#221a05;border:1px solid #6b5518;border-radius:8px;padding:10px 12px;font-size:14px" data-i18n="cancelledNote">' + S.cancelledNote + '</p>' : '';
   const acct = loggedIn ? '' : (
     '<h3 style="margin:18px 0 8px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
-    + '<label style="font-size:13px;color:#444" data-i18n="fName">' + S.fName + '</label><input id="jName" style="' + input + '" value="' + escMail(inv.name || '') + '">'
-    + '<label style="font-size:13px;color:#444" data-i18n="fEmail">' + S.fEmail + '</label><input id="jEmail" type="email" style="' + input + '" value="' + escMail(inv.email || '') + '">'
-    + '<label style="font-size:13px;color:#444" data-i18n="fPhone">' + S.fPhone + '</label><input id="jPhone" style="' + input + '" value="' + escMail(inv.phone || '') + '">'
-    + '<label style="font-size:13px;color:#444" data-i18n="passLabel">' + S.passLabel + '</label><input id="jPass" type="password" style="' + input + '">'
+    + '<label style="font-size:13px;color:#a49d93" data-i18n="fName">' + S.fName + '</label><input id="jName" style="' + input + '" value="' + escMail(inv.name || '') + '">'
+    + '<label style="font-size:13px;color:#a49d93" data-i18n="fEmail">' + S.fEmail + '</label><input id="jEmail" type="email" style="' + input + '" value="' + escMail(inv.email || '') + '">'
+    + '<label style="font-size:13px;color:#a49d93" data-i18n="fPhone">' + S.fPhone + '</label><input id="jPhone" style="' + input + '" value="' + escMail(inv.phone || '') + '">'
+    + '<label style="font-size:13px;color:#a49d93" data-i18n="passLabel">' + S.passLabel + '</label><input id="jPass" type="password" style="' + input + '">'
   );
   return head
     + '<h2 style="margin-top:0">🎟️ <span data-i18n="titleInvite">' + S.titleInvite + '</span></h2>'
     + cancelled
     + '<p style="font-size:16px">' + (firstName ? '<span>' + S.hi.replace('{name}', firstName) + '</span>' : '') + '<span data-i18n="intro">' + S.intro + '</span></p>'
     + '<ul style="line-height:1.75;font-size:15px;padding-left:20px"><li data-i18n="b1">' + S.b1 + '</li><li data-i18n="b2">' + S.b2 + '</li><li data-i18n="b3">' + S.b3 + '</li><li data-i18n="b4">' + S.b4 + '</li></ul>'
-    + '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px 12px;font-size:14.5px" data-i18n="how">' + S.how + '</p>'
+    + '<p style="background:#0b2013;border:1px solid #1d5c38;border-radius:8px;padding:10px 12px;font-size:14.5px" data-i18n="how">' + S.how + '</p>'
     + acct
     + '<button id="joinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:15px 26px;font-weight:700;font-size:16px;width:100%;margin-top:16px;cursor:pointer" data-i18n="joinBtn">' + S.joinBtn + '</button>'
-    + '<p id="joinMsg" style="color:#b00020;font-size:14px;min-height:18px"></p>'
+    + '<p id="joinMsg" style="color:#ff9aa2;font-size:14px;min-height:18px"></p>'
     + '<script>var INV_ID=' + JSON.stringify(inv.id) + ';var loggedIn=' + (loggedIn ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){var n=$(i);return n?n.value.trim():"";}'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
@@ -4204,18 +4204,18 @@ function invoicePageHtml(inv, langOverride, notice) {
   const S = IV[initLang];
   const fillS = (s, m) => String(s || '').replace(/\{(\w+)\}/g, (x, k) => (m && m[k] != null ? m[k] : x));
   const pub = publicInvoice(inv);
-  const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
+  const rows = (pub.items || []).map(it => '<tr><td style="padding:8px;border-bottom:1px solid #2a2a31">' + escMail(it.description) + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:right">' + usd(it.lineTotal) + '</td></tr>').join('');
   // Customer-facing status (added 2026-10-19): the client never sees internal
   // workflow states — draft/sent both read as "Unpaid" on the public link.
   const displayStatus = (pub.status === 'draft' || pub.status === 'sent') ? 'unpaid' : pub.status;
   const statusLabel = { unpaid: S.statusUnpaid, paid: S.statusPaid, overdue: S.statusOverdue, cancelled: S.statusCancelled }[displayStatus] || displayStatus;
-  const badge = { unpaid: ['#fde2e2', '#c81e1e'], paid: ['#d3f0dd', '#1a7f37'], overdue: ['#fde2e2', '#c81e1e'], cancelled: ['#ececec', '#6b6762'] }[displayStatus] || ['#ececec', '#6b6762'];
+  const badge = { unpaid: ['#2a0d10', '#ff9aa2'], paid: ['#0b2013', '#2fbf71'], overdue: ['#2a0d10', '#ff9aa2'], cancelled: ['#26262a', '#a49d93'] }[displayStatus] || ['#26262a', '#a49d93'];
   const payable = ['draft', 'sent', 'overdue'].includes(pub.status);
   const tipTotalCents = Math.round(pub.total * 100);
-  const tipBtnStyle = 'padding:10px 16px;border:1px solid #ccc;border-radius:999px;background:#fff;font-weight:700;cursor:pointer;font-size:14px';
+  const tipBtnStyle = 'padding:10px 16px;border:1px solid #33333b;border-radius:999px;background:#1b1b1f;color:#e8e8ea;font-weight:700;cursor:pointer;font-size:14px';
   const payBlock = payable
-    ? '<div style="margin:14px 0;padding:14px;border:1px solid #e5e5e5;border-radius:12px;background:#fafafa">'
-    + '<p style="margin:0 0 10px;font-weight:700">' + S.tipH + ' <span style="font-weight:400;color:#666;font-size:13px">' + S.tipOpt + '</span></p>'
+    ? '<div style="margin:14px 0;padding:14px;border:1px solid #2a2a31;border-radius:12px;background:#101013">'
+    + '<p style="margin:0 0 10px;font-weight:700">' + S.tipH + ' <span style="font-weight:400;color:#a49d93;font-size:13px">' + S.tipOpt + '</span></p>'
     + '<div id="tipBtns" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
     + '<button type="button" data-tip="0" class="tipBtn" style="' + tipBtnStyle + '">' + S.tipNone + '</button>'
     + '<button type="button" data-tip="10" class="tipBtn" style="' + tipBtnStyle + '">10%</button>'
@@ -4223,16 +4223,16 @@ function invoicePageHtml(inv, langOverride, notice) {
     + '<button type="button" data-tip="20" class="tipBtn" style="' + tipBtnStyle + '">20%</button>'
     + '<button type="button" data-tip="custom" class="tipBtn" style="' + tipBtnStyle + '">' + S.tipCustom + '</button>'
     + '</div>'
-    + '<div id="tipCustomWrap" style="display:none;margin-bottom:6px"><label style="font-size:14px;color:#555">$ <input id="tipCustom" type="number" min="0" step="0.01" placeholder="0.00" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:130px;font-size:15px"></label></div>'
-    + '<p id="tipLine" style="margin:0;color:#666;font-size:14px"></p>'
+    + '<div id="tipCustomWrap" style="display:none;margin-bottom:6px"><label style="font-size:14px;color:#c9c4bc">$ <input id="tipCustom" type="number" min="0" step="0.01" placeholder="0.00" style="padding:10px;background:#1b1b1f;border:1px solid #33333b;color:#e8e8ea;border-radius:8px;width:130px;font-size:15px"></label></div>'
+    + '<p id="tipLine" style="margin:0;color:#a49d93;font-size:14px"></p>'
     + '</div>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + fillS(S.payNow, { amt: usd(pub.total) }) + '</button><p id="payMsg" style="color:#666"></p>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + fillS(S.payNow, { amt: usd(pub.total) }) + '</button><p id="payMsg" style="color:#a49d93"></p>'
     + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;var PAYNOW=' + JSON.stringify(S.payNow) + ';var TIPWORD=' + JSON.stringify(S.tipWord) + ';var OPENING=' + JSON.stringify(S.opening) + ';var FAILED=' + JSON.stringify(S.failed) + ';'
     + 'function fmtC(c){return \"$\"+(c/100).toFixed(2);}'
     + 'function refreshPay(){var t=document.getElementById(\"tipLine\");t.textContent=tipCents>0?(TIPWORD+\": \"+fmtC(tipCents)):\"\";document.getElementById(\"payBtn\").textContent=PAYNOW.replace(\"{amt}\",fmtC(invCents+tipCents));}'
     + 'document.querySelectorAll(\".tipBtn\").forEach(function(b){b.onclick=function(){'
-    + 'document.querySelectorAll(\".tipBtn\").forEach(function(x){x.style.background=\"#fff\";x.style.color=\"#111\";});'
-    + 'b.style.background=\"#0b0b0b\";b.style.color=\"#fff\";'
+    + 'document.querySelectorAll(\".tipBtn\").forEach(function(x){x.style.background=\"#1b1b1f\";x.style.color=\"#e8e8ea\";});'
+    + 'b.style.background=\"#e42535\";b.style.color=\"#fff\";'
     + 'var v=b.getAttribute(\"data-tip\");'
     + 'document.getElementById(\"tipCustomWrap\").style.display=(v===\"custom\")?\"block\":\"none\";'
     + 'if(v===\"custom\"){tipCents=Math.max(0,Math.round(parseFloat(document.getElementById(\"tipCustom\").value||\"0\")*100)||0);}'
@@ -4241,50 +4241,50 @@ function invoicePageHtml(inv, langOverride, notice) {
     + 'document.getElementById(\"tipCustom\").oninput=function(){tipCents=Math.max(0,Math.round(parseFloat(this.value||\"0\")*100)||0);if(tipCents>invCents)tipCents=invCents;refreshPay();};'
     + 'document.querySelector(\".tipBtn\").click();'
     + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=OPENING;try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents,lang:' + JSON.stringify(initLang) + '})});var d=await r.json();if(!r.ok)throw new Error(d.error||FAILED);location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
-    : (pub.status === 'paid' ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px">' + S.paidFull + '</p>' : '<p style="color:#666">' + fillS(S.isStatus, { s: String(statusLabel).toLowerCase() }) + '</p>');
+    : (pub.status === 'paid' ? '<p style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:12px">' + S.paidFull + '</p>' : '<p style="color:#a49d93">' + fillS(S.isStatus, { s: String(statusLabel).toLowerCase() }) + '</p>');
   // Scheduling request (added 2026-10-12): shown on the paid confirmation.
   // This is a REQUEST, not a booking — Gabriel confirms the final schedule
   // himself from the admin panel.
   let schedBlock = '';
   if (pub.status === 'paid') {
     if (pub.scheduleRequestedAt) {
-      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedReceivedH + '</h3>'
+      schedBlock = '<div style="background:#101013;border:1px solid #2a2a31;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedReceivedH + '</h3>'
         + '<p>' + S.schedPreferred + ' <b>' + escMail(pub.preferredDate || '—') + '</b> • <b>' + escMail(pub.preferredTime || '—') + '</b></p>'
-        + (pub.scheduleNotes ? '<p style="color:#555">' + escMail(pub.scheduleNotes) + '</p>' : '')
+        + (pub.scheduleNotes ? '<p style="color:#c9c4bc">' + escMail(pub.scheduleNotes) + '</p>' : '')
         + (pub.confirmedDate
-          ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:10px">✅ <b>' + S.schedConfirmed + ' ' + escMail(pub.confirmedDate) + (pub.confirmedTime ? ' • ' + escMail(pub.confirmedTime) : '') + '</b></p>'
-          : '<p style="color:#666;font-size:13px">' + S.schedConfirmNote + '</p>')
+          ? '<p style="background:#0b2013;border:1px solid #1d5c38;border-radius:8px;padding:10px">✅ <b>' + S.schedConfirmed + ' ' + escMail(pub.confirmedDate) + (pub.confirmedTime ? ' • ' + escMail(pub.confirmedTime) : '') + '</b></p>'
+          : '<p style="color:#a49d93;font-size:13px">' + S.schedConfirmNote + '</p>')
         + '</div>';
     } else {
-      schedBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedH + '</h3>'
-        + '<p style="color:#666;font-size:13px">' + S.schedIntro + '</p>'
-        + '<label style="display:block;margin:8px 0">' + S.schedDate + '<br><input type="date" id="schedDate" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box"></label>'
-        + '<label style="display:block;margin:8px 0">' + S.schedTime + '<br><select id="schedTime" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%"><option value="morning">' + S.optMorning + '</option><option value="afternoon">' + S.optAfternoon + '</option><option value="evening">' + S.optEvening + '</option></select></label>'
-        + '<label style="display:block;margin:8px 0">' + S.schedNotes + '<br><textarea id="schedNotes" placeholder="' + S.schedNotesPh + '" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
-        + '<button id="schedBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + S.schedBtn + '</button><p id="schedMsg" style="color:#666"></p></div>'
+      schedBlock = '<div style="background:#101013;border:1px solid #2a2a31;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + S.schedH + '</h3>'
+        + '<p style="color:#a49d93;font-size:13px">' + S.schedIntro + '</p>'
+        + '<label style="display:block;margin:8px 0">' + S.schedDate + '<br><input type="date" id="schedDate" style="padding:10px;background:#1b1b1f;color:#e8e8ea;color-scheme:dark;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box"></label>'
+        + '<label style="display:block;margin:8px 0">' + S.schedTime + '<br><select id="schedTime" style="padding:10px;background:#1b1b1f;color:#e8e8ea;color-scheme:dark;border:1px solid #33333b;border-radius:8px;width:100%"><option value="morning">' + S.optMorning + '</option><option value="afternoon">' + S.optAfternoon + '</option><option value="evening">' + S.optEvening + '</option></select></label>'
+        + '<label style="display:block;margin:8px 0">' + S.schedNotes + '<br><textarea id="schedNotes" placeholder="' + S.schedNotesPh + '" style="padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
+        + '<button id="schedBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + S.schedBtn + '</button><p id="schedMsg" style="color:#a49d93"></p></div>'
         + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent=' + JSON.stringify(S.schedPickDate) + ';return;}m.textContent=' + JSON.stringify(S.schedSending) + ';try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
     }
   }
   const other21 = initLang === 'es' ? 'en' : 'es';
   const noticeHtml = notice === 'cancelled'
-    ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px">' + S.cancelledNote + '</div>'
+    ? '<div style="background:#221a05;border:1px solid #6b5518;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px">' + S.cancelledNote + '</div>'
     : '';
   return '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleInv + ' ' + escMail(pub.id) + ' — General Handyman Solutions</title>'
-    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
+    + '<style>html,body{background:#0a0a0c}</style><body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#e8e8ea;background:#0a0a0c">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#e42535;font-size:13px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
     + '<div style="white-space:nowrap;padding-top:2px"><a href="?lang=' + other21 + '" style="color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;text-decoration:none">' + (initLang === 'es' ? 'EN' : 'ES') + '</a></div></div>'
-    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">'
+    + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">'
     + noticeHtml
     + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0">' + S.titleInv + ' ' + escMail(pub.id) + '</h2><span style="background:' + badge[0] + ';color:' + badge[1] + ';border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(statusLabel) + '</span></div>'
-    + '<p style="color:#666">' + S.billedTo + ' <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 ' + S.due + ' <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
+    + '<p style="color:#a49d93">' + S.billedTo + ' <b>' + escMail(pub.customerName) + '</b>' + (pub.dueDate ? ' \u2022 ' + S.due + ' <b>' + escMail(pub.dueDate) + '</b>' : '') + '</p>'
     + '<table style="width:100%;border-collapse:collapse;font-size:14px"><tr><th style="text-align:left;padding:8px">' + S.thDesc + '</th><th style="padding:8px">' + S.thQty + '</th><th style="text-align:right;padding:8px">' + S.thEach + '</th><th style="text-align:right;padding:8px">' + S.thLine + '</th></tr>' + rows + '</table>'
     + '<p>' + S.subtotal + ': <b>' + usd(pub.subtotal) + '</b></p>'
     + (pub.discount > 0 ? '<p>' + S.discount + ': <b>-' + usd(pub.discount) + '</b></p>' : '')
     + '<p style="font-size:22px">' + S.totalDue + ': <b>' + usd(pub.total) + '</b></p>'
-    + (pub.notes ? '<p style="color:#555">' + escMail(pub.notes) + '</p>' : '')
+    + (pub.notes ? '<p style="color:#c9c4bc">' + escMail(pub.notes) + '</p>' : '')
     + payBlock
     + schedBlock
-    + '<p style="color:#666;font-size:13px">' + S.questions + '</p>'
+    + '<p style="color:#a49d93;font-size:13px">' + S.questions + '</p>'
     + '</div></body></html>';
 }
 // ---------- Public estimate approval (added 2026-10-12) ----------
@@ -4321,7 +4321,7 @@ function estimatePayPanelHtml(r, lang) {
   const fmtDT = (iso) => iso ? new Date(iso).toLocaleString(lang === 'es' ? 'es-US' : 'en-US') : '';
   const holdState = (h) => h.status === 'captured' ? '<b>' + PP.charged + '</b>' : h.status === 'authorized' ? '<b>' + PP.onHold + '</b>' : '<b>' + escMail(h.status) + '</b>';
   let lines = '';
-  if (visit) lines += '<p style="margin:6px 0">' + PP.visit + ' — ' + usd(visit.authorizedCents / 100) + ': ' + holdState(visit) + (visit.status === 'authorized' && visit.captureBefore ? ' <span style="color:#666">(hold valid until ' + fmtD(visit.captureBefore) + ')</span>' : '') + '</p>';
+  if (visit) lines += '<p style="margin:6px 0">' + PP.visit + ' — ' + usd(visit.authorizedCents / 100) + ': ' + holdState(visit) + (visit.status === 'authorized' && visit.captureBefore ? ' <span style="color:#a49d93">(hold valid until ' + fmtD(visit.captureBefore) + ')</span>' : '') + '</p>';
   if (bal && bal.status !== 'released' && bal.status !== 'expired') lines += '<p style="margin:6px 0">' + PP.balance + ' — ' + usd(bal.authorizedCents / 100) + ': ' + holdState(bal) + '</p>';
   if (target > 0) lines += '<p style="margin:6px 0">' + PP.approvedTotal + ': <b>' + usd(target / 100) + '</b> — ' + PP.authorizedSoFar + ': <b>' + usd(Math.max(pool, captured) / 100) + '</b></p>';
   if (captured > 0) {
@@ -4333,14 +4333,14 @@ function estimatePayPanelHtml(r, lang) {
   let balanceBtn = '';
   if (r.status === 'Approved' && r.holdSync && (r.holdSync.state === 'needs_balance' || r.holdSync.state === 'increment_failed')) {
     const missing = Math.max(0, target - pool - captured);
-    if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#0b0b0b;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">' + PP.authorize + usd(missing / 100) + '</button> <span id="balMsg" style="color:#666"></span></p>'
+    if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">' + PP.authorize + usd(missing / 100) + '</button> <span id="balMsg" style="color:#a49d93"></span></p>'
       + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent=' + JSON.stringify(PP.opening) + ';fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||' + JSON.stringify(PP.failed) + ';}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
   }
   // Live refresh while the customer watches — skipped while the estimate
   // is still awaiting their decision so a typed reply is never wiped.
   const refresh = r.status !== 'Quoted' ? '<script>setTimeout(function(){location.reload();},30000);</scr' + 'ipt>' : '';
-  return '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + PP.h + '</h3>' + lines
-    + '<p style="color:#666;font-size:13px;margin:8px 0 0">' + PP.note + '</p>' + balanceBtn + '</div>' + refresh;
+  return '<div style="background:#221a05;border:1px solid #6b5518;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0">' + PP.h + '</h3>' + lines
+    + '<p style="color:#a49d93;font-size:13px;margin:8px 0 0">' + PP.note + '</p>' + balanceBtn + '</div>' + refresh;
 }
 function estimatePageLink(r) { return appBase() + '/estimate/' + r.id; }
 // What this estimate costs as a HomeCare member: the 20% member discount
@@ -4468,11 +4468,11 @@ function estimatePageHtml(r, user, langOverride, notice) {
   const fmtDate = (dstr) => { const t = Date.parse(String(dstr || '') + 'T00:00:00Z'); return isNaN(t) ? String(dstr || '') : new Date(t).toLocaleDateString(initLang === 'es' ? 'es-US' : 'en-US', { timeZone: 'UTC' }); };
   const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
   const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleEst + ' ' + escMail(r.id) + ' — General Handyman Solutions</title>'
-    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+    + '<style>html,body{background:#0a0a0c}</style><body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#e8e8ea;background:#0a0a0c">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#e42535;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
     + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
-    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
-  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">';
+  const foot = '<p style="color:#a49d93;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
     + '<script>var I18N=' + JSON.stringify(EI) + ';var LANG=' + JSON.stringify(initLang) + ';'
     + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
     + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsEstLang", l); }catch(e){}'
@@ -4484,7 +4484,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
     + 'try{ var sv=localStorage.getItem("ghsEstLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
     + '</scr' + 'ipt></body>';
   // --- items table for the SELECTED option (or the single estimate) ---
-  const rowOf = (it) => '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#888;font-size:11px">(' + S.materials.toLowerCase() + ')</span>' : '') + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(it.lineTotal) + '</td></tr>';
+  const rowOf = (it) => '<tr><td style="padding:8px;border-bottom:1px solid #2a2a31">' + escMail(it.description) + (it.type === 'material' ? ' <span style="color:#9a968f;font-size:11px">(' + S.materials.toLowerCase() + ')</span>' : '') + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:center">' + escMail(it.qty) + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:right">' + usd(it.unitPrice) + '</td><td style="padding:8px;border-bottom:1px solid #2a2a31;text-align:right">' + usd(it.lineTotal) + '</td></tr>';
   const rows = (disp.items || []).map(rowOf).join('');
   let adj = '';
   if (disp.asapAmount > 0) adj += '<p><span data-i18n="asap">' + S.asap + '</span>: <b>' + usd(disp.asapAmount) + '</b></p>';
@@ -4494,36 +4494,36 @@ function estimatePageHtml(r, user, langOverride, notice) {
     + '<p><span data-i18n="subtotal">' + S.subtotal + '</span>: <b>' + usd(disp.subtotal) + '</b></p>' + adj
     + '<p style="font-size:22px"><span data-i18n="total">' + S.total + '</span>: <b>' + usd(disp.total) + '</b></p>'
     + '<p><b data-i18n="dueToBook">' + S.dueToBook + '</b> ' + usd(disp.bookingDue) + ' • <b data-i18n="balanceAt">' + S.balanceAt + '</b> ' + usd(disp.balanceDue) + '</p>'
-    + '<p style="color:#666;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>';
+    + '<p style="color:#a49d93;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>';
   // --- two-option picker ---
   let optionsBlock = '';
   if (Array.isArray(e.options) && e.options.length >= 2 && r.status === 'Quoted' && !expired) {
     const cards = e.options.map((o, i) => {
       const sel = i === (Number(e.selectedOption) || 0);
-      return '<label style="display:block;border:2px solid ' + (sel ? '#e42535' : '#ddd') + ';border-radius:10px;padding:12px;margin:8px 0;cursor:pointer;background:' + (sel ? '#fff5f5' : '#fff') + '">'
+      return '<label style="display:block;border:2px solid ' + (sel ? '#e42535' : '#2a2a31') + ';border-radius:10px;padding:12px;margin:8px 0;cursor:pointer;background:' + (sel ? '#1c0e11' : '#1b1b1f') + '">'
         + '<input type="radio" name="estOpt" value="' + i + '" ' + (sel ? 'checked' : '') + ' onchange="pickOption(' + i + ')"> <b>' + escMail(o.label) + '</b>'
-        + '<span style="float:right;text-align:right"><b>' + usd(o.listTotal) + '</b>' + (o.memberTotal < o.listTotal ? '<br><span style="color:#1a7f37;font-size:13px">' + S.memberWord + ': <b>' + usd(o.memberTotal) + '</b></span>' : '') + '</span>'
-        + '<span style="display:block;color:#666;font-size:13px;margin-top:4px">' + (o.items || []).map(it => escMail(it.description)).join(' • ') + '</span></label>';
+        + '<span style="float:right;text-align:right"><b>' + usd(o.listTotal) + '</b>' + (o.memberTotal < o.listTotal ? '<br><span style="color:#2fbf71;font-size:13px">' + S.memberWord + ': <b>' + usd(o.memberTotal) + '</b></span>' : '') + '</span>'
+        + '<span style="display:block;color:#a49d93;font-size:13px;margin-top:4px">' + (o.items || []).map(it => escMail(it.description)).join(' • ') + '</span></label>';
     }).join('');
     optionsBlock = '<div style="margin-top:14px"><h3 style="margin-bottom:4px" data-i18n="optionsH">' + S.optionsH + '</h3>' + cards + '</div>'
       + '<script>function pickOption(i){ fetch("/estimate/' + r.id + '/option",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({index:i})}).then(function(res){ return res.json(); }).then(function(d){ if(d && d.ok) location.reload(); }).catch(function(){}); }</scr' + 'ipt>';
   }
   // --- photos Gabriel attached ---
   const photosBlock = (Array.isArray(e.photos) && e.photos.length)
-    ? '<div style="margin-top:14px"><h3 style="margin-bottom:6px" data-i18n="photosH">' + S.photosH + '</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' + e.photos.map(ph => '<img src="' + ph + '" alt="" style="width:31%;min-width:120px;border-radius:10px;border:1px solid #ddd">').join('') + '</div></div>'
+    ? '<div style="margin-top:14px"><h3 style="margin-bottom:6px" data-i18n="photosH">' + S.photosH + '</h3><div style="display:flex;gap:8px;flex-wrap:wrap">' + e.photos.map(ph => '<img src="' + ph + '" alt="" style="width:31%;min-width:120px;border-radius:10px;border:1px solid #2a2a31">').join('') + '</div></div>'
     : '';
   // --- membership block ---
   let memberBlock = '';
   if (isMember) {
-    memberBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="memberAppliedH">' + S.memberAppliedH + '</b><p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>';
+    memberBlock = '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="memberAppliedH">' + S.memberAppliedH + '</b><p style="margin:6px 0 0;color:#c9c4bc;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>';
   } else if (canJoin) {
     memberBlock = '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
       + '<b style="font-size:16px" data-i18n="joinLabel">' + S.joinLabel + '</b>'
-      + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0">' + fillS(S.joinBody, joinAmounts) + '</p>'
-      + '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="emailLabel">' + S.emailLabel + '</span><input id="eJoinEmail" type="email" autocomplete="email" value="' + escMail(r.customerEmail || (user ? user.email : '')) + '" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>'
-      + ((user) ? '' : '<label style="display:block;font-size:14px;color:#555;margin:8px 0"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="eJoinPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>')
+      + '<p id="joinBody" style="color:#c9c4bc;font-size:14px;margin:8px 0">' + fillS(S.joinBody, joinAmounts) + '</p>'
+      + '<label style="display:block;font-size:14px;color:#c9c4bc;margin:8px 0"><span data-i18n="emailLabel">' + S.emailLabel + '</span><input id="eJoinEmail" type="email" autocomplete="email" value="' + escMail(r.customerEmail || (user ? user.email : '')) + '" style="padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>'
+      + ((user) ? '' : '<label style="display:block;font-size:14px;color:#c9c4bc;margin:8px 0"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="eJoinPass" type="password" autocomplete="new-password" style="padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>')
       + '<button id="estJoinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:13px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%;margin-top:10px">' + fillS(S.joinBtn, joinAmounts) + '</button>'
-      + '<p id="joinMsg" style="color:#666;margin:6px 0 0"></p></div>'
+      + '<p id="joinMsg" style="color:#a49d93;margin:6px 0 0"></p></div>'
       + '<script>var EST_ID=' + JSON.stringify(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ';'
       + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();}'
       + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
@@ -4554,47 +4554,47 @@ function estimatePageHtml(r, user, langOverride, notice) {
   const inv = (db.invoices || []).find(x => x.requestId === r.id);
   let actionBlock = '';
   if (expired) {
-    actionBlock = '<div style="background:#fde2e2;border:1px solid #e5a3a3;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#c81e1e" data-i18n="expiredH">' + S.expiredH + '</h3><p style="color:#555" data-i18n="expiredBody">' + S.expiredBody + '</p></div>';
+    actionBlock = '<div style="background:#2a0d10;border:1px solid #7a2027;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#ff9aa2" data-i18n="expiredH">' + S.expiredH + '</h3><p style="color:#c9c4bc" data-i18n="expiredBody">' + S.expiredBody + '</p></div>';
   } else if (r.status === 'Quoted') {
-    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px">'
+    actionBlock = '<div style="background:#101013;border:1px solid #2a2a31;border-radius:10px;padding:14px;margin-top:14px">'
       + '<h3 style="margin-top:0" data-i18n="approveH">' + S.approveH + '</h3>'
-      + '<p style="color:#666;font-size:13px" data-i18n="approveBody">' + S.approveBody + '</p>'
-      + '<input id="decReason" data-i18n-ph="decReasonPh" placeholder="' + S.decReasonPh + '" style="width:100%;padding:10px;border:1px solid #ccc;border-radius:8px;margin-bottom:10px;box-sizing:border-box">'
+      + '<p style="color:#a49d93;font-size:13px" data-i18n="approveBody">' + S.approveBody + '</p>'
+      + '<input id="decReason" data-i18n-ph="decReasonPh" placeholder="' + S.decReasonPh + '" style="width:100%;padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;margin-bottom:10px;box-sizing:border-box">'
       + '<div style="display:flex;gap:10px;flex-wrap:wrap"><button id="apBtn" style="background:#1a7f37;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1" data-i18n="approveBtn">' + S.approveBtn + '</button>'
-      + '<button id="decBtn" style="background:#fff;color:#333;border:1px solid #ccc;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1" data-i18n="declineBtn">' + S.declineBtn + '</button></div>'
-      + '<p id="decMsg" style="color:#666"></p></div>'
+      + '<button id="decBtn" style="background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;flex:1" data-i18n="declineBtn">' + S.declineBtn + '</button></div>'
+      + '<p id="decMsg" style="color:#a49d93"></p></div>'
       + '<script>function decide(action){var m=document.getElementById("decMsg");m.textContent=T("sending");var reason=document.getElementById("decReason").value;fetch("/estimate/' + r.id + '/"+action,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason:reason})}).then(function(res){return res.json().then(function(d){return{ok:res.ok,d:d};});}).then(function(o){if(!o.ok)throw new Error(o.d.error||"failed");if(action==="approve"&&o.d.payUrl){m.innerHTML=T("approvedOpening");setTimeout(function(){location.href=o.d.payUrl;},1200);}else{location.reload();}}).catch(function(e){m.textContent=e.message;});}document.getElementById("apBtn").onclick=function(){decide("approve");};document.getElementById("decBtn").onclick=function(){if(confirm(T("declineConfirm")))decide("decline");};</scr' + 'ipt>';
   } else if (r.status === 'Approved') {
-    actionBlock = '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#1a7f37" data-i18n="approvedH">' + S.approvedH + '</h3>'
+    actionBlock = '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0;color:#2fbf71" data-i18n="approvedH">' + S.approvedH + '</h3>'
       + (inv
         ? '<p><span data-i18n="invoiceReadyA">' + S.invoiceReadyA + '</span> <b>' + escMail(inv.id) + '</b> (' + usd(inv.total) + ') <span data-i18n="invoiceReadyB">' + S.invoiceReadyB + '</span>' + (inv.status === 'paid' ? ' <span data-i18n="invoicePaid">' + S.invoicePaid + '</span>' : '') + '</p><p><a href="/invoice/' + escMail(inv.id) + '" style="background:#e42535;color:#fff;padding:14px 26px;border-radius:999px;text-decoration:none;font-weight:700;display:inline-block">' + (inv.status === 'paid' ? S.viewInvoice : fillS(S.payNow, { amt: usd(inv.total) })) + '</a></p>'
         : '<p data-i18n="invoicePrep">' + S.invoicePrep + '</p>')
       + '</div>';
   } else if (r.status === 'Declined') {
-    actionBlock = '<div style="background:#f7f7f7;border:1px solid #ddd;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0" data-i18n="declinedH">' + S.declinedH + '</h3><p style="color:#666" data-i18n="declinedBody">' + S.declinedBody + '</p></div>';
+    actionBlock = '<div style="background:#101013;border:1px solid #2a2a31;border-radius:10px;padding:14px;margin-top:14px"><h3 style="margin-top:0" data-i18n="declinedH">' + S.declinedH + '</h3><p style="color:#a49d93" data-i18n="declinedBody">' + S.declinedBody + '</p></div>';
   }
   // v54 return banners — 'joined' renders only after the SERVER verified
   // the subscription with Stripe on the GET handler (never from flags).
   const noticeHtml = notice === 'joined'
-    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
+    ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
     : notice === 'paid'
-      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="paidNote">' + S.paidNote + '</div>'
+      ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="paidNote">' + S.paidNote + '</div>'
       : notice === 'hold'
-        ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="holdNote">' + S.holdNote + '</div>'
+        ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="holdNote">' + S.holdNote + '</div>'
         : notice === 'cancelled'
-          ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+          ? '<div style="background:#221a05;border:1px solid #6b5518;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
           : '';
   return head
     + noticeHtml
     + '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px"><h2 style="margin:0"><span data-i18n="titleEst">' + S.titleEst + '</span> ' + escMail(r.id) + '</h2><span style="background:' + badge + ';color:#fff;border-radius:999px;padding:6px 14px;font-weight:700;font-size:13px;text-transform:uppercase">' + escMail(badgeLabel) + '</span></div>'
-    + '<p style="color:#666"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • <span data-i18n="forWord">' + S.forWord + '</span> <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
-    + (r.description ? '<p style="color:#555">' + escMail(r.description) + '</p>' : '')
+    + '<p style="color:#a49d93"><b>' + escMail(r.service || '') + '</b>' + (r.city ? ' in <b>' + escMail(r.city) + '</b>' : '') + ' • <span data-i18n="forWord">' + S.forWord + '</span> <b>' + escMail(r.customerName || 'Customer') + '</b></p>'
+    + (r.description ? '<p style="color:#c9c4bc">' + escMail(r.description) + '</p>' : '')
     + optionsBlock
     + '<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:10px"><tr><th style="text-align:left;padding:8px" data-i18n="thWork">' + S.thWork + '</th><th style="padding:8px" data-i18n="thQty">' + S.thQty + '</th><th style="text-align:right;padding:8px" data-i18n="thEach">' + S.thEach + '</th><th style="text-align:right;padding:8px" data-i18n="thLine">' + S.thLine + '</th></tr>' + rows + '</table>'
     + sums
-    + (disp.validUntil && !expired ? '<p style="color:#666;font-size:13px"><span data-i18n="validUntil">' + S.validUntil + '</span> <b>' + escMail(fmtDate(disp.validUntil)) + '</b></p>' : '')
-    + (r.quoteNote ? '<p style="color:#555"><b data-i18n="teamNote">' + S.teamNote + '</b> ' + escMail(r.quoteNote) + '</p>' : '')
-    + '<p style="color:#666;font-size:13px">' + (estimateHasMaterials(disp) ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
+    + (disp.validUntil && !expired ? '<p style="color:#a49d93;font-size:13px"><span data-i18n="validUntil">' + S.validUntil + '</span> <b>' + escMail(fmtDate(disp.validUntil)) + '</b></p>' : '')
+    + (r.quoteNote ? '<p style="color:#c9c4bc"><b data-i18n="teamNote">' + S.teamNote + '</b> ' + escMail(r.quoteNote) + '</p>' : '')
+    + '<p style="color:#a49d93;font-size:13px">' + (estimateHasMaterials(disp) ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + photosBlock
     + estimatePayPanelHtml(r, initLang)
     + (r.status === 'Quoted' && !expired ? memberBlock : '')
