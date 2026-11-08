@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v84', swSrc.includes("const CACHE = 'ghs-app-v84'"));
+t('static: SW cache is ghs-app-v85', swSrc.includes("const CACHE = 'ghs-app-v85'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -4322,7 +4322,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v84: ghs-app-v84)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v84'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v85: ghs-app-v85)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v85'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -7289,6 +7289,41 @@ try { child4.kill('SIGTERM'); } catch (e) {}
     sm82.status === 200 && !sm82.j.items.some(it => it.serviceId === 'turbo-replacement') && sm82.j.items.some(it => it.serviceId === 'alternator-difficult' && it.price === 250));
   const wCartTurbo82 = await req2('POST', '/api/worker/carts', { token: wli82.j.token, body: { items: [{ serviceId: 'turbo-replacement', qty: 1 }] } });
   t('v82: a seller cart with the turbo is rejected (400, estimate-first)', wCartTurbo82.status === 400 && String(wCartTurbo82.j.error || '').includes('estimate-first'));
+}
+
+// ---------------- v85: home/vitrina restyle — the approved draft's design language on the customer home ----------------
+// Gabriel 2026-11-07: the whole page must look like the /tecnico draft —
+// black/clean dark surfaces, red #e42535 accents, BIG clear type, large
+// rounded cards, one idea per screen. v85 applies that language to the
+// customer HOME (#oldhome): CSS/markup only — no ids, handlers, routes,
+// prices or catalog facts moved; the memberships strip follows his
+// settled hierarchy (Plus $100 first as the best, then HomeCare, then
+// Yard, FREE last) and paintOldHome's OH_UI memCards follow the SAME
+// order in both languages so the repaint can never cross names/prices.
+{
+  const ohUi85 = dictOf819('OH_UI');
+  const heroStars85 = (htmlSrc.match(/<div class="stars">[\s\S]*?<\/div>/) || [''])[0];
+  t('static v85: the home hero carries the BIG five-star row with an HONEST 4.5 fill — exactly 4 full stars + the fifth a clipped two-tone HALF star — over the settled rating line (4.5 on Google · 20 reviews), through OH_UI in both languages; five full stars and any 5.0 stay banned in the hero',
+    htmlSrc.includes('<div class="stars"><span class="starrow"><span class="st">★</span><span class="st">★</span><span class="st">★</span><span class="st">★</span><span class="st half">★<i>★</i></span></span>4.5 <span>on Google · 20 reviews</span></div>') && !htmlSrc.includes('<div class="stars">★★★★★</div>') &&
+    (heroStars85.match(/<span class="st">★<\/span>/g) || []).length === 4 && (heroStars85.match(/<span class="st half">/g) || []).length === 1 && !heroStars85.includes('5.0') &&
+    htmlSrc.includes("heroRatingHtml: '<span class=\"starrow\"><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st half\">★<i>★</i></span></span>4.5 <span>on Google · 20 reviews</span>'") &&
+    htmlSrc.includes("heroRatingHtml: '<span class=\"starrow\"><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st\">★</span><span class=\"st half\">★<i>★</i></span></span>4.5 <span>en Google · 20 reseñas</span>'") &&
+    htmlSrc.includes('#oldhome .stars .starrow{display:flex; gap:5px; font-size:30px;') &&
+    htmlSrc.includes('#oldhome .stars .starrow .st.half i{position:absolute; left:0; top:0; width:50%; overflow:hidden; color:#ffb800; font-style:normal;}') &&
+    htmlSrc.includes("setH(q('.heroimg .stars'), ui.heroRatingHtml);"));
+  t('static v85: the home speaks the draft card language — 20px-radius service/junk cards, the How-ordering example card wears the featured red border, the hero headline steps up',
+    htmlSrc.includes('#oldhome .card{background:#17171b; border:1px solid #2a2a31; border-radius:20px') &&
+    htmlSrc.includes('#oldhome .wide{background:#17171b; border:1px solid #2a2a31; border-radius:20px') &&
+    htmlSrc.includes('#oldhome .order{background:#141414; border:2px solid #e42535; border-radius:20px') &&
+    htmlSrc.includes('#oldhome .heroimg h1{font-size:36px'));
+  t('static v85: home memberships follow the settled hierarchy — HomeCare Plus $100 FIRST as the featured card (red border + BEST badge), then HomeCare $29, Plus $175, the Yard plans, FREE last; OH_UI memCards repaint in the SAME order in both languages',
+    htmlSrc.indexOf('href="#join-plus1"') > -1 && htmlSrc.indexOf('href="#join-plus1"') < htmlSrc.indexOf('href="#join-homecare"') &&
+    htmlSrc.indexOf('href="#join-homecare"') < htmlSrc.indexOf('href="#join-plus2"') && htmlSrc.indexOf('href="#join-plus2"') < htmlSrc.indexOf('href="#join-yard1"') &&
+    htmlSrc.indexOf('href="#join-yard1"') < htmlSrc.indexOf('href="#join-yard2"') && htmlSrc.indexOf('href="#join-yard2"') < htmlSrc.indexOf('class="ghs-mem-card ghs-mem-free"') &&
+    htmlSrc.includes('class="ghs-mem-card ghs-mem-best"') && htmlSrc.includes('<div class="ghs-mem-badge">★ BEST</div>') &&
+    htmlSrc.includes('.ghs-mem-card{background:#141414;border:2px solid #2b2b30;border-radius:20px') &&
+    !!ohUi85 && ohUi85.en.memCards[0].h === 'HomeCare Plus' && ohUi85.en.memCards[0].badge === '★ BEST' && ohUi85.en.memCards[1].h === 'HomeCare' && ohUi85.en.memCards[5].h === 'FREE' &&
+    ohUi85.es.memCards[0].h === 'HomeCare Plus' && ohUi85.es.memCards[0].badge === '★ EL MEJOR' && ohUi85.es.memCards[1].h === 'HomeCare' && ohUi85.es.memCards[5].h === 'GRATIS');
 }
 
 // ---------------- v84: worker classification (tecnico / ayudante) ----------------
