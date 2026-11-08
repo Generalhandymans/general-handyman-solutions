@@ -4914,23 +4914,23 @@ function cartPageHtml(c, user, langOverride, notice) {
     const eu = startMember ? mu : it.unitPrice;
     const el = money(it.qty * eu);
     const tag = !it.custom ? '' : (it.kind === 'labor'
-      ? ' <span data-i18n="tagLabor" style="display:inline-block;background:#eef7ee;border:1px solid #bfe3bf;color:#1a7f37;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagLabor + '</span>'
-      : ' <span data-i18n="tagMaterial" style="display:inline-block;background:#f1f1f1;border:1px solid #ddd;color:#555;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagMaterial + '</span>');
+      ? ' <span data-i18n="tagLabor" style="display:inline-block;background:#0b2013;border:1px solid #1d5c38;color:#2fbf71;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagLabor + '</span>'
+      : ' <span data-i18n="tagMaterial" style="display:inline-block;background:#26262a;border:1px solid #33333b;color:#a49d93;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagMaterial + '</span>');
     const hint = (mu < it.unitPrice)
-      ? '<div class="memHint" style="color:#1a9e4b;font-size:12.5px;font-weight:700' + (startMember ? ';display:none' : '') + '">Members ' + usd(memLine) + '</div>' : '';
-    return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + escMail(it.name) + tag + hint + '</td>'
-      + '<td style="padding:8px;border-bottom:1px solid #eee;text-align:center">' + escMail(it.qty) + '</td>'
-      + '<td class="cEach" data-l="' + usd(it.unitPrice) + '" data-m="' + usd(mu) + '" style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(eu) + '</td>'
-      + '<td class="cLine" data-l="' + usd(it.lineTotal) + '" data-m="' + usd(memLine) + '" style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + usd(el) + '</td></tr>';
+      ? '<div class="memHint" style="color:#2fbf71;font-size:12.5px;font-weight:700' + (startMember ? ';display:none' : '') + '">Members ' + usd(memLine) + '</div>' : '';
+    return '<tr><td style="padding:8px;border-bottom:1px solid #26262a">' + escMail(it.name) + tag + hint + '</td>'
+      + '<td style="padding:8px;border-bottom:1px solid #26262a;text-align:center">' + escMail(it.qty) + '</td>'
+      + '<td class="cEach" data-l="' + usd(it.unitPrice) + '" data-m="' + usd(mu) + '" style="padding:8px;border-bottom:1px solid #26262a;text-align:right">' + usd(eu) + '</td>'
+      + '<td class="cLine" data-l="' + usd(it.lineTotal) + '" data-m="' + usd(memLine) + '" style="padding:8px;border-bottom:1px solid #26262a;text-align:right">' + usd(el) + '</td></tr>';
   }).join('');
   const tblHead = '<tr><th style="text-align:left;padding:8px" data-i18n="thService">' + S.thService + '</th><th style="padding:8px" data-i18n="thQty">' + S.thQty + '</th><th style="text-align:right;padding:8px" data-i18n="thEach">' + S.thEach + '</th><th style="text-align:right;padding:8px" data-i18n="thLine">' + S.thLine + '</th></tr>';
-  const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #555;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
-  const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + S.titleCart + ' ' + escMail(c.id) + ' — General Handyman Solutions</title>'
-    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#111">'
-    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
+  const langBtn = (l, lbl) => '<button type="button" data-lang-btn="' + l + '" style="background:' + (initLang === l ? '#e42535' : 'transparent') + ';color:#fff;border:1px solid #3a3a41;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;cursor:pointer">' + lbl + '</button>';
+  const head = '<!doctype html><html lang="' + initLang + '"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0b0b0b"><meta name="color-scheme" content="dark"><style>html,body{background:#0a0a0c}:root{color-scheme:dark}option{background:#1b1b1f;color:#e8e8ea}</style><title>' + S.titleCart + ' ' + escMail(c.id) + ' — General Handyman Solutions</title>'
+    + '<body style="font-family:system-ui,sans-serif;max-width:640px;margin:0 auto;padding:20px;color:#e8e8ea;background:#0a0a0c">'
+    + '<div style="background:#0b0b0b;color:#fff;padding:16px 20px;border-radius:20px 20px 0 0;display:flex;justify-content:space-between;align-items:flex-start;gap:10px"><div><div style="font-size:19px;font-weight:bold">General Handyman Solutions</div><div style="color:#e42535;font-size:13px">Fairfield • Vacaville • Vallejo • Solano County</div></div>'
     + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
-    + '<div style="border:1px solid #ddd;border-top:0;border-radius:0 0 14px 14px;padding:18px 20px">';
-  const foot = '<p style="color:#666;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
+    + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">';
+  const foot = '<p style="color:#a49d93;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
     + '<script>var I18N=' + JSON.stringify(CI) + ';var LANG=' + JSON.stringify(initLang) + ';'
     + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
     + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsCartLang", l); }catch(e){}'
@@ -4943,7 +4943,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'try{ var sv=localStorage.getItem("ghsCartLang"); if(sv && sv!==LANG && I18N[sv]) setLang(sv); }catch(e){}'
     + '</scr' + 'ipt></body>';
   if (c.status === 'cancelled') {
-    return head + '<h2 style="margin-top:0" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#666" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
+    return head + '<h2 style="margin-top:0;font-size:22px;font-weight:800" data-i18n="cancelledH">' + S.cancelledH + '</h2><p style="color:#a49d93" data-i18n="cancelledBody">' + S.cancelledBody + '</p>' + foot;
   }
   if (c.status === 'paid') {
     // v80.5 GAP-1: a cart whose ORDER was cancelled + refunded renders
@@ -4954,7 +4954,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     // orders cancelled before this patch existed).
     const reqLinked805 = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
     if ((c.payment && c.payment.balanceVoid) || (reqLinked805 && reqLinked805.status === 'Cancelled')) {
-      return head + '<h2 style="margin-top:0" data-i18n="orderCancelledH">' + S.orderCancelledH + '</h2><p style="color:#666" data-i18n="orderCancelledBody">' + S.orderCancelledBody + '</p>' + foot;
+      return head + '<h2 style="margin-top:0;font-size:22px;font-weight:800" data-i18n="orderCancelledH">' + S.orderCancelledH + '</h2><p style="color:#a49d93" data-i18n="orderCancelledBody">' + S.orderCancelledBody + '</p>' + foot;
     }
     // v69: materials adjustments (admin, append-only) render as their
     // own signed lines under the items — the customer sees exactly
@@ -4965,7 +4965,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     const adjRows = (c.payment && Array.isArray(c.payment.adjustments) && c.payment.adjustments.length)
       ? c.payment.adjustments.map(a => a.kind === 'travel'
         ? '<p style="font-size:15px;margin:2px 0"><span data-i18n="travelLine">' + S.travelLine + '</span> — <b>' + usd(a.deltaCents / 100) + '</b></p>'
-        : '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#555">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
+        : '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#a49d93">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
       : '';
     // v62: a cart in DEPOSIT state (40% in, balance outstanding) shows
     // the booked state + the balance with its own Pay button on this
@@ -4974,20 +4974,20 @@ function cartPageHtml(c, user, langOverride, notice) {
     const balOut = c.payment && Number(c.payment.balanceCents) > 0 && !c.payment.balanceAt;
     if (balOut) {
       const balScript = '<script>document.getElementById("balBtn").addEventListener("click", async function(){ var b=this; b.disabled=true; document.getElementById("balMsg").textContent="..."; try{ var r=await fetch("/api/carts/' + c.id + '/checkout", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ balance:true, lang:(function(){ try { return localStorage.getItem("ghsCartLang") || "en"; } catch(e){ return "en"; } })() }) }); var d=await r.json(); if(d.url){ location.href=d.url; } else { document.getElementById("balMsg").textContent=(d.error||"error"); b.disabled=false; } }catch(e){ document.getElementById("balMsg").textContent="connection error — try again"; b.disabled=false; } });</scr' + 'ipt>';
-      return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="depPaidH">' + S.depPaidH + '</h2>'
+      return head + '<h2 style="margin-top:0;font-size:22px;font-weight:800;color:#2fbf71" data-i18n="depPaidH">' + S.depPaidH + '</h2>'
         + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '</p>'
-        + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:15px">' + tblHead + rows + '</table>'
         + adjRows
         + '<p style="font-size:17px;margin-bottom:2px"><span data-i18n="totalLabel">' + S.totalLabel + '</span> <b>' + usd((Number(c.payment.amountCents) || 0) / 100) + '</b></p>'
         + '<p style="font-size:17px;margin:2px 0"><span data-i18n="depPaidLine">' + S.depPaidLine + '</span> <b>' + usd((Number(c.payment.depositCents) || 0) / 100) + '</b></p>'
         + '<p style="font-size:20px;margin:2px 0"><span data-i18n="balLine">' + S.balLine + '</span> <b>' + usd((Number(c.payment.balanceCents) || 0) / 100) + '</b></p>'
-        + '<p style="color:#555;font-size:14px" data-i18n="depPaidBody">' + S.depPaidBody + '</p>'
-        + '<button id="balBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:8px">' + fillS(S.balanceBtn, { amt: usd((Number(c.payment.balanceCents) || 0) / 100) }) + '</button><p id="balMsg" style="color:#666"></p>'
+        + '<p style="color:#a49d93;font-size:14px" data-i18n="depPaidBody">' + S.depPaidBody + '</p>'
+        + '<button id="balBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:8px">' + fillS(S.balanceBtn, { amt: usd((Number(c.payment.balanceCents) || 0) / 100) }) + '</button><p id="balMsg" style="color:#a49d93"></p>'
         + balScript + foot;
     }
-    return head + '<h2 style="margin-top:0;color:#1a7f37" data-i18n="paidH">' + S.paidH + '</h2>'
+    return head + '<h2 style="margin-top:0;font-size:22px;font-weight:800;color:#2fbf71" data-i18n="paidH">' + S.paidH + '</h2>'
       + '<p><span data-i18n="titleCart">' + S.titleCart + '</span> <b>' + escMail(c.id) + '</b> <span data-i18n="paidBodyA">' + S.paidBodyA + '</span>' + (c.requestId ? ' <span data-i18n="paidOrder">' + S.paidOrder + '</span> <b>' + escMail(c.requestId) + '</b>' : '') + '. <span data-i18n="paidBodyB">' + S.paidBodyB + '</span></p>'
-      + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
+      + '<table style="width:100%;border-collapse:collapse;font-size:15px">' + tblHead + rows + '</table>'
       + adjRows
       + '<p style="font-size:20px"><span data-i18n="totalPaid">' + S.totalPaid + '</span> <b>' + usd((c.payment && c.payment.amountCents ? c.payment.amountCents : 0) / 100) + '</b></p>' + foot;
   }
@@ -4999,7 +4999,7 @@ function cartPageHtml(c, user, langOverride, notice) {
   // 20% order discount belongs to HomeCare / HomeCare Plus ONLY: picking
   // a Yard plan keeps the totals at the regular price and says so right
   // there (yardNote) — no silent no-discount surprise at payment time.
-  const planRow = (key, i18n, checked, extra) => '<label style="display:block;border:1px solid #ddd;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;background:#fff"><input type="radio" name="cPlan" value="' + key + '"' + (checked ? ' checked' : '') + ' style="margin-right:8px"> <span data-i18n="' + i18n + '">' + S[i18n] + '</span>' + (extra || '') + '</label>';
+  const planRow = (key, i18n, checked, extra) => '<label style="display:block;border:1px solid #33333b;border-radius:14px;padding:10px 12px;margin:6px 0;font-size:14px;cursor:pointer;background:#1b1b1f"><input type="radio" name="cPlan" value="' + key + '"' + (checked ? ' checked' : '') + ' style="margin-right:8px"> <span data-i18n="' + i18n + '">' + S[i18n] + '</span>' + (extra || '') + '</label>';
   // v61 (Gabriel): a personal invitation attached to THIS cart puts the
   // free month right here — the HomeCare $29 row carries the badge and
   // the join can claim it here; no separate invite link needed. The
@@ -5021,65 +5021,65 @@ function cartPageHtml(c, user, langOverride, notice) {
     + planRow('plus2', 'planPlus2', false)
     + planRow('yard1', 'planYard1', false)
     + planRow('yard2', 'planYard2', false)
-    + '<p id="yardNote" style="display:none;color:#7a5b00;background:#fff8e6;border:1px solid #ecd28f;border-radius:8px;padding:8px 10px;font-size:13.5px;margin:8px 0 0"><span data-i18n="yardNote">' + S.yardNote + '</span></p>'
+    + '<p id="yardNote" style="display:none;color:#ffcf4d;background:#221a05;border:1px solid #6b5518;border-radius:14px;padding:8px 10px;font-size:13.5px;margin:8px 0 0"><span data-i18n="yardNote">' + S.yardNote + '</span></p>'
     + '</div>';
   const joinBlock = sessionMember
-    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>'
+    ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:20px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#a49d93;font-size:14px" data-i18n="memberAppliedBody">' + S.memberAppliedBody + '</p></div>'
     : sessionYardMember
-      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px"><b data-i18n="yardActiveH">' + S.yardActiveH + '</b><p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="yardActiveBody">' + S.yardActiveBody + '</p></div>'
-      : '<div id="joinBox" style="border:1px solid #e42535;border-radius:10px;padding:14px;margin-top:14px">'
+      ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:20px;padding:14px;margin-top:14px"><b data-i18n="yardActiveH">' + S.yardActiveH + '</b><p style="margin:6px 0 0;color:#a49d93;font-size:14px" data-i18n="yardActiveBody">' + S.yardActiveBody + '</p></div>'
+      : '<div id="joinBox" style="background:#141414;border:2px solid #e42535;border-radius:20px;padding:16px;margin-top:14px">'
         + '<label style="display:block;font-size:16px"><input type="checkbox" id="cJoin" style="transform:scale(1.3);margin-right:8px"> <b data-i18n="joinLabel">' + S.joinLabel + '</b></label>'
-        + (freeMonth ? '<p style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:8px;padding:8px 10px;font-size:14.5px;margin:8px 0 0"><b data-i18n="inviteBanner">' + S.inviteBanner + '</b></p>' : '')
-        + '<p id="joinBody" style="color:#555;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
+        + (freeMonth ? '<p style="background:#0b2013;border:1px solid #1d5c38;border-radius:14px;padding:8px 10px;font-size:14.5px;margin:8px 0 0"><b data-i18n="inviteBanner">' + S.inviteBanner + '</b></p>' : '')
+        + '<p id="joinBody" style="color:#a49d93;font-size:14px;margin:8px 0 0">' + fillS(S.joinBody, amounts) + '</p>'
         + planPicker
-        + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#555"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
+        + '<div id="joinPassRow" style="display:none;margin-top:10px"><label style="display:block;font-size:14px;color:#a49d93"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="cPass" type="password" autocomplete="new-password" style="padding:12px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:14px;width:100%;box-sizing:border-box;margin-top:4px"></label></div>'
         + '</div>'
-        + '<div id="memberFound" style="display:none;background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#555;font-size:14px" data-i18n="memberFoundBody">' + S.memberFoundBody + '</p></div>';
-  const inp = 'padding:10px;border:1px solid #ccc;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px';
-  const lbl = 'display:block;margin:10px 0;font-size:14px;color:#555';
+        + '<div id="memberFound" style="display:none;background:#0b2013;border:1px solid #1d5c38;border-radius:20px;padding:14px;margin-top:14px">' + memberBox + '<p style="margin:6px 0 0;color:#a49d93;font-size:14px" data-i18n="memberFoundBody">' + S.memberFoundBody + '</p></div>';
+  const inp = 'padding:12px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:14px;width:100%;box-sizing:border-box;margin-top:4px';
+  const lbl = 'display:block;margin:10px 0;font-size:14px;color:#a49d93';
   const startCents = Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100);
   // v54 return banners: 'joined' renders only after the SERVER verified
   // the subscription with Stripe (the GET handler decides — page flags
   // alone never produce it); 'cancelled' is a plain friendly note.
   const noticeHtml = notice === 'joined'
-    ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
+    ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:20px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedNote">' + S.joinedNote + '</div>'
     : notice === 'joined-yard'
-      ? '<div style="background:#eef7ee;border:1px solid #bfe3bf;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedYardNote">' + S.joinedYardNote + '</div>'
+      ? '<div style="background:#0b2013;border:1px solid #1d5c38;border-radius:20px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="joinedYardNote">' + S.joinedYardNote + '</div>'
       : notice === 'cancelled'
-        ? '<div style="background:#fff8e6;border:1px solid #ecd28f;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
+        ? '<div style="background:#221a05;border:1px solid #6b5518;border-radius:20px;padding:12px 14px;margin-bottom:14px;font-size:14.5px" data-i18n="cancelledNote">' + S.cancelledNote + '</div>'
         : '';
   return head
     + noticeHtml
-    + '<h2 style="margin-top:0" data-i18n="titleCart">' + S.titleCart + '</h2>'
-    + '<p style="color:#666" data-i18n="intro">' + S.intro + '</p>'
-    + '<table style="width:100%;border-collapse:collapse;font-size:14px">' + tblHead + rows + '</table>'
-    + '<div style="margin-top:12px;border-top:2px solid #111;padding-top:10px">'
+    + '<h2 style="margin-top:0;font-size:22px;font-weight:800" data-i18n="titleCart">' + S.titleCart + '</h2>'
+    + '<p style="color:#a49d93" data-i18n="intro">' + S.intro + '</p>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:15px">' + tblHead + rows + '</table>'
+    + '<div style="margin-top:14px;background:#141414;border:2px solid #e42535;border-radius:20px;padding:16px">'
     + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span id="ctSubtotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '">' + usd(c.listTotal) + '</span></div>'
-    + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#1a9e4b;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
+    + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#2fbf71;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="depositDueLabel">' + S.depositDueLabel + '</span><b id="ctDeposit" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).depositCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).depositCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).depositCents / 100) + '</b></div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px;color:#555"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).balanceCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).balanceCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).balanceCents / 100) + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="depositDueLabel">' + S.depositDueLabel + '</span><b id="ctDeposit" style="font-size:21px" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).depositCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).depositCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).depositCents / 100) + '</b></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;color:#a49d93"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).balanceCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).balanceCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).balanceCents / 100) + '</span></div>'
     + '</div>'
-    + '<p style="color:#666;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
+    + '<p style="color:#a49d93;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + '<div id="cartForm">'
-    + '<h3 style="margin-bottom:2px" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
+    + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
     + '<label style="' + lbl + '"><span data-i18n="fullName">' + S.fullName + '</span><input id="cName" autocomplete="name" value="' + escMail(user ? user.name : (c.customerName || '')) + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="phone">' + S.phone + '</span><input id="cPhone" type="tel" autocomplete="tel" value="' + escMail(user ? (user.phone || '') : (c.customerPhone || '')) + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="email">' + S.email + '</span><input id="cEmail" type="email" autocomplete="email" value="' + escMail(user ? user.email : '') + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="address">' + S.address + '</span><input id="cAddr" autocomplete="street-address" value="' + escMail(user ? (user.serviceAddress || '') : '') + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="city">' + S.city + '</span><input id="cCity" autocomplete="address-level2" style="' + inp + '"></label>'
-    + '<h3 style="margin-bottom:2px" data-i18n="whenH">' + S.whenH + '</h3>'
-    + '<p style="color:#666;font-size:13px;margin-top:0" data-i18n="whenNote">' + S.whenNote + '</p>'
-    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:150px;font-size:14px;color:#555"><span data-i18n="prefDate">' + S.prefDate + '</span><input id="cDate" type="date" style="' + inp + '"></label>'
-    + '<label style="flex:1;min-width:150px;font-size:14px;color:#555"><span data-i18n="timeWindow">' + S.timeWindow + '</span><select id="cWin" style="' + inp + '"><option value="ASAP — first available" data-i18n="optAsap">' + S.optAsap + '</option><option value="Morning (8am–12pm)" data-i18n="optMorning">' + S.optMorning + '</option><option value="Afternoon (12pm–5pm)" data-i18n="optAfternoon">' + S.optAfternoon + '</option><option value="Evening (5pm–8pm)" data-i18n="optEvening">' + S.optEvening + '</option></select></label></div>'
+    + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="whenH">' + S.whenH + '</h3>'
+    + '<p style="color:#a49d93;font-size:13px;margin-top:0" data-i18n="whenNote">' + S.whenNote + '</p>'
+    + '<div style="display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:150px;font-size:14px;color:#a49d93"><span data-i18n="prefDate">' + S.prefDate + '</span><input id="cDate" type="date" style="' + inp + '"></label>'
+    + '<label style="flex:1;min-width:150px;font-size:14px;color:#a49d93"><span data-i18n="timeWindow">' + S.timeWindow + '</span><select id="cWin" style="' + inp + '"><option value="ASAP — first available" data-i18n="optAsap">' + S.optAsap + '</option><option value="Morning (8am–12pm)" data-i18n="optMorning">' + S.optMorning + '</option><option value="Afternoon (12pm–5pm)" data-i18n="optAfternoon">' + S.optAfternoon + '</option><option value="Evening (5pm–8pm)" data-i18n="optEvening">' + S.optEvening + '</option></select></label></div>'
     + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
     + joinBlock
-    + '<h3 style="margin-bottom:2px" data-i18n="paymentH">' + S.paymentH + '</h3>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(depositSplit(startCents).depositCents / 100) }) + '</button>'
-    + '<p id="payMsg" style="color:#666"></p>'
-    + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#555;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
-    + '<p style="color:#666;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
-    + '<p style="color:#666;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
+    + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="paymentH">' + S.paymentH + '</h3>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(depositSplit(startCents).depositCents / 100) }) + '</button>'
+    + '<p id="payMsg" style="color:#a49d93"></p>'
+    + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#a49d93;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
+    + '<p style="color:#a49d93;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
+    + '<p style="color:#a49d93;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
@@ -9068,7 +9068,7 @@ async function handleRequest(req, res) {
   if (cartPageMatch && req.method === 'GET') {
     if (workerSessionBlocked(user)) return workerBlockedPage(res, 'cart'); // v79 P0-2
     const c = cartsOf().find(x => x.id === cartPageMatch[1]);
-    if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
+    if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px;background:#0a0a0c;color:#e8e8ea"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
     // v54 return verification: Stripe sends the customer back with
     // ?joined=1 / ?paid=1 AND the session_id — the flags alone change
     // NOTHING. The server retrieves the session from Stripe and acts
