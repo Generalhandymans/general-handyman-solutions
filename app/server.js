@@ -2587,6 +2587,10 @@ function verifyStripeSig(payload, header) {
   const expected = crypto.createHmac('sha256', STRIPE_WEBHOOK_SECRET).update(m[1] + '.' + payload, 'utf8').digest('hex');
   try { return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(m[2], 'hex')); } catch (e) { return false; }
 }
+// v94: throttle stamp for the webhook bad-signature admin alarm (the
+// rejection itself is console-logged on EVERY hit; the notification +
+// audit entry fire at most once an hour so scanners can't flood them).
+let lastWebhookSigAlertAt94 = 0;
 // Single place that turns a user into an active HomeCare member (added
 // 2026-10-19 for the inline "New HomeCare member" signup). Used by the
 // homecare-confirm endpoint (synchronous, right after the card is charged)
@@ -2727,6 +2731,23 @@ function alertDuplicateBalance(where, r, c, pi, cents) {
   console.error('v80.5 ' + msg);
   notifyAdmins('payment', '⚠️ ' + msg);
   audit(null, 'balance.duplicate', (r && r.id) || (c && c.id) || '', msg);
+}
+// v94: the Brijesh hole — Stripe proved a payment landed on a BOOKED
+// cart, but its amount does NOT equal the outstanding balance on record
+// to the cent, so settleCartPayment lawfully refuses to book it. Before
+// v94 that refusal was a silent `return false` (no log, no alert): the
+// money sat in Stripe while the order kept showing "deposit" and
+// nobody knew. The books are still NOT changed here — a human must
+// reconcile — but the failure is now LOUD: console, admin notification
+// and an audit entry ('cart.payment_unmatched'). The deposit PI is
+// excluded by the caller (its late webhook on an equal-legs total is
+// not a balance event — v80.5 F).
+function alertUnrecordedCartPayment(c, payInfo, cents) {
+  const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
+  const msg = 'UNRECORDED STRIPE PAYMENT — ' + usd((Number(cents) || 0) / 100) + ' landed on cart ' + c.id + (r ? ' / order ' + r.id : '') + ' (PI ' + ((payInfo && payInfo.pi) || 'n/a') + '), but the outstanding balance on record is ' + usd((Number(c.payment.balanceCents) || 0) / 100) + ' — the books were NOT changed. Check Stripe, then reconcile by hand.';
+  console.error('v94 ' + msg);
+  notifyAdmins('payment', '⚠️ ' + msg);
+  audit(null, 'cart.payment_unmatched', c.id, msg);
 }
 // Stamp the cart half of the seal. via: 'link' | 'app' | 'adjust'.
 // Returns true only when it actually changed the cart.
@@ -3480,6 +3501,13 @@ function settleCartPayment(c, payInfo) {
     else if (cents !== listCents && cents !== memberCents) { console.error('cart settle: session amount ' + cents + ' matches neither cart total — not converting cart ' + c.id); return false; }
     return !!convertCartToRequest(c, { pi: payInfo.pi || '', amountCents: cents });
   }
+  // v94: a BOOKED cart, an unsealed balance, and a proven payment that
+  // matches NOTHING above (not the balance to the cent, not a post-seal
+  // twin) used to fall through to a silent `return false` — real money
+  // invisible in the books. The exact-cents guard still refuses it;
+  // now it also raises the unrecorded-payment alert. (The deposit's own
+  // PI is excluded — v80.5 F: its late webhook is not a balance event.)
+  if (c.status === 'paid' && c.payment && !c.payment.balanceAt && cents > 0 && payInfo.pi && payInfo.pi !== (c.payment.depositPi || '')) alertUnrecordedCartPayment(c, payInfo, cents);
   return false;
 }
 // ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
@@ -3641,6 +3669,7 @@ async function handleStripeEvent(event) {
     if (kind === 'cart-order') {
       const c = cartsOf().find(x => x.id === (obj.metadata && obj.metadata.cartId));
       if (c && obj.payment_status === 'paid') { settleCartPayment(c, { pi: obj.payment_intent || '', amountCents: Math.round(Number(obj.amount_total) || 0) }); save(); }
+      else if (!c) console.error('stripe webhook: cart-order session ' + obj.id + ' names unknown cart ' + ((obj.metadata && obj.metadata.cartId) || 'n/a') + ' — payment NOT recorded'); // v94: never a silent drop
       return;
     }
     // v70: the combined join+deposit session settles BOTH halves here:
@@ -3834,6 +3863,7 @@ async function handleStripeEvent(event) {
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
         if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
+        else console.error('stripe webhook: cart-order PI ' + obj.id + ' names unknown cart ' + obj.metadata.cartId + ' — payment NOT recorded'); // v94: never a silent drop
       } else if ((obj.metadata.kind === 'cart-checkout' || obj.metadata.kind === 'cart-checkout-hosted') && obj.metadata.checkoutId) {
         // v78: the guest-cart order is born here when the in-app
         // confirm never landed (tab closed after paying) — the same
@@ -8971,7 +9001,24 @@ async function handleRequest(req, res) {
   }
   if (p === '/api/stripe/webhook' && req.method === 'POST') {
     const raw = await readRawBody(req);
-    if (!verifyStripeSig(raw, req.headers['stripe-signature'] || '')) return send(res, 400, { error: 'bad signature' });
+    if (!verifyStripeSig(raw, req.headers['stripe-signature'] || '')) {
+      // v94: a rejected signature used to vanish WITHOUT A TRACE (no
+      // log, no audit, no alert) — so a webhook secret that does not
+      // match the live endpoint fails silently forever while page
+      // returns mask the outage, until a payment whose return path
+      // also dies (the 2026-11-07 suspension) exposes it. Now: always
+      // logged, and at most once an hour it raises an admin
+      // notification + audit entry so a dead webhook is VISIBLE.
+      console.error('stripe webhook: SIGNATURE REJECTED — ' + raw.length + ' bytes dropped (check STRIPE_WEBHOOK_SECRET against the live endpoint secret)');
+      const now94 = Date.now();
+      if (now94 - lastWebhookSigAlertAt94 > 3600e3) {
+        lastWebhookSigAlertAt94 = now94;
+        notifyAdmins('payment', '⚠️ Stripe WEBHOOK SIGNATURE REJECTED — if payments are landing in Stripe, the webhook secret on file does not match the live endpoint and NOTHING is being recorded automatically. Check the endpoint + STRIPE_WEBHOOK_SECRET now.');
+        audit(null, 'stripe.webhook_bad_signature', '', 'webhook POST failed signature verification (' + raw.length + ' bytes) — possible dead webhook: secret mismatch with the live endpoint');
+        save();
+      }
+      return send(res, 400, { error: 'bad signature' });
+    }
     try {
       const event = JSON.parse(raw);
       await handleStripeEvent(event);
@@ -9090,8 +9137,23 @@ async function handleRequest(req, res) {
     // the second is a no-op, so an order is never created twice.
     let notice = '';
     const retSessionId = url.searchParams.get('session_id') || '';
+    // v94 SELF-HEAL (the Brijesh fix, 2026-11-07): the ?paid=1 return
+    // above is a single point of failure — it fires only if the
+    // customer's browser completes the redirect back to this page. If
+    // the app is down at that moment (the Render suspension), or the
+    // customer closes the tab after paying, the ONLY recorder left is
+    // the webhook. So on ANY load of a booked cart whose balance is
+    // still unsealed, the page ALSO verifies the balance session the
+    // cart itself recorded (c.paySessionId) with Stripe — same strict
+    // proof as the return (recorded session only, payment_status
+    // 'paid', settleCartPayment's exact-cents guard decides). The next
+    // time ANYONE opens the link — customer or Gabriel checking the
+    // order — a landed-but-unrecorded balance books itself. A voided
+    // cart never heals (its door is disarmed, v80.5).
+    const healSid94 = (!retSessionId && c.status === 'paid' && c.payment && !c.payment.balanceAt && !c.payment.balanceVoid && Number(c.payment.balanceCents) > 0) ? (c.paySessionId || '') : '';
+    const effSid94 = retSessionId || healSid94;
     if (url.searchParams.get('cancelled') === '1' && c.status === 'open') notice = 'cancelled';
-    if ((c.status === 'open' || (c.status === 'paid' && url.searchParams.get('paid') === '1')) && retSessionId && stripeReady()) { // v62: a BALANCE return arrives on an already-'paid' (deposit-state) cart — it must verify too; the joined branch stays guarded by its own session checks
+    if ((c.status === 'open' || (c.status === 'paid' && (url.searchParams.get('paid') === '1' || healSid94))) && effSid94 && stripeReady()) { // v62: a BALANCE return arrives on an already-'paid' (deposit-state) cart — it must verify too; the joined branch stays guarded by its own session checks
       try {
         if (url.searchParams.get('paid') === '1' && c.pendingJoin && c.paySessionId && retSessionId === c.paySessionId) {
           // v70: the combined join+deposit session returns ONCE, with
@@ -9141,9 +9203,9 @@ async function handleRequest(req, res) {
               }
             }
           }
-        } else if (url.searchParams.get('paid') === '1' && c.paySessionId && retSessionId === c.paySessionId) {
-          const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(retSessionId));
-          if (sess && sess.id === retSessionId && sess.payment_status === 'paid') {
+        } else if ((url.searchParams.get('paid') === '1' || healSid94) && c.paySessionId && effSid94 === c.paySessionId) {
+          const sess = await stripeGet('/checkout/sessions/' + encodeURIComponent(effSid94));
+          if (sess && sess.id === effSid94 && sess.payment_status === 'paid') {
             // v62: settle through the shared path — the deposit
             // converts the cart as BOOKED (40% in), the balance flips
             // it to paid in full; legacy full-amount sessions still

@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v93', swSrc.includes("const CACHE = 'ghs-app-v93'"));
+t('static: SW cache is ghs-app-v94', swSrc.includes("const CACHE = 'ghs-app-v94'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -3848,6 +3848,46 @@ t('static v69: balance adjustment rails exist — admin endpoint, append-only ad
 }
 
 
+// ---------- v94 REPRO: deposit -> 3 adjustments -> pay the exact current balance via the cart link (the Brijesh sequence, live 2026-11-07) ----------
+{
+  const adm94 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const A94 = adm94.j.token;
+  const mem94 = await mkMember('brij94@t.local', '(707) 555-0144');
+  const sub94 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mem94.token, body: {} });
+  await mockActivate(sub94.j.subscriptionId);
+  const conf94 = await req2('POST', '/api/stripe/homecare-confirm', { token: mem94.token, body: {} });
+  const cart94 = await req2('POST', '/api/admin/carts', { token: A94, body: { items: [{ custom: true, kind: 'labor', name: 'Laundry wall + shower + drain bundle', qty: 1, unitPrice: 520 }], customerName: 'Brijesh R94', customerEmail: 'brij94@t.local', customerPhone: '(707) 555-0144' } });
+  const cid94 = cart94.j.cart.id;
+  t('v94 setup: member cart $520 list / $416 member, HomeCare active', cart94.status === 201 && cart94.j.cart.listTotal === 520 && cart94.j.cart.memberTotal === 416 && conf94.j && conf94.j.active === true);
+  const det94 = { name: 'Brijesh R94', phone: '7075550144', email: 'brij94@t.local', address: '3255 Palomino Cir', city: 'Fairfield', when: 'Friday' };
+  const co94 = await req2('POST', '/api/carts/' + cid94 + '/checkout', { token: mem94.token, body: det94 });
+  const sess94D = sessionForCart(cid94, 'payment');
+  t('v94 setup: member deposit session is $166.40 (40% of $416), payStep deposit', co94.status === 200 && co94.j.deposit === 166.4 && !!sess94D && sess94D.amount_total === 16640 && sess94D.metadata.payStep === 'deposit');
+  await mockSessionPaid(sess94D.id);
+  await fetch(BASE2 + '/cart/' + cid94 + '?paid=1&session_id=' + sess94D.id, { headers: { Authorization: 'Bearer ' + mem94.token } });
+  const reqs94a = await req2('GET', '/api/requests', { token: A94 });
+  const ord94a = (reqs94a.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid94);
+  t('v94 setup: deposit books the order — $166.40 of $416, balance $249.60', !!ord94a && ord94a.payment.status === 'deposit' && ord94a.payment.amountCents === 16640 && ord94a.payment.totalCents === 41600 && ord94a.payment.balanceCents === 24960);
+  const adj94a = await req2('POST', '/api/admin/carts/' + cid94 + '/adjust-balance', { token: A94, body: { delta: 112, note: 'Materials' } });
+  const adj94b = await req2('POST', '/api/admin/carts/' + cid94 + '/adjust-balance', { token: A94, body: { delta: 14, note: 'Door latch part' } });
+  const adj94c = await req2('POST', '/api/admin/carts/' + cid94 + '/adjust-balance', { token: A94, body: { delta: -50, note: 'Laundry line final — leak detection' } });
+  t('v94 setup: three adjustments land — total $492, balance $325.60', adj94a.j.cart.payState.balance === 361.6 && adj94b.j.cart.payState.balance === 375.6 && adj94c.j.cart.payState.balance === 325.6 && adj94c.j.cart.payState.total === 492);
+  const bal94 = await req2('POST', '/api/carts/' + cid94 + '/checkout', { body: { balance: true } });
+  const sess94B = sessionForCart(cid94, 'payment');
+  t('v94 setup: the balance checkout charges the ADJUSTED $325.60 (payStep balance)', bal94.status === 200 && bal94.j.amount === 325.6 && !!sess94B && sess94B.amount_total === 32560 && sess94B.metadata.payStep === 'balance');
+  await mockSessionPaid(sess94B.id);
+  // The doors that must work when the customer's browser return never lands (the live failure): Stripe's own webhooks.
+  const whSess94 = await wh2('checkout.session.completed', stripeState.sessions[sess94B.id]);
+  const whPi94 = await wh2('payment_intent.succeeded', stripeState.pis[sess94B.payment_intent]);
+  const reqs94b = await req2('GET', '/api/requests', { token: A94 });
+  const ord94b = (reqs94b.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid94);
+  t('v94 REPRO: paying the exact adjusted balance via the cart link flips the order PAID IN FULL ($492)', whSess94.status === 200 && whPi94.status === 200 && !!ord94b && ord94b.payment.status === 'paid' && ord94b.payment.amountCents === 49200);
+  const carts94 = await req2('GET', '/api/admin/carts', { token: A94 });
+  const cart94b = (carts94.j.carts || []).find(x => x.id === cid94);
+  t('v94 REPRO: the cart seals — balancePaid true, balanceVia link', !!cart94b && !!cart94b.payState && cart94b.payState.balancePaid === true && cart94b.payState.balanceVia === 'link');
+}
+
+
 // ---------- v70: ONE single checkout — plan + 40% deposit together (Gabriel, 2026-10-25) ----------
 t('static v70: combined-session rails exist — cart-join kind, pendingJoin settle branch, webhook + return combined branches, materials-variation clause on cart + estimate pages',
   serverSrc.includes("kind === 'cart-join'") && serverSrc.includes('c.pendingJoin') && serverSrc.includes("metadata[plan]") && serverSrc.includes('One single checkout') && serverSrc.includes('Un solo cobro') &&
@@ -4424,7 +4464,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v93: ghs-app-v93)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v93'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v94: ghs-app-v94)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v94'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -4878,6 +4918,75 @@ t('static v80.5 server: the seal helpers + dead-order predicate + duplicate aler
   const leg1 = await req2('POST', '/api/carts/' + aB.cid + '/pay', { body: { name: 'X', email: 'x@t.local', address: '1 St' } });
   const leg2 = await req2('POST', '/api/carts/' + aB.cid + '/pay-confirm', { body: { paymentIntentId: 'pi_whatever' } });
   t('v80.5 E (GAP-3): legacy /api/carts/:id/pay and /pay-confirm answer 410 Gone — the 100%-up-front bypass is retired', leg1.status === 410 && leg2.status === 410);
+}
+
+// ---------------- v94: the landed-but-unrecorded balance (Brijesh GHS-EF134AE44AAC2BA4A5, 2026-11-07) ----------------
+t('static v94: the cart page SELF-HEALS a landed balance — on any load of a booked, unsealed cart it verifies the recorded session (healSid94/effSid94) through the same strict branch (recorded session only)', serverSrc.includes('const healSid94 =') && serverSrc.includes('const effSid94 = retSessionId || healSid94') && serverSrc.includes('effSid94 === c.paySessionId') && serverSrc.includes('!c.payment.balanceVoid'));
+t('static v94: unmatched money + a dead webhook are LOUD — alertUnrecordedCartPayment helper, cart.payment_unmatched + stripe.webhook_bad_signature audit keys, throttled sig alarm', serverSrc.includes('function alertUnrecordedCartPayment(') && serverSrc.includes("'cart.payment_unmatched'") && serverSrc.includes("'stripe.webhook_bad_signature'") && serverSrc.includes('lastWebhookSigAlertAt94'));
+{
+  const A94 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const reqs94 = async () => (await req2('GET', '/api/requests', { token: A94 })).j.requests || [];
+  const ordOf94 = async (cartId) => (await reqs94()).find(x => x.menuOrder && x.menuOrder.cartId === cartId);
+
+  // --- the incident replay: balance paid at Stripe, the ?paid=1 return
+  // dies (app suspended), the webhook never records it. A PLAIN load of
+  // the cart page must book the money by itself. ---
+  const cust94 = await mkMember('heal94@t.local', '(707) 555-0194');
+  const cart94 = await req2('POST', '/api/admin/carts', { token: A94, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }], customerName: 'Heal Hana' } });
+  const cid94 = cart94.j.cart.id;
+  const co94 = await req2('POST', '/api/carts/' + cid94 + '/checkout', { token: cust94.token, body: { name: 'Heal Hana', phone: '7075550194', email: 'heal94@t.local', address: '9 Heal St', city: 'Fairfield', when: 'Today' } });
+  const sess94 = sessionForCart(cid94, 'payment');
+  await mockSessionPaid(sess94.id);
+  await fetch(BASE2 + '/cart/' + cid94 + '?paid=1&session_id=' + sess94.id, { headers: { Authorization: 'Bearer ' + cust94.token } });
+  const ord94a = await ordOf94(cid94);
+  t('v94 setup: the deposit books the order ($50 of $250, balance $200)', co94.status === 200 && !!ord94a && ord94a.payment.status === 'deposit' && ord94a.payment.balanceCents === 20000);
+  const adj94 = await req2('POST', '/api/admin/carts/' + cid94 + '/adjust-balance', { token: A94, body: { delta: 25, note: 'Materials: pipe + fittings' } });
+  t('v94 setup: the balance adjusts to $225 (total $275) before the customer pays it', adj94.status === 200 && adj94.j.cart.payState.balance === 225);
+  const bal94 = await req2('POST', '/api/carts/' + cid94 + '/checkout', { body: { balance: true } });
+  const sess94B = sessionForCart(cid94, 'payment');
+  t('v94 setup: the balance session charges the ADJUSTED $225 (payStep balance — the amount was never stale)', bal94.status === 200 && bal94.j.amount === 225 && !!sess94B && sess94B.id !== sess94.id && sess94B.amount_total === 22500 && sess94B.metadata.payStep === 'balance');
+  await mockSessionPaid(sess94B.id);
+  // NO ?paid=1 return. NO webhook. The money sits at Stripe, unrecorded.
+  const ord94pre = await ordOf94(cid94);
+  t('v94: with no return and no webhook the order still shows DEPOSIT (the 2026-11-07 hole, reproduced)', !!ord94pre && ord94pre.payment.status === 'deposit');
+  const pg94 = await (await fetch(BASE2 + '/cart/' + cid94)).text();
+  const ord94 = await ordOf94(cid94);
+  t('v94 HEAL: a plain cart-page load settles the landed balance — PAID IN FULL $275, balance PI on the record, page renders paid-in-full', !!ord94 && ord94.payment.status === 'paid' && ord94.payment.amountCents === 27500 && ord94.payment.pi === sess94B.payment_intent && pg94.includes('data-i18n="paidH"') && !pg94.includes('id="balBtn"'));
+  const carts94 = await req2('GET', '/api/admin/carts', { token: A94 });
+  const cartAdm94 = (carts94.j.carts || []).find(x => x.id === cid94);
+  t('v94 HEAL: the cart half of the seal lands in the same write (balancePaid, balanceVia link)', !!cartAdm94 && !!cartAdm94.payState && cartAdm94.payState.balancePaid === true && cartAdm94.payState.balanceVia === 'link');
+  await fetch(BASE2 + '/cart/' + cid94); // second load must be a no-op
+  const ord94b = await ordOf94(cid94);
+  const aud94 = await req2('GET', '/api/admin/audit', { token: A94 });
+  const dups94 = (aud94.j.entries || []).filter(e => e.action === 'balance.duplicate' && e.target === (ord94 && ord94.id));
+  t('v94 HEAL: a second load does NOT double-settle (same balance PI, still paid, zero duplicate alerts)', !!ord94b && ord94b.payment.status === 'paid' && ord94b.payment.pi === sess94B.payment_intent && dups94.length === 0);
+  const bal94b = await req2('POST', '/api/carts/' + cid94 + '/checkout', { body: { balance: true } });
+  t('v94 HEAL: after the heal the seal holds — a fresh balance checkout is refused (400), no second charge possible', bal94b.status === 400);
+
+  // --- unmatched money is an ALERT, never silence (and never booked) ---
+  const cust94u = await mkMember('unmatched94@t.local', '(707) 555-0195');
+  const cart94u = await req2('POST', '/api/admin/carts', { token: A94, body: { items: [{ serviceId: 'garbage-disposal-swap', name: 'Garbage Disposal Swap', qty: 1, unitPrice: 125 }, { serviceId: 'door-slab-swap', name: 'Door Slab Swap', qty: 1, unitPrice: 125 }], customerName: 'Unmatched Uma' } });
+  const cid94u = cart94u.j.cart.id;
+  await req2('POST', '/api/carts/' + cid94u + '/checkout', { token: cust94u.token, body: { name: 'Unmatched Uma', phone: '7075550195', email: 'unmatched94@t.local', address: '9 Heal St', city: 'Fairfield', when: 'Today' } });
+  const sess94u = sessionForCart(cid94u, 'payment');
+  await mockSessionPaid(sess94u.id);
+  await fetch(BASE2 + '/cart/' + cid94u + '?paid=1&session_id=' + sess94u.id, { headers: { Authorization: 'Bearer ' + cust94u.token } });
+  const bal94u = await req2('POST', '/api/carts/' + cid94u + '/checkout', { body: { balance: true } });
+  const sess94uB = sessionForCart(cid94u, 'payment');
+  await mockSessionPaid(sess94uB.id);
+  const adj94u = await req2('POST', '/api/admin/carts/' + cid94u + '/adjust-balance', { token: A94, body: { delta: 40, note: 'Extra materials after the session opened' } });
+  t('v94 setup: balance session opened at $200, then the balance on record moves to $240 (the session amount is now stale)', bal94u.status === 200 && !!sess94uB && sess94uB.amount_total === 20000 && adj94u.status === 200 && adj94u.j.cart.payState.balance === 240);
+  const whU = await wh2('payment_intent.succeeded', { id: sess94uB.payment_intent, status: 'succeeded', amount: 20000, amount_received: 20000, metadata: { kind: 'cart-order', cartId: cid94u, payStep: 'balance' } });
+  const ord94u = await ordOf94(cid94u);
+  const aud94u = await req2('GET', '/api/admin/audit', { token: A94 });
+  const unm94 = (aud94u.j.entries || []).filter(e => e.action === 'cart.payment_unmatched' && e.target === cid94u);
+  t('v94 UNMATCHED: the $200 success against a $240 balance does NOT settle (exact-cents guard intact) — and raises cart.payment_unmatched instead of vanishing', whU.status === 200 && !!ord94u && ord94u.payment.status === 'deposit' && ord94u.payment.balanceCents === 24000 && unm94.length === 1);
+
+  // --- a dead webhook must be VISIBLE ---
+  const badWh = await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + Math.floor(Date.now() / 1000) + ',v1=' + '0'.repeat(64) }, body: JSON.stringify({ id: 'evt_bad94', type: 'payment_intent.succeeded', data: { object: { id: 'pi_bad94' } } }) });
+  const aud94w = await req2('GET', '/api/admin/audit', { token: A94 });
+  const badSig94 = (aud94w.j.entries || []).filter(e => e.action === 'stripe.webhook_bad_signature');
+  t('v94 WEBHOOK VISIBILITY: a bad-signature POST still answers 400 — but now leaves the stripe.webhook_bad_signature audit alarm (a dead webhook can no longer hide)', badWh.status === 400 && badSig94.length >= 1);
 }
 
 // ---------------- v80.6 ADMIN PACKAGE: tiles, no-churn map, removals, scoped reloads, stripe-health cache (Gabriel 2026-10-26) ----------------
