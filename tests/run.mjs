@@ -24,14 +24,21 @@ process.on('unhandledRejection', (e) => { console.log('unhandledRejection (ignor
 
 // ---------------- static checks ----------------
 const serverSrc = fs.readFileSync(path.join(APP_DIR, 'server.js'), 'utf8');
-const htmlSrc = fs.readFileSync(path.join(APP_DIR, 'public', 'index.html'), 'utf8');
+const shellSrc = fs.readFileSync(path.join(APP_DIR, 'public', 'index.html'), 'utf8');
+const appJsSrc = fs.readFileSync(path.join(APP_DIR, 'public', 'app.js'), 'utf8');
+const appCssSrc = fs.readFileSync(path.join(APP_DIR, 'public', 'app.css'), 'utf8');
+// v98: the client ships as shell + /app.css + /app.js — the old inline
+// monolith extracted byte-identical. Content pins read the COMPOSED
+// client so every pre-v98 pin keeps its meaning; script blocks keep the
+// monolith's original order (bundle first, then the shell's boot scripts).
+const htmlSrc = shellSrc + '\n<style>\n' + appCssSrc + '\n</style>\n<script>\n' + appJsSrc + '\n</script>';
 const swSrc = fs.readFileSync(path.join(APP_DIR, 'public', 'sw.js'), 'utf8');
 try { new vm.Script(serverSrc); t('static: server.js parses', true); } catch (e) { t('static: server.js parses (' + e.message + ')', false); }
-const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
+const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1])];
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v97', swSrc.includes("const CACHE = 'ghs-app-v97'"));
+t('static: SW cache is ghs-app-v98', swSrc.includes("const CACHE = 'ghs-app-v98'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -44,6 +51,30 @@ t('static v97: ONE canonical sitemap builder behind every sitemap door (apex bas
   serverSrc.includes('Sitemap: https://generalhandymans.app/sitemap.xml') &&
   serverSrc.includes('Sitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml') &&
   serverSrc.includes('Sitemap: https://generalhandymans.app/sitemap-www.xml'));
+t('static v98: the shell is a shell — under 200KB (was 1,368,391 bytes at v97) — and still carries the doctype, the critical dark first-paint style and the Bing meta in its head',
+  Buffer.byteLength(shellSrc) < 200000 && shellSrc.startsWith('<!doctype html>') &&
+  shellSrc.includes('<style>html,body{background:#0a0a0c}</style>') && shellSrc.includes('<meta name="msvalidate.01"'));
+t('static v98: the client loads its bundle + stylesheet from our own routes — the only inline scripts left in the shell are the two small boot scripts (SW updater + install button)',
+  shellSrc.includes('<script src="/app.js"></script>') && shellSrc.includes('<link rel="stylesheet" href="/app.css">') &&
+  (shellSrc.match(/<script>/g) || []).length === 2 && appJsSrc.length > 500000 && appCssSrc.length > 60000);
+t('static v98: NO base64 image blob survives in shell, bundle or stylesheet (the 551,853 base64 chars of data URIs became real files)',
+  !/data:[a-z0-9.+-]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]{500,}/.test(shellSrc + appJsSrc + appCssSrc));
+t('static v98: the 11 extracted images exist on disk with real weight (5 membership plan-card WebP + 6 category photos)',
+  ['plan-img/homecare.webp', 'plan-img/yard1.webp', 'plan-img/plus1.webp', 'plan-img/yard2.webp', 'plan-img/plus2.webp',
+   'cat-img/carpentry.jpg', 'cat-img/electrical.jpg', 'cat-img/plumbing.jpg', 'cat-img/gardening.jpg', 'cat-img/mechanic.jpg', 'cat-img/otro.webp']
+    .every(f => { try { return fs.statSync(path.join(APP_DIR, 'public', f)).size > 10000; } catch (e) { return false; } }));
+t('static v98: CAT_IMGS + PLAN_CARD_IMGS + the plan <img>s point at the new file routes (same images, same alts — only the transport changed)',
+  ['carpentry', 'electrical', 'plumbing', 'gardening', 'mechanic'].every(k => appJsSrc.includes('"' + k + '": "/cat-img/' + k + '.jpg"')) &&
+  appJsSrc.includes('"otro": "/cat-img/otro.webp"') &&
+  appJsSrc.includes("src: '/plan-img/yard2.webp'") && appJsSrc.includes("src: '/plan-img/plus2.webp'") &&
+  shellSrc.includes('id="yardPlanImg" src="/plan-img/yard1.webp"') && shellSrc.includes('id="plusPlanImg" src="/plan-img/plus1.webp"') &&
+  shellSrc.includes('src="/plan-img/homecare.webp"'));
+t('static v98: the server routes the bundle, the stylesheet and both image folders explicitly (still no generic static handler), and serves text through the gzip-aware route helper',
+  serverSrc.includes("p === '/app.js'") && serverSrc.includes("p === '/app.css'") &&
+  serverSrc.includes("p.startsWith('/cat-img/')") && serverSrc.includes("p.startsWith('/plan-img/')") &&
+  serverSrc.includes('function serveTextFile(') && serverSrc.includes("headers['Content-Encoding'] = 'gzip'"));
+t('static v98: the service worker precaches the bundle, the stylesheet and all 11 extracted images (offline parity — in the monolith those images rode inside the cached document)',
+  swSrc.includes("'/app.js'") && swSrc.includes("'/app.css'") && swSrc.includes("'/cat-img/otro.webp'") && swSrc.includes("'/plan-img/homecare.webp'") && swSrc.includes("'/plan-img/plus2.webp'"));
 t('static v96: index — NO light inline surface survives anywhere in the app shell (the seven v95-audit survivors wear their dark keys: auth-sheet charge notes in the dark red tint, HomeCare promo + membership address box on the panel, perm card in the dark amber key, checkout error in the dark error key, wizard fee card on the panel)',
   !htmlSrc.includes('background:#fff5f5') && !htmlSrc.includes('background:#fef2f2') && !htmlSrc.includes('background:#faf9f7') &&
   htmlSrc.includes('id="joinChargeNote" style="display:none;background:#1c0e11') && htmlSrc.includes('id="hcChargeNote" style="display:none;background:#1c0e11') &&
@@ -127,7 +158,7 @@ const custBlock42 = htmlSrc.slice(htmlSrc.indexOf('id="customerBox"'), htmlSrc.i
 t('static v42: wizard reuses the legacy request fields (exactly one of each in the customer section)', ['cService', 'rDesc', 'rPhotos', 'cEst', 'cCity', 'rAddr', 'cWhen', 'rDate', 'anonContact', 'rName', 'rEmail', 'rPhone', 'cMember', 'cAck', 'cSendBtn'].every(id => (custBlock42.match(new RegExp('id="' + id + '"', 'g')) || []).length === 1));
 t('static v42: access notes ride inside the description + confirmation shows the request id', htmlSrc.includes('Access notes: ') && htmlSrc.includes('wzShowDone(rd.request)') && htmlSrc.includes('What happens next'));
 t('static v42: wizard step 3 has the Nominatim address autocomplete (CSP already allows it)', htmlSrc.includes('nominatim.openstreetmap.org/search') && htmlSrc.includes('id="wzAddrSugg"'));
-t('static v42: category cards carry the 5 trades + Otro with created images', ['data-cat="carpentry"', 'data-cat="electrical"', 'data-cat="plumbing"', 'data-cat="gardening"', 'data-cat="mechanic"', 'data-cat="otro"'].every(x => htmlSrc.includes(x)) && htmlSrc.includes('const CAT_IMGS = {') && htmlSrc.includes('data:image/jpeg;base64,'));
+t('static v42: category cards carry the 5 trades + Otro with created images (v98: the photos ride as /cat-img/ files instead of base64 in the page)', ['data-cat="carpentry"', 'data-cat="electrical"', 'data-cat="plumbing"', 'data-cat="gardening"', 'data-cat="mechanic"', 'data-cat="otro"'].every(x => htmlSrc.includes(x)) && htmlSrc.includes('const CAT_IMGS = {') && ['carpentry', 'electrical', 'plumbing', 'gardening', 'mechanic'].every(k => htmlSrc.includes('"/cat-img/' + k + '.jpg"')) && htmlSrc.includes('"/cat-img/otro.webp"'));
 const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSrc.indexOf('/* ================= v79: LEGACY'));
 const catalogIds42 = [...catBlock.matchAll(/'([a-z0-9-]+)': \{ name:/g)].map(m => m[1]);
 const grpBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_GROUPS = ['), htmlSrc.indexOf('const wzState'));
@@ -4585,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v97: ghs-app-v97)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v97'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v98: ghs-app-v98)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v98'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6335,11 +6366,12 @@ t('static v80.17: the guest is never trapped — exitJoinPromo disarms, any non-
   htmlSrc.includes('if (isJoinPromoActive()) exitJoinPromo();'));
 {
   const home817 = await (await fetch(BASE + '/')).text();
-  t('v80.17 served page: the page the server serves carries the promo door (hero box + renderer + the join-hash config for Plus, Yard and HomeCare)',
-    home817.includes('id="joinPromoBox"') && home817.includes('function renderJoinPromo()') &&
-    home817.includes("'#join-plus1': { kind: 'homecare-plus', plan: 'plus1'") &&
-    home817.includes("'#join-yard1': { kind: 'yardcare', plan: 'yard1'") &&
-    home817.includes("'#join-homecare': { kind: 'homecare', plan: 'homecare'"));
+  const appJs817 = await (await fetch(BASE + '/app.js')).text();
+  t('v80.17 served page: the page the server serves carries the promo door (hero box in the shell; renderer + the join-hash config for Plus, Yard and HomeCare in the /app.js bundle since v98)',
+    home817.includes('id="joinPromoBox"') && home817.includes('<script src="/app.js"></script>') && appJs817.includes('function renderJoinPromo()') &&
+    appJs817.includes("'#join-plus1': { kind: 'homecare-plus', plan: 'plus1'") &&
+    appJs817.includes("'#join-yard1': { kind: 'yardcare', plan: 'yard1'") &&
+    appJs817.includes("'#join-homecare': { kind: 'homecare', plan: 'homecare'"));
   const dPlus817 = await fetch(BASE + '/plus', { redirect: 'manual' });
   const dPlusSrc817 = await fetch(BASE + '/plus?src=PUERTA817', { redirect: 'manual' });
   const dYard817 = await fetch(BASE + '/yard', { redirect: 'manual' });
@@ -6350,7 +6382,23 @@ t('static v80.17: the guest is never trapped — exitJoinPromo disarms, any non-
     dYard817.status === 302 && (dYard817.headers.get('location') || '') === '/#join-yard1' &&
     dHome817.status === 302 && (dHome817.headers.get('location') || '') === '/#join-homecare');
   t('v80.17 src: the client still captures the source from inside the hash on the promo door (ghsSrc stash intact)',
-    home817.includes('function captureCampaignSource(){') && home817.includes("sessionStorage.setItem('ghsSrc'"));
+    appJs817.includes('function captureCampaignSource(){') && appJs817.includes("sessionStorage.setItem('ghsSrc'"));
+  const jsResp98 = await fetch(BASE + '/app.js');
+  const cssResp98 = await fetch(BASE + '/app.css');
+  const catResp98 = await fetch(BASE + '/cat-img/carpentry.jpg');
+  const planResp98 = await fetch(BASE + '/plan-img/homecare.webp');
+  const gz98 = await new Promise((resolve, reject) => {
+    http.get(BASE + '/', { headers: { 'Accept-Encoding': 'gzip' } }, r => {
+      const chunks = []; r.on('data', c => chunks.push(c));
+      r.on('end', () => resolve({ status: r.statusCode, enc: r.headers['content-encoding'] || '', bytes: Buffer.concat(chunks).length }));
+    }).on('error', reject);
+  });
+  t('live v98: /app.js serves 200 as JavaScript, /app.css as CSS, the extracted category + plan images serve 200 with image types, and the shell answers gzip-encoded (smaller than the raw shell) when the client offers gzip',
+    jsResp98.status === 200 && (jsResp98.headers.get('content-type') || '').includes('javascript') &&
+    cssResp98.status === 200 && (cssResp98.headers.get('content-type') || '').includes('text/css') &&
+    catResp98.status === 200 && (catResp98.headers.get('content-type') || '').includes('image/jpeg') &&
+    planResp98.status === 200 && (planResp98.headers.get('content-type') || '').includes('image/webp') &&
+    gz98.status === 200 && gz98.enc === 'gzip' && gz98.bytes > 0 && gz98.bytes < Buffer.byteLength(shellSrc));
 }
 
 // ---------------- v80.18 PESO Y SEO: WebP/lazy image diet + the apex SEO package ----------------

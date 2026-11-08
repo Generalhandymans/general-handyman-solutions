@@ -1,0 +1,613 @@
+
+:root{--red:#e42535;--ink:#0b0b0b;--muted:#6b6762;--line:#e6e2dc;--bg:#fff;--soft:#faf9f7;--panel:#141414;--panel-ink:#f2f0ec;--panel-mut:#b5aea2;--panel-line:#333;--green:#2fbf71;--field-line:#d8d2c8;
+ /* v77 PREMIUM DESIGN SYSTEM — tokens derived from the WEBSITE brand
+    (generalhandymans.app): near-black surfaces #17171b/#1b1b1f, lines
+    #2a2a31, brand red #e42535 (+ #ff4655 highlight), green #2fbf71,
+    amber #ffb800, light ink #e8e8ea — so website and app read as ONE
+    product. Shared by the customer shell components below. */
+ --red-hi:#ff4655;--red-dk:#c21725;--panel-2:#17171b;--panel-3:#1b1b1f;--line-d:#2a2a31;--ink-w:#e8e8ea;--amber:#ffb800;
+ --r-lg:18px;--r-md:12px;--r-sm:10px;--sh-card:0 12px 32px rgba(11,11,11,.10),0 2px 6px rgba(11,11,11,.05);--sh-btn:0 8px 20px rgba(228,37,53,.30);--sh-pop:0 16px 44px rgba(11,11,11,.28);--ring:0 0 0 3px rgba(228,37,53,.16)}
+*{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:#0b0b0b;color:#fff;padding:10px 18px;display:flex;justify-content:flex-end;align-items:center;gap:10px;flex-wrap:wrap}
+header b{font-size:20px;letter-spacing:.02em;text-transform:uppercase} header b em{color:var(--red);font-style:normal}
+.wrap{max-width:880px;margin:0 auto;padding:18px}
+.card{border:1px solid var(--line);border-radius:16px;padding:16px;margin:14px 0;background:#fff}
+input,select,textarea{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px;font:inherit;margin:5px 0 10px;background:#fff}
+label{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+button{background:var(--red);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:700;cursor:pointer}
+button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+button.black{background:#0b0b0b}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:160px}
+.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:12.5px;font-weight:700}
+.st{color:var(--red);font-weight:800}
+.mut{color:var(--muted);font-size:13.5px;line-height:1.45}
+.err{background:#fff1f0;border:1px solid #f3b3ae;color:#8b0f08;padding:10px;border-radius:10px;display:none;margin:8px 0}
+.err.show{display:block}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.tabs button{background:#fff;color:var(--ink);border:1px solid var(--line)} .tabs button.on{background:#0b0b0b;color:#fff}
+h2{font-size:26px;text-transform:uppercase;margin:18px 0 4px} h3{margin:6px 0}
+.pick{display:flex;flex-wrap:wrap;gap:7px;margin:4px 0 10px}
+.pick button{background:#fff;color:var(--ink);border:1px solid var(--line);padding:8px 12px;font-size:13.5px;font-weight:600}
+.pick button.sel{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.wclass-step{color:var(--red);font-weight:800;text-transform:uppercase;font-size:14.5px;letter-spacing:.03em;margin:12px 0 4px}
+.wclass-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 10px}
+.wclass-card{position:relative;background:var(--panel);color:var(--panel-ink);border:2px solid var(--panel-line);border-radius:14px;padding:16px 12px 14px;text-align:center;cursor:pointer}
+.wclass-card.sel{border-color:var(--red)}
+.wclass-card .wc-check{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:var(--red);color:#fff;font-weight:800;font-size:14px;line-height:24px;display:none}
+.wclass-card.sel .wc-check{display:block}
+.wclass-card .wc-title{font-size:21px;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+.wclass-card .wc-sub{font-weight:700;font-size:14.5px;margin-top:6px}
+.wclass-card .wc-lines{color:var(--panel-mut);font-size:13px;line-height:1.55;margin-top:5px}
+.thread{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;display:grid;gap:8px}
+.msg{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:9px 11px;font-size:14px;line-height:1.4}
+.photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.thumb{width:92px;height:92px;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+.reply{display:flex;gap:8px;margin-top:10px}.reply input{flex:1;margin:0}.reply button{white-space:nowrap}
+.estimate{border:2px solid var(--ink);border-radius:14px;overflow:hidden;margin:12px 0;background:#fff;text-align:left}
+.estimate-head{background:#0b0b0b;color:#fff;padding:12px 14px;border-bottom:4px solid var(--red)}
+.estimate-head b{font-size:17px;text-transform:uppercase}.estimate-head span{color:var(--red)}
+.estimate-meta{font-size:12px;opacity:.85;margin-top:3px;line-height:1.45}
+.estimate-body{padding:12px 14px}.estimate table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
+.estimate th{background:#111;color:#fff;text-align:left;padding:7px}.estimate td{padding:7px;border-bottom:1px solid var(--line)}
+.estimate .num{text-align:right}.estimate-total{background:#111!important;color:#fff;font-weight:900}.estimate-total td{border-bottom:0}
+.est-row{display:grid;grid-template-columns:minmax(150px,2fr) 72px 105px 38px;gap:6px;align-items:end;margin:6px 0}
+.est-row.trow{grid-template-columns:minmax(130px,2fr) 96px 64px 96px 34px}.est-row select{margin:0}
+.est-row input{margin:0}.est-row button{padding:9px 10px}.est-x{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.est-grid{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:8px}.est-grid label{text-transform:none;letter-spacing:0;font-size:13px}.est-grid input{margin-top:3px}
+.est-summary{background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:10px;margin:10px 0;font-size:14px;line-height:1.5}
+.est-actions{display:flex;gap:8px;flex-wrap:wrap}.est-actions button{flex:1;min-width:190px}
+@media(max-width:620px){.est-row.trow{grid-template-columns:minmax(96px,1fr) 78px 50px 72px 30px}.est-row{grid-template-columns:minmax(120px,1fr) 58px 86px 34px}.est-grid{grid-template-columns:1fr}.estimate th,.estimate td{padding:6px 4px}}
+.cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}.cal-head b{font-size:18px;text-transform:uppercase;flex:1}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;text-align:center;padding:4px 0}
+.cal-day{min-height:62px;border:1px solid var(--line);border-radius:10px;padding:4px;font-size:12px;cursor:pointer;background:#fff;overflow:hidden}
+.cal-day.off{background:var(--soft);color:var(--muted);cursor:default}
+.cal-day.today{border-color:var(--red)}
+.cal-day.sel{outline:2px solid var(--red)}
+.cal-day .dn{font-weight:800;margin-bottom:2px}
+.cal-ev{background:#0b0b0b;color:#fff;border-radius:6px;padding:2px 5px;margin:2px 0;font-size:11px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cal-ev.req{background:#fff;color:var(--ink);border:1px dashed var(--line)}
+.cal-ev.sched{background:#0b5c2e}
+.cal-ev.done{background:#0b5c2e}
+.cal-ev.canc{background:#e8e4de;color:var(--muted);text-decoration:line-through}
+.cal-ev.prop{background:#fdf3d7;color:#8a6d00;border:1px dashed #d9a441}
+.yc-over{color:var(--red);font-weight:700}
+@media(max-width:620px){.cal-day{min-height:48px;font-size:11px}.cal-ev{font-size:10px}}
+.membership-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:14px 0}
+.plan-card{display:flex;flex-direction:column}
+.plan-card img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;border:1px solid var(--line)}
+.plan-price{font-size:34px;font-weight:900;margin:4px 0}
+.plan-price span{font-size:16px;color:var(--muted);font-weight:600}
+.plan-card ul{margin:6px 0 12px;padding-left:18px;line-height:1.55;font-size:14px}
+.plan-card .grow{flex:1}
+@media(max-width:800px){.membership-grid{grid-template-columns:1fr}}
+/* Plan comparison — dark storefront panel (approved mock design, 2026-10-21) */
+#compareGridBox{background:#0b0b0b;border-radius:20px;padding:30px 22px 16px;margin:0 0 14px;color:#fff}
+.cg-title{text-align:center;font-size:38px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;margin:0;color:#fff}
+.cg-sub{text-align:center;color:#b3aca2;font-size:16.5px;margin:8px 0 2px}
+.compare-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:18px 0 4px}
+@media(max-width:800px){.compare-grid{grid-template-columns:1fr}}
+.cg-card{background:#141414;border:2px solid #e42535;border-radius:16px;padding:22px 18px 18px;display:flex;flex-direction:column;text-align:center}
+.cg-card.free{border-color:#2fbf71}
+.cg-card h3{margin:0;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:#fff}
+.cg-price{font-size:37px;font-weight:900;margin:10px 0 6px;color:#e42535}
+.cg-price span{font-size:.6em;font-weight:800}
+.cg-card.free .cg-price{color:#2fbf71}
+.cg-subline{color:#a49d93;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.cg-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;line-height:1.5;font-size:14.5px;color:#f2f0ec}
+.cg-card ul li{padding:4px 0 4px 26px;position:relative}
+.cg-card ul li::before{content:"✓";position:absolute;left:2px;top:4px;font-weight:900;color:#e42535}
+.cg-card.free ul li::before{color:#2fbf71}
+.cg-card .grow{flex:1}
+.cg-card img{width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:12px;margin-bottom:14px;border:1px solid #333}
+/* v27: signup share links — one dark panel of compact rows (name + price, muted truncated URL, red Copy button) */
+.share-panel{background:#141414;border:2px solid #e42535;border-radius:16px;padding:18px;margin:0 0 18px;color:#f2f0ec}
+.share-panel h3{margin:0 0 4px;color:#fff}
+.share-panel .share-sub{color:#a49d93;font-size:13.5px;margin:0 0 6px}
+.share-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #2b2b2b}
+.share-meta{flex:1;min-width:0;text-align:left}
+.share-name{display:block;font-weight:800;color:#fff;font-size:15px}
+.share-url{display:block;color:#8f8a81;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.share-copy{flex:none;width:auto;background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:800;font-size:14px;cursor:pointer}
+#teamContactPill{position:fixed;left:12px;right:12px;bottom:12px;z-index:1200;display:none;gap:8px;justify-content:space-between;align-items:center}
+#teamContactPill a{display:inline-block;background:#e42535;color:#fff;font-weight:800;font-size:14.5px;padding:12px 16px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+#teamContactPill a.sms{background:#1a1a1a;border:1.5px solid #e42535}
+#photoFab{display:none}
+#photoFab a{display:inline-block;background:#25d366;color:#fff;font-weight:800;font-size:14.5px;padding:12px 16px;border-radius:999px;text-decoration:none;box-shadow:0 4px 14px rgba(0,0,0,.45)}
+@media(max-width:520px){#photoFab a{font-size:12.5px;padding:10px 10px}}
+#teamContactPill a{white-space:nowrap}
+#photoFab a{white-space:nowrap}
+@media(max-width:520px){#teamContactPill{gap:6px}#teamContactPill a{font-size:12.5px;padding:10px 10px}}
+@media(max-width:520px){#teamContactPill a{font-size:13.5px;padding:11px 13px}}
+.cg-card button{width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;background:#e42535;color:#fff}
+.cg-card.free button{background:#2fbf71}
+.cg-foot{text-align:center;font-size:12px;color:#8f8a81;margin:14px 0 2px}
+.cg-foot a{color:#c9c2b8;font-weight:700}
+/* v21: public info pages — Terms (legal page) + How it works (step timelines) */
+.legal-card{max-width:760px;margin:14px auto}
+.legal-card h2{margin:2px 0 4px;font-size:24px;line-height:1.25}
+.legal-updated{color:var(--muted);font-size:13px;margin:0 0 4px}
+.clause{padding:13px 0;border-bottom:1px solid var(--line)}
+.clause:last-of-type{border-bottom:0}
+.clause h4{margin:0 0 5px;font-size:15.5px}
+.clause p{margin:0;font-size:14.5px;line-height:1.65;color:#26241f}
+.seg{display:flex;gap:8px;margin:12px 0 4px}
+.seg button{flex:1;background:#fff;color:var(--ink);border:1px solid var(--line)}
+.seg button.on{background:#0b0b0b;color:#fff;border-color:#0b0b0b}
+.steps{margin:16px 0 4px}
+.step-card{display:flex;gap:12px;position:relative;padding:0 0 18px}
+.trade-row{display:flex;align-items:center;gap:8px;margin:5px 0;flex-wrap:wrap}
+.trade-row .trade-name{flex:1;min-width:150px;font-weight:600}
+.trade-row select{width:190px}
+.trade-row .trade-tools{font-size:13px;white-space:nowrap}
+.trade-lvl{display:inline-flex;gap:4px}
+.trade-lvl button{padding:3px 9px;min-width:0}
+.trade-lvl button.sel{background:#e42535;color:#fff;border-color:#e42535}
+.step-card:last-child{padding-bottom:2px}
+.step-card::before{content:"";position:absolute;left:16px;top:36px;bottom:0;width:2px;background:var(--line)}
+.step-card:last-child::before{display:none}
+.step-badge{flex:0 0 34px;width:34px;height:34px;border-radius:50%;color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;position:relative;z-index:1}
+.step-badge.red{background:#e42535}
+.step-badge.green{background:#2fbf71}
+.step-body{flex:1;border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:#fff}
+.step-body b{display:block;font-size:15px;margin-bottom:2px}
+.step-body span{font-size:14px;line-height:1.55;color:#33302b}
+header nav a{color:#fff;text-decoration:none;font-weight:700;font-size:14.5px;padding:8px 12px;border:1px solid #333;border-radius:999px;background:#1a1a1a}
+header nav a:hover{border-color:var(--red)}
+.trk-pin{background:transparent;border:0}
+.leaflet-container{font:inherit}
+
+/* ===== v28 ACABADOS — design unification (visual only) =====
+   Tokens from the approved storefront system (.cg-card / .share-panel):
+   panel #141414, brand red #e42535, green #2fbf71, panel ink #f2f0ec,
+   panel muted #a49d93, radius 16px cards / 12px fields / 10px dark-card CTAs. */
+body{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.card{border-radius:16px;padding:18px;box-shadow:0 1px 4px rgba(11,11,11,.06)}
+input,select,textarea{border-color:var(--field-line);border-radius:12px;padding:12px 13px}
+input::placeholder,textarea::placeholder{color:#9a958c}
+input:focus,select:focus,textarea:focus{border-color:var(--ink);outline:0;box-shadow:0 0 0 3px rgba(228,37,53,.16)}
+button{font-weight:800;letter-spacing:.01em;padding:12px 20px}
+button:hover{filter:brightness(1.06)}
+button.ghost{border-color:var(--field-line)}
+button.ghost:hover{border-color:var(--red);color:var(--red)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.tabs button{padding:10px 16px}
+.pick button{border-color:var(--field-line);padding:9px 14px;min-height:40px}
+.pill{border-color:var(--field-line)}
+.err{border-radius:12px;padding:12px 14px}
+.msg{border-color:var(--field-line)}
+.thumb{border-color:var(--field-line)}
+.est-summary{border-radius:12px}
+.estimate{border-radius:16px}
+.estimate th{background:#141414}
+.estimate-total{background:#141414!important}
+.cal-day{border-radius:12px}
+.cal-ev{border-radius:7px}
+.step-body{border-color:var(--field-line)}
+/* dark designed panels — membership status, promos, danger zone */
+.panel-dark{background:var(--panel);border:2px solid var(--red);color:var(--panel-ink);box-shadow:none}
+.panel-dark .mut{color:var(--panel-mut)}
+.panel-green{border-color:var(--green)}
+/* customer payment (hold) panel */
+.pay-panel{margin-top:10px;background:#fff8e6;border:1px solid #ecd28f;border-radius:12px;padding:12px 14px;line-height:1.5}
+/* designed empty states — same words, finished blocks */
+.empty{border:1.5px dashed var(--field-line);background:var(--soft);border-radius:14px;padding:18px 16px;text-align:center;margin:14px 0}
+.flash{animation:ghsflash 1.2s ease-in-out 2}
+@keyframes ghsflash{0%,100%{box-shadow:0 0 0 0 rgba(228,37,53,0)}50%{box-shadow:0 0 0 3px rgba(228,37,53,.85)}}
+.empty p{margin:0}
+.empty .mut{font-size:14px}
+.thread .empty{margin:0}
+/* memberships plan toggle cards — full dark standard, same language as .cg-card */
+.plan-card{background:var(--panel);border:2px solid var(--red);color:var(--panel-ink);padding:22px 18px 18px;text-align:center;box-shadow:none}
+.plan-card h3{color:#fff;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;margin:0 0 4px}
+.plan-card img{border:1px solid var(--panel-line)}
+.plan-card label{color:var(--panel-mut)}
+.plan-card .pick{justify-content:center;margin:6px 0 4px}
+.plan-card .pick button{background:#1f1f1f;color:var(--panel-ink);border-color:#3a3a3a}
+.plan-card .pick button.sel{background:var(--red);border-color:var(--red);color:#fff}
+.plan-card .plan-price{font-size:37px;color:var(--red);margin:10px 0 6px}
+.plan-card .plan-price span{font-size:37px;color:var(--red)}
+.plan-card .plan-price span:last-of-type{font-size:16px;color:var(--panel-mut);font-weight:600}
+.plan-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;font-size:14.5px;line-height:1.5;color:var(--panel-ink)}
+.plan-card ul li{padding:4px 0 4px 26px;position:relative}
+.plan-card ul li::before{content:"\2713";position:absolute;left:2px;top:4px;font-weight:900;color:var(--red)}
+.plan-card>button{width:100%;border-radius:10px;padding:14px 16px;font-size:16.5px;background:var(--red);color:#fff}
+/* v42: Solicitud Profesional wizard + in-app menu */
+.wz-progress{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.wz-bar{flex:1;height:8px;background:#262626;border-radius:999px;overflow:hidden}
+#wzBarFill{height:100%;width:25%;background:var(--red);border-radius:999px;transition:width .25s ease}
+.wz-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:6px 0 4px}
+.wz-cats button{background:#141414!important;color:#fff!important;border:2px solid #2c2c2c!important;border-radius:14px;padding:0 0 10px;overflow:hidden;text-align:center;font-size:15px;cursor:pointer}
+.wz-cats button img{width:100%;height:92px;object-fit:cover;display:block;margin-bottom:8px}
+.wz-cats button.sel{border-color:var(--red)!important;box-shadow:0 0 0 2px var(--red)}
+.wz-mi{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--field-line);border-radius:12px;padding:9px 12px;margin:6px 0;background:#101010}
+.wz-mi-img{width:46px;height:46px;object-fit:cover;border-radius:9px;flex:none}
+.wz-mi-main{flex:1;min-width:0}
+.menu-lang{display:inline-flex;border:1px solid #3a3a3a;border-radius:999px;overflow:hidden}
+.menu-lang button{background:#161616;color:#cfc9c2;border:0;padding:6px 14px;font-weight:700;cursor:pointer;font-size:13px}
+.menu-lang button.on{background:#e42535;color:#fff}
+.wz-mi-price{white-space:nowrap;font-weight:700}
+.wz-mem{color:#2fbf71}
+.wz-guide{display:flex;gap:10px;align-items:center;border:1px dashed var(--field-line);border-radius:12px;padding:8px;margin:4px 0 8px}
+.wz-guide img{width:86px;height:58px;object-fit:cover;border-radius:8px}
+#wzAddrSugg{display:flex;flex-direction:column;gap:6px;margin:4px 0 8px}
+#wzAddrSugg .wz-sugg{text-align:left;background:#141414;color:#fff;border:1px solid #333;border-radius:10px;padding:9px 12px;font-size:14px;cursor:pointer}
+.wz-nav{display:flex;justify-content:space-between;gap:10px;margin-top:14px}
+.wz-nav button{flex:0 1 auto;padding:13px 20px;font-size:15.5px}
+.wz-sum{border:1px solid var(--field-line);border-radius:12px;padding:10px 14px;margin:10px 0;background:#101010}
+.wz-sum div{display:flex;justify-content:space-between;gap:12px;padding:4px 0;border-bottom:1px dashed #262626}
+.wz-sum div:last-child{border-bottom:0}
+.wz-sum span{color:#a8a29e}
+.wz-sum b{text-align:right}
+.wz-next-steps{line-height:1.65;margin:6px 0 12px;padding-left:20px}
+.wz-wa{display:inline-block;background:#1faa55;color:#fff;border-radius:10px;padding:12px 16px;font-weight:700;text-decoration:none;margin:4px 6px 4px 0}
+.menu-group-title{margin:20px 0 8px}
+.menu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
+.menu-card{background:#111;border:1px solid #2a2a2a;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+.menu-card img{width:100%;height:104px;object-fit:cover;display:block}
+.menu-card-body{padding:10px 12px 12px;display:flex;flex-direction:column;gap:3px;flex:1;color:#f5f5f4}
+.menu-card-body b{font-size:15.5px;line-height:1.3;color:#fff}
+.menu-card-body .mut{color:#c9c4bc}
+.menu-card-body .grow{flex:1}
+.menu-prices{display:flex;gap:10px;align-items:baseline;margin:4px 0 8px}
+/* ---------- v80.28 BÚSQUEDA: sticky menu nav + search/favorites/recents/pairings ---------- */
+.menu-nav{position:sticky;top:0;z-index:60;background:rgba(11,11,13,.97);border:1px solid #2a2a2a;border-radius:14px;padding:10px;margin:12px 0 2px}
+.menu-nav input{width:100%;background:#1a1a1a;border:1px solid #333;color:#fff;border-radius:999px;padding:10px 15px;font-size:15px}
+.menu-nav input::placeholder{color:#9a968f}
+.menu-chips{display:flex;gap:6px;overflow-x:auto;padding-top:9px;scrollbar-width:none}
+.menu-chips::-webkit-scrollbar{display:none}
+.menu-chip{flex:none;background:#1b1b1f;border:1px solid #2c2c33;color:#e8e8ea;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px;cursor:pointer;box-shadow:none}
+.menu-chip.on{background:var(--red);border-color:var(--red);color:#fff}
+.menu-card-top{display:flex;align-items:flex-start;gap:6px}
+.menu-card-top b{flex:1}
+.fav-btn{flex:none;background:none;border:0;box-shadow:none;cursor:pointer;font-size:19px;line-height:1;padding:0 2px;color:#6b675f}
+.fav-btn.on{color:#ffb800}
+.menu-pairs{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:2px 0 4px}
+.pairs-lbl{font-size:12px;color:#a8a29e;font-weight:700}
+.pair-chip{background:#1f2937;border:1px solid #374151;color:#e5e7eb;font-size:12px;font-weight:700;padding:5px 9px;border-radius:999px;cursor:pointer;box-shadow:none}
+.pair-chip:hover{border-color:var(--red)}
+.menu-minis{display:flex;flex-direction:column;gap:6px}
+.menu-mini{display:flex;align-items:center;gap:9px;background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:8px 12px;color:#f5f5f4}
+.menu-mini .mm-name{flex:1;font-weight:700;font-size:14.5px;min-width:0}
+.menu-mini .mm-price{font-weight:800;color:#fff;white-space:nowrap}
+.menu-mini .mm-add{flex:none;background:var(--red);color:#fff;border:0;font-size:13px;font-weight:800;padding:7px 12px;border-radius:999px;cursor:pointer;box-shadow:none}
+/* ---------- v78: guest cart (Amazon-style) + embedded checkout ---------- */
+#cartBtn{position:relative;background:#1a1a1a;border:1px solid #333;font-size:17px;padding:8px 12px;border-radius:12px;cursor:pointer}
+#cartBadge{position:absolute;top:-6px;right:-6px;background:var(--red);color:#fff;border-radius:999px;font-size:11px;font-weight:800;padding:1px 6px;display:none}
+#cartBtn.bump{animation:cartBump .35s ease}
+@keyframes cartBump{30%{transform:scale(1.18)}}
+#cartToast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;border:1px solid var(--line-d);border-radius:999px;padding:10px 16px;font-weight:700;font-size:14px;box-shadow:var(--sh-pop);opacity:0;pointer-events:none;transition:all .25s ease;z-index:10002;max-width:92vw;text-align:center}
+#cartToast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto}
+#cartToast a{color:#ffb3ba;margin-left:8px;white-space:nowrap}
+.cart-add-btn{margin-top:8px}
+.cart-line{display:flex;gap:10px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #eee}
+.cart-line-main{flex:1;min-width:0}
+.cart-qty{display:inline-flex;align-items:center;gap:8px;border:1px solid #d4d4d8;border-radius:999px;padding:2px 6px}
+.cart-qty button{background:none;border:0;color:var(--ink);font-size:17px;font-weight:800;padding:2px 8px;box-shadow:none;cursor:pointer}
+.cart-remove{background:none;border:0;color:#b91c1c;font-weight:700;box-shadow:none;padding:4px;cursor:pointer}
+.cart-total-row{display:flex;justify-content:space-between;padding:3px 0}
+.cart-members-pay{color:#2fbf71;font-weight:700;white-space:nowrap}
+.cart-members-total{color:#2fbf71;font-weight:800}
+.cart-member-save{color:#2fbf71;font-weight:700;font-size:13px;white-space:nowrap}
+#cartPayElement{border:1px solid #d4d4d8;border-radius:12px;padding:12px;background:#fff;min-height:52px}
+.wz-mi .cart-add-mini{flex:none;padding:8px 10px}
+.menu-price{font-size:19px;font-weight:800;color:#fff}
+.menu-member{color:#2fbf71;font-weight:700;font-size:13.5px}
+
+/* ===== v77 PREMIUM DESIGN SYSTEM — customer shell (Gabriel, 2026-10-25) =====
+   One product with the website: dark brand surfaces, red #e42535, the
+   wide-logo black header treatment, pill CTAs, designed cards. These are
+   SHARED components — every customer screen that uses .card / button /
+   input / .tabs / header inherits the upgrade without a per-screen pass.
+   Technician and admin zones keep their functional tool styling; only
+   the generic base polish below reaches them. */
+header{border-bottom:3px solid var(--red);box-shadow:0 4px 18px rgba(11,11,11,.35)}
+.card{border-radius:var(--r-lg);box-shadow:var(--sh-card)}
+button{background:linear-gradient(180deg,var(--red-hi),var(--red) 46%,var(--red-dk));box-shadow:0 4px 14px rgba(228,37,53,.22);transition:filter .15s ease,transform .05s ease}
+button:active{transform:scale(.985)}
+button.ghost,button.black{box-shadow:none}
+input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
+#teamContactPill a{box-shadow:0 10px 24px rgba(11,11,11,.42)}
+/* --- AUTH: app-grade card (v77) --- */
+#authBox{overflow:hidden}
+.auth-hero{margin:-18px -18px 14px;padding:16px 18px;background:linear-gradient(180deg,var(--panel-3),var(--panel-2));border-bottom:3px solid var(--red);display:flex;align-items:center;gap:13px;color:#fff}
+.auth-hero img{width:48px;height:48px;border-radius:13px;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.auth-hero b{display:block;font-size:16.5px;letter-spacing:.03em;text-transform:uppercase;line-height:1.15}
+.auth-hero b em{color:var(--red);font-style:normal}
+.auth-hero b i{font-style:normal}
+.auth-hero span{display:block;color:var(--panel-mut);font-size:12.5px;margin-top:2px;line-height:1.35}
+#authBox h3{font-size:21px;margin:2px 0 4px;letter-spacing:.01em}
+#authBox .tabs{display:flex;flex-wrap:nowrap;background:#f0eee9;border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px;margin:12px 0 14px}
+#authBox .tabs button{flex:1 1 0;background:transparent;color:var(--ink);border:0;border-radius:999px;padding:10px 4px;font-size:13px;font-weight:800;box-shadow:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#authBox .tabs button.on{background:var(--ink);color:#fff;box-shadow:0 3px 10px rgba(11,11,11,.30)}
+#authBox input,#authBox select,#authBox textarea{margin:4px 0 12px;padding:13px}
+#authBtn{width:100%;min-height:54px;font-size:16.5px;border-radius:999px;margin-top:8px;box-shadow:var(--sh-btn)}
+.auth-offer{border:1.5px dashed rgba(228,37,53,.55);background:#fff7f7;border-radius:14px;padding:13px 14px 6px;margin:2px 0 12px}
+.auth-offer>b{font-size:14.5px}
+.auth-offer select{margin-bottom:8px}
+#techLinkRow a{color:var(--muted);font-weight:700;text-decoration:none}
+#techLinkRow a:hover{color:var(--red)}
+/* ===== v86: CART + CHECKOUT hablan el idioma del draft (Gabriel, 2026-11-07) =====
+   Pasos numerados 1·2·3 como el registro de técnicos (.cc-step = el rótulo
+   rojo en mayúsculas del draft), tarjetas de 20px, escala tipográfica del
+   draft y el resumen de dinero como la TARJETA DESTACADA (panel #141414,
+   borde 2px #e42535, números grandes) — la misma que la v85 le dio al
+   ejemplo de How ordering works. SOLO visual: ids, handlers, rutas, la ley
+   de apartado y cada flujo de pago quedan byte a byte como estaban. */
+.cc-step{color:var(--red);font-weight:800;text-transform:uppercase;font-size:15px;letter-spacing:.03em;margin:16px 0 6px}
+#cartBox .card{border-radius:20px;padding:20px}
+#cartTitle{font-size:22px}
+#ccTitleEl{font-size:22px}
+#cartBox h4{font-size:16.5px}
+#cartBox label{font-size:15px}
+#cartBox input,#cartBox select,#cartBox textarea{border-radius:14px;padding:13px 14px}
+#cartBox .cart-line{padding:14px 0}
+#cartBox .cart-line-main b{font-size:15.5px}
+#cartTotals .cart-total-row{font-size:15px;padding:4px 0}
+#cartTotals .cart-total-row b{font-size:17px}
+#cartPayElement{border-radius:14px}
+#ccWhenPick button{padding:10px 16px;font-size:14.5px}
+#cartBox .auth-offer{border-radius:20px}
+#cartCheckoutBtn{font-size:16px;padding:13px 24px;border-radius:14px}
+#cartPayBtn{font-size:17px;padding:15px;border-radius:14px}
+.cart-due-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px;padding:16px 18px}
+.cart-due-card .cart-total-row{padding:4px 0;font-size:15.5px}
+.cart-due-card .cart-total-row b{font-size:16.5px}
+.cart-due-card .cart-due-dep b{font-size:21px}
+#myProposals .card{border-radius:20px;padding:18px}
+#myProposals .card>b{font-size:16.5px}
+/* ===== v87: ZONA DEL TÉCNICO en el idioma del draft (Gabriel, 2026-11-07) =====
+   La misma estrella norte aplicada a #workerBox, pensada para la calle:
+   el técnico lee esto en el teléfono, con sol, a veces con guantes y a una
+   mano — la legibilidad y el tamaño del toque mandan sobre la densidad.
+   Tarjetas de 20px, el servicio en grande, el PAGO como el número más
+   grande de la tarjeta, el estado como insignia de color (data-wst), los
+   botones de acción ENORMES (.wact: ancho completo, mínimo 56px) y las
+   ganancias como tarjetas de cifra destacadas (.wstat-card = el panel
+   #141414 con borde rojo del draft). SOLO visual: ids, handlers, rutas,
+   la matemática del pago (el técnico ve SU oferta, jamás el total del
+   cliente), la puerta de ventas de la v84 y cada flujo quedan intactos. */
+#workerBox .card{border-radius:20px;padding:20px}
+#workerBox h2{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+#workerBox h3{font-size:16.5px}
+#workerBox input,#workerBox select,#workerBox textarea{border-radius:14px;padding:13px 14px}
+#workerBox label{font-size:14px}
+#jobList .card,#jobDetail .card{font-size:15.5px;line-height:1.5}
+.wjob-title{font-size:18.5px;font-weight:800}
+.wjob-pay{font-size:25px}
+#workerBox .pill{font-size:13.5px;font-weight:800;padding:7px 12px}
+#workerBox .pill[data-wst="Open"]{background:var(--red);border-color:var(--red);color:#fff}
+#workerBox .pill[data-wst="Claimed"]{background:var(--amber);border-color:var(--amber);color:#0b0b0b}
+#workerBox .pill[data-wst="On my way"]{background:#0b0b0b;border-color:#0b0b0b;color:#fff}
+#workerBox .pill[data-wst="Arrived"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .pill[data-wst="Done"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .pill[data-wst="Paid"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .card button{min-height:56px;font-size:17px;border-radius:14px}
+#workerBox .reply button{min-height:0}
+#workerBox .trade-lvl button{min-height:0;font-size:14px;border-radius:999px}
+#workerBox .wact{display:block;width:100%;margin-top:10px}
+.wstat-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:4px 0 14px}
+.wstat-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px;padding:16px 18px}
+.wstat-card .wstat-lbl{display:block;color:var(--panel-mut);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.wstat-card .wstat-num{display:block;font-size:27px;font-weight:800;margin-top:4px}
+.wstat-card .wstat-num.paid{color:var(--green)}
+.wstat-card .wstat-num.pend{color:var(--amber)}
+
+
+/* v80.9 FUSIÓN — merged-homepage components (hero carousel, promo boxes,
+   trust band, cities grid, plan comparison table, footer, before/after).
+   Copy lives in HOME_UI (EN/ES); markup is painted by paintHomeBlocks(). */
+#homeSearch{background:#1a1a1a;border:1px solid #333;color:#fff;font-size:14.5px}
+#homeSearch::placeholder{color:#9a968f}
+/* ===== v83 CABECERA (Gabriel, 2026-11-03) — the giant logo banner is
+   GONE from the top of the page (the asset stays in the repo; only its
+   homepage placement died). The compact brand bar now rides IN the
+   header, beside the search: hammer + GENERAL HANDYMAN SOLUTIONS +
+   tagline on one side, "What do you need today?" on the other, and
+   everything below pulls up — the page starts at the top. On narrow
+   screens the tagline drops, the name shrinks and the controls wrap
+   under: the strip stays slim either way (a fraction of the old hero).
+   The auth card's own .auth-hero strip is the SAME brand bar doubled
+   right below the header, so it no longer paints — its markup and the
+   whole login/signup flow stay exactly as they were. */
+#brandBar{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff;flex:none;min-width:0}
+#brandBar img{width:40px;height:40px;border-radius:11px;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+#brandBar .brand-txt{display:flex;flex-direction:column;line-height:1.15;min-width:0}
+#brandBar .brand-txt b{font-size:15.5px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap}
+#brandBar .brand-txt b i{font-style:normal}
+#brandBar .brand-txt>span{color:#9a968f;font-size:11.5px;white-space:nowrap}
+#authBox .auth-hero{display:none}
+@media (max-width:700px){
+  #brandBar img{width:34px;height:34px;border-radius:9px}
+  #brandBar .brand-txt b{font-size:13.5px}
+  #brandBar .brand-txt>span{display:none}
+}
+.hero-car{position:relative;border-radius:18px;overflow:hidden;background:#0b0b0b;margin:14px 0 0}
+.hero-track{display:flex;width:200%;transition:transform .55s ease}
+.hero-slide{width:50%;flex:0 0 50%;position:relative;min-height:252px;display:flex;flex-direction:column;justify-content:center;padding:26px 24px;box-sizing:border-box}
+.hero-slide-1{background:linear-gradient(90deg,rgba(5,5,8,.88) 30%,rgba(5,5,8,.35) 78%),url('/hero-tech.jpg') center/cover no-repeat;color:#fff}
+.hero-slide-2{padding:0;background:#000}
+.hero-slide-2 img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+.hero-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.hero-badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.35);color:#fff;font-size:12.5px;font-weight:700;padding:5px 11px;border-radius:999px;backdrop-filter:blur(3px)}
+.hero-badge.avail{color:#8df0a4}
+.hero-slide-1 h1{margin:0 0 10px;font-size:clamp(27px,5.4vw,42px);line-height:1.08;color:#fff}
+.hero-sub{margin:0 0 16px;font-size:15.5px;line-height:1.45;color:#e8e4dd;max-width:560px}
+.hero-cta{align-self:flex-start;background:var(--red);color:#fff;border:0;font-weight:800;font-size:15.5px;padding:12px 20px;border-radius:999px;cursor:pointer}
+.hero-cta-img{position:absolute;left:18px;bottom:16px;box-shadow:0 6px 20px rgba(0,0,0,.5)}
+.hero-rating{margin-top:12px;font-size:13.5px;font-weight:700;color:#ffd34d}
+.hero-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(10,10,12,.55);color:#fff;border:1px solid rgba(255,255,255,.35);width:36px;height:36px;border-radius:50%;font-size:20px;line-height:1;cursor:pointer;z-index:3}
+.hero-arrow.prev{left:10px}.hero-arrow.next{right:10px}
+.hero-dots{position:absolute;right:14px;bottom:12px;display:flex;gap:7px;z-index:3}
+.hero-dots button{width:10px;height:10px;border-radius:50%;border:1px solid rgba(255,255,255,.7);background:transparent;padding:0;cursor:pointer}
+.hero-dots button.on{background:#fff}
+.trust-band{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px}
+.trust-band span{background:#141414;border:1px solid #2c2c2c;color:#e8e4dd;font-size:13px;font-weight:700;padding:7px 12px;border-radius:999px}
+.trust-band .trust-rating{color:#ffd34d}
+.promo-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:16px 0 4px}
+.promo-box{background:#111;border:1px solid #2a2a2a;border-top:3px solid var(--red);border-radius:14px;padding:16px;color:#f2f0ec;display:flex;flex-direction:column}
+.promo-box .promo-tag{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#ff8a94}
+.promo-box h3{margin:6px 0 6px;font-size:19px;color:#fff}
+.promo-box p{margin:0 0 12px;font-size:14px;line-height:1.45;color:#c9c4bb;flex:1}
+.pop-avail{color:#3ecf6f;font-weight:700;font-size:13.5px;margin:-4px 0 8px}
+.cities-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:8px}
+.city-card{background:#111;border:1px solid #2a2a2a;border-radius:12px;padding:12px 14px;color:#f2f0ec;display:flex;flex-direction:column;gap:3px}
+.city-card b{color:#fff;font-size:15.5px}
+.city-card span{font-size:12.5px;color:#b8b3aa}
+.cmp-wrap{overflow-x:auto;margin-bottom:10px}
+table.cmp{border-collapse:collapse;width:100%;min-width:520px;background:#111;border:1px solid #2a2a2a;border-radius:12px;overflow:hidden}
+table.cmp th,table.cmp td{border-bottom:1px solid #262626;padding:10px 12px;text-align:center;font-size:14px;color:#e8e4dd}
+table.cmp th{color:#fff;font-size:15px;background:#171717}
+table.cmp td:first-child,table.cmp th:first-child{text-align:left}
+table.cmp td.y{color:#8df0a4;font-weight:800}
+table.cmp button{white-space:nowrap}
+.ghs-ba{position:relative;border-radius:18px;overflow:hidden;aspect-ratio:16/10;background:#111;max-width:640px}
+.ghs-ba>img{width:100%;height:100%;object-fit:cover;display:block}
+.ghs-ba-before{position:absolute;top:0;left:0;bottom:0;width:50%;background-size:cover;background-position:center;border-right:3px solid #fff}
+.ba-tag{position:absolute;top:10px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;letter-spacing:.06em}
+.ba-tag.l{left:10px}.ba-tag.r{right:10px}
+.ba-range{width:100%;max-width:640px;margin-top:10px;accent-color:var(--red)}
+#menuNoResults .btn-link{display:inline-block;background:var(--red);color:#fff;font-weight:800;padding:11px 18px;border-radius:999px;text-decoration:none}
+#appFooter{background:#0b0b0b;color:#cfc9c2;margin-top:34px;padding:30px 18px 118px;border-top:3px solid var(--red)}/* v80.10: the 118px bottom padding clears the fixed #teamContactPill (bottom:12px, ~64px tall) so the pill never covers footer content */
+.foot-grid{max-width:1080px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+#appFooter h4{color:#fff;margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.04em}
+#appFooter a{display:block;color:#cfc9c2;text-decoration:none;font-size:14px;padding:3px 0}
+#appFooter a:hover{color:#fff;text-decoration:underline}
+.foot-cities{display:block;font-size:13.5px;line-height:1.55}
+.foot-stripe{display:block;margin-top:10px;font-size:13.5px;color:#e8e4dd}
+.foot-fine{max-width:1080px;margin:18px auto 0;font-size:12.5px;line-height:1.55;color:#8f8a81}
+.foot-social{max-width:1080px;margin:16px auto 0;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.foot-social .foot-social-label{font-size:13px;font-weight:700;color:#e8e4dd;text-transform:uppercase;letter-spacing:.04em}
+#appFooter .foot-social a{display:inline-block;padding:0;font-weight:700}
+
+
+/* v80.10 LA ORIGINAL — the restored homepage’s CSS (old standalone site), every selector scoped to #oldhome */
+#oldhome, #oldhome *{margin:0; padding:0; box-sizing:border-box; font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}#oldhome{background:#0a0a0c; color:#f2f2f2; padding-bottom:86px; width:100vw; margin-left:calc(50% - 50vw);}/* v80.10.1 FULL PAGE: #oldhome breaks out of the app shell's .wrap (max-width:880px, padding:18px) to the full viewport width, exactly like the standalone page. While the customer home is the visible view (the only state in which render() sets #customerBox to display:block — #oldhome lives only inside it), clip horizontal overflow on body so a classic desktop scrollbar (whose width 100vw includes) can never open a horizontal scrollbar. overflow-x:clip creates no scroll container, so the sticky .chips bar below keeps working; hidden is only a fallback for pre-clip browsers. */body:has(#customerBox[style*="display: block"]){overflow-x:hidden; overflow-x:clip;}#oldhome .topbar{position:sticky; top:0; z-index:20; background:rgba(10,10,12,.96); border-bottom:1px solid #26262b; padding:12px 16px 11px;}#oldhome .trow{display:flex; align-items:center; gap:12px;}#oldhome .logo{width:40px; height:40px; border-radius:10px; background:linear-gradient(135deg,#f02b3f,#a8121f); display:flex; align-items:center; justify-content:center; font-size:21px; flex:none; box-shadow:0 4px 14px rgba(228,37,53,.35);}#oldhome .brand{font-weight:800; font-size:15px; line-height:1.1; margin-right:auto;}#oldhome .brand small{color:#9a9aa2; font-weight:600; font-size:11px;}#oldhome .search{width:100%; outline:none; color:#f2f2f2; margin-top:11px; background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:11px 16px; color:#9a9aa2; font-size:13.5px; display:flex; align-items:center; gap:8px;}#oldhome .lang{background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:8px 11px; font-size:12px; font-weight:800; color:#e8e8ea; flex:none;}#oldhome .lang b{color:#e42535;}#oldhome .acct{background:#e42535; color:#fff; border-radius:999px; padding:9px 14px; font-weight:700; font-size:13px; flex:none;}#oldhome .hero{padding:24px 16px 4px; background:radial-gradient(600px 240px at 15% -40px, rgba(228,37,53,.22), transparent 70%);}#oldhome .pills{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;}#oldhome .pill{background:#1b1b1f; border:1px solid #2c2c33; border-radius:999px; padding:6px 11px; font-size:12px; font-weight:700; color:#e8e8ea;}#oldhome .pill .dot{color:#2fbf71;}#oldhome .hero h1{font-size:29px; font-weight:900; letter-spacing:-.6px; line-height:1.12;}#oldhome .hero h1 span{color:#e42535;}#oldhome .hero p{color:#c9c9cf; font-size:14.5px; margin-top:7px;}#oldhome .bigcta{display:block; margin-top:14px; background:#e42535; color:#fff; text-align:center; font-weight:900; font-size:17px; padding:15px; border-radius:16px; box-shadow:0 8px 22px rgba(228,37,53,.35);}#oldhome .stars{color:#ffb800; font-size:13px; margin-top:12px; font-weight:700;}#oldhome .stars span{color:#9a9aa2; font-weight:600;}#oldhome .stars .starrow{display:flex; gap:5px; font-size:30px; line-height:1; margin:1px 0 6px;}#oldhome .stars .starrow .st{color:#ffb800; font-weight:700;}#oldhome .stars .starrow .st.half{position:relative; color:#55555d;}#oldhome .stars .starrow .st.half i{position:absolute; left:0; top:0; width:50%; overflow:hidden; color:#ffb800; font-style:normal;}#oldhome .promos{display:flex; gap:12px; overflow-x:auto; padding:18px 16px 2px; scroll-snap-type:x mandatory;}#oldhome .promo{min-width:262px; scroll-snap-align:start; border-radius:20px; padding:18px; position:relative; overflow:hidden;}#oldhome .promo.season{background:linear-gradient(120deg,#5c1119,#2a060a); border:1px solid #8c1a26;}#oldhome .promo.member{background:linear-gradient(120deg,#0f3a22,#071a0f); border:1px solid #2fbf71;}#oldhome .promo.junkp{background:linear-gradient(120deg,#33302a,#171512); border:1px solid #55504a;}#oldhome .promo .tag{font-size:10.5px; font-weight:900; letter-spacing:1px; text-transform:uppercase; color:#ffb800;}#oldhome .promo.member .tag{color:#2fbf71;}#oldhome .promo.junkp .tag{color:#d8d2c4;}#oldhome .promo h3{font-size:20px; font-weight:900; margin:5px 0 3px;}#oldhome .promo p{font-size:12.5px; color:#e6e2da; opacity:.85;}#oldhome .promo .go{display:inline-block; margin-top:10px; background:#fff; color:#111; font-weight:900; font-size:12.5px; padding:7px 13px; border-radius:999px;}#oldhome .members{display:flex; gap:10px; overflow-x:auto; padding:16px;}#oldhome .mbox{min-width:130px; border-radius:14px; padding:12px; background:#17171b; border:1px solid #2a2a31; position:relative;}#oldhome .mbox.free{background:#123324; border-color:#2fbf71;}#oldhome .mbox.pop{border-color:#e42535;}#oldhome .crown{position:absolute; top:-9px; right:10px; background:#e42535; color:#fff; font-size:9.5px; font-weight:900; padding:3px 8px; border-radius:999px; letter-spacing:.4px;}#oldhome .mbox .t{font-size:11px; font-weight:800; letter-spacing:.6px; color:#c9c9cf; text-transform:uppercase;}#oldhome .mbox.free .t{color:#2fbf71;}#oldhome .mbox .p{font-size:22px; font-weight:900; margin:4px 0 2px;}#oldhome .mbox .p small{font-size:11px; color:#9a9aa2; font-weight:700;}#oldhome .mbox .cta{margin-top:8px; display:inline-block; background:#e42535; color:#fff; font-size:11px; font-weight:800; padding:6px 10px; border-radius:999px;}#oldhome .mbox.free .cta{background:#2fbf71; color:#06280f;}#oldhome .chips{position:sticky; top:0; z-index:15; background:rgba(10,10,12,.97); display:flex; gap:8px; overflow-x:auto; padding:10px 16px; border-bottom:1px solid #26262b;}#oldhome .chip{white-space:nowrap; background:#1b1b1f; border:1px solid #2c2c33; color:#e8e8ea; font-size:13px; font-weight:700; padding:8px 13px; border-radius:999px;}#oldhome .chip.on{background:#e42535; border-color:#e42535; color:#fff;}#oldhome section{padding:26px 16px 6px;}#oldhome section{scroll-margin-top:66px;}#oldhome #yard-card{scroll-margin-top:66px;}#oldhome .shead{display:flex; align-items:baseline; justify-content:space-between;}#oldhome h2{font-size:22px; font-weight:900; margin-bottom:4px;}#oldhome .seeall{color:#e42535; font-size:12.5px; font-weight:800;}#oldhome .sub{color:#9a9aa2; font-size:13.5px; margin-bottom:14px;}#oldhome .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;}#oldhome .card{background:#17171b; border:1px solid #2a2a31; border-radius:20px; overflow:hidden; display:flex; flex-direction:column;}#oldhome .tile{height:110px; display:flex; align-items:center; justify-content:center; font-size:44px; position:relative; background:linear-gradient(135deg,#26262e,#131316);}#oldhome .tile::after{content:''; position:absolute; inset:0; background:radial-gradient(200px 90px at 50% 0%, rgba(255,255,255,.09), transparent 70%);}#oldhome .tile img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}#oldhome .tile.red{background:linear-gradient(135deg,#6d1420,#1c0508);}#oldhome .tile.grn{background:linear-gradient(135deg,#11452a,#071a0f);}#oldhome .tile.blu{background:linear-gradient(135deg,#173d5e,#081320);}#oldhome .tile.amb{background:linear-gradient(135deg,#5e3f14,#201304);}#oldhome .badge{position:absolute; top:8px; left:8px; z-index:2; background:rgba(0,0,0,.72); color:#ffb800; font-size:10px; font-weight:900; padding:4px 8px; border-radius:999px;}#oldhome .body{padding:13px 14px 14px; display:flex; flex-direction:column; gap:3px; flex:1;}#oldhome .name{font-weight:800; font-size:15.5px; line-height:1.2;}#oldhome .meta{color:#9a9aa2; font-size:12.5px;}#oldhome .rate{font-size:11.5px; color:#e8e8ea; font-weight:700;}#oldhome .rate i{color:#ffb800; font-style:normal;}#oldhome .rate .today{color:#2fbf71;}#oldhome .price{font-size:22px; font-weight:900; color:#fff; margin-top:6px;}#oldhome .price small{font-size:11px; color:#9a9aa2; font-weight:700;}#oldhome .mem{color:#2fbf71; font-size:12.5px; font-weight:800;}#oldhome .pedir{margin-top:auto; background:#e42535; color:#fff; text-align:center; font-weight:800; font-size:14.5px; padding:11px; border-radius:12px;}#oldhome .wide{background:#17171b; border:1px solid #2a2a31; border-radius:20px; padding:16px; margin-bottom:12px; display:flex; gap:14px; align-items:center;}#oldhome .wide .ic{font-size:36px;}#oldhome .wide .ic img{width:64px; height:64px; border-radius:12px; object-fit:cover; display:block;}#oldhome .wide .name{font-size:16px;}#oldhome .wide .price{margin-left:auto; text-align:right; flex:none;}#oldhome .fill{height:7px; border-radius:99px; background:#26262b; margin-top:7px; width:170px; max-width:44vw; overflow:hidden;}#oldhome .fill div{height:100%; background:linear-gradient(90deg,#e42535,#ff5a3c); border-radius:99px;}#oldhome .order{background:#141414; border:2px solid #e42535; border-radius:20px; padding:18px;}#oldhome .orow{display:flex; justify-content:space-between; font-size:14px; padding:5px 0;}#oldhome .orow.tot{border-top:1px solid #2c2c33; margin-top:8px; padding-top:10px; font-weight:900; font-size:16px;}#oldhome .steps{display:flex; gap:10px;}#oldhome .step{flex:1; background:#17171b; border:1px solid #2a2a31; border-radius:18px; padding:15px; font-size:12.5px; color:#c9c9cf;}#oldhome .step b{display:block; color:#fff; font-size:14.5px; margin-bottom:3px;}#oldhome .step .n{display:inline-flex; width:22px; height:22px; border-radius:50%; background:#e42535; color:#fff; align-items:center; justify-content:center; font-weight:900; font-size:12px; margin-bottom:7px;}#oldhome .quotes{display:flex; gap:10px; overflow-x:auto;}#oldhome .quote{min-width:230px; background:#17171b; border:1px solid #2a2a31; border-radius:18px; padding:14px; font-size:13px; color:#e8e8ea; line-height:1.45;}#oldhome .quote .who{color:#9a9aa2; font-size:11.5px; margin-top:8px; font-weight:700;}#oldhome .quote .st{color:#ffb800; font-size:12px;}#oldhome .trust{display:flex; gap:10px; padding:18px 16px 6px; flex-wrap:wrap;}#oldhome .trust div{flex:1; min-width:100px; background:#17171b; border:1px solid #2a2a31; border-radius:18px; padding:14px; text-align:center; font-size:12px; font-weight:700; color:#c9c9cf;}#oldhome .trust b{display:block; font-size:20px; margin-bottom:4px;}#oldhome .heroimg{position:relative; overflow:hidden;}#oldhome .heroimg > img{width:100%; height:380px; object-fit:cover; object-position:72% 50%; display:block;}#oldhome .heroimg .scrim{position:absolute; inset:0; background:linear-gradient(90deg, rgba(5,5,8,.88) 0%, rgba(5,5,8,.55) 46%, rgba(5,5,8,.05) 75%), linear-gradient(0deg, rgba(10,10,12,.95) 0%, rgba(10,10,12,0) 34%);}#oldhome .heroimg .hcontent{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end; padding:22px 18px 20px; max-width:560px;}#oldhome .heroimg h1{font-size:36px; font-weight:900; letter-spacing:-.6px; line-height:1.08; text-shadow:0 2px 14px rgba(0,0,0,.6);}#oldhome .heroimg h1 span{color:#ff4655;}#oldhome .heroimg p{color:#e6e6ea; font-size:14px; margin-top:6px; text-shadow:0 1px 8px rgba(0,0,0,.7);}#oldhome .heroimg .bigcta{max-width:300px;}#oldhome .cats{display:flex; gap:16px; overflow-x:auto; padding:18px 16px 4px;}#oldhome .cat{text-align:center; flex:none; width:74px;}#oldhome .cat img{width:66px; height:66px; border-radius:50%; object-fit:cover; border:2px solid #2c2c33; display:block; margin:0 auto;}#oldhome .cat.on img{border-color:#e42535; box-shadow:0 0 0 3px rgba(228,37,53,.25);}#oldhome .cat .cl{font-size:11.5px; font-weight:800; margin-top:7px; color:#e8e8ea; line-height:1.2;}#oldhome .reveal{opacity:0; transform:translateY(16px); transition:opacity .55s ease, transform .55s ease;}#oldhome .reveal.in{opacity:1; transform:none;}#oldhome .fab{position:fixed; right:14px; bottom:96px; z-index:31; background:#2fbf71; color:#06280f; font-weight:900; font-size:13.5px; padding:12px 16px; border-radius:999px; box-shadow:0 10px 24px rgba(0,0,0,.5); text-decoration:none; display:flex; align-items:center; gap:7px;}#oldhome .cities{display:grid; grid-template-columns:1fr 1fr; gap:11px;}#oldhome .city{position:relative; border-radius:20px; overflow:hidden; height:104px; border:1px solid #2a2a31; display:block; color:inherit; text-decoration:none; cursor:pointer;}#oldhome .city img{width:100%; height:100%; object-fit:cover; display:block;}#oldhome .city .cov{position:absolute; inset:0; background:linear-gradient(0deg, rgba(5,5,8,.88) 8%, rgba(5,5,8,.15) 55%); display:flex; flex-direction:column; justify-content:flex-end; padding:10px 12px;}#oldhome .city .cn{font-weight:900; font-size:16px;}#oldhome .city .cs{color:#c9c9cf; font-size:11px; font-weight:700;}#oldhome .city .cs b{color:#2fbf71;}#oldhome.searching .heroimg, #oldhome.searching .promos, #oldhome.searching .cats, #oldhome.searching .members, #oldhome.searching .trust, #oldhome.searching footer{display:none;}#oldhome #noresults{display:none; margin:22px 16px; background:#17171b; border:1px solid #2a2a31; border-radius:16px; padding:18px; text-align:center; font-size:14px; color:#c9c9cf; line-height:1.55;}#oldhome #noresults b{color:#fff;}#oldhome .band{position:relative; border-radius:20px; overflow:hidden; margin:20px 16px 4px; border:1px solid #3a2328;}#oldhome .band > img{width:100%; height:290px; object-fit:cover; object-position:78% 22%; display:block;}#oldhome .band .scrim{position:absolute; inset:0; background:linear-gradient(90deg, rgba(5,5,8,.92) 0%, rgba(5,5,8,.68) 52%, rgba(5,5,8,.05) 82%), linear-gradient(0deg, rgba(10,10,12,.9) 0%, rgba(10,10,12,0) 40%);}#oldhome .band .bc{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; padding:16px; max-width:430px;}#oldhome .band .eb{font-size:10.5px; font-weight:900; letter-spacing:1.6px; color:#ff4655; text-transform:uppercase;}#oldhome .band h2{font-size:23px; font-weight:900; margin:5px 0 4px; text-shadow:0 2px 10px rgba(0,0,0,.6);}#oldhome .band p{font-size:13px; color:#e6e6ea; line-height:1.45; text-shadow:0 1px 6px rgba(0,0,0,.7);}#oldhome .band .prom{display:flex; gap:7px; margin-top:11px; flex-wrap:wrap;}#oldhome .band .prom span{background:rgba(0,0,0,.55); border:1px solid rgba(255,255,255,.22); border-radius:999px; padding:6px 10px; font-size:11.5px; font-weight:800;}#oldhome .band2{display:flex; border-radius:20px; overflow:hidden; margin:20px 16px 4px; border:1px solid #3a2328; background:#121013;}#oldhome .band2 .txt{flex:1; padding:18px 16px; display:flex; flex-direction:column; justify-content:center;}#oldhome .band2 .eb{font-size:10.5px; font-weight:900; letter-spacing:1.6px; color:#ff4655; text-transform:uppercase;}#oldhome .band2 h2{font-size:23px; font-weight:900; margin:5px 0 5px; line-height:1.12;}#oldhome .band2 p{font-size:13px; color:#c9c9cf; line-height:1.5;}#oldhome .band2 .prom{display:flex; flex-direction:column; gap:6px; margin-top:12px;}#oldhome .band2 .prom span{font-size:12.5px; font-weight:800; color:#e8e8ea;}#oldhome .band2 .ph{flex:1.15; min-height:350px;}#oldhome .band2 .ph img{width:100%; height:100%; object-fit:cover; object-position:0% 12%; display:block;}#oldhome footer{color:#66666e; font-size:11px; text-align:center; padding:14px 20px 8px; line-height:1.5;}
+/* v83.1 (Gabriel, 2026-11-03): LA FRANJA BLANCA + LAS BARRITAS DE LA VITRINA.
+   (1) The bright band between the black header and the black vitrina hero:
+   the .wrap's 18px top padding painted the body's white background
+   (--bg:#fff) in a strip above #oldhome, and the v83 header redesign
+   exposed it (the deleted logo banner used to cover that strip). While —
+   and ONLY while — the customer area is the live view (the same
+   inline-style state the v80.10.1 overflow clip above keys on:
+   #customerBox display:block) AND no card stands above it in the wrap
+   (the login card revealed over the storefront, or the password-reset
+   card), the wrap's top padding collapses to 0 and the dark vitrina
+   meets the header. Every route that replaces the customer area (cart,
+   memberships, info pages, yard calendar, the /plus promo door) sets
+   #customerBox to display:none before returning, and the worker/admin
+   zones never show it, so this rule cannot fire on those screens; with
+   the login or reset card up, the :not() guards fail the selector and
+   the page renders exactly as before. No background changes anywhere —
+   only that one padding strip, only in the vitrina state. */
+body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="display: block"])):not(:has(#resetBox[style*="display: block"])) .wrap{padding-top:0}
+/* (2) The sideways rows of the vitrina keep their scroll but lose the
+   pale scrollbar desktop/tablet browsers paint under them — the same
+   treatment .menu-chips already has. */
+#oldhome .promos, #oldhome .chips, #oldhome .cats, #oldhome .members, #oldhome .quotes{scrollbar-width:none}
+#oldhome .promos::-webkit-scrollbar, #oldhome .chips::-webkit-scrollbar, #oldhome .cats::-webkit-scrollbar, #oldhome .members::-webkit-scrollbar, #oldhome .quotes::-webkit-scrollbar{display:none}
+
+
+/* ===== v89: TEMA GLOBAL — LA MARCA PRINCIPAL GHS EN TODA LA APP =====
+   (Gabriel, corrección 2026-11-07 17:05: el tema general de TODA la
+   aplicación es la marca principal de General Handyman Solutions — el
+   mundo del logo y los flyers: superficies negras/oscuras, rojo de
+   marca #e42535, tipografía blanca y fuerte; del draft de /tecnico
+   solo el parentesco — claridad, letras grandes, tarjetas grandes —
+   no la copia.) Hasta la v88 cada superficie nueva vestía el idioma,
+   pero el cromo GLOBAL seguía mixto: el body era blanco (--bg:#fff)
+   y la hoja de Log in / Sign up — tarjetas, campos, pastillas beige —
+   salía CLARA sobre la vitrina oscura: dos compañías en un flujo.
+   Esta pasada unifica SOLO el cromo neutro (fondos, bordes, campos,
+   hojas): los tokens compartidos se voltean a su valor oscuro — los
+   bordes y textos tenues que ya colgaban de ellos (hilos, miniaturas,
+   filas del wizard, calendario) caen solos — y las superficies con el
+   claro pintado a mano se reescriben en este bloque, el último de la
+   cascada. Los colores que SIGNIFICAN no se tocan: el verde de
+   ahorros/éxito del miembro, el ámbar de propuestas/pendientes, los
+   estados de la zona del técnico y el dinero verde/ámbar conservan su
+   matiz (en su clave oscura, donde el matiz claro no se podía leer).
+   Las FOTOS del menú y el logo no se tocan. Cero cambios de
+   comportamiento, ids, handlers, rutas, precios o textos. */
+:root{--bg:#0a0a0c;--soft:#101013;--line:#2a2a31;--field-line:#33333b;--muted:#a49d93;color-scheme:dark}
+html{background:#0a0a0c}
+body{background:#0a0a0c;color:#e8e8ea}
+a{color:#9adcff}
+.card{background-color:var(--panel-2)}
+.panel-dark{background-color:var(--panel)}
+.plan-card{background-color:var(--panel)}
+input,select,textarea{background:#1b1b1f;border-color:#2c2c33;color:#e8e8ea}
+option{background:#1b1b1f;color:#e8e8ea}
+input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:var(--ring)}
+button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
+.tabs button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.tabs button.on{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.pick button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.pick button.sel{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.seg button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.seg button.on{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.msg{background:#1b1b1f;border-color:#2c2c33}
+.err{background:#2a0d10;border-color:#7a2027;color:#ff9aa2}
+.estimate{background-color:#17171b;border-color:#2c2c33}
+.est-x{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.est-summary{background:#101013}
+.cal-day{background:#17171b}
+.cal-day.off{background:#101013;color:#9a968f}
+.cal-ev.req{background:#1b1b1f;color:#e8e8ea;border-color:#3a3a3a}
+.cal-ev.canc{background:#26262a}
+.cal-ev.prop{background:#2a2107;color:#ffcf4d;border-color:#8a6d00}
+.step-body{background:#17171b}
+.step-body span{color:#c9c4bc}
+.step-card::before{background:#2a2a31}
+.clause p{color:#d8d4cc}
+.pay-panel{background:#221a05;border-color:#6b5518}
+.empty{background:#101013}
+.auth-offer{background:#1c0e11}
+#authBox .tabs{background:#101013;border-color:var(--line-d)}
+#authBox .tabs button{color:#e8e8ea}
+#authBox .tabs button.on{background:linear-gradient(180deg,var(--red-hi),var(--red) 46%,var(--red-dk));color:#fff;box-shadow:0 3px 10px rgba(228,37,53,.35)}
+.cart-line{border-bottom-color:#26262a}
+.cart-qty{border-color:#3a3a3a}
+.cart-qty button{color:#e8e8ea}
+.cart-remove{color:#ff7079}
+#cartPayElement{background:var(--panel-2);border-color:var(--line-d)}
+.leaflet-container{background:#17171b}
+.leaflet-popup-content-wrapper{background:#17171b;color:#e8e8ea;border:1px solid #2c2c33;border-radius:14px}
+.leaflet-popup-tip{background:#17171b}
+.leaflet-popup-content a{color:#9adcff}
+.leaflet-bar a{background:#17171b;color:#e8e8ea;border-color:#2c2c33}
+.leaflet-control-attribution{background:rgba(10,10,12,.72);color:#8f8a81}
+.leaflet-control-attribution a{color:#8f8a81}
+
+
+/* ===== v90: EL ADMIN HABLA EL IDIOMA DE LA MARCA =====
+   La v89 unificó el cromo global, pero el panel del Team seguía con
+   la densidad vieja: tarjetas al radio global de 16px, rótulos de
+   sección sin tratamiento y la insignia de clase de la v84 (TÉCNICO
+   negro / AYUDANTE dorado) como una pastilla genérica más — el negro
+   se perdía sobre la tarjeta oscura. Esta pasada SOLO pule la
+   superficie admin con el idioma asentado en v85–v87 (tarjetas de
+   20px, rótulos grandes, tarjeta de dinero destacada) y le da a las
+   PROPUESTAS DORMIDAS su tarjeta resumen (.adm-dormant, pintada por
+   loadAdminCarts). Los colores que significan no se tocan: la
+   insignia de clase conserva su negro/dorado exacto de la v84 (gana
+   borde y tracking para leerse sobre el panel), el ámbar de espera
+   (.adm-age) es el ámbar de pendiente de siempre en su clave oscura
+   y el STALE (.adm-stale) usa la pareja rojo-oscuro de error de la
+   v89. Cero cambios de comportamiento, ids, handlers, rutas o
+   precios: donde este bloque no llega, el admin queda como estaba. */
+#adminBox h2{font-size:22px;font-weight:800;letter-spacing:.01em}
+#adminBox h3{font-size:18px;font-weight:800;margin:28px 0 10px;padding-left:10px;border-left:4px solid var(--red)}
+#adminBox .card{border-radius:20px;padding:20px}
+#admNav button{min-height:40px;padding:8px 14px;border-radius:999px;font-weight:700}
+#adminBox .pill{font-weight:800;letter-spacing:.02em}
+.wclass-pill{border-color:#3a3a41;letter-spacing:.05em}
+.wclass-pill.ayudante{border-color:#e8c766}
+#adminMoney .card{border-radius:20px}
+#adminMoney .card:first-of-type{background:#141414;border:2px solid var(--red)}
+.adm-dormant{background:#141414;border:2px solid var(--red);border-radius:20px}
+.adm-dormant-num{font-size:25px;font-weight:800}
+.adm-age{color:#ffcf4d;font-weight:700}
+.adm-stale{background:#2a0d10;color:#ff9aa2;border-color:#7a2027}
+
+#oldhome .oa-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:6px 0 4px}#oldhome .oa-card{display:flex;gap:12px;align-items:center;background:#141416;border:1px solid #26262a;border-radius:20px;padding:12px 14px;text-decoration:none;color:#fff}#oldhome .oa-card img{width:56px;height:56px;border-radius:12px;object-fit:cover}#oldhome .oa-card b{display:block;font-size:15px}#oldhome .oa-card span{color:#9a968f;font-size:13px}#oldhome .oa-card .oa-go{margin-left:auto;color:#e42535;font-weight:800;white-space:nowrap}#oldhome .ba{position:relative;border-radius:20px;overflow:hidden;aspect-ratio:16/10;background:#111;max-width:640px}#oldhome .ba>img{width:100%;height:100%;object-fit:cover;display:block}#oldhome .ba-before{position:absolute;top:0;left:0;bottom:0;width:50%;background-size:cover;background-position:center;border-right:3px solid #fff}#oldhome .ba-tag{position:absolute;top:10px;background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;letter-spacing:.06em}#oldhome .ba-tag.l{left:10px}#oldhome .ba-tag.r{right:10px}#oldhome .ba input[type=range]{width:100%;max-width:640px;margin-top:10px;accent-color:#e42535}#oldhome .ba-cap{color:#9a968f;font-size:14px}#oldhome .ba-cap a{color:#9adcff;font-weight:700}#oldhome .cmp-wrap{overflow-x:auto;margin-top:14px}#oldhome table.cmp{border-collapse:collapse;width:100%;min-width:560px;background:#101012;border:1px solid #26262a;border-radius:20px;overflow:hidden}#oldhome table.cmp th, #oldhome table.cmp td{padding:11px 13px;text-align:left;border-bottom:1px solid #222226;font-size:14.5px;color:#e8e6e1}#oldhome table.cmp th{background:#17171a;font-size:15px}#oldhome table.cmp td.y{color:#2fbf71;font-weight:800}#oldhome table.cmp .join{display:inline-block;background:#e42535;color:#fff;border-radius:10px;padding:7px 13px;font-weight:700;text-decoration:none;font-size:13.5px}#oldhome .ft-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:18px;text-align:left;max-width:900px;margin:0 auto 14px}#oldhome .ft-grid h4{margin:0 0 8px;font-size:14px;letter-spacing:.05em;text-transform:uppercase;color:#fff}#oldhome .ft-grid a{display:block;color:#9adcff;text-decoration:none;margin:5px 0;font-size:14px}#oldhome .ft-grid p{color:#9a968f;font-size:14px;margin:5px 0;line-height:1.45}#oldhome .ft-small{color:#77736c;font-size:12.5px;line-height:1.5}
+#oldhome #ghsMemberships{background:#0b0b0b;border-radius:20px;padding:34px 22px 26px;margin:26px 0 0;color:#fff}#oldhome #ghsMemberships *, #oldhome #ghsMemberships *::before, #oldhome #ghsMemberships *::after{box-sizing:border-box}#oldhome #ghsMemberships .ghs-mem-title{text-align:center;font-size:38px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;margin:0;color:#fff;line-height:1.1}#oldhome #ghsMemberships .ghs-mem-sub{text-align:center;color:#b3aca2;font-size:16.5px;margin:8px 0 2px}#oldhome #ghsMemberships .ghs-mem-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin:18px 0 4px}@media(max-width:800px){#oldhome #ghsMemberships .ghs-mem-grid{grid-template-columns:1fr}}#oldhome #ghsMemberships .ghs-mem-card{background:#141414;border:2px solid #2b2b30;border-radius:20px;padding:24px 20px 20px;display:flex;flex-direction:column;text-align:center}#oldhome #ghsMemberships .ghs-mem-photo{height:140px;margin:-24px -20px 16px;border-radius:18px 18px 0 0;overflow:hidden;position:relative;background:#1b1b1f}#oldhome #ghsMemberships .ghs-mem-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 30%;display:block}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free{border-color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-best{border-color:#e42535}#oldhome #ghsMemberships .ghs-mem-badge{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#e42535;color:#fff;font-size:12px;font-weight:900;letter-spacing:.06em;padding:5px 12px;border-radius:999px;z-index:2;white-space:nowrap}#oldhome #ghsMemberships .ghs-mem-card h3{margin:0;font-size:19px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:#fff}#oldhome #ghsMemberships .ghs-mem-price{font-size:37px;font-weight:900;margin:10px 0 6px;color:#e42535;line-height:1.1}#oldhome #ghsMemberships .ghs-mem-price span{font-size:.6em;font-weight:800}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-price{color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-subline{color:#a49d93;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}#oldhome #ghsMemberships .ghs-mem-card ul{list-style:none;margin:16px 0;padding:0;text-align:left;line-height:1.5;font-size:14.5px;color:#f2f0ec}#oldhome #ghsMemberships .ghs-mem-card ul li{padding:4px 0 4px 26px;position:relative}#oldhome #ghsMemberships .ghs-mem-card ul li::before{content:"✓";position:absolute;left:2px;top:4px;font-weight:900;color:#e42535}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free ul li::before{color:#2fbf71}#oldhome #ghsMemberships .ghs-mem-grow{flex:1}#oldhome #ghsMemberships .ghs-mem-btn{display:block;width:100%;border-radius:12px;padding:15px 16px;font-size:16.5px;font-weight:800;background:#e42535;color:#fff;text-decoration:none;text-align:center;cursor:pointer}#oldhome #ghsMemberships .ghs-mem-card.ghs-mem-free .ghs-mem-btn{background:#2fbf71}

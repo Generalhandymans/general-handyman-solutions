@@ -5,6 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');
 
 const PORT = process.env.PORT || 3000;
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
@@ -83,6 +84,31 @@ function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
   res.writeHead(code, Object.assign({ 'Content-Type': typeof obj === 'string' ? 'text/html; charset=utf-8' : 'application/json' }, headers || {}));
   res.end(body);
+}
+// v98: gzip-aware serving for the app shell and its extracted text assets.
+// The 1.36MB single-file page became a ~125KB shell + /app.js + /app.css
+// (the inline script/styles moved out byte-identical); clients that accept
+// gzip get the compressed body, everyone else the raw file. Bodies are
+// cached per file mtime+size, so a redeploy never serves stale bytes.
+const textFileCache = new Map();
+function serveTextFile(req, res, file, contentType, cacheControl) {
+  let st;
+  try { st = fs.statSync(file); } catch (e) { res.writeHead(404); return res.end('not found'); }
+  let ent = textFileCache.get(file);
+  if (!ent || ent.mtimeMs !== st.mtimeMs || ent.size !== st.size) {
+    const raw = fs.readFileSync(file);
+    ent = { mtimeMs: st.mtimeMs, size: st.size, raw, gz: zlib.gzipSync(raw) };
+    textFileCache.set(file, ent);
+  }
+  const headers = { 'Content-Type': contentType, 'Vary': 'Accept-Encoding' };
+  if (cacheControl) headers['Cache-Control'] = cacheControl;
+  if (/\bgzip\b/.test(String(req.headers['accept-encoding'] || ''))) {
+    headers['Content-Encoding'] = 'gzip';
+    res.writeHead(200, headers);
+    return res.end(ent.gz);
+  }
+  res.writeHead(200, headers);
+  return res.end(ent.raw);
 }
 function readBody(req) { return new Promise(r => { let b = ''; let over = false; req.on('data', c => { if (!over) { b += c; if (b.length > MAX_BODY_BYTES) { over = true; b = ''; } } }); req.on('end', () => { if (over) return r({ __tooLarge: true }); try { r(JSON.parse(b || '{}')); } catch (e) { r({}); } }); }); }
 function sessionUserId(token) {
@@ -5791,7 +5817,16 @@ async function handleRequest(req, res) {
     return res.end();
   }
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
-    return send(res, 200, fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'));
+    return serveTextFile(req, res, path.join(__dirname, 'public', 'index.html'), 'text/html; charset=utf-8');
+  }
+  // v98: the extracted app bundle + stylesheet (byte-identical to the old
+  // inline script/styles of the 1.36MB monolith). no-cache like /sw.js so
+  // a deploy always lands; the v98 service-worker cache carries offline.
+  if (req.method === 'GET' && p === '/app.js') {
+    return serveTextFile(req, res, path.join(__dirname, 'public', 'app.js'), 'text/javascript; charset=utf-8', 'no-cache');
+  }
+  if (req.method === 'GET' && p === '/app.css') {
+    return serveTextFile(req, res, path.join(__dirname, 'public', 'app.css'), 'text/css; charset=utf-8', 'no-cache');
   }
   if (req.method === 'GET' && p === '/manifest.json') {
     res.writeHead(200, { 'Content-Type': 'application/manifest+json', 'Access-Control-Allow-Origin': '*' });
@@ -5816,6 +5851,16 @@ async function handleRequest(req, res) {
     const file = path.join(__dirname, 'public', 'menu-img', path.basename(p));
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': p.endsWith('.webp') ? 'image/webp' : 'image/jpeg', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // v98: category photos (CAT_IMGS) + membership plan-card photos — these
+  // were base64 data URIs inside the monolith (551KB of the 1.36MB page);
+  // now real files under public/cat-img + public/plan-img. Basename only
+  // (no traversal), fixed folders, same contract as /menu-img/ above.
+  if (req.method === 'GET' && (p.startsWith('/cat-img/') || p.startsWith('/plan-img/')) && (p.endsWith('.webp') || p.endsWith('.jpg') || p.endsWith('.png'))) {
+    const file = path.join(__dirname, 'public', p.startsWith('/cat-img/') ? 'cat-img' : 'plan-img', path.basename(p));
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': p.endsWith('.webp') ? 'image/webp' : (p.endsWith('.png') ? 'image/png' : 'image/jpeg'), 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
   // Hero technician photo (v80.9, ported from the website hero) — exact name.

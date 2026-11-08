@@ -1,7 +1,9 @@
 // GHS app service worker — caches the app shell so it opens fast and installs,
 // while keeping every visitor on the CURRENT version of the page.
-const CACHE = 'ghs-app-v97';
-const SHELL = ['/', '/index.html', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png'];
+const CACHE = 'ghs-app-v98';
+const SHELL = ['/', '/index.html', '/app.js', '/app.css', '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png',
+  '/cat-img/carpentry.jpg', '/cat-img/electrical.jpg', '/cat-img/plumbing.jpg', '/cat-img/gardening.jpg', '/cat-img/mechanic.jpg', '/cat-img/otro.webp',
+  '/plan-img/homecare.webp', '/plan-img/yard1.webp', '/plan-img/plus1.webp', '/plan-img/yard2.webp', '/plan-img/plus2.webp'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
