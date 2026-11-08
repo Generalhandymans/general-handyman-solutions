@@ -3,8 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<style>html,body{background:#0a0a0c}</style>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#0b0b0b">
+<meta name="color-scheme" content="dark">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
@@ -537,6 +539,78 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
 #oldhome .promos, #oldhome .chips, #oldhome .cats, #oldhome .members, #oldhome .quotes{scrollbar-width:none}
 #oldhome .promos::-webkit-scrollbar, #oldhome .chips::-webkit-scrollbar, #oldhome .cats::-webkit-scrollbar, #oldhome .members::-webkit-scrollbar, #oldhome .quotes::-webkit-scrollbar{display:none}
 </style>
+<style>
+/* ===== v89: TEMA GLOBAL — LA MARCA PRINCIPAL GHS EN TODA LA APP =====
+   (Gabriel, corrección 2026-11-07 17:05: el tema general de TODA la
+   aplicación es la marca principal de General Handyman Solutions — el
+   mundo del logo y los flyers: superficies negras/oscuras, rojo de
+   marca #e42535, tipografía blanca y fuerte; del draft de /tecnico
+   solo el parentesco — claridad, letras grandes, tarjetas grandes —
+   no la copia.) Hasta la v88 cada superficie nueva vestía el idioma,
+   pero el cromo GLOBAL seguía mixto: el body era blanco (--bg:#fff)
+   y la hoja de Log in / Sign up — tarjetas, campos, pastillas beige —
+   salía CLARA sobre la vitrina oscura: dos compañías en un flujo.
+   Esta pasada unifica SOLO el cromo neutro (fondos, bordes, campos,
+   hojas): los tokens compartidos se voltean a su valor oscuro — los
+   bordes y textos tenues que ya colgaban de ellos (hilos, miniaturas,
+   filas del wizard, calendario) caen solos — y las superficies con el
+   claro pintado a mano se reescriben en este bloque, el último de la
+   cascada. Los colores que SIGNIFICAN no se tocan: el verde de
+   ahorros/éxito del miembro, el ámbar de propuestas/pendientes, los
+   estados de la zona del técnico y el dinero verde/ámbar conservan su
+   matiz (en su clave oscura, donde el matiz claro no se podía leer).
+   Las FOTOS del menú y el logo no se tocan. Cero cambios de
+   comportamiento, ids, handlers, rutas, precios o textos. */
+:root{--bg:#0a0a0c;--soft:#101013;--line:#2a2a31;--field-line:#33333b;--muted:#a49d93;color-scheme:dark}
+html{background:#0a0a0c}
+body{background:#0a0a0c;color:#e8e8ea}
+a{color:#9adcff}
+.card{background-color:var(--panel-2)}
+.panel-dark{background-color:var(--panel)}
+.plan-card{background-color:var(--panel)}
+input,select,textarea{background:#1b1b1f;border-color:#2c2c33;color:#e8e8ea}
+option{background:#1b1b1f;color:#e8e8ea}
+input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:var(--ring)}
+button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
+.tabs button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.tabs button.on{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.pick button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.pick button.sel{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.seg button{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.seg button.on{background:#0b0b0b;color:#fff;border-color:var(--red)}
+.msg{background:#1b1b1f;border-color:#2c2c33}
+.err{background:#2a0d10;border-color:#7a2027;color:#ff9aa2}
+.estimate{background-color:#17171b;border-color:#2c2c33}
+.est-x{background:#1b1b1f;color:#e8e8ea;border-color:#2c2c33}
+.est-summary{background:#101013}
+.cal-day{background:#17171b}
+.cal-day.off{background:#101013;color:#9a968f}
+.cal-ev.req{background:#1b1b1f;color:#e8e8ea;border-color:#3a3a3a}
+.cal-ev.canc{background:#26262a}
+.cal-ev.prop{background:#2a2107;color:#ffcf4d;border-color:#8a6d00}
+.step-body{background:#17171b}
+.step-body span{color:#c9c4bc}
+.step-card::before{background:#2a2a31}
+.clause p{color:#d8d4cc}
+.pay-panel{background:#221a05;border-color:#6b5518}
+.empty{background:#101013}
+.auth-offer{background:#1c0e11}
+#authBox .tabs{background:#101013;border-color:var(--line-d)}
+#authBox .tabs button{color:#e8e8ea}
+#authBox .tabs button.on{background:linear-gradient(180deg,var(--red-hi),var(--red) 46%,var(--red-dk));color:#fff;box-shadow:0 3px 10px rgba(228,37,53,.35)}
+.cart-line{border-bottom-color:#26262a}
+.cart-qty{border-color:#3a3a3a}
+.cart-qty button{color:#e8e8ea}
+.cart-remove{color:#ff7079}
+#cartPayElement{background:var(--panel-2);border-color:var(--line-d)}
+.leaflet-container{background:#17171b}
+.leaflet-popup-content-wrapper{background:#17171b;color:#e8e8ea;border:1px solid #2c2c33;border-radius:14px}
+.leaflet-popup-tip{background:#17171b}
+.leaflet-popup-content a{color:#9adcff}
+.leaflet-bar a{background:#17171b;color:#e8e8ea;border-color:#2c2c33}
+.leaflet-control-attribution{background:rgba(10,10,12,.72);color:#8f8a81}
+.leaflet-control-attribution a{color:#8f8a81}
+</style>
 </head>
 <body>
 <header>
@@ -653,7 +727,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
     <label>Password</label><input id="aPass" type="password" placeholder="Password">
     <div id="cardRow" style="display:none">
       <label id="cardChargeLabel">Card — $0 charged today, then $29/mo</label>
-      <div id="cardElement" style="background:#fff;border:1px solid #d8d2c8;border-radius:12px;padding:12px"></div>
+      <div id="cardElement" style="background:#17171b;border:1px solid #2c2c33;border-radius:12px;padding:12px"></div>
       <p class="mut" style="font-size:12.5px">Secure payment via Stripe — your card number never touches our servers. Cancel anytime from your dashboard.</p>
     </div>
     <div id="workerExtra" style="display:none">
@@ -1105,9 +1179,9 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
        appConfirm(msg) -> true/false, appPrompt(msg, def) -> string/null,
        exactly the semantics the call sites already expect. -->
   <div id="appDlg" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.62);z-index:10001;align-items:center;justify-content:center;padding:18px">
-    <div style="background:#fff;border-radius:14px;max-width:360px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4)">
+    <div style="background:#17171b;border-radius:14px;max-width:360px;width:100%;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.4)">
       <p id="appDlgMsg" style="margin:0 0 12px;font-size:15.5px;line-height:1.45;white-space:pre-line"></p>
-      <input id="appDlgInput" style="display:none;width:100%;padding:11px;border:1.5px solid #ccc;border-radius:9px;font-size:15.5px;margin-bottom:12px;box-sizing:border-box">
+      <input id="appDlgInput" style="display:none;width:100%;padding:11px;border:1.5px solid #33333b;border-radius:9px;font-size:15.5px;margin-bottom:12px;box-sizing:border-box">
       <div style="display:flex;gap:10px">
         <button type="button" class="ghost" style="flex:1;padding:12px;font-weight:700" onclick="appDlgCancelClicked()">Cancelar</button>
         <button type="button" id="appDlgOk" style="flex:1;padding:12px;background:#e42535;color:#fff;border:0;border-radius:9px;font-weight:800;cursor:pointer" onclick="appDlgOkClicked()">OK</button>
@@ -3122,7 +3196,7 @@ async function doDeleteAccount(sfx){
     await api('/api/me/delete-account', { method: 'POST', body: JSON.stringify({ confirmEmail: email }) });
   } catch (e) { if (err) err.textContent = e.message; return; }
   const slot = document.getElementById(sfx === 'C' ? 'delAcctSlotC' : (sfx === 'W' ? 'delAcctSlotW' : 'delAcctSlotA'));
-  if (slot) slot.innerHTML = '<div class="card" style="border-color:#bfe3bf;background:#f3fbf3;margin-top:12px"><h3 style="margin-top:0">' + WT('delDoneTitle') + '</h3><p class="mut" style="margin:0">' + WT('delDoneBody') + '</p></div>';
+  if (slot) slot.innerHTML = '<div class="card" style="border-color:#1d5c38;background:#0b2013;margin-top:12px"><h3 style="margin-top:0">' + WT('delDoneTitle') + '</h3><p class="mut" style="margin:0">' + WT('delDoneBody') + '</p></div>';
   delAcctPaintedFor = '';
   setTimeout(function(){ location.reload(); }, 2600);
 }
@@ -3205,7 +3279,7 @@ function mountAuthCard(){
   if (!host || !stripeObj) return false;
   if (cardEl) { try { cardEl.unmount(); } catch (e) {} cardEl = null; cardHostEl = null; }
   host.innerHTML = '';
-  cardEl = stripeObj.elements().create('card', { style: { base: { fontSize: '16px' } } });
+  cardEl = stripeObj.elements().create('card', { style: { base: { fontSize: '16px', color: '#f2f0ec', iconColor: '#9a968f', '::placeholder': { color: '#8f8a81' } } } });
   cardEl.mount(host);
   cardHostEl = host;
   cardEl.on('change', e => { if (e.error) showErr(e.error.message); else hideErr(); });
@@ -3503,7 +3577,7 @@ function renderNotifs(){ const p=document.getElementById('notifPanel'); p.innerH
   var tgt = notifTargetFor(n);
   var click = tgt ? ' onclick="notifGo(\''+tgt.replace(/'/g,"\\'")+'\')" style="cursor:pointer" title="' + CU('notifOpenTitle') + '"' : '';
   var arrow = tgt ? ' <span style="color:#e42535;font-weight:700">→</span>' : '';
-  return '<div'+click+' style="padding:9px 4px;border-bottom:1px solid #eee;'+(n.read?'opacity:.55':'')+(urgent?';background:#fff3f3;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+escHtml(n.text)+arrow+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
+  return '<div'+click+' style="padding:9px 4px;border-bottom:1px solid #26262a;'+(n.read?'opacity:.55':'')+(urgent?';background:#2a0d10;border-left:4px solid #e42535;padding-left:10px;border-radius:6px':'')+'"><div>'+escHtml(n.text)+arrow+'</div>'+payBtn+'<div class="mut">'+new Date(n.at).toLocaleString()+'</div></div>';
 }).join(''):'<div class="empty"><p class="mut">' + CU('notifEmpty') + '</p></div>'); }
 // v80 P1-4: resolve a notification's target for THIS session. Worker
 // sessions are NEVER routed to a customer surface (v79 frontier): a
@@ -4471,7 +4545,7 @@ function initialsOf(name){
 }
 function avatarHtml(photo, name, size){
   size = size || 40;
-  if (photo) return '<img src="' + escAttr(photo) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid #e42535;vertical-align:middle;background:#fff">';
+  if (photo) return '<img src="' + escAttr(photo) + '" alt="" style="width:' + size + 'px;height:' + size + 'px;border-radius:50%;object-fit:cover;border:2px solid #e42535;vertical-align:middle;background:#1b1b1f">';
   return '<span style="display:inline-flex;align-items:center;justify-content:center;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:#e42535;color:#fff;font-weight:800;font-size:' + Math.max(11, Math.round(size * 0.4)) + 'px;vertical-align:middle">' + escHtml(initialsOf(name)) + '</span>';
 }
 // The customer's technician line on their job card: avatar + name. The
@@ -5276,7 +5350,7 @@ function trackBlockHtml(j, audience){
   if (!j || !j.liveLoc) return '';
   const who = audience === 'admin' ? CU('trkTechAdmin') : CU('trkYourTech');
   return '<div class="trackbox" style="margin-top:10px">'
-    + '<div id="trkmap-' + j.id + '" style="height:220px;border-radius:12px;overflow:hidden;background:#e9e5df"></div>'
+    + '<div id="trkmap-' + j.id + '" style="height:220px;border-radius:12px;overflow:hidden;background:#17171b"></div>'
     + '<div class="mut" style="margin-top:6px">🔨 <b>' + who + '</b>' + (j.address ? CU('trkHeadingTo') + escHtml(j.address) : '') + ' · <span id="trkupd-' + j.id + '">' + CU('trkUpdated') + agoText(j.liveLoc.updatedAt) + '</span></div></div>';
 }
 function trackFallbackHtml(j){
@@ -5299,7 +5373,7 @@ function pinIcon(txt){ return L.divIcon({ className: 'trk-pin', html: '<div styl
 // glyph on a brand-red circle. The glyph (not the icon file) is used so
 // the pin renders reliably inside a Leaflet divIcon with no extra fetch.
 function photoIcon(photo){
-  return L.divIcon({ className: 'trk-pin', html: '<div style="position:relative;width:40px;height:40px"><img src="' + escAttr(photo) + '" alt="" style="width:40px;height:40px;border-radius:50%;border:3px solid #e42535;object-fit:cover;display:block;background:#fff;box-sizing:border-box;box-shadow:0 1px 6px rgba(0,0,0,.45)"><span style="position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;background:#e42535;color:#fff;font-size:10px;line-height:14px;text-align:center;border:2px solid #fff">🔨</span></div>', iconSize: [40, 40], iconAnchor: [20, 20] });
+  return L.divIcon({ className: 'trk-pin', html: '<div style="position:relative;width:40px;height:40px"><img src="' + escAttr(photo) + '" alt="" style="width:40px;height:40px;border-radius:50%;border:3px solid #e42535;object-fit:cover;display:block;background:#1b1b1f;box-sizing:border-box;box-shadow:0 1px 6px rgba(0,0,0,.45)"><span style="position:absolute;right:-5px;bottom:-5px;width:17px;height:17px;border-radius:50%;background:#e42535;color:#fff;font-size:10px;line-height:14px;text-align:center;border:2px solid #fff">🔨</span></div>', iconSize: [40, 40], iconAnchor: [20, 20] });
 }
 function hammerPinIcon(){
   return L.divIcon({ className: 'trk-pin', html: '<div style="width:36px;height:36px;border-radius:50%;background:#e42535;border:3px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.45);color:#fff;font-size:17px;line-height:29px;text-align:center">🔨</div>', iconSize: [36, 36], iconAnchor: [18, 18] });
@@ -5409,7 +5483,7 @@ function reqPayPanelHtml(r){
   if(p.status==='deposit' && r.estimateType==='menu' && (Number(p.balanceCents)||0)>0 && !r.refund){
     const bal=moneyFmt((p.balanceCents||0)/100);
     h+='<div style="margin-top:8px"><button class="black" onclick="reqPayBalanceStart(\''+r.id+'\')">'+CU('payBalanceBtnTpl').replace('{amt}', bal)+'</button>'
-      +'<div id="reqPay-'+r.id+'" style="display:none;margin-top:8px"><div id="reqCard-'+r.id+'" style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#fff"></div>'
+      +'<div id="reqPay-'+r.id+'" style="display:none;margin-top:8px"><div id="reqCard-'+r.id+'" style="border:1px solid var(--line);border-radius:10px;padding:10px;background:#17171b"></div>'
       +'<div style="margin-top:8px"><button class="black" id="reqPayGo-'+r.id+'" onclick="reqPayBalanceConfirm(\''+r.id+'\')">'+CU('payBalanceBtnTpl').replace('{amt}', bal)+'</button> <span class="mut" id="reqPayMsg-'+r.id+'"></span></div></div></div>';
   }
   return h;
@@ -5431,7 +5505,7 @@ async function reqPayBalanceStart(idv){
     const d=await api('/api/orders/pay',{method:'POST', body:JSON.stringify({requestId:idv})});
     const st=await cartEnsureStripe();
     if(st!=='ready'||!stripeObj) throw new Error(CU('payNotConnected'));
-    const cel=stripeObj.elements().create('card',{style:{base:{fontSize:'16px'}}});
+    const cel=stripeObj.elements().create('card',{style:{base:{fontSize:'16px',color:'#f2f0ec',iconColor:'#9a968f','::placeholder':{color:'#8f8a81'}}}});
     cel.mount('#reqCard-'+idv);
     reqPayEls[idv]={el:cel, secret:d.clientSecret, pi:d.paymentIntentId};
     if(msg) msg.textContent='';
@@ -5503,7 +5577,7 @@ function adminHoldPanelHtml(r){
   const visit=holds.find(function(h){ return h.key==='visit' && h.status==='authorized'; });
   const anyActive=holds.some(function(h){ return h.status==='authorized'; });
   const incDisabled=!visit || visit.incremental==='unavailable';
-  return '<div style="margin-top:10px;border:1px solid #ecd28f;background:#fff8e6;border-radius:10px;padding:10px">'
+  return '<div style="margin-top:10px;border:1px solid #6b5518;background:#221a05;border-radius:10px;padding:10px">'
     +'<b>💳 Authorization holds — YOU control the money</b> <span class="mut">Nothing is ever charged automatically. You decide the amount and the moment.</span>'
     +(rows||'<div class="mut">No holds yet — the customer authorizes the estimate fee from their request card or the estimate page.</div>')
     +diff
@@ -6494,7 +6568,7 @@ async function loadAdminMap(preloadedJobs, force){
       + '<div>' + listHtml + '</div>'
       + (jobPins.length ? '<p class="mut">🏠 = destino de un trabajo activo de hoy / an active job destination today (' + jobPins.length + ')</p>' : '')
       + emptyNote
-      + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#e9e5df;margin-top:8px"></div>'
+      + '<div id="adminMap" style="height:380px;border-radius:12px;overflow:hidden;background:#17171b;margin-top:8px"></div>'
       + '</div>';
     adminMapSig = sig;
     if (adminMasterMap) { try { adminMasterMap.remove(); } catch(e) {} adminMasterMap = null; }
@@ -6542,7 +6616,7 @@ async function loadAdminMap(preloadedJobs, force){
           tileLayer.on('tileerror', function(){ tilesErr++; });
         }
         tileLayer = ghsTileLayer().addTo(map); wireTileLayer();
-        mapEl.insertAdjacentHTML('beforeend', '<div class="map-loading-note" style="position:absolute;z-index:1200;left:10px;bottom:10px;background:rgba(255,255,255,.92);border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none">' + CU('mapLoading') + '</div>');
+        mapEl.insertAdjacentHTML('beforeend', '<div class="map-loading-note" style="position:absolute;z-index:1200;left:10px;bottom:10px;background:rgba(10,10,12,.88);color:#e8e8ea;border-radius:8px;padding:4px 10px;font-size:12px;pointer-events:none">' + CU('mapLoading') + '</div>');
         tileSoftTimer = setTimeout(function(){
           if (tileGaveUp || tilesOk > 0 || adminMasterMap !== map) return;
           if (tilesErr > 0 && !tileRetried) { // genuine errors: ONE fresh-layer retry, then keep waiting
@@ -7436,7 +7510,7 @@ function cartMountDeferred(forceMode){
   if (cartElements && cartElementsMode === mode && (mode === 'setup' || cartElementsAmount === amount)) return true;
   try {
     host.innerHTML = '';
-    const appearance = { theme: 'stripe', variables: { colorPrimary: '#e42535', borderRadius: '12px' } };
+    const appearance = { theme: 'night', variables: { colorPrimary: '#e42535', borderRadius: '12px' } };
     cartElements = mode === 'payment'
       ? stripeObj.elements({ mode: 'payment', amount: amount, currency: 'usd', appearance: appearance })
       : stripeObj.elements({ mode: 'setup', currency: 'usd', appearance: appearance });
@@ -7555,7 +7629,7 @@ function paintCartPayState(){
   // Stripe page (no Stripe.js needed in this browser) — plus the
   // retry, plus the stage ref so a real-device test reports WHICH
   // stage failed (CFG config fetch / JS script load / INIT construct).
-  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:10px">' + CU('cartPayFailBody') + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">' + CU('cartPayHostedBtn') + '</button><button type="button" onclick="cartRetryStripe()">' + CU('cartPayRetryBtn') + '</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#991b1b">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
+  else if (cartStripeState === 'failed') host.innerHTML = '<div style="color:#ff9aa2;background:#2a0d10;border:1px solid #7a2027;border-radius:10px;padding:10px">' + CU('cartPayFailBody') + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button type="button" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:10px 18px;font-weight:700;cursor:pointer" onclick="cartPayHosted()">' + CU('cartPayHostedBtn') + '</button><button type="button" onclick="cartRetryStripe()">' + CU('cartPayRetryBtn') + '</button></div>' + (cartStripeFailStage ? '<div style="margin-top:6px;font-size:11px;color:#ff8a94">ref: ' + cartStripeFailStage + '</div>' : '') + '</div>';
 }
 function cartRetryStripe(){ cartStripeState = 'idle'; paintCartPayState(); cartEagerMount(true); }
 // v80.1: the config fetch gets a HARD timeout. api() has none — the
