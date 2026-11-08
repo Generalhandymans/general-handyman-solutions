@@ -31,13 +31,19 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v96', swSrc.includes("const CACHE = 'ghs-app-v96'"));
+t('static: SW cache is ghs-app-v97', swSrc.includes("const CACHE = 'ghs-app-v97'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
   fs.readFileSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml'), 'utf8').includes('<user>CA95D6E2EB6DDA53B4F4B72A8D883928</user>'));
 t('static v93: the server routes /BingSiteAuth.xml at the apex root (explicit SEO-door route serving the public file, like the og image next to robots.txt and sitemap.xml)',
   serverSrc.includes("p === '/BingSiteAuth.xml'"));
+t('static v97: ONE canonical sitemap builder behind every sitemap door (apex base + www base, never the fetched host), the /sitemap-www.xml route exists, and robots.txt advertises all three sitemap doors (apex canonical, Render origin, apex www variant)',
+  serverSrc.includes('const sitemapBody = base =>') && serverSrc.includes("sitemapBody('https://generalhandymans.app')") &&
+  serverSrc.includes("sitemapBody('https://www.generalhandymans.app')") && serverSrc.includes("p === '/sitemap-www.xml'") &&
+  serverSrc.includes('Sitemap: https://generalhandymans.app/sitemap.xml') &&
+  serverSrc.includes('Sitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml') &&
+  serverSrc.includes('Sitemap: https://generalhandymans.app/sitemap-www.xml'));
 t('static v96: index — NO light inline surface survives anywhere in the app shell (the seven v95-audit survivors wear their dark keys: auth-sheet charge notes in the dark red tint, HomeCare promo + membership address box on the panel, perm card in the dark amber key, checkout error in the dark error key, wizard fee card on the panel)',
   !htmlSrc.includes('background:#fff5f5') && !htmlSrc.includes('background:#fef2f2') && !htmlSrc.includes('background:#faf9f7') &&
   htmlSrc.includes('id="joinChargeNote" style="display:none;background:#1c0e11') && htmlSrc.includes('id="hcChargeNote" style="display:none;background:#1c0e11') &&
@@ -4579,7 +4585,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v96: ghs-app-v96)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v96'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v97: ghs-app-v97)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v97'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6397,6 +6403,29 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
   t('v93 Bing auth: GET /BingSiteAuth.xml answers 200 XML carrying the exact verification key (the tiny file Bing fetches instead of the 1.36MB page)',
     bing93.status === 200 && String(bing93.headers.get('content-type') || '').includes('xml') &&
     bingTxt93.includes('<user>CA95D6E2EB6DDA53B4F4B72A8D883928</user>'));
+  const sitemap97 = await fetch(BASE + '/sitemap.xml');
+  const sitemapTxt97 = await sitemap97.text();
+  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all five apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs',
+    sitemap97.status === 200 && String(sitemap97.headers.get('content-type') || '').includes('xml') &&
+    sitemapTxt97 === '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      ['/', '/plus', '/plus2', '/homecare', '/yard'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
+  const sitemapWww97 = await fetch(BASE + '/sitemap-www.xml');
+  const sitemapWwwTxt97 = await sitemapWww97.text();
+  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same five doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
+    sitemapWww97.status === 200 && String(sitemapWww97.headers.get('content-type') || '').includes('xml') &&
+    sitemapWwwTxt97.includes('<urlset') &&
+    ['<loc>https://www.generalhandymans.app/</loc>', '<loc>https://www.generalhandymans.app/plus</loc>',
+     '<loc>https://www.generalhandymans.app/plus2</loc>', '<loc>https://www.generalhandymans.app/homecare</loc>',
+     '<loc>https://www.generalhandymans.app/yard</loc>'].every(x => sitemapWwwTxt97.includes(x)) &&
+    !sitemapWwwTxt97.includes('<loc>https://generalhandymans.app/'));
+  const robots97 = await fetch(BASE + '/robots.txt');
+  const robotsTxt97 = await robots97.text();
+  t('v97 robots: GET /robots.txt advertises all three sitemap doors — apex canonical first, then the Render origin host and the apex www variant (multiple Sitemap lines are valid robots.txt)',
+    robots97.status === 200 && String(robots97.headers.get('content-type') || '').includes('text/plain') &&
+    robotsTxt97.includes('Sitemap: https://generalhandymans.app/sitemap.xml') &&
+    robotsTxt97.includes('Sitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml') &&
+    robotsTxt97.includes('Sitemap: https://generalhandymans.app/sitemap-www.xml') &&
+    robotsTxt97.indexOf('Sitemap: https://generalhandymans.app/sitemap.xml') < robotsTxt97.indexOf('Sitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml'));
   const og818 = await fetch(BASE + '/og-image.jpg');
   t('v80.18 og image: GET /og-image.jpg serves the 1200x630 share photo (200 image/jpeg, real bytes)',
     og818.status === 200 && String(og818.headers.get('content-type') || '').includes('image/jpeg') &&

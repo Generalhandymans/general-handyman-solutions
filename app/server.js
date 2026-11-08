@@ -5854,16 +5854,33 @@ async function handleRequest(req, res) {
   // SEO doors (v80.18): robots.txt + sitemap.xml at the apex root. The
   // sitemap lists only the real public customer doors (the homepage and
   // the four membership join doors the server 302s onto their fragments).
+  // v97: ONE canonical sitemap builder behind every sitemap door — the
+  // <loc> entries ALWAYS carry the base passed in, never the host that
+  // happened to serve the fetch, so every door hands Bing the same
+  // canonical map. Bingbot intermittently fails to fetch the apex (the
+  // submitted sitemap sat in "Error — Bingbot was not able to access the
+  // page", 0 URLs discovered), so the map gets extra doors on hosts it
+  // can reach: the Render origin host itself (whose /sitemap.xml still
+  // lists the canonical apex URLs) and the www-base variant below; the
+  // apex /sitemap.xml body is byte-identical to the v80.18 original.
+  const SITEMAP_DOORS = ['/', '/plus', '/plus2', '/homecare', '/yard'];
+  const sitemapBody = base => '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    SITEMAP_DOORS.map(d => '  <url><loc>' + base + d + '</loc></url>').join('\n') + '\n</urlset>\n';
   if (req.method === 'GET' && p === '/robots.txt') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
-    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n');
+    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\nSitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml\nSitemap: https://generalhandymans.app/sitemap-www.xml\n');
   }
   if (req.method === 'GET' && p === '/sitemap.xml') {
-    const doors = ['/', '/plus', '/plus2', '/homecare', '/yard'];
-    const body = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-      doors.map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n';
     res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
-    return res.end(body);
+    return res.end(sitemapBody('https://generalhandymans.app'));
+  }
+  // v97: the www-base variant — the same five doors listed on the www
+  // host (a CNAME onto this same service, so the content is identical);
+  // its <loc>s live on www, a host Bingbot may reach more reliably than
+  // the apex. An explicit separate path — never host-based switching.
+  if (req.method === 'GET' && p === '/sitemap-www.xml') {
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(sitemapBody('https://www.generalhandymans.app'));
   }
   // Bing verification (v93): BingSiteAuth.xml at the apex root — the XML
   // file method. The v92 meta tag stays in index.html, but Bing's verify
