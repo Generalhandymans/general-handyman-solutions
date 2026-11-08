@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v89', swSrc.includes("const CACHE = 'ghs-app-v89'"));
+t('static: SW cache is ghs-app-v90', swSrc.includes("const CACHE = 'ghs-app-v90'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -481,6 +481,7 @@ const fetchLog = [];
 // return so doAuth can run end-to-end in the VM.
 let stripeCfgMode = 'empty';
 let stubAuthUser = null;
+let stubAdminCarts = null;
 async function fetchStub(url, opts = {}) {
   const method = (opts.method || 'GET').toUpperCase();
   fetchLog.push({ method, url, body: opts.body || null });
@@ -494,6 +495,7 @@ async function fetchStub(url, opts = {}) {
   if ((url === '/api/login' || url === '/api/signup') && stubAuthUser) return ok({ user: stubAuthUser });
   if (url === '/api/jobs' && method === 'GET') return ok({ jobs: fetchJobsResponse.jobs });
   if (url === '/api/requests' && method === 'GET') return ok({ requests: [] });
+  if (url === '/api/admin/carts' && method === 'GET' && stubAdminCarts) return ok({ carts: stubAdminCarts });
   if (url === '/api/notifications') return ok({ notifications: [], unread: 0 });
   return ok({});
 }
@@ -1045,6 +1047,34 @@ el('aPlanSel').value = 'free'; run('joinPlanChanged()');
 t('v88 free fallback: picking FREE drops the armed plan — plain customer form, picker gone, unpriced button', run('pendingMembershipPlan') === null && run('curMode') === 'customer' && el('planSelRow').style.display === 'none' && (el('authBtn').textContent || '').trim() === 'Create account');
 run('me = null; pendingJoin = null; pendingMembershipPlan = null;');
 stripeCfgMode = 'empty';
+
+// ---------------- v90 client: admin dormant proposals ----------------
+// The admin carts list used to bury sent-but-unpaid proposals in
+// server order with no age and no deposit figure. v90 renders ONLY
+// from what /api/admin/carts already exposes (publicCart has carried
+// createdAt all along — no server change): a featured summary card,
+// open carts sorted first (oldest on top), a STALE pill at 7+ days
+// and the deposit-to-book derived from the settled deposit law.
+// (the VM clock is the harness's fake Date — createdAt must be
+// computed from IT, not from the test process's real clock)
+const vmNow90 = run('Date.now()');
+const iso90 = (days) => new Date(vmNow90 - days * 86400000).toISOString();
+stubAdminCarts = [
+  { id: 'CRT-PAID1', status: 'paid', items: [{ name: 'TV Mounting', qty: 1 }], listTotal: 175, memberTotal: 140, customerName: 'Paid Pam', customerPhone: '', customerEmail: '', createdAt: iso90(2), requestId: 'GHS-TEST1', link: 'https://generalhandymans.app/cart/CRT-PAID1', payState: { deposit: 70, balance: 70, balancePaid: false, adjustments: [] } },
+  { id: 'CRT-STALE1', status: 'open', items: [{ name: 'Big job', qty: 1 }], listTotal: 450, memberTotal: 360, customerName: 'Dormant Dan', customerPhone: '', customerEmail: '', createdAt: iso90(10), requestId: '', link: 'https://generalhandymans.app/cart/CRT-STALE1', payState: null },
+  { id: 'CRT-FRESH1', status: 'open', items: [{ name: 'Small job', qty: 1 }], listTotal: 200, memberTotal: 160, customerName: 'Fresh Fred', customerPhone: '', customerEmail: '', createdAt: iso90(2), requestId: '', link: 'https://generalhandymans.app/cart/CRT-FRESH1', payState: null },
+  { id: 'CRT-DEAD1', status: 'cancelled', items: [{ name: 'Old job', qty: 1 }], listTotal: 100, memberTotal: 80, customerName: '', customerPhone: '', customerEmail: '', createdAt: iso90(30), requestId: '', link: 'https://generalhandymans.app/cart/CRT-DEAD1', payState: null }
+];
+run("me = { id: 'USR-ADM90', role: 'admin', name: 'Gabriel' };");
+await run('loadAdminCarts()');
+const admHtml90 = el('adminCarts').innerHTML;
+t('v90 VM: the dormant summary card leads the list — 2 waiting, $230.00 in deposits to collect, $650.00 in open work, 1 stale (7d+)', admHtml90.includes('adm-dormant') && admHtml90.includes('Dormant proposals — no deposit yet') && admHtml90.includes('$230.00') && admHtml90.includes('$650.00') && admHtml90.includes('1 stale (7d+)'));
+t('v90 VM: open carts sort FIRST, oldest on top — stale ahead of fresh, paid and cancelled keep their order below', admHtml90.indexOf('CRT-STALE1') > -1 && admHtml90.indexOf('CRT-STALE1') < admHtml90.indexOf('CRT-FRESH1') && admHtml90.indexOf('CRT-FRESH1') < admHtml90.indexOf('CRT-PAID1') && admHtml90.indexOf('CRT-PAID1') < admHtml90.indexOf('CRT-DEAD1'));
+t('v90 VM: the 10-day cart wears the STALE pill and the waiting line with the settled deposit law (40% of $450 = $180.00 · member $144.00)', admHtml90.includes('adm-stale') && admHtml90.includes('STALE · 10d waiting') && admHtml90.includes('Waiting 10 days') && admHtml90.includes('$180.00') && admHtml90.includes('$144.00') && (admHtml90.match(/adm-stale/g) || []).length === 1);
+t('v90 VM: the fresh $200 cart books at the $50.00 FLAT deposit (the <= $300 tier of the law) with no member split (member deposit is also $50.00)', admHtml90.includes('Waiting 2 days') && admHtml90.includes('deposit to book <b>$50.00</b>'));
+t('v90 VM: paid + cancelled cards render byte-identical content as before (paid badge with its request id, the payState deposit line, Copy link / Cancel cart actions intact)', admHtml90.includes('paid → GHS-TEST1') && admHtml90.includes('💰 Deposit $70.00 in (40%)') && admHtml90.includes('Copy link') && admHtml90.includes('Cancel cart') && admHtml90.includes('cancelled'));
+stubAdminCarts = null;
+run('me = null;');
 
 // --- v78 client: guest cart (localStorage) + embedded checkout ---
 // Gabriel's Amazon model: the cart exists for GUESTS, persists on the
@@ -4059,6 +4089,10 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   t('static v89: the auth sheet wears the brand — dark tab track, red-gradient active auth tab (generic tabs keep black + red border), red field focus, dark Stripe card host and the legacy card elements painted light-on-dark', htmlSrc.includes('#authBox .tabs{background:#101013;border-color:var(--line-d)}') && htmlSrc.includes('#authBox .tabs button.on{background:linear-gradient(180deg,var(--red-hi),var(--red) 46%,var(--red-dk))') && htmlSrc.includes('.tabs button.on{background:#0b0b0b;color:#fff;border-color:var(--red)}') && htmlSrc.includes('input:focus,select:focus,textarea:focus{border-color:var(--red);box-shadow:var(--ring)}') && htmlSrc.includes('id="cardElement" style="background:#17171b;border:1px solid #2c2c33') && htmlSrc.includes("color: '#f2f0ec', iconColor: '#9a968f'") && htmlSrc.includes("color:'#f2f0ec',iconColor:'#9a968f'"));
   t('static v89: money + meaning surfaces in dark keys — Stripe Payment Element on the night theme in a dark host, amber pay panels, red-tint error/urgent/fail, amber calendar chip, the app dialog dark, map backdrops dark; no light JS paint survives', htmlSrc.includes("theme: 'night'") && !htmlSrc.includes("theme: 'stripe'") && htmlSrc.includes('#cartPayElement{background:var(--panel-2);border-color:var(--line-d)}') && htmlSrc.includes('.pay-panel{background:#221a05;border-color:#6b5518}') && htmlSrc.includes('border:1px solid #6b5518;background:#221a05') && htmlSrc.includes('.err{background:#2a0d10;border-color:#7a2027;color:#ff9aa2}') && htmlSrc.includes('.cal-ev.prop{background:#2a2107;color:#ffcf4d;border-color:#8a6d00}') && htmlSrc.includes('background:#17171b;border-radius:14px;max-width:360px') && !htmlSrc.includes('background:#e9e5df') && !htmlSrc.includes('background:#fff3f3') && !htmlSrc.includes('background:#f3fbf3'));
   t('static v89: dark from the FIRST paint and in the native controls — critical inline background at the top of <head>, dark theme-color + color-scheme metas, dark select options, dark Leaflet chrome (owner: no black-to-white anywhere in a flow)', htmlSrc.includes('<style>html,body{background:#0a0a0c}</style>') && htmlSrc.includes('<meta name="theme-color" content="#0b0b0b">') && htmlSrc.includes('<meta name="color-scheme" content="dark">') && htmlSrc.includes('option{background:#1b1b1f;color:#e8e8ea}') && htmlSrc.includes('.leaflet-popup-content-wrapper{background:#17171b;color:#e8e8ea') && htmlSrc.includes('.leaflet-container{background:#17171b}'));
+  t('static v90: admin wears the settled card language — 20px cards, big section headers with the red brand bar, nav chips, and the Money surface leads with the featured card (#141414, 2px red border)', htmlSrc.includes('#adminBox .card{border-radius:20px;padding:20px}') && htmlSrc.includes('#adminBox h3{font-size:18px;font-weight:800') && htmlSrc.includes('border-left:4px solid var(--red)') && htmlSrc.includes('#admNav button{min-height:40px;padding:8px 14px;border-radius:999px') && htmlSrc.includes('#adminMoney .card:first-of-type{background:#141414;border:2px solid var(--red)}') && htmlSrc.includes('.adm-dormant{background:#141414;border:2px solid var(--red);border-radius:20px}'));
+  t('static v90: the v84 class badge is polished, not repainted — it gains the wclass-pill class (border + tracking so the black reads on the dark panel; gold border for ayudante) while its v84 colors and words stay byte-identical', htmlSrc.includes('pill wclass-pill') && htmlSrc.includes('.wclass-pill{border-color:#3a3a41;letter-spacing:.05em}') && htmlSrc.includes('.wclass-pill.ayudante{border-color:#e8c766}') && htmlSrc.includes("w.workerClass === 'ayudante' ? '#8a6d1a' : '#0b0b0b'") && htmlSrc.includes("w.workerClass === 'ayudante' ? 'AYUDANTE' : 'TÉCNICO'"));
+  t('static v90: NO light surface survives inside the admin — the cart-edit banner wears the v89 dark-amber key and the admin templates drop their light dashed hairlines', !htmlSrc.includes('background:#fff4d6') && !htmlSrc.includes('border-top:1px dashed #ddd') && htmlSrc.includes('id="cartEditBanner" style="display:none;background:#2a2107;border:1px solid #8a6d00;color:#ffcf4d'));
+  t('static v90: dormant proposals render from data the admin ALREADY gets — publicCart exposes createdAt (server untouched for v90), the render derives age from it, flags STALE at 7+ days, sorts open carts first (oldest on top) and derives the deposit from the settled law ($50 flat <= $300, 40% above)', serverSrc.includes("createdAt: c.createdAt || ''") && htmlSrc.includes('ageDays90=function') && htmlSrc.includes('new Date(c.createdAt||\'\')') && htmlSrc.includes('age90>=7') && htmlSrc.includes('adm-stale') && htmlSrc.includes('Dormant proposals — no deposit yet') && htmlSrc.includes('depFor90=function') && htmlSrc.includes('t<=300?Math.min(50,t):Math.round(t*40)/100') && htmlSrc.includes("c.status==='open'?0:(c.status==='paid'?1:2)"));
   const wSlice78 = htmlSrc.slice(htmlSrc.indexOf('id="workerBox"'), htmlSrc.indexOf('id="adminBox"'));
   const aStart78 = htmlSrc.indexOf('id="adminBox"');
   const aSlice78 = htmlSrc.slice(aStart78, htmlSrc.indexOf('<script>', aStart78));
@@ -4375,7 +4409,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v89: ghs-app-v89)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v89'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v90: ghs-app-v90)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v90'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
