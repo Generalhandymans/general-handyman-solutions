@@ -4,7 +4,7 @@
 // covers (a) every v23 behavior (SSE push, wake lock, throttle, resume),
 // and (b) a regression pass over every code path v23 touches (auth,
 // requests, jobs, claim/status flow, live location, payload privacy).
-// Run: node /tmp/ghs-v17-test/run.mjs
+// Run: node /tmp/ghs-v95-test/run.mjs
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,10 +12,10 @@ import vm from 'node:vm';
 import { spawn } from 'node:child_process';
 
 const APP_DIR = '/home/hatch/workspace/ghs-app/app';
-const APP_PORT = 8977;
-const GEO_PORT = 8978;
+const APP_PORT = 9977;
+const GEO_PORT = 9978;
 const BASE = 'http://127.0.0.1:' + APP_PORT;
-const DATA_FILE = '/tmp/ghs-v17-test/data-v23.json';
+const DATA_FILE = '/tmp/ghs-v95-test/data-v23.json';
 
 let pass = 0, fail = 0; const failures = [];
 function t(name, cond) { if (cond) pass++; else { fail++; failures.push(name); console.log('FAIL: ' + name); } }
@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v94', swSrc.includes("const CACHE = 'ghs-app-v94'"));
+t('static: SW cache is ghs-app-v95', swSrc.includes("const CACHE = 'ghs-app-v95'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -1616,8 +1616,8 @@ t('static v45: builder UI — menu picker, line types, options, photos, preview,
 // Resend; both APIs are mocked over HTTP via the app's own env base
 // overrides (STRIPE_API_BASE / RESEND_API_BASE), against a second app
 // instance with its own data file.
-const BASE2 = 'http://127.0.0.1:8979';
-const DATA_FILE2 = '/tmp/ghs-v17-test/data-v24.json';
+const BASE2 = 'http://127.0.0.1:9979';
+const DATA_FILE2 = '/tmp/ghs-v95-test/data-v24.json';
 const stripeState = { subs: {}, n: 0, connectTransfers: [], poorTransfers: true, pis: {}, refunds: [], sessions: {}, setis: {}, failPiCreates: 0 };
 const stripeMock = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -1745,7 +1745,7 @@ const stripeMock = http.createServer(async (req, res) => {
   if (req.method === 'POST' && path === '/transfers') { if (form.destination === 'acct_mock_poor' && stripeState.poorTransfers) return send(402, { error: { message: 'insufficient available funds in Stripe account' } }); const tr = { id: 'tr_mock_' + (++stripeState.n), amount: Number(form.amount || 0), destination: form.destination || '' }; stripeState.connectTransfers.push(tr); return send(200, tr); }
   return send(404, { error: { message: 'mock stripe: unhandled ' + req.method + ' ' + path } });
 });
-await new Promise(r => stripeMock.listen(8980, r));
+await new Promise(r => stripeMock.listen(9980, r));
 const resendState = { emails: [], fail: false };
 const resendMock = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
@@ -1760,16 +1760,16 @@ const resendMock = http.createServer(async (req, res) => {
   }
   res.writeHead(404); res.end();
 });
-await new Promise(r => resendMock.listen(8981, r));
+await new Promise(r => resendMock.listen(9981, r));
 function spawnApp2() {
   return spawn('node', ['server.js'], {
     cwd: APP_DIR,
     env: Object.assign({}, process.env, {
-      PORT: '8979', DATA_FILE: DATA_FILE2, NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT,
+      PORT: '9979', DATA_FILE: DATA_FILE2, NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT,
       SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
-      STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1',
+      STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1',
       STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
-      RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981'
+      RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981'
     }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
@@ -1785,10 +1785,10 @@ async function req2(method, p, opts = {}) {
   const j = await r.json().catch(() => ({}));
   return { status: r.status, j };
 }
-async function mockActivate(subId) { await fetch('http://127.0.0.1:8980/__activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: subId }) }); }
-async function mockFailPiOnce() { await fetch('http://127.0.0.1:8980/__failpi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ times: 1 }) }); }
-async function mockPiStatus(id, status) { await fetch('http://127.0.0.1:8980/__pi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); }
-async function mockSessionPaid(id) { await fetch('http://127.0.0.1:8980/__session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, paid: true }) }); }
+async function mockActivate(subId) { await fetch('http://127.0.0.1:9980/__activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: subId }) }); }
+async function mockFailPiOnce() { await fetch('http://127.0.0.1:9980/__failpi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ times: 1 }) }); }
+async function mockPiStatus(id, status) { await fetch('http://127.0.0.1:9980/__pi', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) }); }
+async function mockSessionPaid(id) { await fetch('http://127.0.0.1:9980/__session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, paid: true }) }); }
 const sessionForCart = (cartId, mode) => Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.cartId === cartId && (!mode || s.mode === mode)).slice(-1)[0];
 const sessionForEstimate = (estId, mode) => Object.values(stripeState.sessions).filter(s => s.metadata && s.metadata.estimateId === estId && (!mode || s.mode === mode)).slice(-1)[0];
 try { fs.unlinkSync(DATA_FILE2); } catch (e) {}
@@ -1891,7 +1891,7 @@ async function loginCookie2(email, password) {
 }
 function sseConnect2(cookie) {
   return new Promise((resolve, reject) => {
-    const r = http.get({ host: '127.0.0.1', port: 8979, path: '/api/events', headers: { Cookie: cookie } }, (res) => {
+    const r = http.get({ host: '127.0.0.1', port: 9979, path: '/api/events', headers: { Cookie: cookie } }, (res) => {
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('sse2 status ' + res.statusCode)); }
       const c = { req: r, res, buf: '', raw: '', events: [], waiters: [] };
       res.setEncoding('utf8');
@@ -3111,7 +3111,7 @@ await waitHealth2();
 const adm2b = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
 const A2B = adm2b.j.token;
 t('v24 A3: app2 reboots on the seeded data file', !!A2B);
-async function mockEmails() { const r = await fetch('http://127.0.0.1:8981/__emails'); return r.json(); }
+async function mockEmails() { const r = await fetch('http://127.0.0.1:9981/__emails'); return r.json(); }
 function receiptsFor(emails, idPart) { return emails.filter(e => (e.subject || '') === 'Your receipt — General Handyman Solutions' && JSON.stringify(e).includes(idPart)); }
 async function waitReceipts(idPart, tries) {
   let hits = [];
@@ -3132,7 +3132,7 @@ t('v24 A3: failed capture -> 502 and NO receipt', cap2.status === 502 && receipt
 const cap3 = await req2('POST', '/api/requests/GHS-RCPT3/hold/capture', { token: A2B, body: { finalCents: 7500 } });
 await sleep(500);
 t('v24 A3: capture with no customer email succeeds, sends nothing', cap3.status === 200 && receiptsFor(await mockEmails(), 'GHS-RCPT3').length === 0);
-await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'true' });
+await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'true' });
 const cap4 = await req2('POST', '/api/requests/GHS-RCPT4/hold/capture', { token: A2B, body: { finalCents: 7500 } });
 await sleep(600);
 t('v24 A3: Resend failure does NOT break the capture (still 200)', cap4.status === 200 && cap4.j.finalCents === 7500);
@@ -3176,7 +3176,7 @@ t('v24 A3: Resend failure does NOT break the capture (still 200)', cap4.status =
   t('v33 audit: customers cannot read the security log (403)', audit403.status === 403);
 }
 
-await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
+await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'false' });
 
 
 // ---------------- v36: worker-deletion removal email ----------------
@@ -3218,10 +3218,10 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   // (b) Resend forced to fail: the DELETE still succeeds, the worker is
   // still gone, and the audit entry records the email failure
   const dw2 = await mkWorker36('Del Dos', 'del2@t.local');
-  await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'true' });
+  await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'true' });
   const del2 = await req2('DELETE', '/api/workers/' + dw2, { token: A2B });
   const del2again = await req2('DELETE', '/api/workers/' + dw2, { token: A2B });
-  await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
+  await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'false' });
   const aud2 = await auditEntryFor(A2B, 'worker.delete', dw2);
   t('v36: Resend failure does NOT block the deletion (200, worker gone)', del2.status === 200 && del2.j.ok === true && del2again.status === 404);
   t('v36: audit records the removal email failure', !!aud2 && (aud2.detail || '').includes('emailed: false'));
@@ -3268,10 +3268,10 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   t('v41 mail: board job created', bj.status === 201);
   await sleep(700);
   t('v41 mail: a board post sends NO direct-offer email', (await directMailFor('Board no direct mail job')).length === 0);
-  await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'true' });
+  await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'true' });
   const dj2 = await req2('POST', '/api/jobs', { token: A41, body: { service: 'Direct mail fail job', city: 'Fairfield', payOffer: 95, assignedWorkerId: danId, silent: true } });
   t('v41 mail: email provider down — the direct offer STILL succeeds (failure never blocks)', dj2.status === 201);
-  await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
+  await fetch('http://127.0.0.1:9981/__fail', { method: 'POST', body: 'false' });
 }
 
 // ---------------- v45: estimate builder — typed lines, materials, options, member page, expiry, duplicate, nuevo, reminder ----------------
@@ -3425,7 +3425,7 @@ await fetch('http://127.0.0.1:8981/__fail', { method: 'POST', body: 'false' });
   }
   fs.writeFileSync(DATA_FILE2, JSON.stringify(seedR));
   const { spawn: spawn45 } = await import('node:child_process');
-  child2 = spawn45('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, { PORT: '8979', DATA_FILE: DATA_FILE2, NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT, SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', EST_REMIND_THROTTLE_MS: '400' }), stdio: ['ignore', 'pipe', 'pipe'] });
+  child2 = spawn45('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, { PORT: '9979', DATA_FILE: DATA_FILE2, NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT, SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981', EST_REMIND_THROTTLE_MS: '400' }), stdio: ['ignore', 'pipe', 'pipe'] });
   child2.stderr.on('data', d => process.stderr.write('[app2] ' + d));
   await waitHealth2();
   const adm45b = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
@@ -3848,6 +3848,63 @@ t('static v69: balance adjustment rails exist — admin endpoint, append-only ad
 }
 
 
+// ---------- v95: OPTIONAL materials-pickup service on the adjust-balance flow (Gabriel, 2026-11-07) ----------
+t('static v95: pickup rails exist — server flag + sealed line kinds, EN+ES page labels, admin toggle labels, audit note',
+  serverSrc.includes('b.pickup === true') && serverSrc.includes("kind: 'pickup'") && serverSrc.includes("kind: 'processing'") &&
+  serverSrc.includes("pickupLine: 'Materials pickup service'") && serverSrc.includes("pickupLine: 'Servicio de compra de materiales'") &&
+  serverSrc.includes("processingLine: 'Materials processing (3%)'") && serverSrc.includes("processingLine: 'Procesamiento de materiales (3%)'") &&
+  serverSrc.includes('pickup applied') &&
+  htmlSrc.includes('We pick up the materials (+$15 + 3%)') && htmlSrc.includes('Nosotros compramos los materiales (+$15 + 3%)') && htmlSrc.includes('pickup:pickup'));
+{
+  const adm95 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const A95 = adm95.j.token;
+  // MEMBER order: labor $200 + materials $100 -> member total $260 (labor takes the −20%, materials never do)
+  const mem95 = await mkMember('pickup95@t.local', '(707) 555-0195');
+  const sub95 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mem95.token, body: {} });
+  await mockActivate(sub95.j.subscriptionId);
+  await req2('POST', '/api/stripe/homecare-confirm', { token: mem95.token, body: {} });
+  const cart95 = await req2('POST', '/api/admin/carts', { token: A95, body: { items: [{ custom: true, kind: 'labor', name: 'Sink swap labor', qty: 1, unitPrice: 200 }, { custom: true, kind: 'other', name: 'Materials', qty: 1, unitPrice: 100 }], customerName: 'Pickup Pam', customerEmail: 'pickup95@t.local' } });
+  const cid95 = cart95.j.cart.id;
+  t('v95 setup: member cart totals $300 list / $260 member', cart95.status === 201 && cart95.j.cart.listTotal === 300 && cart95.j.cart.memberTotal === 260);
+  const co95 = await req2('POST', '/api/carts/' + cid95 + '/checkout', { token: mem95.token, body: { name: 'Pickup Pam', phone: '7075550195', email: 'pickup95@t.local', address: '9 Pine St', city: 'Fairfield', when: 'Today' } });
+  const sess95 = sessionForCart(cid95, 'payment');
+  await mockSessionPaid(sess95.id);
+  await fetch(BASE2 + '/cart/' + cid95 + '?paid=1&session_id=' + sess95.id);
+  const reqs95a = await req2('GET', '/api/requests', { token: A95 });
+  const conv95a = (reqs95a.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid95);
+  t('v95 setup: the member deposit books the order ($50 flat tier of $260, balance $210)', co95.status === 200 && co95.j.memberApplied === true && !!conv95a && conv95a.payment.status === 'deposit' && conv95a.payment.balanceCents === 21000);
+  // FLAG ON: +$100 materials -> THREE lines; pickup $15 + processing $3.00 (3% of THIS $100 delta only), balance +$118
+  const pk1 = await req2('POST', '/api/admin/carts/' + cid95 + '/adjust-balance', { token: A95, body: { delta: 100, note: 'Materials: faucet + supply lines, at cost', pickup: true } });
+  t('v95: pickup ON lands THREE lines — materials +$100, kind pickup +$15, kind processing +$3.00 — balance $210 -> $328, total $378', pk1.status === 200 && pk1.j.cart.payState.adjustments.length === 3 && pk1.j.cart.payState.adjustments[0].delta === 100 && !pk1.j.cart.payState.adjustments[0].kind && pk1.j.cart.payState.adjustments[1].kind === 'pickup' && pk1.j.cart.payState.adjustments[1].delta === 15 && pk1.j.cart.payState.adjustments[2].kind === 'processing' && pk1.j.cart.payState.adjustments[2].delta === 3 && pk1.j.cart.payState.balance === 328 && pk1.j.cart.payState.total === 378 && pk1.j.cart.payState.deposit === 50);
+  t('v95: on a MEMBER order the pickup lines stay FULL price ($15.00 / $3.00 exact — the member −20% NEVER touches them)', pk1.j.cart.payState.adjustments[1].delta === 15 && pk1.j.cart.payState.adjustments[2].delta === 3);
+  const pg95 = await (await fetch(BASE2 + '/cart/' + cid95)).text();
+  t('v95: the customer page renders both sealed lines with names + amounts and the new balance', pg95.includes('Materials pickup service') && pg95.includes('$15.00') && pg95.includes('Materials processing (3%)') && pg95.includes('Pay balance $328.00'));
+  const reqs95b = await req2('GET', '/api/requests', { token: A95 });
+  const conv95b = (reqs95b.j.requests || []).find(x => x.menuOrder && x.menuOrder.cartId === cid95);
+  t('v95: the order record syncs — total $378, balance $328, still deposit state', !!conv95b && conv95b.payment.status === 'deposit' && conv95b.payment.totalCents === 37800 && conv95b.payment.balanceCents === 32800);
+  // FLAG OFF: a plain materials adjustment adds ONLY its own line
+  const pk2 = await req2('POST', '/api/admin/carts/' + cid95 + '/adjust-balance', { token: A95, body: { delta: 50, note: 'More materials: valves' } });
+  t('v95: flag OFF adds ONLY the materials line (+$50 -> balance $378, no service lines)', pk2.status === 200 && pk2.j.cart.payState.adjustments.length === 4 && pk2.j.cart.payState.adjustments[3].delta === 50 && !pk2.j.cart.payState.adjustments[3].kind && pk2.j.cart.payState.balance === 378);
+  // NO STICKY STATE: the next adjustment needs the flag again
+  const pk3 = await req2('POST', '/api/admin/carts/' + cid95 + '/adjust-balance', { token: A95, body: { delta: 10, note: 'Tape + fittings', pickup: false } });
+  t('v95: no sticky pickup — a later adjustment with pickup:false adds no service lines (+$10 -> $388)', pk3.status === 200 && pk3.j.cart.payState.adjustments.length === 5 && pk3.j.cart.payState.balance === 388 && pk3.j.cart.payState.adjustments.filter(a => a.kind === 'pickup').length === 1 && pk3.j.cart.payState.adjustments.filter(a => a.kind === 'processing').length === 1);
+  // NEGATIVE delta + pickup:true -> NO service lines, no error
+  const pk4 = await req2('POST', '/api/admin/carts/' + cid95 + '/adjust-balance', { token: A95, body: { delta: -20, note: 'Materials credit', pickup: true } });
+  t('v95: pickup:true on a NEGATIVE adjustment adds no service lines and does not error (-$20 -> $368)', pk4.status === 200 && pk4.j.cart.payState.adjustments.length === 6 && pk4.j.cart.payState.adjustments[5].delta === -20 && !pk4.j.cart.payState.adjustments[5].kind && pk4.j.cart.payState.balance === 368 && pk4.j.cart.payState.adjustments.filter(a => a.kind === 'pickup').length === 1);
+  // ES cart + ROUNDING: 3% of $33.33 = $0.9999 -> $1.00 exactly; the lines speak the customer's language
+  const cart95es = await req2('POST', '/api/admin/carts', { token: A95, body: { lang: 'es', items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Compra Carla', customerEmail: 'compra95@t.local' } });
+  const cid95es = cart95es.j.cart.id;
+  const co95es = await req2('POST', '/api/carts/' + cid95es + '/checkout', { body: { name: 'Compra Carla', phone: '7075550196', email: 'compra95@t.local', address: '8 Pino St', city: 'Fairfield', when: 'Hoy' } });
+  const sess95es = sessionForCart(cid95es, 'payment');
+  await mockSessionPaid(sess95es.id);
+  await fetch(BASE2 + '/cart/' + cid95es + '?paid=1&session_id=' + sess95es.id);
+  const pkEs = await req2('POST', '/api/admin/carts/' + cid95es + '/adjust-balance', { token: A95, body: { delta: 33.33, note: 'Materiales: llave + mangueras', pickup: true } });
+  t('v95: the 3% rounds to cents (3% of $33.33 = $1.00) and the ES lines carry the Spanish names', pkEs.status === 200 && pkEs.j.cart.payState.adjustments.length === 3 && pkEs.j.cart.payState.adjustments[1].kind === 'pickup' && pkEs.j.cart.payState.adjustments[1].delta === 15 && pkEs.j.cart.payState.adjustments[1].note === 'Servicio de compra de materiales' && pkEs.j.cart.payState.adjustments[2].kind === 'processing' && pkEs.j.cart.payState.adjustments[2].delta === 1 && pkEs.j.cart.payState.adjustments[2].note === 'Procesamiento de materiales (3%)' && pkEs.j.cart.payState.balance === 134.33);
+  const pg95es = await (await fetch(BASE2 + '/cart/' + cid95es)).text();
+  t('v95: the ES customer page renders "Servicio de compra de materiales — $15.00" and the processing line', pg95es.includes('Servicio de compra de materiales') && pg95es.includes('Procesamiento de materiales (3%)') && pg95es.includes('$15.00'));
+}
+
+
 // ---------- v94 REPRO: deposit -> 3 adjustments -> pay the exact current balance via the cart link (the Brijesh sequence, live 2026-11-07) ----------
 {
   const adm94 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
@@ -4029,7 +4086,7 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
 
 // ---------------- v78 server: guest cart quote + embedded checkout ----------------
 // The live app2 at this point is the v75-respawned instance (mock
-// Stripe on 8980, whsec_mock_test); admin re-logs in for a token.
+// Stripe on 9980, whsec_mock_test); admin re-logs in for a token.
 {
   const adm78 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
   const A78 = adm78.j.token;
@@ -4464,7 +4521,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v94: ghs-app-v94)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v94'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v95: ghs-app-v95)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v95'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5074,13 +5131,13 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
 
   // --- #4b: a midway Stripe failure is RECORDED as partial; a retry finishes only the outstanding leg ---
   const sP = await bookSplit807('split-p@t.local', '(707) 555-0282', 'Split Pam');
-  await fetch('http://127.0.0.1:8980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: sP.balPi }) });
+  await fetch('http://127.0.0.1:9980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: sP.balPi }) });
   const rfBeforeP = stripeState.refunds.length;
   const rfP1 = await req2('POST', '/api/requests/' + sP.ord.id + '/refund', { token: A807, body: {} });
   const ordP1 = (await reqs807()).find(x => x.id === sP.ord.id);
   t('v80.7 #4b: a midway refund failure answers 502 and is RECORDED as partial ($50 leg only) — the order is NOT cancelled', rfP1.status === 502 && rfP1.j.partial === true && !!ordP1 && ordP1.status !== 'Cancelled' && !!ordP1.refund && ordP1.refund.partial === true && ordP1.refund.refundedCents === 5000);
   t('v80.7 #4b: only the deposit PI was refunded before the failure', stripeState.refunds.slice(rfBeforeP).filter(x => x.payment_intent === sP.depPi).length === 1 && stripeState.refunds.slice(rfBeforeP).filter(x => x.payment_intent === sP.balPi).length === 0);
-  await fetch('http://127.0.0.1:8980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: '' }) });
+  await fetch('http://127.0.0.1:9980/__failrefund', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pi: '' }) });
   const rfP2 = await req2('POST', '/api/requests/' + sP.ord.id + '/refund', { token: A807, body: {} });
   const ordP2 = (await reqs807()).find(x => x.id === sP.ord.id);
   const cartsAdmP = await req2('GET', '/api/admin/carts', { token: A807 });
@@ -5399,31 +5456,31 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const old8010 = await raw809(APP_PORT, 'GET', '/old/old-01.webp', 'generalhandymans.app');
   t('v80.10 LA ORIGINAL: restored homepage photo served (200 image/webp since v80.18)', old8010.status === 200 && String(old8010.headers['content-type']).includes('image/webp') && old8010.body.length > 1000);
 
-  try { fs.unlinkSync('/tmp/ghs-v17-test/data-gate.json'); } catch (e) {}
+  try { fs.unlinkSync('/tmp/ghs-v95-test/data-gate.json'); } catch (e) {}
   const child809 = spawn('node', ['server.js'], {
     cwd: APP_DIR,
     env: Object.assign({}, process.env, {
-      PORT: '8990', DATA_FILE: '/tmp/ghs-v17-test/data-gate.json', NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT,
+      PORT: '9990', DATA_FILE: '/tmp/ghs-v95-test/data-gate.json', NOMINATIM_BASE: 'http://127.0.0.1:' + GEO_PORT,
       SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
-      STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
-      RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981',
+      STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
+      RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981',
       MERGED_DOMAIN_LIVE: '1'
     }),
     stdio: ['ignore', 'pipe', 'pipe']
   });
   child809.stderr.on('data', d => process.stderr.write('[gate] ' + d));
   let up809 = false;
-  for (let i = 0; i < 60 && !up809; i++) { try { const h = await raw809(8990, 'GET', '/api/health', '127.0.0.1'); up809 = h.status === 200; } catch (e) {} if (!up809) await sleep(250); }
+  for (let i = 0; i < 60 && !up809; i++) { try { const h = await raw809(9990, 'GET', '/api/health', '127.0.0.1'); up809 = h.status === 200; } catch (e) {} if (!up809) await sleep(250); }
   t('v80.9 FUSION: gate instance boots with MERGED_DOMAIN_LIVE=1', up809);
-  const red1809 = await raw809(8990, 'GET', '/', 'app.generalhandymans.app');
+  const red1809 = await raw809(9990, 'GET', '/', 'app.generalhandymans.app');
   t('v80.9 FUSION: gate ON — app host root 308-redirects to the apex', red1809.status === 308 && red1809.headers.location === 'https://generalhandymans.app/');
-  const red2809 = await raw809(8990, 'GET', '/cart/CRT-TEST809?src=ig&x=1', 'app.generalhandymans.app');
+  const red2809 = await raw809(9990, 'GET', '/cart/CRT-TEST809?src=ig&x=1', 'app.generalhandymans.app');
   t('v80.9 FUSION: gate ON — redirect preserves path + query', red2809.status === 308 && red2809.headers.location === 'https://generalhandymans.app/cart/CRT-TEST809?src=ig&x=1');
-  const wh809 = await raw809(8990, 'POST', '/api/stripe/webhook', 'app.generalhandymans.app', '{"id":"evt_gate_test"}');
+  const wh809 = await raw809(9990, 'POST', '/api/stripe/webhook', 'app.generalhandymans.app', '{"id":"evt_gate_test"}');
   t('v80.9 FUSION: gate ON — /api/stripe/webhook is EXEMPT (served, never redirected)', wh809.status !== 308 && wh809.status !== 301 && wh809.status !== 302 && wh809.status !== 303 && wh809.status !== 307);
-  const apex809 = await raw809(8990, 'GET', '/', 'generalhandymans.app');
+  const apex809 = await raw809(9990, 'GET', '/', 'generalhandymans.app');
   t('v80.9 FUSION: gate ON — the apex host itself serves normally (200)', apex809.status === 200);
-  const onr809 = await raw809(8990, 'GET', '/', 'general-handyman-solutions-app.onrender.com');
+  const onr809 = await raw809(9990, 'GET', '/', 'general-handyman-solutions-app.onrender.com');
   t('v80.9 FUSION: gate ON — the onrender host is untouched (200)', onr809.status === 200);
   try { child809.kill('SIGTERM'); } catch (e) {}
 }
@@ -5493,7 +5550,7 @@ t('unit v80.13 margin guard: minTotalForSoldMargin inverts the floor (~$3.30) an
 
 // ---------------- v80.11 ALCANCE: behavioral (app3 — own instance, city-aware geo mock, shared Stripe mock) ----------------
 const BASE3 = 'http://127.0.0.1:8985';
-const DATA_FILE3 = '/tmp/ghs-v17-test/data-v80-11.json';
+const DATA_FILE3 = '/tmp/ghs-v95-test/data-v80-11.json';
 const geo3 = http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/search') {
@@ -5514,9 +5571,9 @@ const child3 = spawn('node', ['server.js'], {
   env: Object.assign({}, process.env, {
     PORT: '8985', DATA_FILE: DATA_FILE3, NOMINATIM_BASE: 'http://127.0.0.1:8986',
     SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
-    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1',
+    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1',
     STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
-    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981'
+    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981'
   }),
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -6013,9 +6070,9 @@ const child3b = spawn('node', ['server.js'], {
   env: Object.assign({}, process.env, {
     PORT: '8985', DATA_FILE: DATA_FILE3, NOMINATIM_BASE: 'http://127.0.0.1:8986',
     SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '',
-    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1',
+    STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1',
     STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test',
-    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981'
+    RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981'
   }),
   stdio: ['ignore', 'pipe', 'pipe']
 });
@@ -6048,9 +6105,9 @@ t('static v80.15: review ask is settings-driven and hooked ONLY at the two paid-
 t('static v80.15: payment_failed webhook emails the customer once per event, beside the v80.12 failure record', serverSrc.includes("fireAutomation('payment_failed'") && serverSrc.includes("type === 'payment_failed'"));
 t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
 const BASE4 = 'http://127.0.0.1:8987';
-const DATA_FILE4 = '/tmp/ghs-v17-test/data-v80-15.json';
+const DATA_FILE4 = '/tmp/ghs-v95-test/data-v80-15.json';
 try { fs.unlinkSync(DATA_FILE4); } catch (e) {}
-const env815 = { PORT: '8987', DATA_FILE: DATA_FILE4, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+const env815 = { PORT: '8987', DATA_FILE: DATA_FILE4, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
 let child4 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env815), stdio: ['ignore', 'pipe', 'pipe'] });
 child4.stderr.on('data', d => process.stderr.write('[app4] ' + d));
 async function req4(method, p, opts = {}) {
@@ -6360,9 +6417,9 @@ t('static v80.19.1: the restored trade chips pick their scroll target by chip PO
 
 
 const BASE5 = 'http://127.0.0.1:8989';
-const DATA_FILE5 = '/tmp/ghs-v17-test/data-v80-19.json';
+const DATA_FILE5 = '/tmp/ghs-v95-test/data-v80-19.json';
 try { fs.unlinkSync(DATA_FILE5); } catch (e) {}
-const env819 = { PORT: '8989', DATA_FILE: DATA_FILE5, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+const env819 = { PORT: '8989', DATA_FILE: DATA_FILE5, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
 let child5 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env819), stdio: ['ignore', 'pipe', 'pipe'] });
 child5.stderr.on('data', d => process.stderr.write('[app5] ' + d));
 async function req5(method, p, opts = {}) {
@@ -6994,9 +7051,9 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   // pressure washing out of season, filters on their 6-month cycle),
   // so the pins are deterministic in any calendar month.
   const BASE6 = 'http://127.0.0.1:8991';
-  const DATA_FILE6 = '/tmp/ghs-v17-test/data-v80-27.json';
+  const DATA_FILE6 = '/tmp/ghs-v95-test/data-v80-27.json';
   try { fs.unlinkSync(DATA_FILE6); } catch (e) {}
-  const env827 = { PORT: '8991', DATA_FILE: DATA_FILE6, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', SEASONAL_NOW_MS: String(Date.UTC(2026, 10, 15, 12, 0, 0)) };
+  const env827 = { PORT: '8991', DATA_FILE: DATA_FILE6, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981', SEASONAL_NOW_MS: String(Date.UTC(2026, 10, 15, 12, 0, 0)) };
   function spawnApp6() { const c = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env827), stdio: ['ignore', 'pipe', 'pipe'] }); c.stderr.on('data', d => process.stderr.write('[app6] ' + d)); return c; }
   let child6 = spawnApp6();
   async function req6(method, p, opts = {}) {
@@ -7178,9 +7235,9 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
 
   // --- HTTP: favorites + recents persist on the account (app7) ---
   const BASE7 = 'http://127.0.0.1:8992';
-  const DATA_FILE7 = '/tmp/ghs-v17-test/data-v80-28.json';
+  const DATA_FILE7 = '/tmp/ghs-v95-test/data-v80-28.json';
   try { fs.unlinkSync(DATA_FILE7); } catch (e) {}
-  const env828 = { PORT: '8992', DATA_FILE: DATA_FILE7, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981' };
+  const env828 = { PORT: '8992', DATA_FILE: DATA_FILE7, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981' };
   const child7 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env828), stdio: ['ignore', 'pipe', 'pipe'] });
   child7.stderr.on('data', d => process.stderr.write('[app7] ' + d));
   async function req7(method, p, opts = {}) {
@@ -7287,9 +7344,9 @@ t('static v81: every new customer string lives in BOTH CUST_UI languages (EN/ES 
 t('static v81: the sprint dictionary is in EN/ES parity (ADM821)', (htmlSrc.match(/paceNow:/g) || []).length === 2 && (htmlSrc.match(/firstCharges:/g) || []).length === 2);
 
 const BASE8 = 'http://127.0.0.1:8993';
-const DATA_FILE8 = '/tmp/ghs-v17-test/data-v81.json';
+const DATA_FILE8 = '/tmp/ghs-v95-test/data-v81.json';
 try { fs.unlinkSync(DATA_FILE8); } catch (e) {}
-const env81 = { PORT: '8993', DATA_FILE: DATA_FILE8, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981' };
+const env81 = { PORT: '8993', DATA_FILE: DATA_FILE8, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:9980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:9981' };
 function spawnApp8() { const c = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env81), stdio: ['ignore', 'pipe', 'pipe'] }); c.stderr.on('data', d => process.stderr.write('[app8] ' + d)); return c; }
 let child8 = spawnApp8();
 async function req8(method, p, opts = {}) {

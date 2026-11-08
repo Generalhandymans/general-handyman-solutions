@@ -6452,9 +6452,17 @@ async function adjustCartBalance(idv){
   if(!isFinite(delta) || delta===0){ alert('Enter a non-zero dollar amount.'); return; }
   const note=await appPrompt('Note the customer will see on his link (e.g. Updated materials: cable roll + valves, at cost):');
   if(note===null) return;
+  // v95: Gabriel's pickup call — when WE go buy the materials, the run
+  // is a paid service: $15 flat + 3% of this materials amount, as its
+  // own never-discounted lines on the customer's link. Asked ONLY on a
+  // positive adjustment and OFF unless he taps yes here — never
+  // automatic, decided case by case. Label follows the app EN|ES
+  // toggle like every other string.
+  let pickup=false;
+  if(delta>0){ pickup=await appConfirm((menuLang()==='es'?'Nosotros compramos los materiales (+$15 + 3%)':'We pick up the materials (+$15 + 3%)')+'?\nTap yes only if the Team goes to buy/pick up these materials: the customer pays the $15 pickup service plus 3% of this materials amount — both land as their own lines on his link, never discounted.'); }
   if(!await appConfirm('Apply '+(delta<0?'-':'+')+moneyFmt(Math.abs(delta))+' to '+idv+'?\nHis link shows the new balance right away.')) return;
   try{
-    const d=await api('/api/admin/carts/'+idv+'/adjust-balance',{method:'POST', body:JSON.stringify({ delta:delta, note:(note||'').trim() })});
+    const d=await api('/api/admin/carts/'+idv+'/adjust-balance',{method:'POST', body:JSON.stringify({ delta:delta, note:(note||'').trim(), pickup:pickup })});
     alert('Done — '+idv+' balance is now '+moneyFmt(d.cart.payState.balance)+' (total '+moneyFmt(d.cart.payState.total)+').');
     loadAdminCarts();
   }catch(e){ alert(e.message); }

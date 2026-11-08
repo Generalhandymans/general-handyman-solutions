@@ -4835,7 +4835,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
       depositDueLabel: 'Due today — booking deposit to book', balanceDueLabel: 'Balance at completion',
-      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', travelLine: 'Travel', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
+      depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', travelLine: 'Travel', pickupLine: 'Materials pickup service', processingLine: 'Materials processing (3%)', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
       joinOrderNote: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
@@ -4883,7 +4883,7 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
       depositDueLabel: 'Hoy — anticipo para agendar', balanceDueLabel: 'Resto al terminar',
-      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', travelLine: 'Viaje', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
+      depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', travelLine: 'Viaje', pickupLine: 'Servicio de compra de materiales', processingLine: 'Procesamiento de materiales (3%)', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
       joinOrderNote: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
@@ -4992,10 +4992,16 @@ function cartPageHtml(c, user, langOverride, notice) {
     // v80.20: a kind:'travel' adjustment renders as its own sealed
     // line — "Travel — $25" / "Viaje — $25" — localized by the same
     // data-i18n repaint as every other string on this page.
+    // v95: the pickup pair renders the same sealed way —
+    // "Materials pickup service — $15" / "Materials processing (3%) — $3".
     const adjRows = (c.payment && Array.isArray(c.payment.adjustments) && c.payment.adjustments.length)
       ? c.payment.adjustments.map(a => a.kind === 'travel'
         ? '<p style="font-size:15px;margin:2px 0"><span data-i18n="travelLine">' + S.travelLine + '</span> — <b>' + usd(a.deltaCents / 100) + '</b></p>'
-        : '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#a49d93">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
+        : a.kind === 'pickup'
+          ? '<p style="font-size:15px;margin:2px 0"><span data-i18n="pickupLine">' + S.pickupLine + '</span> — <b>' + usd(a.deltaCents / 100) + '</b></p>'
+          : a.kind === 'processing'
+            ? '<p style="font-size:15px;margin:2px 0"><span data-i18n="processingLine">' + S.processingLine + '</span> — <b>' + usd(a.deltaCents / 100) + '</b></p>'
+            : '<p style="font-size:15px;margin:2px 0"><span data-i18n="adjLine">' + S.adjLine + '</span>: <b>' + (a.deltaCents < 0 ? '-' : '+') + usd(Math.abs(a.deltaCents) / 100) + '</b>' + (a.note ? ' <span style="color:#a49d93">— ' + escMail(a.note) + '</span>' : '') + '</p>').join('')
       : '';
     // v62: a cart in DEPOSIT state (40% in, balance outstanding) shows
     // the booked state + the balance with its own Pay button on this
@@ -8650,14 +8656,38 @@ async function handleRequest(req, res) {
       if (Math.abs(deltaCents) > 200000) return send(res, 400, { error: 'that adjustment is over $2,000 — check the number' });
       note = cleanText(b.note, 200);
     }
-    const newBalance = Math.round(Number(c.payment.balanceCents) || 0) + deltaCents;
+    // v95 PICKUP (Gabriel, 2026-11-07 — his call, case by case): when
+    // WE go buy/pick up the customer's materials, the customer pays
+    // for that run: $15 flat for the pickup service PLUS 3% of THIS
+    // adjustment's materials amount (materials ride at cost, so the
+    // card fee on them used to come out of our pocket). It rides the
+    // SAME materials call — { pickup: true } on a POSITIVE delta only:
+    // never on travel, never on a credit/negative adjustment, never
+    // automatic, and with the flag absent the endpoint behaves exactly
+    // as before. Both charges land as their own sealed append-only
+    // lines right after the materials line — kind 'pickup' /
+    // 'processing', service lines like travel: priced 'other', so the
+    // member −20% NEVER touches them, and the 3% is computed on THIS
+    // call's materials delta only (never the cart total, never prior
+    // adjustments). Each materials adjustment needs the flag again —
+    // nothing sticks.
+    const isPickup = !isTravel && b.pickup === true && deltaCents > 0;
+    const pickupCents = isPickup ? 1500 : 0;
+    const processingCents = isPickup ? Math.round(deltaCents * 3 / 100) : 0;
+    const totalDeltaCents = deltaCents + pickupCents + processingCents;
+    const newBalance = Math.round(Number(c.payment.balanceCents) || 0) + totalDeltaCents;
     if (newBalance < 0) return send(res, 400, { error: 'the balance cannot go below $0 — the deposit already paid is ' + usd(Number(c.payment.depositCents) / 100) });
     await expireCartSessions(c);
     if (!Array.isArray(c.payment.adjustments)) c.payment.adjustments = [];
     const adjRec = { at: new Date().toISOString(), by: user.email || user.id, deltaCents, note };
     if (isTravel) adjRec.kind = 'travel';
     c.payment.adjustments.push(adjRec);
-    c.payment.amountCents = Math.round(Number(c.payment.amountCents) || 0) + deltaCents;
+    if (isPickup) {
+      const pkAt = new Date().toISOString();
+      c.payment.adjustments.push({ at: pkAt, by: user.email || user.id, deltaCents: pickupCents, note: c.lang === 'es' ? 'Servicio de compra de materiales' : 'Materials pickup service', kind: 'pickup' });
+      c.payment.adjustments.push({ at: pkAt, by: user.email || user.id, deltaCents: processingCents, note: c.lang === 'es' ? 'Procesamiento de materiales (3%)' : 'Materials processing (3%)', kind: 'processing' });
+    }
+    c.payment.amountCents = Math.round(Number(c.payment.amountCents) || 0) + totalDeltaCents;
     c.payment.balanceCents = newBalance;
     const r = c.requestId ? db.requests.find(x => x.id === c.requestId) : null;
     if (r) {
@@ -8666,10 +8696,10 @@ async function handleRequest(req, res) {
       r.messages = r.messages || [];
       r.messages.push({ from: 'team', name: 'General Handyman Solutions Team', text: isTravel
         ? 'Travel charge on your order ' + r.id + ': +' + usd(deltaCents / 100) + ' — the trip charge for this job (travel is a trip cost, never discounted). New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '.'
-        : 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.', at: new Date().toISOString() });
+        : 'Materials update on your order ' + r.id + ': ' + (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + '. New total: ' + usd(c.payment.amountCents / 100) + ' · balance due at completion: ' + usd(newBalance / 100) + '. No extra labor charge.' + (isPickup ? ' We picked up the materials for this job: pickup service +' + usd(pickupCents / 100) + ' · materials processing (3%) +' + usd(processingCents / 100) + '.' : ''), at: new Date().toISOString() });
       if (r.customerId) notify(r.customerId, 'payment', (isTravel ? 'Travel charge on order ' : 'Materials update on order ') + r.id + ' — new balance at completion: ' + usd(newBalance / 100) + '.', '#req=' + r.id);
     }
-    audit(user, 'cart.adjust-balance', c.id, (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + ' · new balance ' + usd(newBalance / 100));
+    audit(user, 'cart.adjust-balance', c.id, (deltaCents < 0 ? '-' : '+') + usd(Math.abs(deltaCents) / 100) + (note ? ' — ' + note : '') + ' · new balance ' + usd(newBalance / 100) + (isPickup ? ' · pickup applied: service +' + usd(pickupCents / 100) + ' + processing (3%) +' + usd(processingCents / 100) : ''));
     if (newBalance === 0) {
       c.payment.balancePi = 'ADJUSTED';
       c.payment.balanceAt = new Date().toISOString();
