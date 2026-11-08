@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v87', swSrc.includes("const CACHE = 'ghs-app-v87'"));
+t('static: SW cache is ghs-app-v88', swSrc.includes("const CACHE = 'ghs-app-v88'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1005,6 +1005,46 @@ t('v77 rescue: forgot-password row shows on the customer login', el('forgotRow')
 run("location.hash = '#reset=" + 'a'.repeat(64) + "';"); run('checkResetHash()');
 t('v77 rescue: an emailed #reset= link opens the reset box', elById.get('resetBox').style.display === 'block');
 run("location.hash = '';"); run('checkResetHash()');
+
+// ---------------- v88 client: the member picker's FREE option ----------------
+// Gabriel (live on his phone, 2026-11-07): the "New member — join a
+// plan" picker offered ONLY the five paid plans — a visitor who does
+// not want to pay had NO way to register from that form. FREE is now
+// the picker's first option: picking it disarms every charge rail and
+// the member form submits as a plain free customer registration (the
+// v77 New customer rails — same /api/signup, role customer, no plan).
+resetStripeState();
+stripeCfgMode = 'ok';
+run("location.hash = '';");
+await run('openMemberJoin()');
+t('v88 free: cold member tab still lands on the paid join form (HomeCare armed, card row up)', run('curMode') === 'join' && run('pendingJoin && pendingJoin.plan') === 'homecare' && el('cardRow').style.display === 'block');
+el('aPlanSel').value = 'free'; run('joinPlanChanged()');
+t('v88 free: picking FREE disarms the pending join — no plan armed on either rail, still the member form', run('pendingJoin') === null && run('pendingMembershipPlan') === null && run('curMode') === 'join' && run('joinFreeSelected()') === true);
+t('v88 free: the form presents as a plain signup — NO card row, NO address/home/start groups, NO join agreement', el('cardRow').style.display === 'none' && el('serviceAddressRow').style.display === 'none' && el('homeGroup').style.display === 'none' && el('startGroup').style.display === 'none' && el('joinAgreeRow').style.display === 'none');
+t('v88 free: the note promises $0 today and $0/mo and the button is a bare Create account', (el('joinChargeNote').innerHTML || '').includes('$0 today and $0/mo') && (el('authBtn').textContent || '').trim() === 'Create account');
+el('aName').value = 'Free Fran'; el('aEmail').value = 'fran@t.local'; el('aPhone').value = '7075550113'; el('aPass').value = 'password123'; el('aServiceAddress').value = '';
+stubAuthUser = { id: 'USR-V88A', role: 'customer', name: 'Free Fran', email: 'fran@t.local' };
+const freeMark = fetchLog.length;
+await run('doAuth()');
+const freeCalls = fetchLog.slice(freeMark);
+t('v88 free: submit is a plain registration — signup + login happened, ZERO Stripe/payment calls, NO checkout URL produced, customer inside', freeCalls.some(f => f.url === '/api/signup') && freeCalls.some(f => f.url === '/api/login') && !freeCalls.some(f => f.url.includes('/api/stripe/')) && run('me && me.id') === 'USR-V88A');
+stubAuthUser = null;
+run('me = null;');
+// switching back to a paid plan re-arms the full paid join form
+await run('openMemberJoin()');
+el('aPlanSel').value = 'free'; run('joinPlanChanged()');
+el('aPlanSel').value = 'plus1'; run('joinPlanChanged()');
+t('v88 free: switching back to plus1 re-arms the paid join — pending join set, card row back, $100 on note + button', run('pendingJoin && pendingJoin.plan') === 'plus1' && el('cardRow').style.display === 'block' && (el('joinChargeNote').innerHTML || '').includes('$100') && (el('authBtn').textContent || '').includes('$100'));
+run('me = null; pendingJoin = null; pendingMembershipPlan = null;');
+// fallback state (Stripe down): FREE drops the armed plan into the plain signup
+resetStripeState();
+stripeCfgMode = 'down';
+await run("beginInlineJoin('yardcare', 'yard1')");
+t('v88 free fallback: sanity — the yard1 fallback is armed before the pick', run('pendingMembershipPlan && pendingMembershipPlan.plan') === 'yard1' && run('curMode') === 'customer' && el('planSelRow').style.display === 'block');
+el('aPlanSel').value = 'free'; run('joinPlanChanged()');
+t('v88 free fallback: picking FREE drops the armed plan — plain customer form, picker gone, unpriced button', run('pendingMembershipPlan') === null && run('curMode') === 'customer' && el('planSelRow').style.display === 'none' && (el('authBtn').textContent || '').trim() === 'Create account');
+run('me = null; pendingJoin = null; pendingMembershipPlan = null;');
+stripeCfgMode = 'empty';
 
 // --- v78 client: guest cart (localStorage) + embedded checkout ---
 // Gabriel's Amazon model: the cart exists for GUESTS, persists on the
@@ -4012,6 +4052,9 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   t('static v87: worker zone wears the draft language — 20px cards, uppercase section headers, field-grade inputs, HUGE card buttons (min 56px / 17px / 14px radius) with the chat reply + trade-level chips carved back out', htmlSrc.includes('#workerBox .card{border-radius:20px;padding:20px}') && htmlSrc.includes('#workerBox h2{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}') && htmlSrc.includes('#workerBox .card button{min-height:56px;font-size:17px;border-radius:14px}') && htmlSrc.includes('#workerBox .reply button{min-height:0}') && htmlSrc.includes('#workerBox .trade-lvl button{min-height:0') && htmlSrc.includes('#workerBox .wact{display:block;width:100%;margin-top:10px}'));
   t('static v87: job board + detail render the big title, the pay as the biggest number (.wjob-pay 25px) and the status as a COLORED badge keyed by data-wst (Open red, Claimed amber, On my way black, Arrived green); every flow button in workerJobBtns is a full-width .wact with its handler untouched', htmlSrc.includes('<span class="wjob-title">') && htmlSrc.includes('data-wst="') && htmlSrc.includes('.wjob-pay{font-size:25px}') && htmlSrc.includes('class="st wjob-pay"') && htmlSrc.includes('#workerBox .pill[data-wst="Open"]{background:var(--red)') && htmlSrc.includes('#workerBox .pill[data-wst="Arrived"]{background:var(--green)') && htmlSrc.includes('class="wact" onclick="claimJob') && htmlSrc.includes('class="black wact" onclick="setJobStatus') && htmlSrc.includes('class="black wact" onclick="doneJob') && htmlSrc.includes('class="ghost wact" onclick="openJobDetail'));
   t('static v87: earnings totals are the draft featured stat cards — .wstat-card dark #141414 panel, 2px red border, 20px radius, paid number green / pending amber — fed by the SAME totals and labels (paidOutLabel / pendingLabel), per-job rows unchanged below', htmlSrc.includes('.wstat-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px') && htmlSrc.includes('class="wstat-cards"') && htmlSrc.includes('<span class="wstat-num paid">$') && htmlSrc.includes('<span class="wstat-num pend">$') && htmlSrc.includes("WT('paidOutLabel')") && htmlSrc.includes("WT('pendingLabel')"));
+  t('static v88: the member picker carries the FREE option FIRST (value free, the settled EN label) and the five paid options survive byte-identical below it', htmlSrc.includes('<option value="free">FREE Member — $0/mo · No plan — just my free account</option>') && htmlSrc.indexOf('<option value="free">') < htmlSrc.indexOf('<option value="homecare">HomeCare — $29/mo</option>') && htmlSrc.includes('<option value="yard1">Yard Care — $75/mo · 1 yard visit / month</option>') && htmlSrc.includes('<option value="yard2">Yard Care — $150/mo · 2 yard visits / month</option>') && htmlSrc.includes('<option value="plus1">HomeCare Plus — $100/mo · 1 yard visit / month</option>') && htmlSrc.includes('<option value="plus2">HomeCare Plus — $175/mo · 2 yard visits / month</option>'));
+  t('static v88: the FREE strings live in CUST_UI in BOTH languages — the option label (planFreeOpt) and the under-form note (joinNoteFree0Tpl: $0 today, $0/mo, add a plan anytime)', htmlSrc.includes("planFreeOpt: 'FREE Member — $0/mo · No plan — just my free account'") && htmlSrc.includes("planFreeOpt: 'Miembro FREE — $0/mes · Sin plan — solo mi cuenta gratis'") && htmlSrc.includes("joinNoteFree0Tpl: 'Joining FREE Member — $0 today and $0/mo") && htmlSrc.includes("joinNoteFree0Tpl: 'Te unes como Miembro FREE — $0 hoy y $0/mes"));
+  t('static v88: the FREE wiring — joinFreeSelected derives the state (picker on free + no paid join armed), joinPlanChanged routes the pick, renderJoinTexts paints the $0 note, paintPlanFreeOptLabel repaints the option per language, and FREE is NOT a JOIN_PLAN_INFO plan (no price/trial/charge rail can key off it)', htmlSrc.includes('function joinFreeSelected()') && htmlSrc.includes("sel.value === 'free'") && htmlSrc.includes("CU('joinNoteFree0Tpl')") && htmlSrc.includes('function paintPlanFreeOptLabel()') && htmlSrc.includes("CU('planFreeOpt')") && !htmlSrc.includes('JOIN_PLAN_INFO = {\n  free:') && !/free:\s*\{\s*name:/.test(htmlSrc));
   const wSlice78 = htmlSrc.slice(htmlSrc.indexOf('id="workerBox"'), htmlSrc.indexOf('id="adminBox"'));
   const aStart78 = htmlSrc.indexOf('id="adminBox"');
   const aSlice78 = htmlSrc.slice(aStart78, htmlSrc.indexOf('<script>', aStart78));
@@ -4328,7 +4371,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v87: ghs-app-v87)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v87'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v88: ghs-app-v88)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v88'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---

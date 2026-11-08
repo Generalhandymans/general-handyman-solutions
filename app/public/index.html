@@ -595,6 +595,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
     <div id="planSelRow" style="display:none">
       <label>Choose your plan</label>
       <select id="aPlanSel" onchange="joinPlanChanged()">
+        <option value="free">FREE Member — $0/mo · No plan — just my free account</option>
         <option value="homecare">HomeCare — $29/mo</option>
         <option value="yard1">Yard Care — $75/mo · 1 yard visit / month</option>
         <option value="yard2">Yard Care — $150/mo · 2 yard visits / month</option>
@@ -1729,6 +1730,19 @@ function memberFormPlan(){
   if (sel && sel.value && JOIN_PLAN_INFO[sel.value]) return sel.value;
   return 'homecare';
 }
+// v88 (Gabriel, caught live on his phone, 2026-11-07): the member
+// picker's FREE option — the join form's no-plan state. FREE is NOT a
+// JOIN_PLAN_INFO plan: no price, no trial and no charge rail keys off
+// it. It is selected exactly when the picker shows 'free' and no paid
+// join is armed; while selected, the member form presents AND submits
+// as a plain free customer registration (the v77 New customer rails):
+// no card row, no service-address gate, no checkout — the account
+// alone, identical in the data model to a New customer signup.
+function joinFreeSelected(){
+  if (pendingJoin) return false;
+  const sel = document.getElementById('aPlanSel');
+  return !!(sel && sel.value === 'free');
+}
 // v80.10.1: the join/auth/checkout price notes are built as ONE text node
 // on purpose — inline tags at word boundaries extract as fused words
 // ("JoiningHomeCare Plus… charged$100") in text audits. Keep them tag-free.
@@ -1797,15 +1811,19 @@ function mode(m){ curMode=m;
   // visitor picked in the optional-membership picker. A plain signup
   // shows account fields + the optional offer, nothing more.
   const custPlan = !!fbInfo || (m==='customer' && optPlanPicked());
+  // v88: the member form in its FREE state (picker on 'free', no paid
+  // join armed) shows exactly the plain signup's fields — the paid
+  // membership surfaces below all stay down.
+  const joinFree = (m === 'join' && joinFreeSelected());
   const optRow = document.getElementById('optPlanRow');
   if (optRow) optRow.style.display = (m==='customer' && !fbInfo) ? 'block':'none';
-  document.getElementById('serviceAddressRow').style.display = (m==='join' || (m==='customer' && custPlan)) ? 'block':'none';
+  document.getElementById('serviceAddressRow').style.display = ((m==='join' && !joinFree) || (m==='customer' && custPlan)) ? 'block':'none';
   const planSelRow = document.getElementById('planSelRow');
   if (planSelRow) planSelRow.style.display = (m==='join' || m==='homecare' || fbInfo) ? 'block':'none';
   const forgotRow = document.getElementById('forgotRow');
   if (forgotRow) forgotRow.style.display = (m==='login' && !isWorkerEntry()) ? 'block':'none';
   const joinAgreeRow = document.getElementById('joinAgreeRow');
-  if (joinAgreeRow) joinAgreeRow.style.display = (m==='join' || m==='homecare' || fbInfo) ? 'block':'none';
+  if (joinAgreeRow) joinAgreeRow.style.display = ((m==='join' && !joinFree) || m==='homecare' || fbInfo) ? 'block':'none';
   const workerAgreeRow = document.getElementById('workerAgreeRow');
   if (workerAgreeRow) workerAgreeRow.style.display = m==='worker' ? 'block':'none';
   const serviceAddressHint = document.getElementById('serviceAddressHint');
@@ -1822,15 +1840,15 @@ function mode(m){ curMode=m;
   if (wdr84) wdr84.style.display = m==='worker' ? 'block':'none';
   if (m === 'worker') { consumeDoorClass(false); paintWorkerClass(); }
   const homeGroupEl = document.getElementById('homeGroup');
-  if (homeGroupEl) homeGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
+  if (homeGroupEl) homeGroupEl.style.display = ((m==='join' && !joinFree) || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
   const startGroupEl = document.getElementById('startGroup');
-  if (startGroupEl) startGroupEl.style.display = (m==='join' || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
+  if (startGroupEl) startGroupEl.style.display = ((m==='join' && !joinFree) || m==='homecare' || (m==='customer' && custPlan)) ? 'block':'none';
   document.getElementById('hcChargeNote').style.display = m==='homecare' ? 'block':'none';
   document.getElementById('joinChargeNote').style.display = (m==='join' || fbInfo) ? 'block':'none';
-  document.getElementById('cardRow').style.display = (m==='homecare' || m==='join') ? 'block':'none';
+  document.getElementById('cardRow').style.display = (m==='homecare' || (m==='join' && !joinFree)) ? 'block':'none';
   syncAuthPriceTexts(m);
   if (fbInfo) { const promoEl = document.getElementById('hcPromo'); if (promoEl) promoEl.style.display = 'none'; } // the armed plan is the only price on this form — never a competing HomeCare promo under a Yard/Plus fallback
-  document.getElementById('authBtn').textContent = (m==='homecare' || m==='join') ? CU('btnJoinTpl').replace('{amt}', JOIN_PLAN_INFO[memberFormPlan()].monthly) : (fbInfo ? CU('btnContinueTpl').replace('{amt}', fbInfo.monthly) : (m==='login' ? CU('btnLogin') : CU('btnCreate')));
+  document.getElementById('authBtn').textContent = (m==='homecare' || (m==='join' && !joinFree)) ? CU('btnJoinTpl').replace('{amt}', JOIN_PLAN_INFO[memberFormPlan()].monthly) : (fbInfo ? CU('btnContinueTpl').replace('{amt}', fbInfo.monthly) : (m==='login' ? CU('btnLogin') : CU('btnCreate')));
   if (m==='homecare') ensureStripe();
   paintOptPlanNote();
   const tlrM = document.getElementById('techLinkRow');
@@ -2127,6 +2145,16 @@ const JOIN_PLAN_INFO = {
 // currently selected; the in-form selector and pendingJoin are kept in
 // lockstep so what the visitor sees is exactly what submit will charge.
 function renderJoinTexts(){
+  // v88: the FREE state has no plan info to price from — its note is
+  // the $0 promise and its button is the plain Create account.
+  if (curMode === 'join' && joinFreeSelected()) {
+    const noteF = document.getElementById('joinChargeNote');
+    if (noteF) noteF.innerHTML = CU('joinNoteFree0Tpl');
+    const btnF = document.getElementById('authBtn');
+    if (btnF) btnF.textContent = CU('btnCreate');
+    if (typeof isJoinPromoActive === 'function' && isJoinPromoActive()) renderJoinPromo();
+    return;
+  }
   syncAuthPriceTexts('join');
   const plan = memberFormPlan();
   const info = JOIN_PLAN_INFO[plan];
@@ -2151,6 +2179,27 @@ function enterJoinMode(){
 // submit rails key off it) and instantly re-renders every price string.
 function joinPlanChanged(){
   const sel = document.getElementById('aPlanSel');
+  // v88: FREE picked — the visitor wants the account, not a plan.
+  if (sel && sel.value === 'free') {
+    if (pendingMembershipPlan && !pendingJoin) {
+      // Stripe.js-fallback state: the picker rides the plain form, so
+      // picking FREE drops the armed plan and lands on the plain
+      // signup (the v77 escape rails — account only, offer unpicked).
+      plainSignupTab();
+      return;
+    }
+    // Inline join state: disarm every charge rail and re-present the
+    // member form in its FREE state (mode + renderJoinTexts paint it:
+    // no card row, no address gate, the $0 note, unpriced button).
+    // Submit then runs the plain registration path — pendingJoin and
+    // pendingMembershipPlan both null, so doAuth creates the account
+    // and nothing else.
+    pendingJoin = null;
+    pendingMembershipPlan = null;
+    mode('join');
+    renderJoinTexts();
+    return;
+  }
   const plan = (sel && JOIN_PLAN_INFO[sel.value]) ? sel.value : 'homecare';
   if (pendingMembershipPlan && !pendingJoin) {
     // Account-first fallback (v35): the selector re-arms the FALLBACK plan —
@@ -2420,7 +2469,7 @@ en: {
   planPer: '/mo', planYardVisits: 'Monthly yard plan — {n} visit(s) / month', planPlusVisits: 'Monthly plan — PLUS {n} yard visit(s) / month included',
   hcNoteFreeTpl: '{name} — ${amt}/mo total. Your first month is FREE — $0 charged today, then ${amt}/mo (one free month per account). {perks}', hcNotePaidTpl: '{name} — ${amt}/mo total. Your card will be charged ${amt} today, then ${amt}/mo. {perks}',
   cardLblFreeTpl: 'Card — $0 charged today, then ${amt}/mo', cardLblPaidTpl: 'Card — charged ${amt} today, then ${amt}/mo',
-  optNoteFreeTpl: '{name} — your first month is FREE. $0 at checkout today, then ${amt}/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.', optNotePaidTpl: '{name} — ${amt}/mo. Tap Create account and we take you straight to secure checkout to start it — ${amt} charged today, then ${amt}/mo. Cancel anytime.', joinNoteFreeTpl: 'Joining {name} — your first month is FREE: $0 charged today, then ${amt}/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.', joinNotePaidTpl: 'Joining {name} — your card will be charged ${amt} today, then ${amt}/mo. One form, one submit: account, service address and payment together. Cancel anytime.', fbNoteTpl: 'Joining {name} — ${amt}/mo. Create your account and we will take you straight to secure checkout for this plan.', fbNoteFreeSuffix: ' Your first month is FREE — $0 at checkout today, then ${amt}/mo (one free month per account).', fbNoteAddrSuffix: ' Your service address is required for Yard Care and HomeCare Plus.', welcomeTpl: 'Welcome to {name}! 🎉', welcomeYourPlan: 'your membership', memActiveTpl: 'Your membership is <b>active</b> — ${amt}/mo. ', welcomeYardNote: 'The Team will schedule your yard visits with you — watch for a message from us.', welcomeEstNote: 'Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.', welcomeHcTitle: 'Welcome to HomeCare! 🎉', memActiveTrial: 'Your membership is <b>active</b> — your first month is <b>FREE</b>, then $29/mo. ', memActivePaid: 'Your membership is <b>active</b> — $29/mo. ', procPay: 'Processing payment…', procGen: 'Processing…', errAddressReq: 'Service address is required to join this membership — enter the address where we will do the work.',
+  optNoteFreeTpl: '{name} — your first month is FREE. $0 at checkout today, then ${amt}/mo (one free month per account). Tap Create account and we take you straight to secure checkout to start it. Cancel anytime.', optNotePaidTpl: '{name} — ${amt}/mo. Tap Create account and we take you straight to secure checkout to start it — ${amt} charged today, then ${amt}/mo. Cancel anytime.', joinNoteFreeTpl: 'Joining {name} — your first month is FREE: $0 charged today, then ${amt}/mo starting in 30 days (one free month per account). One form, one submit: account and payment together. Cancel anytime.', joinNotePaidTpl: 'Joining {name} — your card will be charged ${amt} today, then ${amt}/mo. One form, one submit: account, service address and payment together. Cancel anytime.', planFreeOpt: 'FREE Member — $0/mo · No plan — just my free account', joinNoteFree0Tpl: 'Joining FREE Member — $0 today and $0/mo. No card and no checkout: tap Create account and you are in, and you can add a plan anytime from inside your account.', fbNoteTpl: 'Joining {name} — ${amt}/mo. Create your account and we will take you straight to secure checkout for this plan.', fbNoteFreeSuffix: ' Your first month is FREE — $0 at checkout today, then ${amt}/mo (one free month per account).', fbNoteAddrSuffix: ' Your service address is required for Yard Care and HomeCare Plus.', welcomeTpl: 'Welcome to {name}! 🎉', welcomeYourPlan: 'your membership', memActiveTpl: 'Your membership is <b>active</b> — ${amt}/mo. ', welcomeYardNote: 'The Team will schedule your yard visits with you — watch for a message from us.', welcomeEstNote: 'Your first in-person estimate is <b>FREE</b>: request it from your dashboard, and book jobs straight through the app.', welcomeHcTitle: 'Welcome to HomeCare! 🎉', memActiveTrial: 'Your membership is <b>active</b> — your first month is <b>FREE</b>, then $29/mo. ', memActivePaid: 'Your membership is <b>active</b> — $29/mo. ', procPay: 'Processing payment…', procGen: 'Processing…', errAddressReq: 'Service address is required to join this membership — enter the address where we will do the work.',
   resetTitle: 'Set a new password', resetSub: 'Choose a new password for your account (at least 8 characters). This signs you out everywhere else.', resetLbl1: 'New password', resetLbl2: 'Confirm new password', resetPh1: 'New password', resetPh2: 'Type it again',
   resetBtn: 'Set new password',
   resetNoToken: 'This reset link is missing its code. Open the link from your email again.',
@@ -2553,7 +2602,7 @@ es: {
   planPer: '/mes', planYardVisits: 'Plan de yarda mensual — {n} visita(s) / mes', planPlusVisits: 'Plan mensual — PLUS {n} visita(s) de yarda / mes incluidas',
   hcNoteFreeTpl: '{name} — ${amt}/mes en total. Tu primer mes es GRATIS — $0 cobrados hoy, luego ${amt}/mes (un mes gratis por cuenta). {perks}', hcNotePaidTpl: '{name} — ${amt}/mes en total. Hoy se cargan ${amt} a tu tarjeta, luego ${amt}/mes. {perks}',
   cardLblFreeTpl: 'Tarjeta — $0 cobrados hoy, luego ${amt}/mes', cardLblPaidTpl: 'Tarjeta — se cargan ${amt} hoy, luego ${amt}/mes',
-  optNoteFreeTpl: '{name} — tu primer mes es GRATIS. $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta). Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo. Cancela cuando quieras.', optNotePaidTpl: '{name} — ${amt}/mes. Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo — ${amt} cobrados hoy, luego ${amt}/mes. Cancela cuando quieras.', joinNoteFreeTpl: 'Te unes a {name} — tu primer mes es GRATIS: $0 cobrados hoy, luego ${amt}/mes empezando en 30 días (un mes gratis por cuenta). Un solo formulario, un solo envío: cuenta y pago juntos. Cancela cuando quieras.', joinNotePaidTpl: 'Te unes a {name} — hoy se cargan ${amt} a tu tarjeta, luego ${amt}/mes. Un solo formulario, un solo envío: cuenta, dirección del servicio y pago juntos. Cancela cuando quieras.', fbNoteTpl: 'Te unes a {name} — ${amt}/mes. Crea tu cuenta y te llevamos directo al checkout seguro para este plan.', fbNoteFreeSuffix: ' Tu primer mes es GRATIS — $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta).', fbNoteAddrSuffix: ' Tu dirección del servicio es obligatoria para Yard Care y HomeCare Plus.', welcomeTpl: '¡Bienvenido a {name}! 🎉', welcomeYourPlan: 'tu membresía', memActiveTpl: 'Tu membresía está <b>activa</b> — ${amt}/mes. ', welcomeYardNote: 'El Team agendará tus visitas de yarda contigo — pendiente de nuestro mensaje.', welcomeEstNote: 'Tu primer estimado en persona es <b>GRATIS</b>: pídelo desde tu panel y reserva trabajos directo en la app.', welcomeHcTitle: '¡Bienvenido a HomeCare! 🎉', memActiveTrial: 'Tu membresía está <b>activa</b> — tu primer mes es <b>GRATIS</b>, luego $29/mes. ', memActivePaid: 'Tu membresía está <b>activa</b> — $29/mes. ', procPay: 'Procesando pago…', procGen: 'Procesando…', errAddressReq: 'La dirección del servicio es obligatoria para unirte a esta membresía — escribe la dirección donde haremos el trabajo.',
+  optNoteFreeTpl: '{name} — tu primer mes es GRATIS. $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta). Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo. Cancela cuando quieras.', optNotePaidTpl: '{name} — ${amt}/mes. Toca Crear cuenta y te llevamos directo al checkout seguro para empezarlo — ${amt} cobrados hoy, luego ${amt}/mes. Cancela cuando quieras.', joinNoteFreeTpl: 'Te unes a {name} — tu primer mes es GRATIS: $0 cobrados hoy, luego ${amt}/mes empezando en 30 días (un mes gratis por cuenta). Un solo formulario, un solo envío: cuenta y pago juntos. Cancela cuando quieras.', joinNotePaidTpl: 'Te unes a {name} — hoy se cargan ${amt} a tu tarjeta, luego ${amt}/mes. Un solo formulario, un solo envío: cuenta, dirección del servicio y pago juntos. Cancela cuando quieras.', planFreeOpt: 'Miembro FREE — $0/mes · Sin plan — solo mi cuenta gratis', joinNoteFree0Tpl: 'Te unes como Miembro FREE — $0 hoy y $0/mes. Sin tarjeta y sin checkout: toca Crear cuenta y entras, y puedes agregar un plan cuando quieras desde tu cuenta.', fbNoteTpl: 'Te unes a {name} — ${amt}/mes. Crea tu cuenta y te llevamos directo al checkout seguro para este plan.', fbNoteFreeSuffix: ' Tu primer mes es GRATIS — $0 en el checkout hoy, luego ${amt}/mes (un mes gratis por cuenta).', fbNoteAddrSuffix: ' Tu dirección del servicio es obligatoria para Yard Care y HomeCare Plus.', welcomeTpl: '¡Bienvenido a {name}! 🎉', welcomeYourPlan: 'tu membresía', memActiveTpl: 'Tu membresía está <b>activa</b> — ${amt}/mes. ', welcomeYardNote: 'El Team agendará tus visitas de yarda contigo — pendiente de nuestro mensaje.', welcomeEstNote: 'Tu primer estimado en persona es <b>GRATIS</b>: pídelo desde tu panel y reserva trabajos directo en la app.', welcomeHcTitle: '¡Bienvenido a HomeCare! 🎉', memActiveTrial: 'Tu membresía está <b>activa</b> — tu primer mes es <b>GRATIS</b>, luego $29/mes. ', memActivePaid: 'Tu membresía está <b>activa</b> — $29/mes. ', procPay: 'Procesando pago…', procGen: 'Procesando…', errAddressReq: 'La dirección del servicio es obligatoria para unirte a esta membresía — escribe la dirección donde haremos el trabajo.',
   resetTitle: 'Crea una contraseña nueva', resetSub: 'Elige una contraseña nueva para tu cuenta (al menos 8 caracteres). Esto cierra tu sesión en todos los demás lugares.', resetLbl1: 'Contraseña nueva', resetLbl2: 'Confirma la contraseña nueva', resetPh1: 'Contraseña nueva', resetPh2: 'Escríbela de nuevo',
   resetBtn: 'Guardar contraseña nueva',
   resetNoToken: 'A este link de restablecimiento le falta su código. Abre de nuevo el link de tu correo.',
@@ -4770,6 +4819,7 @@ function paintStaticChrome(){
     set('startLbl', CU('startLbl')); set('startNote', CU('startNote'));
     paintPickLabels('aStartPick');
     paintHomeOptionLabels('aHomeType', 'aYardSize');
+    paintPlanFreeOptLabel();
     const an = document.getElementById('aName'); if (an) an.placeholder = CU('namePh');
     const as2 = document.getElementById('aServiceAddress'); if (as2) as2.placeholder = CU('addrPh');
     const ms = document.getElementById('membershipServiceAddress'); if (ms) ms.placeholder = CU('addrPh');
@@ -4788,6 +4838,14 @@ function paintPickLabels(pickId){
     if (b.getAttribute('data-v') === 'asap') b.textContent = CU('startAsap');
     if (b.getAttribute('data-v') === 'date') b.textContent = CU('startDateOpt');
   });
+}
+// v88: the member picker's FREE option label is painted per language
+// (CU planFreeOpt) with the same option-painting mechanism the form's
+// other selects use; the five paid options keep their settled labels.
+function paintPlanFreeOptLabel(){
+  const sel = document.getElementById('aPlanSel');
+  if (!sel || !sel.options) return;
+  Array.prototype.forEach.call(sel.options, function(o){ if (o.value === 'free') o.textContent = CU('planFreeOpt'); });
 }
 function paintHomeOptionLabels(typeId, sizeId){
   const paint = function(selId, map){ const sel = document.getElementById(selId); if (!sel || !sel.options) return; Array.prototype.forEach.call(sel.options, function(o){ if (map[o.value]) o.textContent = map[o.value]; }); };
