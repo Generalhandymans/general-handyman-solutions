@@ -5829,6 +5829,17 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
     return res.end(body);
   }
+  // Bing verification (v93): BingSiteAuth.xml at the apex root — the XML
+  // file method. The v92 meta tag stays in index.html, but Bing's verify
+  // fetcher failed on the 1.36MB single-file page ("Body tag not found"),
+  // so Bing fetches this one tiny static file instead. Served from
+  // app/public like the og image (the file is the single source of truth).
+  if (req.method === 'GET' && p === '/BingSiteAuth.xml') {
+    const file = path.join(__dirname, 'public', 'BingSiteAuth.xml');
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
   // Membership plan card images (added 2026-10-21) + app logo banner (v40)
   // + the v80.9 hero tracking slide — exact filenames only.
   if (req.method === 'GET' && ['/stripe-homecare.png', '/stripe-yard-care.png', '/stripe-homecare-plus.png', '/logo-header.png', '/hero-tracking.png'].includes(p)) {
