@@ -31,7 +31,7 @@ const scriptBlocks = [...htmlSrc.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v85', swSrc.includes("const CACHE = 'ghs-app-v85'"));
+t('static: SW cache is ghs-app-v86', swSrc.includes("const CACHE = 'ghs-app-v86'"));
 t('static v68: NO service remains at $185 in either catalog — the $175 / member $140 tier (deck/mailbox/exhaust) holds; tv-mounting-large left it at $215 / $172 in v80.20 (Gabriel 2026-10-25 tier; 2026-11-01 adjustment)',
   !htmlSrc.includes('price: 185') && !serverSrc.includes('{p:185') &&
   htmlSrc.includes("'deck-board-replacement': { name: 'Deck Board Replacement (Up to 5)', meta: '~2 h · Flat', price: 175, member: 140") &&
@@ -1132,6 +1132,7 @@ run('cartShowCheckout();');
 await new Promise(r => setTimeout(r, 20));
 if (!run('!!cartPayCtx')) await run('cartPrepare()');
 t('v78 refine: the checkout summary is EDITABLE — per-line qty + remove controls inside the checkout card', (el('ccLines').innerHTML || '').includes('ccQty(') && (el('ccLines').innerHTML || '').includes('ccRemove(') && (el('ccLines').innerHTML || '').includes('TV Mounting') && (el('cartPayBtn').textContent || '').includes('Pay $310'));
+t('v86 VM: at checkout the money summary paints inside the featured .cart-due-card with its deposit row marked, and the three step headers carry their labels', (el('cartTotalsDue').innerHTML || '').includes('cart-due-card') && (el('cartTotalsDue').innerHTML || '').includes('cart-due-dep') && (el('cartTotalsDue').innerHTML || '').includes('Deposit due today') && (el('ccStep1El').textContent || '').includes('Your order') && (el('ccStep2El').textContent || '').includes('Your details') && (el('ccStep3El').textContent || '').includes('Payment'));
 v78Calls.length = 0;
 await run('ccQty(0, 1)');
 t('v78 refine: a qty edit AT CHECKOUT re-quotes with the server + recreates the intent at the NEW total (Pay $485)', v78Calls.some(c => c.step === 'quote') && v78Calls.filter(c => c.step === 'pay').length === 1 && (el('cartPayBtn').textContent || '').includes('Pay $485') && run('cartPayCtx.due') === 485);
@@ -4006,6 +4007,8 @@ t('static v72 P-1/P-2: branded bilingual payment-result pages + UA-ordered insta
   t('static v78: the order settles ONLY from a verified payment (settleCartCheckout + webhook kind cart-checkout)', serverSrc.includes('function settleCartCheckout(') && serverSrc.includes("obj.metadata.kind === 'cart-checkout'"));
   t('static v78: client keeps the cart in localStorage ghsCart + mounts a Payment Element + calls the cart endpoints', htmlSrc.includes("CART_LS_KEY = 'ghsCart'") && htmlSrc.includes("create('payment')") && htmlSrc.includes('confirmPayment') && htmlSrc.includes("api('/api/cart/checkout'"));
   t('static v78 refine: at-checkout editing — editable lines + add-more + server re-quote (client), supersede + PI cancel (server)', htmlSrc.includes('id="ccLines"') && htmlSrc.includes('ccQty(') && htmlSrc.includes('ccRemove(') && htmlSrc.includes('ccAddMore(') && htmlSrc.includes("api('/api/cart/quote'") && serverSrc.includes('pc.superseded') && serverSrc.includes("'/cancel'"));
+  t('static v86: cart + checkout wear the draft step labels — 1/2/3 step headers in the markup, painted by paintCartStatics from CUST_UI keys present in BOTH languages', htmlSrc.includes('id="ccStep1El"') && htmlSrc.includes('id="ccStep2El"') && htmlSrc.includes('id="ccStep3El"') && htmlSrc.includes("ccStepOrder: '1 · Your order'") && htmlSrc.includes("ccStepOrder: '1 · Tu orden'") && htmlSrc.includes("ccStepDetails: '2 · Your details'") && htmlSrc.includes("ccStepDetails: '2 · Tus datos'") && htmlSrc.includes("ccStepPayment: '3 · Payment'") && htmlSrc.includes("ccStepPayment: '3 · Pago'") && htmlSrc.includes("set('ccStep1El', CU('ccStepOrder'))") && htmlSrc.includes("set('ccStep2El', CU('ccStepDetails'))") && htmlSrc.includes("set('ccStep3El', CU('ccStepPayment'))") && htmlSrc.includes('.cc-step{color:var(--red);font-weight:800;text-transform:uppercase'));
+  t('static v86: the money summary is the draft featured card — dark #141414 panel, 2px red border, 20px radius; renderCartTotalsDue wraps its UNCHANGED rows in .cart-due-card and marks the deposit row; cart/checkout/proposal cards take the 20px draft radius', htmlSrc.includes('.cart-due-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px') && htmlSrc.includes("'<div class=\"cart-due-card\">' + s + '</div>'") && htmlSrc.includes('cart-total-row cart-due-dep') && htmlSrc.includes('#cartBox .card{border-radius:20px;padding:20px}') && htmlSrc.includes('#myProposals .card{border-radius:20px'));
   const wSlice78 = htmlSrc.slice(htmlSrc.indexOf('id="workerBox"'), htmlSrc.indexOf('id="adminBox"'));
   const aStart78 = htmlSrc.indexOf('id="adminBox"');
   const aSlice78 = htmlSrc.slice(aStart78, htmlSrc.indexOf('<script>', aStart78));
@@ -4322,7 +4325,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v85: ghs-app-v85)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v85'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v86: ghs-app-v86)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v86'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---

@@ -357,6 +357,35 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
 .auth-offer select{margin-bottom:8px}
 #techLinkRow a{color:var(--muted);font-weight:700;text-decoration:none}
 #techLinkRow a:hover{color:var(--red)}
+/* ===== v86: CART + CHECKOUT hablan el idioma del draft (Gabriel, 2026-11-07) =====
+   Pasos numerados 1·2·3 como el registro de técnicos (.cc-step = el rótulo
+   rojo en mayúsculas del draft), tarjetas de 20px, escala tipográfica del
+   draft y el resumen de dinero como la TARJETA DESTACADA (panel #141414,
+   borde 2px #e42535, números grandes) — la misma que la v85 le dio al
+   ejemplo de How ordering works. SOLO visual: ids, handlers, rutas, la ley
+   de apartado y cada flujo de pago quedan byte a byte como estaban. */
+.cc-step{color:var(--red);font-weight:800;text-transform:uppercase;font-size:15px;letter-spacing:.03em;margin:16px 0 6px}
+#cartBox .card{border-radius:20px;padding:20px}
+#cartTitle{font-size:22px}
+#ccTitleEl{font-size:22px}
+#cartBox h4{font-size:16.5px}
+#cartBox label{font-size:15px}
+#cartBox input,#cartBox select,#cartBox textarea{border-radius:14px;padding:13px 14px}
+#cartBox .cart-line{padding:14px 0}
+#cartBox .cart-line-main b{font-size:15.5px}
+#cartTotals .cart-total-row{font-size:15px;padding:4px 0}
+#cartTotals .cart-total-row b{font-size:17px}
+#cartPayElement{border-radius:14px}
+#ccWhenPick button{padding:10px 16px;font-size:14.5px}
+#cartBox .auth-offer{border-radius:20px}
+#cartCheckoutBtn{font-size:16px;padding:13px 24px;border-radius:14px}
+#cartPayBtn{font-size:17px;padding:15px;border-radius:14px}
+.cart-due-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px;padding:16px 18px}
+.cart-due-card .cart-total-row{padding:4px 0;font-size:15.5px}
+.cart-due-card .cart-total-row b{font-size:16.5px}
+.cart-due-card .cart-due-dep b{font-size:21px}
+#myProposals .card{border-radius:20px;padding:18px}
+#myProposals .card>b{font-size:16.5px}
 </style>
 <style>
 /* v80.9 FUSIÓN — merged-homepage components (hero carousel, promo boxes,
@@ -889,6 +918,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <button class="ghost" onclick="exitCart()" style="margin-bottom:10px">← Back</button>
       <h3 style="margin:0 0 4px" id="cartTitle">Your cart</h3>
       <p class="mut" style="margin:0 0 6px">General Handyman Solutions · Solano County</p>
+      <div class="cc-step" id="ccStep1El" style="margin-top:8px">1 · Your order</div>
       <div id="cartEmpty" style="display:none"><p class="mut" id="cartEmptyTxt">Your cart is empty — add services from the menu and they will wait for you right here.</p><button onclick="exitCart();goMenu();return false;" id="cartBrowseBtn">Browse the menu</button></div>
       <div id="cartLines"></div>
       <div id="cartTotals"></div>
@@ -896,6 +926,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
     </div>
     <div class="card" id="cartCheckoutCard" style="display:none">
       <h3 style="margin-top:0" id="ccTitleEl">Checkout</h3>
+      <div class="cc-step" id="ccStep2El" style="margin-top:0">2 · Your details</div>
       <div id="ccAcct">
         <h4 id="ccAcctTitleEl">Your account — last step</h4>
         <label id="ccNameLbl">Your name<input id="ccName" autocomplete="name"></label>
@@ -921,6 +952,7 @@ body:has(#customerBox[style*="display: block"]):not(:has(#authBox[style*="displa
       <div id="ccLines"></div>
       <div style="margin:4px 0 6px"><button type="button" class="ghost" id="ccAddMoreBtn" onclick="cartToggleAddMore()">＋ Add more services</button></div>
       <div id="ccAddList" style="display:none"></div>
+      <div class="cc-step" id="ccStep3El">3 · Payment</div>
       <div id="cartTotalsDue" style="margin:10px 0"></div>
       <h4 id="ccPayTitleEl">Payment</h4>
       <p class="mut" id="ccPayNoteEl">You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.</p>
@@ -2456,6 +2488,7 @@ en: {
   cartPayLoading: '⏳ Loading secure payment…', cartPayFailBody: '⚠️ The secure payment form could not load — check your connection.', cartPayHostedBtn: 'Pay on Stripe\'s secure page', cartPayRetryBtn: '↻ Try again',
   cartEmptyTxt: 'Your cart is empty — add services from the menu and they will wait for you right here.', cartBrowseBtn: 'Browse the menu', cartCheckoutBtnTxt: 'Checkout →', cartClearBtnTxt: 'Clear cart',
   ccTitle: 'Checkout', ccAcctTitle: 'Your account — last step', ccNameLbl: 'Your name', ccPassPh: 'Create one (8+ characters) — or your account password',
+  ccStepOrder: '1 · Your order', ccStepDetails: '2 · Your details', ccStepPayment: '3 · Payment',
   ccAcctNote: 'New here? This creates your account as part of checkout. Already a customer? Use your account email + password and we log you in.',
   ccWhereWhen: 'Where & when', ccAddrLbl: 'Service address', ccCityLbl: 'City', ccToday: 'Today', ccTomorrow: 'Tomorrow',
   ccWhenLbl: 'Preferred time / details', ccWhenPh: 'e.g. after 3 PM — you propose, we confirm', ccNotesLbl: 'Notes for the technician',
@@ -2588,6 +2621,7 @@ es: {
   cartPayLoading: '⏳ Cargando pago seguro…', cartPayFailBody: '⚠️ El formulario de pago seguro no cargó — revisa tu conexión.', cartPayHostedBtn: 'Pagar en la página segura de Stripe', cartPayRetryBtn: '↻ Reintentar',
   cartEmptyTxt: 'Tu carrito está vacío — agrega servicios del menú y te esperan aquí mismo.', cartBrowseBtn: 'Ver el menú', cartCheckoutBtnTxt: 'Ir a pagar →', cartClearBtnTxt: 'Vaciar carrito',
   ccTitle: 'Pago', ccAcctTitle: 'Tu cuenta — último paso', ccNameLbl: 'Tu nombre', ccPassPh: 'Crea una (8+ caracteres) — o la contraseña de tu cuenta',
+  ccStepOrder: '1 · Tu orden', ccStepDetails: '2 · Tus datos', ccStepPayment: '3 · Pago',
   ccAcctNote: '¿Nuevo aquí? Esto crea tu cuenta como parte del checkout. ¿Ya eres cliente? Usa el correo + contraseña de tu cuenta y entras directo.',
   ccWhereWhen: 'Dónde y cuándo', ccAddrLbl: 'Dirección del servicio', ccCityLbl: 'Ciudad', ccToday: 'Hoy', ccTomorrow: 'Mañana',
   ccWhenLbl: 'Hora preferida / detalles', ccWhenPh: 'ej. después de las 3 PM — tú propones, nosotros confirmamos', ccNotesLbl: 'Notas para el técnico',
@@ -4729,6 +4763,7 @@ function paintCartStatics(){
   const setLabel = function(id, txt){ const el = document.getElementById(id); if (!el || txt == null) return; const nodes = el.childNodes || []; for (const n of nodes) { if (n.nodeType === 3) { n.textContent = txt; return; } } };
   set('cartEmptyTxt', CU('cartEmptyTxt')); set('cartBrowseBtn', CU('cartBrowseBtn')); set('cartCheckoutBtn', CU('cartCheckoutBtnTxt')); set('cartClearBtn', CU('cartClearBtnTxt'));
   set('ccTitleEl', CU('ccTitle')); set('ccAcctTitleEl', CU('ccAcctTitle'));
+  set('ccStep1El', CU('ccStepOrder')); set('ccStep2El', CU('ccStepDetails')); set('ccStep3El', CU('ccStepPayment'));
   setLabel('ccNameLbl', CU('ccNameLbl')); setLabel('ccEmailLbl', CU('lblEmail')); setLabel('ccPhoneLbl', CU('lblPhone')); setLabel('ccPassLbl', CU('lblPassword'));
   set('ccAcctNote', CU('ccAcctNote'));
   set('ccWhereWhenEl', CU('ccWhereWhen')); setLabel('ccAddrLbl', CU('ccAddrLbl')); setLabel('ccCityLbl', CU('ccCityLbl')); setLabel('ccWhenLbl', CU('ccWhenLbl')); setLabel('ccNotesLbl', CU('ccNotesLbl'));
@@ -7100,9 +7135,12 @@ function renderCartTotalsDue(){
   const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : depOf79(due);
   const bal79 = Math.max(0, Math.round((due - dep79) * 100) / 100);
   s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><span>' + CU('cartTotalWord') + '</span><span>$' + due + '</span></div>';
-  s += '<div class="cart-total-row"><b>' + CU('cartDepositDue') + '</b><b>$' + dep79 + '</b></div>';
+  s += '<div class="cart-total-row cart-due-dep"><b>' + CU('cartDepositDue') + '</b><b>$' + dep79 + '</b></div>';
   if (bal79 > 0) s += '<div class="cart-total-row"><span>' + CU('cartBalanceRow') + '</span><span>$' + bal79 + '</span></div>';
-  host.innerHTML = s;
+  // v86: the money summary wears the draft's featured card (dark panel,
+  // red border, big deposit number — the .cart-due-card CSS). Wrapper and
+  // the cart-due-dep class only: every row, word and number is unchanged.
+  host.innerHTML = '<div class="cart-due-card">' + s + '</div>';
 }
 // ---------- v78 refine (Gabriel 2026-10-25 21:57): the cart is FULLY
 // editable AT the checkout itself — fix a mistake, drop a service, add
