@@ -386,6 +386,42 @@ input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease}
 .cart-due-card .cart-due-dep b{font-size:21px}
 #myProposals .card{border-radius:20px;padding:18px}
 #myProposals .card>b{font-size:16.5px}
+/* ===== v87: ZONA DEL TÉCNICO en el idioma del draft (Gabriel, 2026-11-07) =====
+   La misma estrella norte aplicada a #workerBox, pensada para la calle:
+   el técnico lee esto en el teléfono, con sol, a veces con guantes y a una
+   mano — la legibilidad y el tamaño del toque mandan sobre la densidad.
+   Tarjetas de 20px, el servicio en grande, el PAGO como el número más
+   grande de la tarjeta, el estado como insignia de color (data-wst), los
+   botones de acción ENORMES (.wact: ancho completo, mínimo 56px) y las
+   ganancias como tarjetas de cifra destacadas (.wstat-card = el panel
+   #141414 con borde rojo del draft). SOLO visual: ids, handlers, rutas,
+   la matemática del pago (el técnico ve SU oferta, jamás el total del
+   cliente), la puerta de ventas de la v84 y cada flujo quedan intactos. */
+#workerBox .card{border-radius:20px;padding:20px}
+#workerBox h2{font-size:20px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+#workerBox h3{font-size:16.5px}
+#workerBox input,#workerBox select,#workerBox textarea{border-radius:14px;padding:13px 14px}
+#workerBox label{font-size:14px}
+#jobList .card,#jobDetail .card{font-size:15.5px;line-height:1.5}
+.wjob-title{font-size:18.5px;font-weight:800}
+.wjob-pay{font-size:25px}
+#workerBox .pill{font-size:13.5px;font-weight:800;padding:7px 12px}
+#workerBox .pill[data-wst="Open"]{background:var(--red);border-color:var(--red);color:#fff}
+#workerBox .pill[data-wst="Claimed"]{background:var(--amber);border-color:var(--amber);color:#0b0b0b}
+#workerBox .pill[data-wst="On my way"]{background:#0b0b0b;border-color:#0b0b0b;color:#fff}
+#workerBox .pill[data-wst="Arrived"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .pill[data-wst="Done"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .pill[data-wst="Paid"]{background:var(--green);border-color:var(--green);color:#fff}
+#workerBox .card button{min-height:56px;font-size:17px;border-radius:14px}
+#workerBox .reply button{min-height:0}
+#workerBox .trade-lvl button{min-height:0;font-size:14px;border-radius:999px}
+#workerBox .wact{display:block;width:100%;margin-top:10px}
+.wstat-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:4px 0 14px}
+.wstat-card{background:#141414;color:#f2f0ec;border:2px solid var(--red);border-radius:20px;padding:16px 18px}
+.wstat-card .wstat-lbl{display:block;color:var(--panel-mut);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+.wstat-card .wstat-num{display:block;font-size:27px;font-weight:800;margin-top:4px}
+.wstat-card .wstat-num.paid{color:var(--green)}
+.wstat-card .wstat-num.pend{color:var(--amber)}
 </style>
 <style>
 /* v80.9 FUSIÓN — merged-homepage components (hero carousel, promo boxes,
@@ -4229,7 +4265,7 @@ async function loadJobs(){
   document.getElementById('workerStatus').textContent = me.status==='active' ? WT('statusActive') : WT('statusInactive').replace('{status}', me.status);
   const d=await api('/api/jobs').catch(e=>({jobs:[], err:e.message}));
   if (d.workerRating && d.workerRating.count) document.getElementById('workerStatus').textContent += WT('ratingLine').replace('{avg}', d.workerRating.average).replace('{n}', d.workerRating.count).replace('{jobs}', WT(d.workerRating.count === 1 ? 'ratedJob1' : 'ratedJobN'));
-  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — '+escHtml(j.service)+' <span class="pill">'+escHtml(j.status)+'</span><br>'+escHtml(j.description)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+workerDistLine(j)+'<br>'+WT('payOffer')+' <span class="st">$'+escHtml(j.payOffer)+'</span>'+workerPayoutLine(j)+workerCommLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br><button class="ghost" onclick="openJobDetail(\''+j.id+'\')">'+WT('viewDetails')+'</button> '+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
+  document.getElementById('jobList').innerHTML = d.err ? listErrorHtml('loadJobs()', d.err) : (d.jobs.map(j=>'<div class="card" id="wjobcard-'+j.id+'"><b>'+j.id+'</b> — <span class="wjob-title">'+escHtml(j.service)+'</span> <span class="pill" data-wst="'+escHtml(j.status)+'">'+escHtml(j.status)+'</span><br>'+escHtml(j.description)+'<br><span class="mut">'+escHtml(j.city)+' • '+escHtml(j.when)+'</span>'+workerDistLine(j)+'<br>'+WT('payOffer')+' <span class="st wjob-pay">$'+escHtml(j.payOffer)+'</span>'+workerPayoutLine(j)+workerCommLine(j)+(j.mine?'<br>'+(j.infoReleased?'<b>'+WT('detailsConfirmed')+'</b> '+escHtml(j.address||''):'<b>'+WT('addressTime')+'</b> <span class="mut">'+WT('addressTimeNote')+'</span>')+(j.notes?'<br><b>'+WT('teamNotes')+'</b> '+escHtml(j.notes):''):'')+'<br><button class="ghost wact" onclick="openJobDetail(\''+j.id+'\')">'+WT('viewDetails')+'</button> '+workerJobBtns(j)+(j.mine?jobChatHtml(j):'')+'</div>').join('') || '<p class="mut">'+WT('noJobs')+'</p>');
   sndWorkerJobs(d.jobs || []);
   if (jobDetailId) openJobDetail(jobDetailId, true); // keep an open detail view in sync with the board
 }
@@ -4251,12 +4287,12 @@ async function openJobDetail(idv, keepScroll){
   }
   const j = (d && d.job) || {};
   box.innerHTML = '<div class="card" style="border:1.5px solid #e42535"><b>' + WT('detailTitle') + ' — ' + escHtml(j.id || '') + '</b> <button class="ghost" style="float:right" onclick="closeJobDetail()">' + WT('closeDetails') + '</button>'
-    + '<br><b>' + escHtml(j.service || '') + '</b> <span class="pill">' + escHtml(j.status || '') + '</span>'
+    + '<br><span class="wjob-title">' + escHtml(j.service || '') + '</span> <span class="pill" data-wst="' + escHtml(j.status || '') + '">' + escHtml(j.status || '') + '</span>'
     + '<br>' + escHtml(j.description || '')
     + '<br><span class="mut">' + escHtml(j.city || '') + ' • ' + escHtml(j.when || '') + '</span>' + workerDistLine(j)
-    + '<br>' + WT('payOffer') + ' <span class="st">$' + escHtml(j.payOffer) + '</span>' + workerPayoutLine(j) + workerCommLine(j)
+    + '<br>' + WT('payOffer') + ' <span class="st wjob-pay">$' + escHtml(j.payOffer) + '</span>' + workerPayoutLine(j) + workerCommLine(j)
     + (j.mine ? '<br>' + (j.infoReleased ? '<b>' + WT('detailsConfirmed') + '</b> ' + escHtml(j.address || '') : '<b>' + WT('addressTime') + '</b> <span class="mut">' + WT('addressTimeNote') + '</span>') + (j.notes ? '<br><b>' + WT('teamNotes') + '</b> ' + escHtml(j.notes) : '') : '')
-    + '<br><button class="ghost" onclick="closeJobDetail()">' + WT('closeDetails') + '</button> ' + workerJobBtns(j) + (j.mine ? jobChatHtml(j) : '')
+    + '<br><button class="ghost wact" onclick="closeJobDetail()">' + WT('closeDetails') + '</button> ' + workerJobBtns(j) + (j.mine ? jobChatHtml(j) : '')
     + '</div>';
   if (!keepScroll) { try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {} }
 }
@@ -4286,7 +4322,7 @@ async function loadPayouts(){ const box=document.getElementById('workerPayouts')
   const stLabel=function(s){ return WT('st_' + s) !== 'st_' + s ? WT('st_' + s) : String(s||'').replace(/_/g,' '); };
   const rows=(d.entries||[]).map(function(e){ return '<div style="padding:6px 0;border-bottom:1px dashed #333"><b>'+escHtml(e.jobId)+'</b> — '+escHtml(e.service||'Job')+(e.city?' <span class="mut">'+escHtml(e.city)+'</span>':'')+'<br><span class="st">$'+Number(e.amount||0).toFixed(2)+'</span>'+(Number(e.salesCommission)>0?' <span class="mut">(pay $'+Number(e.payOffer||0).toFixed(2)+' + $'+Number(e.salesCommission).toFixed(2)+' '+WT('commissionLine')+')</span>':'')+' <span class="pill">'+escHtml(stLabel(e.status))+'</span>'+(e.date?' <span class="mut">'+escHtml(String(e.date).slice(0,10))+'</span>':'')+'</div>'; }).join('');
   box.innerHTML='<h2>'+WT('moneyTitle')+'</h2>'+setupCard
-    + '<div class="card"><b>'+WT('paidOutLabel')+' <span class="st">$'+Number(tot.paidOut||0).toFixed(2)+'</span></b><br><b>'+WT('pendingLabel')+' $'+Number(tot.pending||0).toFixed(2)+'</b>'
+    + '<div class="card"><div class="wstat-cards"><div class="wstat-card"><span class="wstat-lbl">'+WT('paidOutLabel')+'</span><span class="wstat-num paid">$'+Number(tot.paidOut||0).toFixed(2)+'</span></div><div class="wstat-card"><span class="wstat-lbl">'+WT('pendingLabel')+'</span><span class="wstat-num pend">$'+Number(tot.pending||0).toFixed(2)+'</span></div></div>'
     + (rows ? '<div style="margin-top:8px">'+rows+'</div>' : '<p class="mut">'+WT('noPayouts')+'</p>') + '</div>';
 }
 async function startConnect(){ try{ const r=await api('/api/worker/connect/start',{method:'POST'}); if(r&&r.url){ location.href=r.url; } else alert(WT('connectFail')); }catch(e){ alert(e.message); } }
@@ -5152,16 +5188,16 @@ function stopDutySharing(){
   paintWorkerLocLine();
 }
 function workerJobBtns(j){
-  if (j.status === 'Open') return '<button onclick="claimJob(\'' + j.id + '\')">' + WT('pickJob') + '</button>';
+  if (j.status === 'Open') return '<button class="wact" onclick="claimJob(\'' + j.id + '\')">' + WT('pickJob') + '</button>';
   if (!j.mine) return '';
   let h = '';
-  if (j.status === 'Claimed') h += '<button class="black" onclick="setJobStatus(\'' + j.id + '\',\'On my way\')">' + WT('onMyWay') + '</button> ';
+  if (j.status === 'Claimed') h += '<button class="black wact" onclick="setJobStatus(\'' + j.id + '\',\'On my way\')">' + WT('onMyWay') + '</button> ';
   if (j.status === 'On my way') {
-    h += '<button class="black" onclick="setJobStatus(\'' + j.id + '\',\'Arrived\')">' + WT('arrived') + '</button> ';
-    if (trackWatch && trackWatch.jobId === j.id) h += '<span class="pill">' + WT('sharingLoc') + '</span> <button class="ghost" onclick="stopSharing(\'' + j.id + '\')">' + WT('stopSharing') + '</button> ';
-    else h += '<button class="ghost" onclick="startSharing(\'' + j.id + '\')">' + WT('resumeSharing') + '</button> ';
+    h += '<button class="black wact" onclick="setJobStatus(\'' + j.id + '\',\'Arrived\')">' + WT('arrived') + '</button> ';
+    if (trackWatch && trackWatch.jobId === j.id) h += '<span class="pill">' + WT('sharingLoc') + '</span> <button class="ghost wact" onclick="stopSharing(\'' + j.id + '\')">' + WT('stopSharing') + '</button> ';
+    else h += '<button class="ghost wact" onclick="startSharing(\'' + j.id + '\')">' + WT('resumeSharing') + '</button> ';
   }
-  if (!j.photosReceived) h += '<button class="black" onclick="doneJob(\'' + j.id + '\')">' + WT('markDone') + '</button>';
+  if (!j.photosReceived) h += '<button class="black wact" onclick="doneJob(\'' + j.id + '\')">' + WT('markDone') + '</button>';
   return h;
 }
 // Customer/admin side: the live map block inside a job card. The customer
