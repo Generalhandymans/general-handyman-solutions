@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v98', swSrc.includes("const CACHE = 'ghs-app-v98'"));
+t('static: SW cache is ghs-app-v99', swSrc.includes("const CACHE = 'ghs-app-v99'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4616,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v98: ghs-app-v98)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v98'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v99: ghs-app-v99)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v99'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6199,6 +6199,8 @@ t('static v80.15: follow-up sweeps exist — one-shot, stamped, audited, on the 
 t('static v80.15: review ask is settings-driven and hooked ONLY at the two paid-in-full recorders (2 call sites)', serverSrc.includes('function maybeAskGoogleReview(') && serverSrc.includes('db.settings.googleReviewUrl') && (serverSrc.match(/maybeAskGoogleReview\(r\);/g) || []).length === 2 && serverSrc.includes("p === '/api/admin/settings'") && serverSrc.includes('r.reviewAskedAt'));
 t('static v80.15: payment_failed webhook emails the customer once per event, beside the v80.12 failure record', serverSrc.includes("fireAutomation('payment_failed'") && serverSrc.includes("type === 'payment_failed'"));
 t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
+t('static v99: review ask carries the built-in OFFICIAL default link as fallback + the invoice-company exclusion guard wired into the ask', serverSrc.includes("const DEFAULT_GOOGLE_REVIEW_URL = 'https://g.page/r/Ce0oW03tmveIEBM/review'") && serverSrc.includes('return s || DEFAULT_GOOGLE_REVIEW_URL') && serverSrc.includes('function isInvoiceBilledRequest(') && serverSrc.includes('if (isInvoiceBilledRequest(r)) return false;'));
+t('static v99: admin System hint no longer claims empty = off — built-in default, override only (EN+ES)', htmlSrc.includes('The official GHS link is built in') && htmlSrc.includes('El link oficial de GHS ya viene integrado'));
 const BASE4 = 'http://127.0.0.1:8987';
 const DATA_FILE4 = '/tmp/ghs-v17-test/data-v80-15.json';
 try { fs.unlinkSync(DATA_FILE4); } catch (e) {}
@@ -6269,6 +6271,16 @@ const seedReq815 = (o) => seed815.requests.push(Object.assign({ customerId: CUST
 seedReq815({ id: 'REQ-815A' }); // paid BEFORE the review link exists — no ask, ever
 seedReq815({ id: 'REQ-815B' }); // paid in full after the link is set — the ask fires
 seedReq815({ id: 'REQ-815C', payment: { status: 'deposit', kind: 'cart-order', pi: 'pi_dep815', amountCents: 5000, totalCents: 12500, balanceCents: 7500, at: agoH815(1) } }); // balance landing = the second paid-in-full door
+// v99 fixtures: a MEMBER (ask fires, same as anyone), and two invoice-company
+// orders (NEVER asked) — one linked to its invoice by requestId, one by jobId.
+seed815.users.push({ id: 'USR-815M', name: 'Member Marta', email: 'v815-member@t.local', phone: '(707) 555-0817', role: 'customer', status: 'active', inviteFreeMonthUsed: true, firstRealChargeAt: agoD815(30), homeCareStatus: 'active', homeCareSince: agoD815(60), homeCareCancelAt: null, membershipPlan: { planKey: 'homecare', type: 'homecare', visitsPerMonth: 0, priceId: '', productId: '', status: 'active', subscriptionId: 'sub_815m', since: agoD815(60), cancelAt: null }, createdAt: agoD815(60) });
+seedReq815({ id: 'REQ-815D', customerId: 'USR-815M', customerName: 'Member Marta', customerEmail: 'v815-member@t.local', membership: 'member' });
+seedReq815({ id: 'REQ-815E', customerId: '', customerName: 'Dispatch Co', customerEmail: 'v815-b2b@t.local' });
+seedReq815({ id: 'REQ-815F', customerId: '', customerName: 'Dispatch Co Two', customerEmail: 'v815-b2bj@t.local' });
+seed815.invoices.push({ id: 'INV-815B2B', customerName: 'Dispatch Co', customerEmail: 'v815-b2b@t.local', customerPhone: '', customerId: '', jobId: '', requestId: 'REQ-815E', items: [{ description: 'Labor', qty: 1, unitPrice: 200, lineTotal: 200 }], subtotal: 200, discount: 0, total: 200, status: 'sent', notes: '', dueDate: '', createdAt: agoH815(50), sentAt: agoH815(49), paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: '' });
+seed815.jobs = seed815.jobs || [];
+seed815.jobs.push({ id: 'JOB-815B', requestId: 'REQ-815F', status: 'Done — photos sent', service: 'TV Mounting', city: 'Fairfield', description: 'v815 b2b job bridge', customerName: 'Dispatch Co Two', createdAt: agoH815(3) });
+seed815.invoices.push({ id: 'INV-815B2BJ', customerName: 'Dispatch Co Two', customerEmail: 'v815-b2bj@t.local', customerPhone: '', customerId: '', jobId: 'JOB-815B', requestId: '', items: [{ description: 'Labor', qty: 1, unitPrice: 200, lineTotal: 200 }], subtotal: 200, discount: 0, total: 200, status: 'sent', notes: '', dueDate: '', createdAt: agoH815(50), sentAt: agoH815(49), paidAt: null, paidMethod: '', paidAmount: 0, stripeSessionId: '' });
 fs.writeFileSync(DATA_FILE4, JSON.stringify(seed815));
 child4 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env815), stdio: ['ignore', 'pipe', 'pipe'] });
 child4.stderr.on('data', d => process.stderr.write('[app4] ' + d));
@@ -6303,12 +6315,18 @@ for (let i = 0; i < 30 && !pfMail815.length; i++) { pfMail815 = await bySubj815(
 t('v80.15 payment failed: ONE clear bilingual email to the customer, with the amount and the fix-it route', pfMail815.length === 1 && JSON.stringify(pfMail815[0].to) === JSON.stringify(['v815-pf@t.local']) && (pfMail815[0].text || '').includes('$29.00') && (pfMail815[0].text || '').includes('Manage billing'));
 const disk815b = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
 t('v80.15 payment failed: the v80.12 failure record still lands (user + amount)', (disk815b.paymentFailures || []).some(f => f.userId === 'USR-815PF' && f.amountCents === 2900));
-// --- review ask at Paid in full ---
+// --- review ask at Paid in full (v99: built-in official default ON) ---
+// v99 note: counts are scoped BY RECIPIENT — the mock inbox is suite-global
+// and earlier sections' paid-in-full fixtures now fire default-link asks too.
+const revFor815 = async (em) => (await byTo815(em)).filter(e => (e.subject || '').includes('How did we do'));
+const sys815pre = await req4('GET', '/api/admin/system', { token: A4B });
 await wh4('payment_intent.succeeded', { id: 'pi_a815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815A' } });
-await sleep(800);
+let revMailDef815 = [];
+for (let i = 0; i < 30 && !revMailDef815.length; i++) { revMailDef815 = await revFor815('v815-review@t.local'); if (!revMailDef815.length) await sleep(200); }
+await sleep(400);
 const disk815c = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
 const rqA815 = disk815c.requests.find(r => r.id === 'REQ-815A');
-t('v80.15 review ask: with NO link configured, a paid-in-full order is silently skipped (paid, unstamped, no email)', !!rqA815 && rqA815.payment && rqA815.payment.status === 'paid' && !rqA815.reviewAskedAt && (await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?')).length === 0);
+t('v99 review ask: with NOTHING in settings, the built-in OFFICIAL link fires the ask — health reports it, one email carries it, stamp + in-app note land', sys815pre.j.googleReviewUrl === 'https://g.page/r/Ce0oW03tmveIEBM/review' && !!rqA815 && rqA815.payment && rqA815.payment.status === 'paid' && !!rqA815.reviewAskedAt && revMailDef815.length === 1 && JSON.stringify(revMailDef815[0].to) === JSON.stringify(['v815-review@t.local']) && (revMailDef815[0].text || '').includes('https://g.page/r/Ce0oW03tmveIEBM/review') && (disk815c.notifications || []).some(n => n.userId === CUST815ID && n.type === 'review' && n.text.includes('https://g.page/r/Ce0oW03tmveIEBM/review')));
 const setCust815 = await req4('POST', '/api/admin/settings', { token: CUST815TOK, body: { googleReviewUrl: 'https://g.page/r/TEST815/review' } });
 const setBad815 = await req4('POST', '/api/admin/settings', { token: A4B, body: { googleReviewUrl: 'not-a-url' } });
 const setOk815 = await req4('POST', '/api/admin/settings', { token: A4B, body: { googleReviewUrl: 'https://g.page/r/TEST815/review' } });
@@ -6316,22 +6334,38 @@ const sys815 = await req4('GET', '/api/admin/system', { token: A4B });
 t('v80.15 settings: review link is admin-only, URL-validated, saved to db.settings and read back by System health', setCust815.status === 403 && setBad815.status === 400 && setOk815.status === 200 && sys815.j.googleReviewUrl === 'https://g.page/r/TEST815/review');
 await wh4('payment_intent.succeeded', { id: 'pi_b815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815B' } });
 let revMail815 = [];
-for (let i = 0; i < 30 && !revMail815.length; i++) { revMail815 = await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?'); if (!revMail815.length) await sleep(200); }
+for (let i = 0; i < 30 && revMail815.length < 2; i++) { revMail815 = await revFor815('v815-review@t.local'); if (revMail815.length < 2) await sleep(200); }
 await sleep(400);
 const disk815d = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
 const rqB815 = disk815d.requests.find(r => r.id === 'REQ-815B');
-t('v80.15 review ask: paid in full WITH the link set sends exactly ONE ask — email with the configured URL + in-app note + stamp', revMail815.length === 1 && JSON.stringify(revMail815[0].to) === JSON.stringify(['v815-review@t.local']) && (revMail815[0].text || '').includes('https://g.page/r/TEST815/review') && !!rqB815.reviewAskedAt && (disk815d.notifications || []).some(n => n.userId === CUST815ID && n.type === 'review' && n.text.includes('https://g.page/r/TEST815/review')));
+const revTest815 = revMail815.filter(e => (e.text || '').includes('https://g.page/r/TEST815/review'));
+t('v99 review ask: with an admin link set, the OVERRIDE wins — exactly one ask carries the configured URL (beside the earlier default ask)', revMail815.length === 2 && revTest815.length === 1 && JSON.stringify(revTest815[0].to) === JSON.stringify(['v815-review@t.local']) && !!rqB815.reviewAskedAt && (disk815d.notifications || []).some(n => n.userId === CUST815ID && n.type === 'review' && n.text.includes('https://g.page/r/TEST815/review')));
 await wh4('payment_intent.succeeded', { id: 'pi_b815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815B' } }); // the confirm/webhook TWIN — a no-op
 await sleep(800);
-t('v80.15 review ask: the twin webhook does NOT re-ask (still exactly one)', (await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?')).length === 1);
+t('v80.15 review ask: the twin webhook does NOT re-ask (totals unchanged)', (await revFor815('v815-review@t.local')).length === 2 && (await revFor815('v815-review@t.local')).filter(e => (e.text || '').includes('https://g.page/r/TEST815/review')).length === 1);
 await wh4('payment_intent.succeeded', { id: 'pi_c815', amount_received: 7500, metadata: { kind: 'menu-order', requestId: 'REQ-815C' } });
 let revMail815c = [];
-for (let i = 0; i < 30; i++) { revMail815c = await bySubj815('Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?'); if (revMail815c.length >= 2) break; await sleep(200); }
+for (let i = 0; i < 30; i++) { revMail815c = await revFor815('v815-review@t.local'); if (revMail815c.length >= 3) break; await sleep(200); }
 const disk815e = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
 const rqC815 = disk815e.requests.find(r => r.id === 'REQ-815C');
-t('v80.15 review ask: the BALANCE landing (deposit → paid in full) fires the ask exactly once too', revMail815c.length === 2 && !!rqC815 && rqC815.payment.status === 'paid' && !!rqC815.reviewAskedAt);
+t('v80.15 review ask: the BALANCE landing (deposit → paid in full) fires the ask exactly once too', revMail815c.length === 3 && revMail815c.filter(e => (e.text || '').includes('https://g.page/r/TEST815/review')).length === 2 && !!rqC815 && rqC815.payment.status === 'paid' && !!rqC815.reviewAskedAt);
 const aud815b = await req4('GET', '/api/admin/audit', { token: A4B });
-t('v80.15 audit: review.ask is logged for both paid-in-full doors', (aud815b.j.entries || []).filter(en => en.action === 'review.ask').length >= 2 && (aud815b.j.entries || []).some(en => en.action === 'admin.settings'));
+t('v80.15 audit: review.ask is logged for both paid-in-full doors', (aud815b.j.entries || []).filter(en => en.action === 'review.ask').length >= 3 && (aud815b.j.entries || []).some(en => en.action === 'admin.settings'));
+// --- v99 trigger audit: members equal, invoice companies never ---
+await wh4('payment_intent.succeeded', { id: 'pi_d815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815D' } });
+let revMem815 = [];
+for (let i = 0; i < 30 && !revMem815.length; i++) { revMem815 = (await byTo815('v815-member@t.local')).filter(e => (e.subject || '') === 'Thank you! How did we do? · ¡Gracias! ¿Cómo lo hicimos?'); if (!revMem815.length) await sleep(200); }
+await sleep(300);
+const disk815f = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+const rqD815 = disk815f.requests.find(r => r.id === 'REQ-815D');
+t('v99 review ask: a MEMBER paid in full gets the ask exactly like a normal customer (no membership gate)', revMem815.length === 1 && (revMem815[0].text || '').includes('https://g.page/r/TEST815/review') && !!rqD815 && rqD815.payment && rqD815.payment.status === 'paid' && !!rqD815.reviewAskedAt);
+await wh4('payment_intent.succeeded', { id: 'pi_e815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815E' } });
+await wh4('payment_intent.succeeded', { id: 'pi_f815', amount_received: 12500, metadata: { kind: 'menu-order', requestId: 'REQ-815F' } });
+await sleep(900);
+const disk815g = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
+const rqE815 = disk815g.requests.find(r => r.id === 'REQ-815E');
+const rqF815 = disk815g.requests.find(r => r.id === 'REQ-815F');
+t('v99 review ask: invoice-company orders are NEVER asked — invoice linked by requestId AND invoice linked via its job both pay in full with NO ask, NO stamp, NO email', !!rqE815 && rqE815.payment && rqE815.payment.status === 'paid' && !rqE815.reviewAskedAt && !!rqF815 && rqF815.payment && rqF815.payment.status === 'paid' && !rqF815.reviewAskedAt && (await byTo815('v815-b2b@t.local')).filter(e => (e.subject || '').includes('How did we do')).length === 0 && (await byTo815('v815-b2bj@t.local')).filter(e => (e.subject || '').includes('How did we do')).length === 0);
 
 // ---------------- v80.17 PUERTA PLUS: the promo landing for cold join deep links ----------------
 // The door worked mechanically (302 → hash → plan armed) but a cold guest

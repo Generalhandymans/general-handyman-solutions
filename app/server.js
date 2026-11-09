@@ -2798,14 +2798,36 @@ function disarmCartBalance(c, reason) {
 // ---------- v80.15: Google review ask at Paid in full (one-shot) ----------
 // Fires from the ONLY two places a request first becomes paid in full
 // (recordRequestPayment + settleRequestBalance below) — never a second
-// source of truth for paid status. The review link is Gabriel's to
-// paste in Admin → System (db.settings.googleReviewUrl); while it is
-// empty the ask is silently skipped — no URL is ever invented or
-// hardcoded. The ask stamps r.reviewAskedAt + audits, so it fires
-// exactly once per order, ever.
-function googleReviewUrl() { const v = db.settings && db.settings.googleReviewUrl; return typeof v === 'string' ? v.trim() : ''; }
+// source of truth for paid status. The ask stamps r.reviewAskedAt +
+// audits, so it fires exactly once per order, ever.
+// v99 (Gabriel, 2026-11-08 — "Arregla todo"): the ask is ACTIVE by
+// default. The official GHS Google review link is the built-in
+// fallback; a link pasted in Admin → System (db.settings.googleReviewUrl)
+// still overrides it, and clearing the field returns to the default —
+// the ask is never silently off again. Trigger audit against Gabriel's
+// FINAL rule (2026-11-08): members and normal customers are asked
+// EQUALLY (no membership gate anywhere in this path), and B2B
+// invoice/dispatch companies are NEVER asked. This app has no company
+// flag on users or requests: an invoice company exists only as
+// db.invoices records, and the only bridges from an invoice to a
+// request are inv.requestId and inv.jobId → job.requestId (the same
+// linkage jobPaidForReview uses). An order carrying either bridge is
+// invoice-billed company work and is excluded below; invoice payments
+// themselves never reach this function at all.
+const DEFAULT_GOOGLE_REVIEW_URL = 'https://g.page/r/Ce0oW03tmveIEBM/review';
+function googleReviewUrl() { const v = db.settings && db.settings.googleReviewUrl; const s = typeof v === 'string' ? v.trim() : ''; return s || DEFAULT_GOOGLE_REVIEW_URL; }
+function isInvoiceBilledRequest(r) {
+  if (!r) return false;
+  return (db.invoices || []).some(inv => {
+    if (!inv || inv.status === 'cancelled') return false;
+    if (inv.requestId && inv.requestId === r.id) return true;
+    if (inv.jobId) { const j = (db.jobs || []).find(x => x.id === inv.jobId); if (j && j.requestId && j.requestId === r.id) return true; }
+    return false;
+  });
+}
 function maybeAskGoogleReview(r) {
   if (!r || r.reviewAskedAt) return false;
+  if (isInvoiceBilledRequest(r)) return false; // v99: B2B invoice/dispatch companies — never asked
   const url = googleReviewUrl();
   if (!url) return false;
   const payload = requestAutomationPayload(r);
@@ -9693,16 +9715,17 @@ async function handleRequest(req, res) {
     return send(res, 200, buildSystemHealth());
   }
   // v80.15: admin settings — today just the Google review link that
-  // powers the one-shot review ask at Paid in full. Empty = ask off.
+  // powers the one-shot review ask at Paid in full. v99: empty = the
+  // built-in official link applies (the field only overrides it).
   if (p === '/api/admin/settings' && req.method === 'POST') {
     if (!requireRole(user, ['admin'], res)) return;
     const b = await readBody(req);
     if (b.googleReviewUrl !== undefined) {
       const v = cleanText(b.googleReviewUrl, 500).trim();
-      if (v && !/^https?:\/\/[^\s]+$/i.test(v)) return send(res, 400, { error: 'the Google review link must be a full http(s) URL — or empty to turn the review ask off' });
+      if (v && !/^https?:\/\/[^\s]+$/i.test(v)) return send(res, 400, { error: 'the Google review link must be a full http(s) URL — or empty to use the built-in official link' });
       db.settings = db.settings || {};
       db.settings.googleReviewUrl = v;
-      audit(user, 'admin.settings', 'googleReviewUrl', v ? 'google review link set' : 'google review link cleared');
+      audit(user, 'admin.settings', 'googleReviewUrl', v ? 'google review link set' : 'google review link cleared — built-in default applies');
       save();
       return send(res, 200, { ok: true, googleReviewUrl: v });
     }
