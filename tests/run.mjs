@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v99', swSrc.includes("const CACHE = 'ghs-app-v99'"));
+t('static: SW cache is ghs-app-v100', swSrc.includes("const CACHE = 'ghs-app-v100'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4616,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v99: ghs-app-v99)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v99'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v100: ghs-app-v100)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v100'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6201,6 +6201,11 @@ t('static v80.15: payment_failed webhook emails the customer once per event, bes
 t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
 t('static v99: review ask carries the built-in OFFICIAL default link as fallback + the invoice-company exclusion guard wired into the ask', serverSrc.includes("const DEFAULT_GOOGLE_REVIEW_URL = 'https://g.page/r/Ce0oW03tmveIEBM/review'") && serverSrc.includes('return s || DEFAULT_GOOGLE_REVIEW_URL') && serverSrc.includes('function isInvoiceBilledRequest(') && serverSrc.includes('if (isInvoiceBilledRequest(r)) return false;'));
 t('static v99: admin System hint no longer claims empty = off — built-in default, override only (EN+ES)', htmlSrc.includes('The official GHS link is built in') && htmlSrc.includes('El link oficial de GHS ya viene integrado'));
+t('static v100: ONE cart split helper — cartSplit carries the payFull exception, depositSplit stays the law it delegates to', serverSrc.includes('function cartSplit(c, totalCents)') && serverSrc.includes('if (c && c.payFull) return { depositCents: t, balanceCents: 0 };') && serverSrc.includes('return depositSplit(t);'));
+t('static v100: the flag is stored at create, editable via PUT, and exposed on publicCart', serverSrc.includes('payFull: b.payFull === true') && serverSrc.includes('if (b.payFull !== undefined) c.payFull = b.payFull === true;') && serverSrc.includes('payFull: !!c.payFull'));
+t('static v100: cart page strings exist in BOTH languages — full-pay button, due-full label, honest refund line and join notes', serverSrc.includes("payFullBtn: 'Pay {amt}'") && serverSrc.includes("payFullBtn: 'Pagar {amt}'") && serverSrc.includes("dueFullLabel: 'Due today — full payment'") && serverSrc.includes("dueFullLabel: 'Hoy — pago completo'") && serverSrc.includes('refundLineFull:') && serverSrc.includes('joinOrderNoteFull:') && serverSrc.includes('joinOrderNoteFullFree:'));
+t('static v100: builder + edit carry the bilingual charge-in-full toggle end to end', htmlSrc.includes('id="cartPayFull"') && htmlSrc.includes('Charge in full upfront (no deposit) / Cobrar todo por adelantado (sin depósito)') && (appJsSrc.match(/payFull:!!\(document\.getElementById\('cartPayFull'\)/g) || []).length === 2 && appJsSrc.includes('pfSel.checked=!!c.payFull'));
+t('static v100: checkout stamps payStep full ONLY for flagged carts (deposit otherwise) through the same stamped-split settle', serverSrc.includes("payStep: c.payFull ? 'full' : 'deposit'") && serverSrc.includes('const split = cartSplit(c, totalCents);') && serverSrc.includes('const splitJ = cartSplit(c, totalCentsJ);'));
 const BASE4 = 'http://127.0.0.1:8987';
 const DATA_FILE4 = '/tmp/ghs-v17-test/data-v80-15.json';
 try { fs.unlinkSync(DATA_FILE4); } catch (e) {}
@@ -7855,6 +7860,76 @@ try { child4.kill('SIGTERM'); } catch (e) {}
   const fileCust84 = file84.users.find(u => u.email === 'cora84@t.local');
   t('v84 migration: the class is PERSISTED to the data file (and customers stay classless)', !!fileRick84 && fileRick84.workerClass === 'tecnico' && !!fileCust84 && !('workerClass' in fileCust84));
 }
+
+// --- v100: CHARGE IN FULL — payFull carts (Gabriel's materials rule, 2026-11-09) ---
+// Fixtures mirror Ernest's two live carts figure-for-figure: the work
+// cart (labor $675 + $2,500 + dumpster $500 = $3,675 / member $3,040,
+// deposit $1,470, balance $2,205, NO flag) and the materials cart
+// (5 materials lines = $1,885, flag ON -> $1,885 due in full).
+const A100 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+const matItems100 = [
+  { custom: true, kind: 'other', name: "Sakrete Top 'N Bond polymer-modified repair cement — 40 lb bags", qty: 1, unitPrice: 450 },
+  { custom: true, kind: 'other', name: 'Ready-mix concrete, delivered (approx. 4-4.5 cubic yards)', qty: 1, unitPrice: 1135 },
+  { custom: true, kind: 'other', name: 'Welded wire mesh', qty: 1, unitPrice: 143 },
+  { custom: true, kind: 'other', name: 'Form lumber and stakes', qty: 1, unitPrice: 83 },
+  { custom: true, kind: 'other', name: 'Expansion joint material and curing compound', qty: 1, unitPrice: 74 }
+];
+const workItems100 = [
+  { custom: true, kind: 'labor', name: 'Concrete driveway crack repairs', qty: 1, unitPrice: 675 },
+  { custom: true, kind: 'labor', name: 'Replace two concrete sections by the big tree', qty: 1, unitPrice: 2500 },
+  { custom: true, kind: 'other', name: 'Concrete removal & dumpster', qty: 1, unitPrice: 500 }
+];
+const matCart100 = await req2('POST', '/api/admin/carts', { token: A100, body: { items: matItems100, customerName: 'Ernest Fixture', customerEmail: 'ernest100@t.local', payFull: true } });
+t('v100 create: a payFull cart stores the flag — 5 materials lines, $1,885 list AND member (materials never discount)', matCart100.status === 201 && matCart100.j.cart.payFull === true && matCart100.j.cart.listTotal === 1885 && matCart100.j.cart.memberTotal === 1885);
+const matId100 = matCart100.j.cart.id;
+const workCart100 = await req2('POST', '/api/admin/carts', { token: A100, body: { items: workItems100, customerName: 'Ernest Fixture', customerEmail: 'ernest100@t.local' } });
+t('v100 regression fixture: the unflagged work cart keeps the exact Ernest figures ($3,675 list / $3,040 member, no flag)', workCart100.status === 201 && workCart100.j.cart.payFull === false && workCart100.j.cart.listTotal === 3675 && workCart100.j.cart.memberTotal === 3040);
+const workId100 = workCart100.j.cart.id;
+// The in-account proposal shows the same due numbers the page shows.
+const cust100 = await mkMember('ernest100@t.local', '(707) 555-0199');
+const props100 = (await req2('GET', '/api/me/proposals', { token: cust100.token })).j.proposals || [];
+const propMat100 = props100.find(x => x.kind === 'cart' && x.id === matId100);
+const propWork100 = props100.find(x => x.kind === 'cart' && x.id === workId100);
+t('v100 proposals: the account view matches the pages — materials $1,885 due / $0 balance; work $1,470 due / $2,205 balance', !!propMat100 && propMat100.depositDue === 1885 && propMat100.balanceDue === 0 && !!propWork100 && propWork100.depositDue === 1470 && propWork100.balanceDue === 2205);
+const matPage100 = await (await fetch(BASE2 + '/cart/' + matId100)).text();
+t('v100 page: a payFull cart shows the FULL total due today, one full-pay button and NO balance row', matPage100.includes('Due today — full payment') && matPage100.includes('data-l="$1885.00"') && matPage100.includes('>Pay $1885.00</button>') && !matPage100.includes('id="ctBalance"') && matPage100.includes('BAL_L=0, BAL_M=0') && matPage100.includes('PAY_FULL=true') && matPage100.includes('data-i18n="refundLineFull"'));
+const matPageEs100 = await (await fetch(BASE2 + '/cart/' + matId100 + '?lang=es')).text();
+t('v100 page ES: the same cart in Spanish — pago completo, Pagar $1885.00, no balance row', matPageEs100.includes('Hoy — pago completo') && matPageEs100.includes('>Pagar $1885.00</button>') && !matPageEs100.includes('id="ctBalance"'));
+const workPage100 = await (await fetch(BASE2 + '/cart/' + workId100)).text();
+t('v100 regression page: the normal cart still splits — deposit $1,470.00 / balance $2,205.00 (member $1,216.00 / $1,824.00)', workPage100.includes('id="ctBalance"') && workPage100.includes('data-l="$1470.00"') && workPage100.includes('data-l="$2205.00"') && workPage100.includes('data-m="$1216.00"') && workPage100.includes('data-m="$1824.00"') && workPage100.includes('>Pay deposit $1470.00</button>') && workPage100.includes('PAY_FULL=false'));
+// The edit toggle flips the SAME cart between the two modes.
+const editOn100 = await req2('PUT', '/api/admin/carts/' + workId100, { token: A100, body: { items: workItems100, payFull: true } });
+const workPageFull100 = await (await fetch(BASE2 + '/cart/' + workId100)).text();
+t('v100 edit: PUT payFull:true flips the open work cart to charge-in-full (page due = $3,675.00, balance row gone)', editOn100.status === 200 && editOn100.j.cart.payFull === true && workPageFull100.includes('>Pay $3675.00</button>') && !workPageFull100.includes('id="ctBalance"'));
+const editOff100 = await req2('PUT', '/api/admin/carts/' + workId100, { token: A100, body: { items: workItems100, payFull: false } });
+t('v100 edit: PUT payFull:false restores the deposit split on the same link', editOff100.status === 200 && editOff100.j.cart.payFull === false);
+const det100 = { name: 'Ernest Fixture', phone: '7075550199', email: 'ernest100@t.local', address: '332 Brown Street', city: 'Napa', when: 'Today' };
+const coMat100 = await req2('POST', '/api/carts/' + matId100 + '/checkout', { body: det100 });
+const sessMat100 = sessionForCart(matId100, 'payment');
+const sessMatPi100 = sessMat100 && stripeState.pis[sessMat100.payment_intent];
+t('v100 checkout: a payFull cart charges the FULL total in ONE session — amount $1,885, balance $0, payStep full', coMat100.status === 200 && coMat100.j.amount === 1885 && coMat100.j.deposit === 1885 && coMat100.j.balance === 0 && coMat100.j.total === 1885 && !!sessMat100 && sessMat100.amount_total === 188500 && !!sessMatPi100 && sessMatPi100.metadata.payStep === 'full');
+await mockSessionPaid(sessMat100.id);
+const retMat100 = await fetch(BASE2 + '/cart/' + matId100 + '?paid=1&session_id=' + sessMat100.id);
+const retMatHtml100 = await retMat100.text();
+const convMat100 = (await req2('GET', '/api/requests', { token: A100 })).j.requests.find(x => x.menuOrder && x.menuOrder.cartId === matId100);
+t('v100 settle: the full charge converts the cart PAID IN FULL through the shared path (status paid, $1,885 — never a deposit state)', !!convMat100 && convMat100.payment.status === 'paid' && convMat100.payment.amountCents === 188500 && retMatHtml100.includes('Paid in full'));
+// Twins of the SAME full payment (session webhook + PI webhook): one
+// order, and the v94 unmatched-payment alert must NOT misfire.
+await wh2('checkout.session.completed', { id: sessMat100.id, mode: 'payment', payment_status: 'paid', payment_intent: sessMat100.payment_intent, amount_total: 188500, metadata: { userId: '', kind: 'cart-order', cartId: matId100 } });
+await wh2('payment_intent.succeeded', { id: sessMat100.payment_intent, status: 'succeeded', amount: 188500, amount_received: 188500, metadata: { kind: 'cart-order', cartId: matId100 } });
+const reqsTwin100 = (await req2('GET', '/api/requests', { token: A100 })).j.requests;
+const audit100 = (await req2('GET', '/api/admin/audit', { token: A100 })).j.entries || [];
+t('v100 settle: webhook twins of the full payment never duplicate the order and never raise the v94 unmatched alert', reqsTwin100.filter(x => x.menuOrder && x.menuOrder.cartId === matId100).length === 1 && !audit100.some(e => e.action === 'cart.payment_unmatched' && e.target === matId100));
+const balTry100 = await req2('POST', '/api/carts/' + matId100 + '/checkout', { body: Object.assign({}, det100, { balance: true }) });
+t('v100 settle: a paid-in-full cart has NO balance door — a balance attempt is refused as already paid', balTry100.status === 400);
+const coWork100 = await req2('POST', '/api/carts/' + workId100 + '/checkout', { body: det100 });
+const sessWork100 = sessionForCart(workId100, 'payment');
+const sessWorkPi100 = sessWork100 && stripeState.pis[sessWork100.payment_intent];
+t('v100 regression checkout: the normal cart still books at the deposit ($1,470 of $3,675, balance $2,205, payStep deposit)', coWork100.status === 200 && coWork100.j.amount === 1470 && coWork100.j.deposit === 1470 && coWork100.j.balance === 2205 && coWork100.j.total === 3675 && !!sessWork100 && sessWork100.amount_total === 147000 && !!sessWorkPi100 && sessWorkPi100.metadata.payStep === 'deposit');
+await mockSessionPaid(sessWork100.id);
+await fetch(BASE2 + '/cart/' + workId100 + '?paid=1&session_id=' + sessWork100.id);
+const convWork100 = (await req2('GET', '/api/requests', { token: A100 })).j.requests.find(x => x.menuOrder && x.menuOrder.cartId === workId100);
+t('v100 regression settle: the work cart still converts as a DEPOSIT (status deposit, $1,470 of $3,675, balance $2,205)', !!convWork100 && convWork100.payment.status === 'deposit' && convWork100.payment.amountCents === 147000 && convWork100.payment.totalCents === 367500 && convWork100.payment.balanceCents === 220500);
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
 

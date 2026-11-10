@@ -1092,6 +1092,7 @@
       <label>Customer email (optional — the proposal also appears inside their account)<input id="cartCustEmail" type="email" placeholder="customer@email.com"></label>
       <label>Team note (optional)<input id="cartNote" placeholder="Anything about this quote — the customer sees it in the order"></label>
       <label>Cart page language<select id="cartLang"><option value="en">English</option><option value="es">Español</option></select></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;margin:10px 0"><input type="checkbox" id="cartPayFull" style="width:auto;margin-top:3px"> <span><b>Charge in full upfront (no deposit) / Cobrar todo por adelantado (sin depósito)</b><br><span class="mut">For materials carts (Gabriel's rule): the customer pays the FULL total today — no deposit split, no balance at completion. Leave it off for regular job carts (deposit books, balance at completion).</span></span></label>
       <button class="black" id="cartMainBtn" onclick="submitCart()">Generate cart link</button>
       <div id="cartLinkOut" style="margin-top:8px"></div>
     </div>

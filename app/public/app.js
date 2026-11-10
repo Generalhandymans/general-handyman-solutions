@@ -4390,7 +4390,7 @@ async function createCartLink(){
   const nameProblem = builderNameProblem(); if(nameProblem){ alert(nameProblem); return; }
   const out=document.getElementById('cartLinkOut');
   try{
-    const d=await api('/api/admin/carts',{method:'POST', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
+    const d=await api('/api/admin/carts',{method:'POST', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en', payFull:!!(document.getElementById('cartPayFull')||{}).checked })});
     const url=d.cart.link;
     out.innerHTML='<b>Cart link ready:</b> <a href="'+url+'" target="_blank" rel="noopener">'+url+'</a> <button type="button" class="ghost" onclick="copyCartLink(\''+d.cart.id+'\')">Copy link</button><br><span class="mut">Send it to the customer — they fill their info, decide on HomeCare, and pay the deposit to book. The booked order lands in Customer requests.</span>';
     cartDraft=[]; renderCartLines();
@@ -4423,6 +4423,7 @@ async function editCart(idv){
     document.getElementById('cartCustPhone').value=c.customerPhone||'';
     document.getElementById('cartNote').value=c.note||'';
     const langSel=document.getElementById('cartLang'); if(langSel) langSel.value=c.lang||'en';
+    const pfSel=document.getElementById('cartPayFull'); if(pfSel) pfSel.checked=!!c.payFull; // v100: the charge-in-full toggle reflects the cart being edited
     document.getElementById('cartLinkOut').innerHTML='';
     setCartEditUi();
     renderCartLines();
@@ -4433,6 +4434,7 @@ function cancelCartEdit(){
   cartEditId=null; cartDraft=[];
   ['cartCustName','cartCustPhone','cartCustEmail','cartNote'].forEach(function(id){ const el=document.getElementById(id); if(el) el.value=''; });
   const langSel=document.getElementById('cartLang'); if(langSel) langSel.value='en';
+  const pfSel=document.getElementById('cartPayFull'); if(pfSel) pfSel.checked=false; // v100
   document.getElementById('cartLinkOut').innerHTML='';
   setCartEditUi();
   renderCartLines();
@@ -4443,7 +4445,7 @@ async function saveCartEdit(){
   const nameProblem = builderNameProblem(); if(nameProblem){ alert(nameProblem); return; }
   const idv=cartEditId;
   try{
-    const d=await api('/api/admin/carts/'+idv,{method:'PUT', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en' })});
+    const d=await api('/api/admin/carts/'+idv,{method:'PUT', body:JSON.stringify({ items:cartDraft, customerName:document.getElementById('cartCustName').value.trim(), customerPhone:document.getElementById('cartCustPhone').value.trim(), customerEmail:document.getElementById('cartCustEmail').value.trim(), note:document.getElementById('cartNote').value.trim(), lang:(document.getElementById('cartLang')||{}).value||'en', payFull:!!(document.getElementById('cartPayFull')||{}).checked })});
     const url=d.cart.link;
     cancelCartEdit();
     document.getElementById('cartLinkOut').innerHTML='<b>Cart '+idv+' updated:</b> total now <b>'+moneyFmt(d.cart.listTotal)+'</b> (member '+moneyFmt(d.cart.memberTotal)+') — same link: <a href="'+url+'" target="_blank" rel="noopener">'+url+'</a> <button type="button" class="ghost" onclick="copyCartLink(\''+idv+'\')">Copy link</button>';
@@ -4618,11 +4620,14 @@ async function loadAdminCarts(){
     // orden y su tarjeta byte a byte debajo.
     const nowMs90=Date.now();
     const ageDays90=function(c){ const t=new Date(c.createdAt||'').getTime(); return isFinite(t)?Math.max(0,Math.floor((nowMs90-t)/86400000)):0; };
-    const depFor90=function(total){ const t=Number(total)||0; return t<=300?Math.min(50,t):Math.round(t*40)/100; };
+    // v100: depFor90 takes the cart too — a payFull cart's amount due
+    // is its FULL total (the same number its page shows), never the
+    // deposit law's split.
+    const depFor90=function(total,cart){ const t=Number(total)||0; if(cart&&cart.payFull) return t; return t<=300?Math.min(50,t):Math.round(t*40)/100; };
     const open90=d.carts.filter(function(c){ return c.status==='open'; });
     let head90='';
     if(open90.length){
-      const depSum90=open90.reduce(function(s,c){ return s+depFor90(c.listTotal); },0);
+      const depSum90=open90.reduce(function(s,c){ return s+depFor90(c.listTotal,c); },0);
       const totSum90=open90.reduce(function(s,c){ return s+(Number(c.listTotal)||0); },0);
       const stale90=open90.filter(function(c){ return ageDays90(c)>=7; }).length;
       head90='<div class="card adm-dormant"><b>💤 Dormant proposals — no deposit yet:</b> <span class="adm-dormant-num">'+open90.length+'</span> waiting · <b>'+moneyFmt(depSum90)+'</b> in deposits to collect <span class="mut">('+moneyFmt(totSum90)+' in open work'+(stale90?' · '+stale90+' stale (7d+)':'')+')</span><br><span class="mut">Open proposals sort first below, oldest on top — follow up top-down.</span></div>';
@@ -4634,7 +4639,7 @@ async function loadAdminCarts(){
       const badge=c.status==='paid'?'<span class="pill" style="background:#1a7f37">paid → '+(c.requestId||'')+'</span>':(c.status==='cancelled'?'<span class="pill" style="background:#6b6762">cancelled</span>':'<span class="pill" style="background:#b26a00">open</span>');
       const age90=c.status==='open'?ageDays90(c):0;
       const stalePill90=(c.status==='open'&&age90>=7)?' <span class="pill adm-stale">⏰ STALE · '+age90+'d waiting</span>':'';
-      const dormLine90=c.status==='open'?'<br><span class="adm-age">⏳ Waiting '+(age90===0?'since today':(age90===1?'1 day':age90+' days'))+' — deposit to book <b>'+moneyFmt(depFor90(c.listTotal))+'</b>'+(Math.abs(depFor90(c.memberTotal)-depFor90(c.listTotal))>=0.01?' · member '+moneyFmt(depFor90(c.memberTotal)):'')+'</span>':'';
+      const dormLine90=c.status==='open'?'<br><span class="adm-age">⏳ Waiting '+(age90===0?'since today':(age90===1?'1 day':age90+' days'))+' — '+(c.payFull?'full payment to book <b>':'deposit to book <b>')+moneyFmt(depFor90(c.listTotal,c))+'</b>'+(Math.abs(depFor90(c.memberTotal,c)-depFor90(c.listTotal,c))>=0.01?' · member '+moneyFmt(depFor90(c.memberTotal,c)):'')+'</span>':'';
       return '<div class="card"><b>'+c.id+'</b> '+badge+stalePill90+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+dormLine90+(c.customerName?' • for '+escHtml(c.customerName):'')+(c.payState?'<br><span class="mut">💰 Deposit '+moneyFmt(c.payState.deposit)+' in (40%) · balance '+moneyFmt(c.payState.balance)+(c.payState.balancePaid?' PAID ✓':' due at completion')+'</span>'+(c.payState.adjustments&&c.payState.adjustments.length?'<br><span class="mut">🧾 '+c.payState.adjustments.map(function(a){ return (a.delta<0?'-':'+')+moneyFmt(Math.abs(a.delta))+(a.note?' — '+escHtml(a.note):''); }).join(' · ')+'</span>':''):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button>'+(c.status==='open'?' <button type="button" class="ghost" onclick="editCart(\''+c.id+'\')">Edit</button>':'')+(c.payState&&!c.payState.balancePaid?' <button type="button" class="ghost" onclick="adjustCartBalance(\''+c.id+'\')">Adjust balance</button> <button type="button" class="ghost" onclick="addCartTravel(\''+c.id+'\')">+ Travel $25</button>':'')+' <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }

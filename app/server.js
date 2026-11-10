@@ -1050,7 +1050,7 @@ function estimateReminderEmailText(rq) {
 function cartReminderEmailHtml(c) {
   const es = c.lang === 'es';
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
-  const dep = depositSplit(Math.round(total * 100)).depositCents / 100;
+  const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const items = (c.items || []).map(it => escMail(it.name || '') + ' ×' + (it.qty || 1)).join(' · ');
   const inner = es
     ? '<p>Hola ' + escMail(c.customerName || '') + ',</p>'
@@ -1070,7 +1070,7 @@ function cartReminderEmailHtml(c) {
 function cartReminderEmailText(c) {
   const es = c.lang === 'es';
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
-  const dep = depositSplit(Math.round(total * 100)).depositCents / 100;
+  const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const head = 'General Handyman Solutions — ';
   if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; aún no recibimos el depósito y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · Para apartar hoy: ' + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
   return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; we have not received the deposit yet, so your job is not booked yet.', 'Total: ' + usd(total) + ' · Due to book today: ' + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
@@ -3068,8 +3068,8 @@ function proposalsForUser(u) {
       kind: 'cart', id: c.id,
       title: first ? (first.name + ((c.items || []).length > 1 ? ' +' + ((c.items || []).length - 1) + ' more' : '')) : 'Team proposal',
       total: effTotal || 0, memberTotal: c.memberTotal || 0,
-      depositDue: c.status === 'open' ? depositSplit(Math.round(effTotal * 100)).depositCents / 100 : 0,
-      balanceDue: balDue ? Number(c.payment.balanceCents) / 100 : Math.round((effTotal - depositSplit(Math.round(effTotal * 100)).depositCents / 100) * 100) / 100,
+      depositDue: c.status === 'open' ? cartSplit(c, Math.round(effTotal * 100)).depositCents / 100 : 0,
+      balanceDue: balDue ? Number(c.payment.balanceCents) / 100 : Math.round((effTotal - cartSplit(c, Math.round(effTotal * 100)).depositCents / 100) * 100) / 100,
       state: balDue ? 'booked' : 'open',
       saved: saved,
       url: '/cart/' + c.id, createdAt: c.createdAt || ''
@@ -3097,7 +3097,7 @@ function workerBlockedPage(res, what) {
 }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, payFull: !!c.payFull, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -3369,6 +3369,21 @@ function depositSplit(totalCents) {
   const d = t <= DEPOSIT_FLAT_MAX_CENTS ? Math.min(DEPOSIT_FLAT_CENTS, t) : Math.round(t * DEPOSIT_RATE);
   return { depositCents: d, balanceCents: t - d };
 }
+// ---------- v100: CHARGE IN FULL (Gabriel's materials rule, 2026-11-09) ----------
+// When a quote includes materials GHS supplies, the customer pays the
+// materials IN FULL up front PLUS the deposit on the work — so a
+// materials cart is built with payFull: it charges EVERYTHING today,
+// no deposit split at all. cartSplit is the ONLY split an admin cart
+// (db.carts) ever uses: payFull -> the whole total is the amount due
+// today and the balance is $0; any other cart -> the deposit law
+// above, byte-identical. Estimates and the self-serve cart checkout
+// keep calling depositSplit directly — the flag lives on admin carts
+// only, and a cart without it behaves exactly as before.
+function cartSplit(c, totalCents) {
+  const t = Math.max(0, Math.round(Number(totalCents) || 0));
+  if (c && c.payFull) return { depositCents: t, balanceCents: 0 };
+  return depositSplit(t);
+}
 // ---------- v80 A-7: recoverable-cart store (plumbing only) ----------
 // Snapshots are stored in the SPA's own cart shape ({id, q, x}) so a
 // restore drops straight into localStorage 'ghsCart'. Items are priced
@@ -3469,6 +3484,20 @@ function convertCartToRequest(c, payInfo) {
     notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — deposit ' + usd(Number(payInfo.depositCents) / 100) + ' of ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + ' (balance ' + usd(Number(payInfo.balanceCents) / 100) + ' at completion).');
   } else {
     c.payment = { pi: payInfo.pi || '', amountCents: totalCents };
+    // v100: a payFull cart settles through THIS same full path — its
+    // stamped split is due-today = total / balance = 0, so isDeposit
+    // is false by construction and the order is born paid in full.
+    // Stamp the leg's PI + an explicit $0 balance on the record so
+    // the twin arrivals of THIS payment (page return + session
+    // webhook + PI webhook) are recognized by the existing depositPi
+    // exclusions in settleCartPayment instead of tripping the v94
+    // unrecorded-payment alert, and every balance door stays shut
+    // (balanceCents is 0, never > 0, so no balance can ever be
+    // opened, adjusted or sealed against this cart).
+    if (totalCents > 0 && Math.round(Number(payInfo.depositCents) || 0) === totalCents && Math.round(Number(payInfo.balanceCents) || 0) === 0) {
+      c.payment.depositPi = payInfo.pi || '';
+      c.payment.balanceCents = 0;
+    }
     recordRequestPayment(r, { pi: payInfo.pi, amountCents: totalCents, kind: 'cart-order' });
     notifyAdmins('request', 'New cart order ' + r.id + ' (cart ' + c.id + '): ' + r.service + ' — paid in full ' + usd(totalCents / 100) + ' from ' + (r.customerName || r.customerEmail || 'customer') + '.');
   }
@@ -4883,16 +4912,21 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Create your account password (8+ characters) — or your existing account password',
       paymentH: 'Payment', payBtn: 'Pay deposit {amt}',
       depositDueLabel: 'Due today — booking deposit to book', balanceDueLabel: 'Balance at completion',
+      payFullBtn: 'Pay {amt}', dueFullLabel: 'Due today — full payment',
       depPaidH: 'Deposit received — you are booked! 🎉', depPaidLine: 'Deposit paid', balLine: 'Balance due at completion', adjLine: 'Materials adjustment', travelLine: 'Travel', pickupLine: 'Materials pickup service', processingLine: 'Materials processing (3%)', matVarNote: 'Materials are estimated at today\'s prices. If the actual materials cost differs, your final balance is adjusted to the real cost — receipts available, never an extra labor charge.',
       depPaidBody: 'We received your deposit and your job is booked — the Team will confirm your time. The balance is due when the work is done, and you can pay it right here from this same link.',
       balanceBtn: 'Pay balance {amt}',
       joinOrderNote: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no paying twice.',
       joinOrderNoteYard: 'One single checkout: your booking deposit ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked. Yard Care covers your visits; this order stays at the regular price.',
       joinOrderNoteFree: 'One single checkout: your HomeCare month is FREE today (your card is saved safely with Stripe and the first $29 charge is in 30 days) and only your 40% deposit is charged — {dep} today, and you are booked as a member. No $0 step, no second payment.',
+      joinOrderNoteFull: 'One single checkout: this cart is paid in full ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked as a member. No second step, no balance later.',
+      joinOrderNoteFullYard: 'One single checkout: this cart is paid in full ({dep}) plus your first {planName} month ({price}/mo) — {due} charged today, and you are booked. Yard Care covers your visits; this order stays at the regular price.',
+      joinOrderNoteFullFree: 'One single checkout: your HomeCare month is FREE today (your card is saved safely with Stripe and the first $29 charge is in 30 days) and this cart is paid in full — {dep} today, and you are booked as a member. No $0 step, no balance later.',
       inviteBanner: '🎟️ Personal invitation: your first month of HomeCare is FREE.',
       freeMonthTag: 'FIRST MONTH FREE',
       joinedYardNote: '🎉 Your Yard Care membership is active — your yard visits are covered. This order is at the regular price (the 20% order discount comes with HomeCare / HomeCare Plus). Tap Pay below to finish your order.',
       refundLine: 'You pay a booking deposit today to book your job ($50 on jobs up to $300; 40% on jobs over $300); the rest is due when the work is done — right here on this same link. If you cancel before a technician is dispatched, everything you paid comes back; after dispatch, $75 is non-refundable and the rest comes back to you.',
+      refundLineFull: 'This cart charges everything up front: the full total is due today, so no balance is due later. If you cancel before a technician is dispatched, everything you paid comes back; after dispatch, $75 is non-refundable and the rest comes back to you.',
       working: 'Working…', joining: 'Starting your membership…', processing: 'Processing payment…',
       errName: 'Add your name.', errEmail: 'Add a valid email.', errAddr: 'Add the service address.',
       errPass: 'Create a password (8+ characters) — it is your account for this order and your membership.', errSignup: 'could not create your account',
@@ -4931,16 +4965,21 @@ function cartPageHtml(c, user, langOverride, notice) {
       passLabel: 'Crea la contraseña de tu cuenta (8+ caracteres) — o la contraseña de tu cuenta existente',
       paymentH: 'Pago', payBtn: 'Pagar anticipo {amt}',
       depositDueLabel: 'Hoy — anticipo para agendar', balanceDueLabel: 'Resto al terminar',
+      payFullBtn: 'Pagar {amt}', dueFullLabel: 'Hoy — pago completo',
       depPaidH: '¡Anticipo recibido — tu trabajo está agendado! 🎉', depPaidLine: 'Anticipo pagado', balLine: 'Resto al terminar el trabajo', adjLine: 'Ajuste de materiales', travelLine: 'Viaje', pickupLine: 'Servicio de compra de materiales', processingLine: 'Procesamiento de materiales (3%)', matVarNote: 'Los materiales se estiman a precios de hoy. Si el costo real de los materiales varía, tu saldo final se ajusta al costo real — recibos disponibles, nunca un cargo extra de mano de obra.',
       depPaidBody: 'Recibimos tu anticipo y tu trabajo está agendado — el Equipo confirma tu hora. El resto se paga cuando el trabajo esté terminado, y lo puedes pagar aquí mismo, en este mismo link.',
       balanceBtn: 'Pagar el resto {amt}',
       joinOrderNote: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin pagar dos veces.',
       joinOrderNoteYard: 'Un solo cobro: tu anticipo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado. Yard Care cubre tus visitas; esta orden queda al precio normal.',
       joinOrderNoteFree: 'Un solo cobro: tu mes de HomeCare es GRATIS hoy (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) y solo se cobra tu anticipo del 40% — {dep} hoy, y quedas agendado como miembro. Sin paso de $0, sin segundo pago.',
+      joinOrderNoteFull: 'Un solo cobro: este carrito se paga completo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado como miembro. Sin segundo paso, sin saldo después.',
+      joinOrderNoteFullYard: 'Un solo cobro: este carrito se paga completo ({dep}) más tu primer mes de {planName} ({price}/mes) — hoy se cobran {due} y quedas agendado. Yard Care cubre tus visitas; esta orden queda al precio normal.',
+      joinOrderNoteFullFree: 'Un solo cobro: tu mes de HomeCare es GRATIS hoy (tu tarjeta queda guardada de forma segura en Stripe y el primer cobro de $29 es en 30 días) y este carrito se paga completo — {dep} hoy, y quedas agendado como miembro. Sin paso de $0, sin saldo después.',
       inviteBanner: '🎟️ Invitación personal: tu primer mes de HomeCare es GRATIS.',
       freeMonthTag: 'PRIMER MES GRATIS',
       joinedYardNote: '🎉 Tu membresía Yard Care está activa — tus visitas de yarda están cubiertas. Esta orden queda al precio normal (el descuento del 20% en órdenes viene con HomeCare / HomeCare Plus). Toca Pagar abajo para terminar tu orden.',
       refundLine: 'Hoy pagas un anticipo para agendar tu trabajo ($50 en trabajos de hasta $300; 40% si pasan de $300); el resto se paga al terminar — aquí mismo, en este mismo link. Si cancelas antes de que salga un técnico, te devolvemos todo lo pagado; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
+      refundLineFull: 'Hoy pagas el total completo — este carrito cobra todo por adelantado, así que no queda saldo pendiente. Si cancelas antes de que salga un técnico, te devolvemos todo lo pagado; después de que salga, $75 no son reembolsables y el resto regresa a ti.',
       working: 'Procesando…', joining: 'Activando tu membresía…', processing: 'Procesando el pago…',
       errName: 'Agrega tu nombre.', errEmail: 'Agrega un correo válido.', errAddr: 'Agrega la dirección del servicio.',
       errPass: 'Crea una contraseña (8+ caracteres) — es tu cuenta para esta orden y tu membresía.', errSignup: 'no se pudo crear tu cuenta',
@@ -5122,6 +5161,11 @@ function cartPageHtml(c, user, langOverride, notice) {
   const inp = 'padding:12px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:14px;width:100%;box-sizing:border-box;margin-top:4px';
   const lbl = 'display:block;margin:10px 0;font-size:14px;color:#a49d93';
   const startCents = Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100);
+  // v100: ONE split computation (cartSplit) feeds the due/balance
+  // rows, the Pay button and the client-side DEP_/BAL_ vars, so the
+  // page can never disagree with what checkout will charge. A payFull
+  // cart shows the WHOLE total as due today and no balance row at all.
+  const splitL100 = cartSplit(c, Math.round(c.listTotal * 100)), splitM100 = cartSplit(c, Math.round(c.memberTotal * 100)), splitStart100 = cartSplit(c, startCents);
   // v54 return banners: 'joined' renders only after the SERVER verified
   // the subscription with Stripe (the GET handler decides — page flags
   // alone never produce it); 'cancelled' is a plain friendly note.
@@ -5141,8 +5185,8 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span id="ctSubtotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '">' + usd(c.listTotal) + '</span></div>'
     + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#2fbf71;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="depositDueLabel">' + S.depositDueLabel + '</span><b id="ctDeposit" style="font-size:21px" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).depositCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).depositCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).depositCents / 100) + '</b></div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px;color:#a49d93"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(depositSplit(Math.round(c.listTotal * 100)).balanceCents / 100) + '" data-m="' + usd(depositSplit(Math.round(c.memberTotal * 100)).balanceCents / 100) + '">' + usd(depositSplit(Math.round((sessionMember ? c.memberTotal : c.listTotal) * 100)).balanceCents / 100) + '</span></div>'
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="' + (c.payFull ? 'dueFullLabel' : 'depositDueLabel') + '">' + (c.payFull ? S.dueFullLabel : S.depositDueLabel) + '</span><b id="ctDeposit" style="font-size:21px" data-l="' + usd(splitL100.depositCents / 100) + '" data-m="' + usd(splitM100.depositCents / 100) + '">' + usd(splitStart100.depositCents / 100) + '</b></div>'
+    + (c.payFull ? '' : '<div style="display:flex;justify-content:space-between;font-size:15px;color:#a49d93"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(splitL100.balanceCents / 100) + '" data-m="' + usd(splitM100.balanceCents / 100) + '">' + usd(splitStart100.balanceCents / 100) + '</span></div>')
     + '</div>'
     + '<p style="color:#a49d93;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + '<div id="cartForm">'
@@ -5159,15 +5203,15 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
     + joinBlock
     + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="paymentH">' + S.paymentH + '</h3>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:12px">' + fillS(S.payBtn, { amt: usd(depositSplit(startCents).depositCents / 100) }) + '</button>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:12px">' + fillS(c.payFull ? S.payFullBtn : S.payBtn, { amt: usd(splitStart100.depositCents / 100) }) + '</button>'
     + '<p id="payMsg" style="color:#a49d93"></p>'
     + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#a49d93;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
-    + '<p style="color:#a49d93;font-size:13px" data-i18n="refundLine">' + S.refundLine + '</p>'
+    + '<p style="color:#a49d93;font-size:13px" data-i18n="' + (c.payFull ? 'refundLineFull' : 'refundLine') + '">' + (c.payFull ? S.refundLineFull : S.refundLine) + '</p>'
     + '<p style="color:#a49d93;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
-    + 'var DEP_L=' + depositSplit(Math.round(c.listTotal * 100)).depositCents + ', DEP_M=' + depositSplit(Math.round(c.memberTotal * 100)).depositCents + ', BAL_L=' + depositSplit(Math.round(c.listTotal * 100)).balanceCents + ', BAL_M=' + depositSplit(Math.round(c.memberTotal * 100)).balanceCents + ';'
+    + 'var DEP_L=' + splitL100.depositCents + ', DEP_M=' + splitM100.depositCents + ', BAL_L=' + splitL100.balanceCents + ', BAL_M=' + splitM100.balanceCents + ', PAY_FULL=' + (c.payFull ? 'true' : 'false') + ';'
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (hcFreeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
@@ -5177,7 +5221,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + 'function syncJoinPreview(){ joinPreview=joinOn() && !!PLANS[selPlan()].disc; }'
     + 'function fillPlan(s, pl){ return String(s||"").replace("{planName}", pl.name).replace("{price}", pl.price); }'
     + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
-    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled){ var dueC=(asM?DEP_M:DEP_L); if(joinOn()){ dueC+=((FREE_MONTH && selPlan()==="homecare")?0:PLANS[selPlan()].cents); } pb.textContent=T("payBtn").replace("{amt}",fmt(dueC)); } var dp=$("ctDeposit"); if(dp) dp.textContent=asM?dp.getAttribute("data-m"):dp.getAttribute("data-l"); var bl=$("ctBalance"); if(bl) bl.textContent=asM?bl.getAttribute("data-m"):bl.getAttribute("data-l"); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; var depC=(asM?DEP_M:DEP_L); var dueJ=depC+((FREE_MONTH && selPlan()==="homecare")?0:pl.cents); var raw=(FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard")); jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ)); } } }'
+    + 'function renderAmounts(){ var asM=memberApplied||joinPreview; var cur=asM?MEMBER_C:LIST_C; var bt=$("cartBigTotal"); if(bt) bt.textContent=fmt(cur); var pb=$("payBtn"); if(pb && !pb.disabled){ var dueC=(asM?DEP_M:DEP_L); if(joinOn()){ dueC+=((FREE_MONTH && selPlan()==="homecare")?0:PLANS[selPlan()].cents); } pb.textContent=(PAY_FULL?T("payFullBtn"):T("payBtn")).replace("{amt}",fmt(dueC)); } var dp=$("ctDeposit"); if(dp) dp.textContent=asM?dp.getAttribute("data-m"):dp.getAttribute("data-l"); var bl=$("ctBalance"); if(bl) bl.textContent=asM?bl.getAttribute("data-m"):bl.getAttribute("data-l"); var sl=$("savingsLine"); if(sl) sl.textContent=fillT(T("savings")); var jb=$("joinBody"); if(jb) jb.textContent=fillT(T("joinBody")); document.querySelectorAll(".cEach,.cLine").forEach(function(n){ n.textContent=asM?n.getAttribute("data-m"):n.getAttribute("data-l"); }); document.querySelectorAll(".memHint").forEach(function(n){ n.style.display=asM?"none":""; }); var sr=$("ctSaveRow"); if(sr) sr.style.display=asM?"flex":"none"; var st=$("ctSubtotal"); if(st) st.textContent=joinPreview?st.getAttribute("data-m"):st.getAttribute("data-l"); var yn=$("yardNote"); if(yn) yn.style.display=(joinOn() && !PLANS[selPlan()].disc)?"block":"none"; var jn=$("joinOrderNote"); if(jn){ var on=joinOn(); jn.style.display=on?"block":"none"; if(on){ var pl=PLANS[selPlan()]; var depC=(asM?DEP_M:DEP_L); var dueJ=depC+((FREE_MONTH && selPlan()==="homecare")?0:pl.cents); var raw=PAY_FULL?((FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFullFree"):(pl.disc?T("joinOrderNoteFull"):T("joinOrderNoteFullYard"))):((FREE_MONTH && selPlan()==="homecare")?T("joinOrderNoteFree"):(pl.disc?T("joinOrderNote"):T("joinOrderNoteYard"))); jn.textContent=fillPlan(raw, pl).replace("{dep}",fmt(depC)).replace("{due}",fmt(dueJ)); } } }'
     + 'function applyMemberUi(){ memberApplied=true; joinPreview=false; renderAmounts(); var jb=$("joinBox"); if(jb) jb.style.display="none"; var mf=$("memberFound"); if(mf) mf.style.display="block"; }'
     + 'if($("cJoin")){ $("cJoin").addEventListener("change",function(){ syncJoinPreview(); var pp=$("planPicker"); if(pp) pp.style.display=this.checked?"block":"none"; $("joinPassRow").style.display=(!loggedIn && this.checked)?"block":"none"; renderAmounts(); }); }'
     + 'document.querySelectorAll("input[name=cPlan]").forEach(function(r){ r.addEventListener("change",function(){ syncJoinPreview(); renderAmounts(); }); });'
@@ -8639,7 +8683,7 @@ async function handleRequest(req, res) {
     if (!items.length) return send(res, 400, { error: 'add at least one service to the cart' });
     const totals = cartTotals(items);
     if (!(totals.listTotal > 0)) return send(res, 400, { error: 'the cart total must be over $0' });
-    const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
+    const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: cleanText(b.note, 500), customerName: cleanText(b.customerName, 80), customerPhone: cleanText(b.customerPhone, 40), customerEmail: cleanText(b.customerEmail, 160).toLowerCase(), lang: b.lang === 'es' ? 'es' : 'en', payFull: b.payFull === true, status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: user.id, createdAt: new Date().toISOString() };
     cartsOf().push(c);
     audit(user, 'cart.create', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
     save();
@@ -8690,6 +8734,7 @@ async function handleRequest(req, res) {
     if (b.customerEmail !== undefined) c.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
     if (b.note !== undefined) c.note = cleanText(b.note, 500);
     if (b.lang !== undefined) c.lang = b.lang === 'es' ? 'es' : 'en';
+    if (b.payFull !== undefined) c.payFull = b.payFull === true; // v100: charge-in-full toggle rides the same edit (sessions already expired above)
     audit(user, 'cart.edit', c.id, items.length + ' item(s) · ' + usd(c.listTotal));
     save();
     return send(res, 200, { cart: publicCart(c) });
@@ -9021,7 +9066,7 @@ async function handleRequest(req, res) {
         const discPlan = joinPlan.type === 'homecare' || joinPlan.type === 'plus';
         const totalCentsJ = Math.round((discPlan ? c.memberTotal : c.listTotal) * 100);
         if (!(totalCentsJ > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
-        const splitJ = depositSplit(totalCentsJ);
+        const splitJ = cartSplit(c, totalCentsJ);
         const planFirstCents = hcTrial ? 0 : joinPlan.monthlyCents;
         const s = await createCheckoutSession('cart-join', user, {
           plan: joinPlan.key,
@@ -9029,7 +9074,7 @@ async function handleRequest(req, res) {
           cartId: c.id,
           lang: cartLang80,
           trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0,
-          label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
+          label: 'Cart ' + c.id + (c.payFull ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
           successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
           metadata: { cartId: c.id, src: fmInvite ? 'cart-invite' : 'cart', ...(fmInvite ? { inviteId: fmInvite.id } : {}) },
@@ -9050,13 +9095,17 @@ async function handleRequest(req, res) {
       if (!(totalCents > 0)) { save(); return send(res, 400, { error: 'nothing to pay on this cart' }); }
       // v62 POLICY: a cart link is one of OUR proposals — 40% books
       // the job, the other 60% is due at completion (same link).
-      const split = depositSplit(totalCents);
+      // v100: a payFull cart (materials) is the ONE exception — its
+      // split is the full total today and a $0 balance, stamped the
+      // same way, so settleCartPayment converts it paid in full
+      // through the very same stamped-split branch.
+      const split = cartSplit(c, totalCents);
       const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: cust.email }, {
         amountCents: split.depositCents,
         cartId: c.id,
-        payStep: 'deposit',
+        payStep: c.payFull ? 'full' : 'deposit',
         lang: cartLang80,
-        label: 'Cart ' + c.id + ' — booking deposit — General Handyman Solutions',
+        label: 'Cart ' + c.id + (c.payFull ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
         successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: cartLink(c) + '?cancelled=1'
       });
