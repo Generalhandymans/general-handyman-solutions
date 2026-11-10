@@ -2229,7 +2229,7 @@ function estPhotosOf(idv){ if(!window._estPhotos) window._estPhotos={}; if(!wind
 function estPhotosSeed(idv, photos){ if(window._estPhotos && window._estPhotos[idv]) return; estPhotosOf(idv).push.apply(estPhotosOf(idv), (photos||[]).slice(0,6)); renderEstPhotoThumbs(idv); }
 async function estPhotosAdd(idv, input){ const files=[...input.files].slice(0,6); for(const f of files){ if(estPhotosOf(idv).length>=6) break; estPhotosOf(idv).push(await fileToDataUrl(f)); } input.value=''; renderEstPhotoThumbs(idv); }
 function estPhotoRemove(idv, i){ estPhotosOf(idv).splice(i,1); renderEstPhotoThumbs(idv); }
-function renderEstPhotoThumbs(idv){ const box=document.getElementById('estPhotoThumbs-'+idv); if(!box) return; box.innerHTML=estPhotosOf(idv).map(function(p,i){ return '<span style="position:relative;display:inline-block"><img src="'+p+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="est-x" style="position:absolute;top:-6px;right:-6px;padding:2px 7px" onclick="estPhotoRemove(\''+idv+'\','+i+')" title="Remove photo">×</button></span>'; }).join(''); }
+function renderEstPhotoThumbs(idv){ const box=document.getElementById('estPhotoThumbs-'+idv); if(!box) return; box.innerHTML=estPhotosOf(idv).map(function(p,i){ return '<span style="position:relative;display:inline-block"><img src="'+escAttr(p)+'" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line)"><button type="button" class="est-x" style="position:absolute;top:-6px;right:-6px;padding:2px 7px" onclick="estPhotoRemove(\''+idv+'\','+i+')" title="Remove photo">×</button></span>'; }).join(''); }
 function readEstRows(sel){
   return [...document.querySelectorAll(sel)].map(function(row){ const ty=row.querySelector('[data-est-type]'); return { description:row.querySelector('[data-est-desc]').value.trim(), type:(ty && ty.value==='material')?'material':'labor', qty:Number(row.querySelector('[data-est-qty]').value)||0, unitPrice:Number(row.querySelector('[data-est-price]').value)||0 }; }).filter(function(it){ return it.description && it.qty>0; });
 }
@@ -2451,7 +2451,7 @@ async function loadMyInvoices(){
 }
 function threadHtml(r){
   const msgs=(r.messages||[]).map(function(m){ const who=m.from==='team'?'General Handyman Solutions Team':(m.name||CU('msgCustomerWord')); return '<div class="msg"><b>'+escHtml(who)+':</b> '+escHtml(m.text||'')+'</div>'; }).join('');
-  const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+p+'" alt="'+CU('jobPhotoAlt')+'">'; }).join('');
+  const photos=(r.photos||[]).map(function(p){ return '<img class="thumb" src="'+escAttr(p)+'" alt="'+CU('jobPhotoAlt')+'">'; }).join('');
   const canPost = !!me && (me.role==='admin' || r.customerId===me.id);
   return (photos?'<div class="photos">'+photos+'</div>':'')+'<div class="thread">'+(msgs||'<div class="empty"><span class="mut">'+CU('threadNone')+'</span></div>')+'</div>'+(canPost?'<div class="reply"><input id="m-'+r.id+'" placeholder="'+(me.role==='admin'?CU('threadPhCust'):CU('threadPhTeam'))+'"><button onclick="sendMsg(\''+r.id+'\')">'+CU('sendBtn')+'</button></div>':'');
 }
@@ -2917,7 +2917,7 @@ async function saveWorkerTrades(){
     loadMe();
   } catch (e) { if (msg) msg.textContent = e.message; }
 }
-function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+label+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
+function payoutHtml(j){ if(!j.assignedWorkerId) return ''; const map={ paid:'Payout SENT to the technician \u2713', awaiting_worker_setup:'Payout waiting — technician has not finished Stripe setup', awaiting_payment:'Payout waiting — customer payment not in yet', awaiting_capture:'Payout waiting — customer payment not in yet', pending_funds:'Payout pending — waiting for funds to be available in Stripe', error:'Payout ERROR — '+(j.payoutError||'see server log'), stripe_off:'Payout off — Stripe not configured' }; if(j.status!=='Done \u2014 photos sent'&&!j.payoutStatus) return ''; const label=j.payoutStatus?(map[j.payoutStatus]||('Payout: '+j.payoutStatus)):'Payout not sent yet'; return '<div style="margin-top:8px"><span class="pill">\u{1F4B3} '+escHtml(label)+'</span> <button class="ghost" onclick="payWorkerNow(\''+j.id+'\')">Pay worker now</button></div>'; }
 async function payWorkerNow(idv){ try{ const r=await api('/api/admin/jobs/'+idv+'/pay-worker',{method:'POST'}); alert('Payout status: '+(r.payoutStatus||'\u2014')+(r.payoutError?(' \u2014 '+r.payoutError):'')); loadAdminJobs(); }catch(e){ alert(e.message); } }
 // v75 → v80.8: Gabriel's per-job claim release, right on the job
 // card. While the Connect claim gate lived this released THIS job to
@@ -3998,7 +3998,7 @@ function renderYcDay(){
       (v.source==='auto'?'<div class="mut" style="margin-top:4px">Auto-generated from the membership'+(v.planKey?' ('+escHtml(v.planKey)+(v.period?' • '+escHtml(v.period):'')+')':'')+' — confirm the date with the member.</div>':'')+
       (v.plan&&v.plan.status!=='active'?'<div style="margin-top:4px;color:#b26a00"><b>⚠ Membership '+escHtml(v.plan.status)+'</b> — this proposal stays here for your review.</div>':'')+
       (v.rescheduleAsk?'<div style="margin-top:4px;color:#b26a00"><b>⚠ Member asked to move this visit to '+escHtml(v.rescheduleAsk.date)+'</b>'+(v.rescheduleAsk.note?' — '+escHtml(v.rescheduleAsk.note):'')+' · Reschedule above to answer it.</div>':'')+
-      ((v.beforePhoto||v.afterPhoto)?'<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>':'')+
+      ((v.beforePhoto||v.afterPhoto)?'<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+escAttr(v.beforePhoto)+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+escAttr(v.afterPhoto)+'" alt="After">':'')+'</div>':'')+
       (v.status==='done'?'<div class="mut" style="margin-top:4px">Completed '+(v.completedAt?escHtml(v.completedAt.slice(0,10)):'')+(v.workerPay?' • Worker pay: $'+v.workerPay+' (internal)':'')+'</div>':'')+
       '</div>';
   }).join('') : '<div class="empty"><p class="mut">No yard visits this day.</p></div>';
@@ -4148,7 +4148,7 @@ function yardCardHtml(d){
     const lc=d.lastCompleted;
     h+='<div id="yardcard-' + lc.id + '" style="margin-top:8px"><b>' + CU('yardLastDone') + escHtml(lc.date) + '</b> <span class="pill">' + escHtml(yardStatusLabel('done')) + '</span>'
       + (lc.assignedWorkerName ? '<div class="mut" style="margin-top:2px">' + CU('yardTechPre') + escHtml(lc.assignedWorkerName) + '</div>' : '')
-      + (lc.afterPhoto ? '<div class="photos"><img class="thumb" src="' + lc.afterPhoto + '" alt="' + CU('yardPhotoAlt') + '"></div>' : '') + '</div>';
+      + (lc.afterPhoto ? '<div class="photos"><img class="thumb" src="' + escAttr(lc.afterPhoto) + '" alt="' + CU('yardPhotoAlt') + '"></div>' : '') + '</div>';
   }
   return h;
 }
@@ -4203,7 +4203,7 @@ async function loadWorkerYardVisits(){
       const canPhoto = v.status!=='done';
       let h='<div class="card" id="wyardcard-'+v.id+'"><b>'+escHtml(v.date)+'</b> — '+escHtml(v.planName||'Yard visit')+' <span class="pill">'+escHtml(v.status)+'</span><br>'+
         '<b>'+WT('addressLabel')+'</b> '+escHtml(v.address||'—')+(v.yardSize?'<br><span class="mut">'+WT('yardLabel')+' '+escHtml(v.yardSize)+'</span>':'')+(v.homeNotes?'<br><span class="mut">'+WT('homeNotesLabel')+' '+escHtml(v.homeNotes)+'</span>':'')+(v.notes?'<br><span class="mut">'+WT('teamNotesLabel')+' '+escHtml(v.notes)+'</span>':'');
-      if (v.beforePhoto||v.afterPhoto) h+='<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+v.beforePhoto+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+v.afterPhoto+'" alt="After">':'')+'</div>';
+      if (v.beforePhoto||v.afterPhoto) h+='<div class="photos">'+(v.beforePhoto?'<img class="thumb" src="'+escAttr(v.beforePhoto)+'" alt="Before">':'')+(v.afterPhoto?'<img class="thumb" src="'+escAttr(v.afterPhoto)+'" alt="After">':'')+'</div>';
       if (canPhoto) h+='<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap"><label style="flex:1;min-width:130px">'+WT('beforePhoto')+'<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'beforePhoto\',this)"></label><label style="flex:1;min-width:130px">'+WT('afterPhoto')+'<input type="file" accept="image/*" onchange="yardPhotoChange(\''+v.id+'\',\'afterPhoto\',this)"></label></div>';
       h+='<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+
         (v.status==='assigned'?'<button class="black" onclick="yardVisitStatus(\''+v.id+'\',\'on_the_way\')">'+WT('onMyWay')+'</button>':'')+
@@ -4472,8 +4472,8 @@ async function loadAdminSources(){
 // app language) so the two sections read in the language Gabriel is
 // using, like the rest of the app's painted blocks.
 const ADM812 = {
-  en: { today: 'Today', d7: '7 days', d30: '30 days', funnel: 'Funnel', views: 'views', carts: 'carts', joins: 'signups', payments: 'payments', source: 'Source', deposits: 'Deposits', newMembers: 'New paying members', spend: 'Ad spend', cac: 'CAC', workerCode: 'worker code', customerCode: 'customer code', addSpend: 'Add ad spend', amount: 'Amount', date: 'Date', save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', noSpend: 'No spend records yet — add the first one above when an ad runs.', couldNot: 'Could not load.', depWaiting: 'Deposits in, balance still out', orders: 'orders', collected: 'collected', balanceOut: 'balance still out', receivable: 'Total receivable', orderBalances: 'order balances', cartBalances: 'unconverted cart balances', invoicesOpen: 'open invoices', techDue: 'Tech payouts waiting', jobs: 'jobs', bounties: 'referral bounties pending', awaitingSetup: 'waiting on Stripe setup', captainsDue: 'Captain overrides accrued', entries: 'entries', memFail: 'Membership payment failures (this month)', stripeBox: 'Stripe', avail: 'available', pendingBal: 'pending', nextPayout: 'next payout', noStripe: 'Balance not available right now — the rest of this page is live from the app.' },
-  es: { today: 'Hoy', d7: '7 días', d30: '30 días', funnel: 'Embudo', views: 'visitas', carts: 'carritos', joins: 'registros', payments: 'pagos', source: 'Fuente', deposits: 'Depósitos', newMembers: 'Miembros nuevos que pagaron', spend: 'Gasto en anuncios', cac: 'CAC', workerCode: 'código de técnico', customerCode: 'código de cliente', addSpend: 'Agregar gasto en anuncios', amount: 'Monto', date: 'Fecha', save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Borrar', noSpend: 'Todavía no hay gastos registrados — agrega el primero arriba cuando corra un anuncio.', couldNot: 'No se pudo cargar.', depWaiting: 'Depósitos cobrados, saldo pendiente', orders: 'órdenes', collected: 'cobrados', balanceOut: 'de saldo por cobrar', receivable: 'Total por cobrar', orderBalances: 'saldos de órdenes', cartBalances: 'saldos de carritos sin convertir', invoicesOpen: 'facturas abiertas', techDue: 'Pagos a técnicos en espera', jobs: 'trabajos', bounties: 'bonos de referido pendientes', awaitingSetup: 'esperando su Stripe', captainsDue: 'Overrides de capitán acumulados', entries: 'registros', memFail: 'Pagos de membresía fallidos (este mes)', stripeBox: 'Stripe', avail: 'disponible', pendingBal: 'pendiente', nextPayout: 'próximo payout', noStripe: 'Saldo no disponible ahorita — el resto de la página sí es en vivo desde la app.' }
+  en: { today: 'Today', d7: '7 days', d30: '30 days', funnel: 'Funnel', views: 'views', carts: 'carts', joins: 'signups', payments: 'payments', source: 'Source', deposits: 'Deposits', newMembers: 'New paying members', spend: 'Ad spend', cac: 'CAC', workerCode: 'worker code', customerCode: 'customer code', addSpend: 'Add ad spend', amount: 'Amount', date: 'Date', save: 'Save', cancel: 'Cancel', edit: 'Edit', del: 'Delete', noSpend: 'No spend records yet — add the first one above when an ad runs.', couldNot: 'Could not load.', depWaiting: 'Deposits in, balance still out', orders: 'orders', collected: 'collected', balanceOut: 'balance still out', receivable: 'Total receivable', orderBalances: 'order balances', cartBalances: 'unconverted cart balances', invoicesOpen: 'open invoices', techDue: 'Tech payouts waiting', jobs: 'jobs', bounties: 'referral bounties pending', awaitingSetup: 'waiting on Stripe setup', captainsDue: 'Captain overrides accrued', entries: 'entries', memFail: 'Membership payment failures (this month)', collectedMonth: 'Collected this month', ordersW: 'orders', invoicesW: 'invoices', cartsW: 'carts', allTimeW: 'all time', stripeBox: 'Stripe', avail: 'available', pendingBal: 'pending', nextPayout: 'next payout', noStripe: 'Balance not available right now — the rest of this page is live from the app.' },
+  es: { today: 'Hoy', d7: '7 días', d30: '30 días', funnel: 'Embudo', views: 'visitas', carts: 'carritos', joins: 'registros', payments: 'pagos', source: 'Fuente', deposits: 'Depósitos', newMembers: 'Miembros nuevos que pagaron', spend: 'Gasto en anuncios', cac: 'CAC', workerCode: 'código de técnico', customerCode: 'código de cliente', addSpend: 'Agregar gasto en anuncios', amount: 'Monto', date: 'Fecha', save: 'Guardar', cancel: 'Cancelar', edit: 'Editar', del: 'Borrar', noSpend: 'Todavía no hay gastos registrados — agrega el primero arriba cuando corra un anuncio.', couldNot: 'No se pudo cargar.', depWaiting: 'Depósitos cobrados, saldo pendiente', orders: 'órdenes', collected: 'cobrados', balanceOut: 'de saldo por cobrar', receivable: 'Total por cobrar', orderBalances: 'saldos de órdenes', cartBalances: 'saldos de carritos sin convertir', invoicesOpen: 'facturas abiertas', techDue: 'Pagos a técnicos en espera', jobs: 'trabajos', bounties: 'bonos de referido pendientes', awaitingSetup: 'esperando su Stripe', captainsDue: 'Overrides de capitán acumulados', entries: 'registros', memFail: 'Pagos de membresía fallidos (este mes)', collectedMonth: 'Cobrado este mes', ordersW: 'órdenes', invoicesW: 'facturas', cartsW: 'carritos', allTimeW: 'histórico', stripeBox: 'Stripe', avail: 'disponible', pendingBal: 'pendiente', nextPayout: 'próximo payout', noStripe: 'Saldo no disponible ahorita — el resto de la página sí es en vivo desde la app.' }
 };
 let trafficRange812 = '7d';
 function setTrafficRange(r){ trafficRange812 = r; loadAdminTraffic(); }
@@ -4536,6 +4536,8 @@ async function loadAdminMoney(){
     let h = '';
     h += '<div class="card"><b>' + S.depWaiting + ':</b> ' + (dw.count || 0) + ' ' + S.orders + ' · ' + moneyFmt(dw.collected || 0) + ' ' + S.collected + ' · ' + moneyFmt(dw.balance || 0) + ' ' + S.balanceOut + '</div>';
     h += '<div class="card"><b>' + S.receivable + ':</b> ' + moneyFmt(rc.total || 0) + '<br><span class="mut">' + S.orderBalances + ' ' + moneyFmt(rc.orderBalances || 0) + ' · ' + S.cartBalances + ' ' + moneyFmt(rc.cartBalances || 0) + ' (' + (rc.cartBalancesCount || 0) + ') · ' + S.invoicesOpen + ' ' + moneyFmt(rc.invoicesOpen || 0) + ' (' + (rc.invoicesOpenCount || 0) + ')</span></div>';
+    const col = d.collected || {}, colM = col.month || {}, colA = col.all || {};
+    h += '<div class="card"><b>' + S.collectedMonth + ':</b> ' + moneyFmt(colM.total || 0) + '<br><span class="mut">' + S.ordersW + ' ' + moneyFmt(colM.orders || 0) + ' · ' + S.invoicesW + ' ' + moneyFmt(colM.invoices || 0) + ' · ' + S.cartsW + ' ' + moneyFmt(colM.carts || 0) + ' · ' + S.allTimeW + ' ' + moneyFmt(colA.total || 0) + '</span></div>';
     h += '<div class="card"><b>' + S.techDue + ':</b> ' + moneyFmt(tp.amount || 0) + ' · ' + (tp.jobs || 0) + ' ' + S.jobs
       + ((tp.byState || []).length ? '<br>' + tp.byState.map(function (b) { return '<span class="mut">' + escHtml(b.state) + ':</span> ' + moneyFmt(b.amount) + ' (' + b.jobs + ')'; }).join(' · ') : '')
       + ((tp.bountiesPending && tp.bountiesPending.count) ? '<br><span class="mut">' + S.bounties + ':</span> ' + moneyFmt(tp.bountiesPending.amount) + ' (' + tp.bountiesPending.count + ')' : '')
@@ -4715,13 +4717,27 @@ async function revokeInvite(idv){
   try{ await api('/api/admin/invites/'+idv+'/revoke',{method:'POST', body:JSON.stringify({})}); loadAdminInvites(); }
   catch(e){ alert(e.message); }
 }
+// v101 (wave 9): the members roster (name · plan · status · next charge)
+async function loadAdminMembers(){
+  const box=document.getElementById('adminMembers'); if(!box || !me || me.role!=='admin') return;
+  try{
+    const d=await api('/api/admin/members');
+    const ms=d.members||[];
+    if(!ms.length){ box.innerHTML='<div class="card"><b>Members</b><br><span class="mut">No active members yet.</span></div>'; return; }
+    box.innerHTML='<div class="card"><b>Members ('+ms.length+')</b>'+ms.map(function(m){
+      const badge=m.status==='trialing'?'<span class="pill" style="background:#b26a00">trialing</span>':(m.status==='active'?'<span class="pill" style="background:#1a7f37">active</span>':'<span class="pill" style="background:#6b6762">'+escHtml(m.status)+'</span>');
+      return '<div style="margin-top:8px"><b>'+escHtml(m.name)+'</b> '+badge+'<br><span class="mut">'+escHtml(m.planName||m.planKey||'')+' \u2022 '+escHtml(m.email||'')+(m.nextChargeAt?' \u2022 next charge '+escHtml(String(m.nextChargeAt).slice(0,10)):'')+(m.since?' \u2022 since '+escHtml(String(m.since).slice(0,10)):'')+'</span></div>';
+    }).join('')+'</div>';
+  }catch(e){ box.innerHTML=''; }
+}
 async function loadAdminInvites(){
+  loadAdminMembers();
   const box=document.getElementById('adminInvites'); if(!box || !me || me.role!=='admin') return;
   try{
     const d=await api('/api/admin/invites');
     if(!(d.invites||[]).length){ box.innerHTML=''; return; }
     box.innerHTML=d.invites.map(function(iv){
-      const badge=iv.status==='accepted'?'<span class="pill" style="background:#1a7f37">member ✓</span>':(iv.status==='expired'?'<span class="pill" style="background:#6b6762">expired</span>':(iv.status==='revoked'?'<span class="pill" style="background:#6b6762">revoked</span>':'<span class="pill" style="background:#b26a00">waiting</span>'));
+      const badge=(iv.status==='accepted'||iv.memberNow)?'<span class="pill" style="background:#1a7f37">member ✓</span>':(iv.status==='expired'?'<span class="pill" style="background:#6b6762">expired</span>':(iv.status==='revoked'?'<span class="pill" style="background:#6b6762">revoked</span>':'<span class="pill" style="background:#b26a00">waiting</span>'));
       return '<div class="card"><b>'+escHtml(iv.name)+'</b> '+badge+'<br><span class="mut">🎟️ First month FREE, then $29/mo • created '+escHtml(String(iv.createdAt||'').slice(0,10))+(iv.email?' • '+escHtml(iv.email):'')+(iv.phone?' • '+escHtml(iv.phone):'')+(iv.cartId?' • in his cart '+escHtml(iv.cartId):'')+'</span><div style="margin-top:8px"><button type="button" class="ghost" onclick="copyInviteLink(\''+iv.id+'\')">Copy link</button> <a href="'+iv.link+'" target="_blank" rel="noopener">Open</a>'+(iv.status==='pending'?' <button type="button" class="ghost" onclick="attachInvite(\''+iv.id+'\')">Put it in his cart…</button> <button type="button" class="ghost" onclick="revokeInvite(\''+iv.id+'\')">Revoke</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }
@@ -6127,7 +6143,7 @@ async function cartPrepare(){
     // in customer) leaves a server-side recoverable snapshot of the
     // cart. Fire-and-forget; it never affects the payment flow, and
     // NOTHING is sent anywhere by it (STOP TOTAL).
-    try { api('/api/cart/save-recovery', { method: 'POST', body: JSON.stringify({ email: payload.email || '', items: payload.items }) }).catch(function(){}); } catch (e) {}
+    try { var recTok=''; try { recTok=localStorage.getItem('ghsRecTok')||''; } catch (e) {} api('/api/cart/save-recovery', { method: 'POST', body: JSON.stringify({ email: payload.email || '', items: payload.items, recoveryToken: recTok }) }).then(function(d){ try { if (d && d.token) localStorage.setItem('ghsRecTok', d.token); } catch (e) {} }).catch(function(){}); } catch (e) {} // v101 (BAJA-8): the client keeps its recovery token — replacing the saved cart requires it
     renderCartTotalsDue();
     // v80.4: the element was mounted at ENTRY (deferred) — the arm
     // only guarantees it stands in the mode THIS context needs (a

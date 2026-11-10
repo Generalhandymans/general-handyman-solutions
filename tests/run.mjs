@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v100', swSrc.includes("const CACHE = 'ghs-app-v100'"));
+t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v101'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -1901,7 +1901,7 @@ const m3 = await mkMember('m3@t.local', '(707) 555-0303');
 const sub3 = await req2('POST', '/api/stripe/membership-subscribe', { token: m3.token, body: { plan: 'yard2', source: 'TIKTOK9' } });
 await mockActivate(sub3.j.subscriptionId);
 const nodeCrypto = await import('node:crypto');
-const whPayload = JSON.stringify({ id: 'evt_wh_1', type: 'checkout.session.completed', data: { object: { id: 'cs_wh_1', metadata: { userId: m3.id, kind: 'yardcare', plan: 'yard2' }, customer: 'cus_mock_x', subscription: sub3.j.subscriptionId, amount_total: 15000 } } });
+const whPayload = JSON.stringify({ id: 'evt_wh_1', type: 'checkout.session.completed', data: { object: { id: 'cs_wh_1', payment_status: 'paid', metadata: { userId: m3.id, kind: 'yardcare', plan: 'yard2' }, customer: 'cus_mock_x', subscription: sub3.j.subscriptionId, amount_total: 15000 } } }); // v101 (M4): real Stripe completions always carry payment_status — the yard activation now requires it
 const whTs = Math.floor(Date.now() / 1000);
 const whSig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(whTs + '.' + whPayload, 'utf8').digest('hex');
 const whRes = await fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + whTs + ',v1=' + whSig }, body: whPayload });
@@ -2389,15 +2389,15 @@ const notifA = await req2('GET', '/api/notifications', { token: A2 });
 t('v80.8 (b2): the admin is nagged that the pay is held pending the worker Connect setup', (notifA.j.notifications || []).some(n => (n.text || '').includes(gateJob2.j.job.id) && (n.text || '').includes('has not finished setting up payouts')));
 // (c) A worker WITH Connect ready still gets the normal v29 flow:
 //     claim, complete, payout auto-releases with a real transfer.
-const W8 = await mkConnectWorker2('w8@t.local', '(707) 555-0211', 'workpassA');
-await req2('POST', '/api/worker/connect/start', { token: W8.token, body: {} });
-const cs8 = await req2('GET', '/api/worker/connect/status', { token: W8.token });
+const W8R = await mkConnectWorker2('w8@t.local', '(707) 555-0211', 'workpassA');
+await req2('POST', '/api/worker/connect/start', { token: W8R.token, body: {} });
+const cs8 = await req2('GET', '/api/worker/connect/status', { token: W8R.token });
 t('v80.8 (c) setup: the connected worker is payouts-ready', cs8.status === 200 && cs8.j.ready === true);
 const gateJob3 = await req2('POST', '/api/jobs', { token: A2, body: { service: 'Gate job 3', city: 'Fairfield', when: 'Today', payOffer: 90, customerPrice: 140, customerName: 'Cust', customerPhone: '(707) 555-0101', address: '3 Gate St, Fairfield, CA' } });
-const gateClaimW8 = await req2('POST', '/api/jobs/' + gateJob3.j.job.id + '/claim', { token: W8.token, body: {} });
+const gateClaimW8 = await req2('POST', '/api/jobs/' + gateJob3.j.job.id + '/claim', { token: W8R.token, body: {} });
 t('v80.8 (c): the connected worker claims the paid job', gateClaimW8.status === 200 && gateClaimW8.j.job.status === 'Claimed');
 const trBeforePaid = stripeState.connectTransfers.length;
-await req2('PATCH', '/api/jobs/' + gateJob3.j.job.id, { token: W8.token, body: { photosDone: true } });
+await req2('PATCH', '/api/jobs/' + gateJob3.j.job.id, { token: W8R.token, body: { photosDone: true } });
 let j8 = null; for (let i = 0; i < 14; i++) { j8 = await adminJob2(gateJob3.j.job.id); if (j8 && j8.payoutStatus === 'paid') break; await sleep(200); }
 t('v80.8 (c): the connected worker payout auto-releases on Done (transfer created)', !!j8 && j8.payoutStatus === 'paid' && /^tr_mock/.test(j8.payoutTransferId || '') && stripeState.connectTransfers.length === trBeforePaid + 1);
 // (b3) The held pay is not stuck: once W7 finishes his Connect setup,
@@ -4513,7 +4513,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
   t('v80 recovery: the expiry is ~30 days out', Math.abs(new Date(sv1.j.expiresAt).getTime() - Date.now() - 30 * 864e5) < 3600e3);
   const got1 = await req2('GET', '/api/cart/recovery/' + sv1.j.token);
   t('v80 recovery: the token restores the EXACT cart snapshot (ids, quantities, addons)', got1.status === 200 && JSON.stringify(got1.j.items) === JSON.stringify([{ id: 'faucet-replacement', q: 2, x: [] }, { id: 'closet-doors', q: 1, x: [] }]));
-  const sv2 = await req2('POST', '/api/cart/save-recovery', { body: { email: 'rec@t.local', items: [{ serviceId: 'faucet-replacement', qty: 1 }] } });
+  const sv2 = await req2('POST', '/api/cart/save-recovery', { body: { email: 'rec@t.local', items: [{ serviceId: 'faucet-replacement', qty: 1 }], recoveryToken: sv1.j.token } }); // v101 (BAJA-8): replacing a saved cart presents its current token
   const gotOld = await req2('GET', '/api/cart/recovery/' + sv1.j.token);
   const gotNew = await req2('GET', '/api/cart/recovery/' + sv2.j.token);
   t('v80 recovery: a fresher save REPLACES the snapshot and rotates the token (old link dies)', sv2.j.token !== sv1.j.token && gotOld.status === 404 && gotNew.status === 200 && gotNew.j.items.length === 1);
@@ -4616,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v100: ghs-app-v100)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v100'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v101: ghs-app-v101)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v101'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -7930,6 +7930,452 @@ await mockSessionPaid(sessWork100.id);
 await fetch(BASE2 + '/cart/' + workId100 + '?paid=1&session_id=' + sessWork100.id);
 const convWork100 = (await req2('GET', '/api/requests', { token: A100 })).j.requests.find(x => x.menuOrder && x.menuOrder.cartId === workId100);
 t('v100 regression settle: the work cart still converts as a DEPOSIT (status deposit, $1,470 of $3,675, balance $2,205)', !!convWork100 && convWork100.payment.status === 'deposit' && convWork100.payment.amountCents === 147000 && convWork100.payment.totalCents === 367500 && convWork100.payment.balanceCents === 220500);
+
+
+// ---------------- v101 wave 1: XSS root fix (ALTA-1, ALTA-2, M21, M22) ----------------
+{
+  t('v101 w1 static: isPhotoDataUrl validates STRUCTURE (mime allowlist + pure base64 payload), not just a prefix', serverSrc.includes('(?:png|jpe?g|gif|webp);base64,') && serverSrc.includes('[A-Za-z0-9+/]+={0,2}$'));
+  t('v101 w1 static: anonymous request intake filters photos through isPhotoDataUrl', serverSrc.includes('b.photos.filter(isPhotoDataUrl)'));
+  t('v101 w1 static: yard-visit photo admission uses the same strict validator', serverSrc.includes('const photoOk = isPhotoDataUrl'));
+  t('v101 w1 static: inline-script JSON on server pages goes through jsonScript (script-context escaping)', serverSrc.includes('function jsonScript(v)') && serverSrc.includes("jsonScript(r.customerName || 'Customer')") && serverSrc.includes("jsonScript(r.customerPhone || '')"));
+  t('v101 w1 static: SPA photo srcs are attribute-escaped at the sinks', appJsSrc.includes("src=\"'+escAttr(p)+'\"") && appJsSrc.includes('escAttr(v.beforePhoto)') && appJsSrc.includes('escAttr(lc.afterPhoto)'));
+
+  const admW1 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW1 = admW1.j.token;
+  const hostile = 'data:image/x" onerror="alert(1)';
+  const svgP = 'data:image/svg+xml;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==';
+  const validPh = 'data:image/jpeg;base64,' + 'QUJD'.repeat(10);
+  const crW1 = await req2('POST', '/api/requests', { body: { customerName: 'W1 Hostile', customerEmail: 'w1-hostile@t.local', customerPhone: '(707) 555-0101', service: 'Photo test', description: 'w1', city: 'Fairfield', photos: [hostile, svgP, validPh, 'data:image/png;base64,AAA" onerror="x'] } });
+  const storedW1 = (await req2('GET', '/api/requests', { token: AW1 })).j.requests.find(x => x.id === ((crW1.j.request || {}).id));
+  t('v101 w1 ALTA-2: hostile photo payloads (quote/onerror, svg, junk) are dropped at intake; only the structurally valid photo is stored', crW1.status === 201 && !!storedW1 && JSON.stringify(storedW1.photos) === JSON.stringify([validPh]));
+
+  const wkW1 = await req2('POST', '/api/signup', { body: { name: 'W1 Worker', email: 'w1-worker@t.local', phone: '(707) 555-0102', password: 'workpass42', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const WTW1 = wkW1.j.token;
+  const badW1 = await req2('POST', '/api/me/worker-profile', { token: WTW1, body: { photo: hostile } });
+  const meBadW1 = await req2('GET', '/api/me', { token: WTW1 });
+  t('v101 w1 ALTA-2: a worker profile photo carrying an event-handler payload is rejected (400) and nothing is stored', badW1.status === 400 && !meBadW1.j.user.photo);
+  const goodW1 = await req2('POST', '/api/me/worker-profile', { token: WTW1, body: { photo: validPh } });
+  t('v101 w1: a structurally valid worker photo still saves', goodW1.status === 200 && goodW1.j.user.photo === validPh);
+
+  const evilName = '</scr' + 'ipt><script>alert(1337)</scr' + 'ipt>';
+  const erW1 = await req2('POST', '/api/requests', { body: { customerName: evilName, customerEmail: 'w1-evil@t.local', customerPhone: '(707) 555-0103', service: 'Sink repair', description: 'w1', city: 'Fairfield', address: '1 W1 St', when: 'Tomorrow', estimateType: 'photo', photos: [] } });
+  const erIdW1 = erW1.j.request.id;
+  await req2('PATCH', '/api/requests/' + erIdW1, { token: AW1, body: { estimate: { items: [{ description: 'Labor', qty: 1, unitPrice: 100, type: 'labor' }] } } });
+  const pgW1 = await fetch(BASE2 + '/estimate/' + erIdW1);
+  const htmlW1 = await pgW1.text();
+  t('v101 w1 ALTA-1: the estimate page never emits the stored script-breakout from the customer name', !htmlW1.includes('</scr' + 'ipt><script>alert(1337)') && !htmlW1.includes('alert(1337)</scr' + 'ipt>'));
+}
+
+
+// ---------------- v101 wave 2: ALTA-3 — job access keyed by ACCOUNT, never by phone ----------------
+{
+  t('v101 w2 static: no phone-equality ownership remains in the jobs surface', !serverSrc.includes("j.customerPhone.replace(/\\D/g, '') === user.phone.replace") && serverSrc.includes('function customerOwnsJob(j, user)'));
+  const admW2 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW2 = admW2.j.token;
+  const wkW2 = await req2('POST', '/api/signup', { body: { name: 'W2 Tech', email: 'w2-tech@t.local', phone: '(707) 555-0200', password: 'workpass42', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const W2ID = wkW2.j.user.id;
+  await req2('PATCH', '/api/workers/' + W2ID, { token: AW2, body: { status: 'active' } });
+  // The real customer signs up FIRST with phone P; the Team dispatches a job to that phone.
+  const victim = await req2('POST', '/api/signup', { body: { name: 'W2 Victim', email: 'w2-victim@t.local', phone: '(707) 555-0173', password: 'custpass42', role: 'customer' } });
+  const VT = victim.j.token;
+  const jobW2 = await req2('POST', '/api/jobs', { token: AW2, body: { service: 'W2 bound job', city: 'Fairfield', payOffer: 80, customerName: 'W2 Victim', customerPhone: '(707) 555-0173', address: '9 W2 St', assignedWorkerId: W2ID, silent: true } });
+  const J2 = jobW2.j.job.id;
+  t('v101 w2: job created and dispatch-bound', jobW2.status === 201 && !!J2);
+  const mineV = await req2('GET', '/api/jobs', { token: VT });
+  t('v101 w2 legit: the account the job was dispatched to sees it in their list', (mineV.j.jobs || []).some(x => x.id === J2));
+  // THE ATTACK: a second account registers with the SAME phone number.
+  const atk = await req2('POST', '/api/signup', { body: { name: 'W2 Attacker', email: 'w2-attacker@t.local', phone: '(707) 555-0173', password: 'custpass42', role: 'customer' } });
+  const AT = atk.j.token;
+  const mineA = await req2('GET', '/api/jobs', { token: AT });
+  t('v101 w2 ALTA-3: registering with a victim phone number yields NO jobs (list)', !(mineA.j.jobs || []).some(x => x.id === J2));
+  const atkMsg = await req2('POST', '/api/jobs/' + J2 + '/messages', { token: AT, body: { text: 'i am the customer trust me' } });
+  t('v101 w2 ALTA-3: the phone-twin cannot write into the job thread', atkMsg.status === 403);
+  const atkRate = await req2('POST', '/api/jobs/' + J2 + '/rating', { token: AT, body: { stars: 1, text: 'fake' } });
+  t('v101 w2 ALTA-3: the phone-twin cannot rate the job (ownership gate fires first)', atkRate.status === 403);
+  const ownRate = await req2('POST', '/api/jobs/' + J2 + '/rating', { token: VT, body: { stars: 5, text: 'early' } });
+  t('v101 w2 legit: the true owner passes the ownership gate (fails only on job-not-done)', ownRate.status === 400);
+  const ownMsg = await req2('POST', '/api/jobs/' + J2 + '/messages', { token: VT, body: { text: 'hi this is really me' } });
+  t('v101 w2 legit: the true owner can still write in the thread', ownMsg.status === 201);
+  // Ambiguity: two accounts already share a phone when the Team dispatches -> NO binding.
+  await req2('POST', '/api/signup', { body: { name: 'W2 Twin A', email: 'w2-twina@t.local', phone: '(707) 555-0169', password: 'custpass42', role: 'customer' } });
+  const twinB = await req2('POST', '/api/signup', { body: { name: 'W2 Twin B', email: 'w2-twinb@t.local', phone: '(707) 555-0169', password: 'custpass42', role: 'customer' } });
+  const jobAmb = await req2('POST', '/api/jobs', { token: AW2, body: { service: 'W2 ambiguous job', city: 'Fairfield', payOffer: 80, customerName: 'Twin', customerPhone: '(707) 555-0169', address: '8 W2 St', assignedWorkerId: W2ID, silent: true } });
+  const mineAmb = await req2('GET', '/api/jobs', { token: twinB.j.token });
+  t('v101 w2: an ambiguous shared phone binds NOBODY at dispatch', !(mineAmb.j.jobs || []).some(x => x.id === jobAmb.j.job.id));
+  // The Team can link it explicitly afterwards.
+  await req2('PATCH', '/api/jobs/' + jobAmb.j.job.id, { token: AW2, body: { customerId: twinB.j.user.id } });
+  const mineAmb2 = await req2('GET', '/api/jobs', { token: twinB.j.token });
+  t('v101 w2: an explicit Team customerId link makes the job visible to that account', (mineAmb2.j.jobs || []).some(x => x.id === jobAmb.j.job.id));
+}
+
+
+// ---------------- v101 wave 3: M14 — demotion kills sessions; job mutation requires ACTIVE ----------------
+{
+  const admW3 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW3 = admW3.j.token;
+  const wkW3 = await req2('POST', '/api/signup', { body: { name: 'W3 Tech', email: 'w3-tech@t.local', phone: '(707) 555-0161', password: 'workpass42', role: 'worker', workerClass: 'tecnico', profile: { city: 'Fairfield', areas: 'Fairfield', skills: ['Plumbing'] } } });
+  const W3ID = wkW3.j.user.id;
+  await req2('PATCH', '/api/workers/' + W3ID, { token: AW3, body: { status: 'active' } });
+  const wl3 = await req2('POST', '/api/login', { body: { email: 'w3-tech@t.local', password: 'workpass42' } });
+  const WT3 = wl3.j.token;
+  const jobW3 = await req2('POST', '/api/jobs', { token: AW3, body: { service: 'W3 job', city: 'Fairfield', payOffer: 70, customerName: 'W3 Cust', customerPhone: '(707) 555-0162', address: '7 W3 St', assignedWorkerId: W3ID, silent: true } });
+  const J3 = jobW3.j.job.id;
+  const adv1 = await req2('PATCH', '/api/jobs/' + J3, { token: WT3, body: { status: 'On my way' } });
+  t('v101 w3 sanity: an active worker advances his job', adv1.status === 200);
+  await req2('PATCH', '/api/workers/' + W3ID, { token: AW3, body: { status: 'notfit' } });
+  const stale = await req2('GET', '/api/jobs', { token: WT3 });
+  t('v101 w3 M14: setting notfit KILLS the worker live sessions (old token is dead)', stale.status === 401);
+  const wl3b = await req2('POST', '/api/login', { body: { email: 'w3-tech@t.local', password: 'workpass42' } });
+  const adv2 = await req2('PATCH', '/api/jobs/' + J3, { token: wl3b.j.token, body: { status: 'Arrived' } });
+  t('v101 w3 M14: even with a FRESH login, a notfit worker cannot advance the job', adv2.status === 403);
+  await req2('PATCH', '/api/workers/' + W3ID, { token: AW3, body: { status: 'active' } });
+  const adv3 = await req2('PATCH', '/api/jobs/' + J3, { token: wl3b.j.token, body: { status: 'Arrived' } });
+  t('v101 w3: reactivation restores job advancement', adv3.status === 200);
+}
+
+// ---------------- v101 wave 4: M6 — transfer idempotency + flag-before-await ----------------
+{
+  const payBody = serverSrc.slice(serverSrc.indexOf('async function maybePayWorkerForJob'), serverSrc.indexOf('async function maybePayWorkerForJob') + 6000);
+  const bountyBody = serverSrc.slice(serverSrc.indexOf('async function maybePayReferralBounty'), serverSrc.indexOf('async function maybePayReferralBounty') + 3000);
+  t('v101 w4 M6: stripeApi sends an Idempotency-Key header when asked', serverSrc.includes("headers['Idempotency-Key']"));
+  t('v101 w4 M6: job payout sets payoutInFlight BEFORE the awaited Connect refresh', payBody.indexOf('payoutInFlight = Date.now()') > -1 && payBody.indexOf('payoutInFlight = Date.now()') < payBody.indexOf('await refreshWorkerConnect(w)'));
+  t('v101 w4 M6: job transfer carries a per-job idempotency key', payBody.includes("idempotencyKey: 'ghs-job-payout-' + j.id"));
+  t('v101 w4 M6: bounty sets payoutInFlight BEFORE the awaited Connect refresh', bountyBody.indexOf('payoutInFlight = Date.now()') > -1 && bountyBody.indexOf('payoutInFlight = Date.now()') < bountyBody.indexOf('await refreshWorkerConnect(w)'));
+  t('v101 w4 M6: bounty transfer carries a per-bounty idempotency key', bountyBody.includes("idempotencyKey: 'ghs-bounty-' + e.id"));
+}
+
+
+// ---------------- v101 wave 5: webhook truth family (M2/M3/M4/M5/M8) ----------------
+{
+  const admW5 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW5 = admW5.j.token;
+  const whFixed = async (eid, type, object) => { const payload = JSON.stringify({ id: eid, type, data: { object } }); const ts = Math.floor(Date.now() / 1000); const sig = nodeCrypto.createHmac('sha256', 'whsec_mock_test').update(ts + '.' + payload, 'utf8').digest('hex'); return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: payload }); };
+  const meOf = async (tok) => (await req2('GET', '/api/me', { token: tok })).j.user;
+  const ordersW5 = async () => (await req2('GET', '/api/requests', { token: AW5 })).j.requests || [];
+  const invOf = async (iid) => (await req2('GET', '/api/admin/invoices', { token: AW5 })).j.invoices.find(x => x.id === iid);
+
+  // M4: an unpaid completion activates nothing; the paid twin settles it later
+  const uM4 = await req2('POST', '/api/signup', { body: { name: 'W5 M4', email: 'w5-m4@t.local', phone: '(707) 555-0151', password: 'custpass42', role: 'customer' } });
+  await whFixed('evt_w5_m4_unpaid', 'checkout.session.completed', { id: 'cs_w5_m4', payment_status: 'unpaid', metadata: { userId: uM4.j.user.id, kind: 'yardcare', plan: 'yard1' }, customer: 'cus_w5m4', subscription: 'sub_w5_m4', amount_total: 7500 });
+  const meM4a = await meOf(uM4.j.token);
+  t('v101 w5 M4: a completed-but-UNPAID yard session activates NOTHING', !(meM4a.membershipPlan && meM4a.membershipPlan.status === 'active'));
+  await whFixed('evt_w5_m4_paid', 'checkout.session.completed', { id: 'cs_w5_m4', payment_status: 'paid', metadata: { userId: uM4.j.user.id, kind: 'yardcare', plan: 'yard1' }, customer: 'cus_w5m4', subscription: 'sub_w5_m4', amount_total: 7500 });
+  const meM4b = await meOf(uM4.j.token);
+  t('v101 w5 M4: the same session arriving PAID activates the plan', meM4b.membershipPlan && meM4b.membershipPlan.status === 'active' && meM4b.membershipPlan.planKey === 'yard1');
+
+  // M4: async_payment_failed reverses an activation tied to that subscription
+  const uM4f = await req2('POST', '/api/signup', { body: { name: 'W5 Fail', email: 'w5-fail@t.local', phone: '(707) 555-0152', password: 'custpass42', role: 'customer' } });
+  await whFixed('evt_w5_m4f_paid', 'checkout.session.completed', { id: 'cs_w5_m4f', payment_status: 'paid', metadata: { userId: uM4f.j.user.id, kind: 'homecare-plus', plan: 'plus1' }, customer: 'cus_w5f', subscription: 'sub_w5_m4f', amount_total: 10000 });
+  const meF1 = await meOf(uM4f.j.token);
+  t('v101 w5 setup: plus1 active after the paid completion', meF1.membershipPlan && meF1.membershipPlan.status === 'active');
+  await whFixed('evt_w5_m4f_failed', 'checkout.session.async_payment_failed', { id: 'cs_w5_m4f', metadata: { userId: uM4f.j.user.id, kind: 'homecare-plus' }, subscription: 'sub_w5_m4f', customer: 'cus_w5f' });
+  const meF2 = await meOf(uM4f.j.token);
+  t('v101 w5 M4: async_payment_failed for that subscription deactivates the membership', !(meF2.membershipPlan && meF2.membershipPlan.status === 'active'));
+
+  // M2: invoice settle verifies the stamped session + the exact current amount
+  const uInv = await req2('POST', '/api/signup', { body: { name: 'W5 Inv', email: 'w5-inv@t.local', phone: '(707) 555-0153', password: 'custpass42', role: 'customer' } });
+  const inv5 = await req2('POST', '/api/admin/invoices', { token: AW5, body: { customerName: 'W5 Inv', customerEmail: 'w5-inv@t.local', items: [{ description: 'Work', qty: 1, unitPrice: 500 }] } });
+  const INV5 = inv5.j.invoice.id;
+  t('v101 w5 setup: the invoice is created at $500 for the account email (link proven by the webhook settle below)', inv5.j.invoice.total === 500 && inv5.j.invoice.customerEmail === 'w5-inv@t.local');
+  await req2('POST', '/api/invoices/' + INV5 + '/pay', { body: {} });
+  const sessA = Object.values(stripeState.sessions).slice(-1)[0];
+  const put5 = await req2('PUT', '/api/admin/invoices/' + INV5, { token: AW5, body: { items: [{ description: 'Work', qty: 1, unitPrice: 800 }] } });
+  t('v101 w5 setup: invoice edited to $800', put5.j.invoice.total === 800);
+  await whFixed('evt_w5_m2_old', 'checkout.session.completed', { id: sessA.id, payment_status: 'paid', payment_intent: 'pi_w5_old', amount_total: 50000, metadata: { userId: uInv.j.user.id, kind: 'invoice', invoiceId: INV5, tipCents: '0' } });
+  t('v101 w5 M2: the retired $500 session can NOT settle the $800 invoice', (await invOf(INV5)).status !== 'paid');
+  await req2('POST', '/api/invoices/' + INV5 + '/pay', { body: {} });
+  const sessB = Object.values(stripeState.sessions).slice(-1)[0];
+  await whFixed('evt_w5_m2_wrongamt', 'checkout.session.completed', { id: sessB.id, payment_status: 'paid', payment_intent: 'pi_w5_wrong', amount_total: 50000, metadata: { userId: uInv.j.user.id, kind: 'invoice', invoiceId: INV5, tipCents: '0' } });
+  t('v101 w5 M2: even the CURRENT session cannot settle for the wrong amount', (await invOf(INV5)).status !== 'paid');
+  await whFixed('evt_w5_m2_ok', 'checkout.session.completed', { id: sessB.id, payment_status: 'paid', payment_intent: 'pi_w5_new', amount_total: 80000, metadata: { userId: uInv.j.user.id, kind: 'invoice', invoiceId: INV5, tipCents: '0' } });
+  const invOk = await invOf(INV5);
+  t('v101 w5 M2: the current session at the exact amount settles the invoice', invOk.status === 'paid' && invOk.paidAmount === 800);
+
+  // M8: a dashboard refund of that charge flips the invoice in the books
+  await whFixed('evt_w5_m8', 'charge.refunded', { id: 'ch_w5', payment_intent: 'pi_w5_new', amount: 80000, amount_refunded: 80000, customer: 'cus_w5inv' });
+  t('v101 w5 M8: a full charge.refunded marks the invoice REFUNDED', (await invOf(INV5)).status === 'refunded');
+
+  // M5: a replayed invoice.payment_failed records exactly once
+  const din1 = await req2('GET', '/api/admin/money', { token: AW5 });
+  const failObj = { id: 'in_w5_fail', customer: 'cus_unknown_w5', amount_due: 2900, subscription: 'sub_w5_none' };
+  await whFixed('evt_w5_m5_once', 'invoice.payment_failed', failObj);
+  await whFixed('evt_w5_m5_once', 'invoice.payment_failed', failObj);
+  const din2 = await req2('GET', '/api/admin/money', { token: AW5 });
+  t('v101 w5 M5: the same payment_failed event delivered twice records ONE failure', din2.j.membershipFailures.count === din1.j.membershipFailures.count + 1);
+  await whFixed('evt_w5_m5_twice', 'invoice.payment_failed', failObj);
+  const din3 = await req2('GET', '/api/admin/money', { token: AW5 });
+  t('v101 w5 M5: a NEW event id records a second failure', din3.j.membershipFailures.count === din1.j.membershipFailures.count + 2);
+
+  // M3: the cart-checkout PI rail verifies the amount before creating the order
+  const itemsW5 = [{ serviceId: 'tv-mounting', name: 'TV Mounting (up to 65")', qty: 1, addons: [] }];
+  const coW5 = await req2('POST', '/api/cart/checkout', { body: { name: 'W5 Buyer', email: 'w5-buy@t.local', phone: '7075550154', password: 'buypass123', address: '5 W5 St', city: 'Fairfield', when: 'Today', items: itemsW5 } });
+  await whFixed('evt_w5_m3_ccwrong', 'payment_intent.succeeded', { id: 'pi_w5_ccwrong', amount: 9999, amount_received: 9999, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coW5.j.checkoutId, userId: coW5.j.user.id } });
+  t('v101 w5 M3: a cart-checkout PI for the WRONG amount creates NO order', (await ordersW5()).filter(r => r.menuOrder && r.menuOrder.checkoutId === coW5.j.checkoutId).length === 0);
+  await whFixed('evt_w5_m3_ccok', 'payment_intent.succeeded', { id: coW5.j.paymentIntentId, amount: 5000, amount_received: 5000, status: 'succeeded', metadata: { kind: 'cart-checkout', checkoutId: coW5.j.checkoutId, userId: coW5.j.user.id } });
+  const bornW5 = (await ordersW5()).find(r => r.menuOrder && r.menuOrder.checkoutId === coW5.j.checkoutId);
+  t('v101 w5 M3: the exact deposit ($50 on the $175 TV mount) creates the deposit order', !!bornW5 && bornW5.payment.status === 'deposit' && bornW5.payment.amountCents === 5000);
+
+  // M3: the menu-order PI rail applies the pay-confirm twin's exact-amount rule
+  const uM3 = await req2('POST', '/api/signup', { body: { name: 'W5 Menu', email: 'w5-menu@t.local', phone: '(707) 555-0155', password: 'custpass42', role: 'customer' } });
+  const mkM3 = await req2('POST', '/api/requests', { token: uM3.j.token, body: { service: 'TV Mounting (up to 65")', description: 'menu order', address: '6 W5 St', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder: { serviceId: 'tv-mounting', extras: [{ name: 'Hide the cables (surface raceway)', price: 50 }], asap: false, joinedMembership: false, totals: { list: 225, member: 180, due: 225 } } } });
+  const RID5 = mkM3.j.request.id;
+  await whFixed('evt_w5_m3_menuwrong', 'payment_intent.succeeded', { id: 'pi_w5_menuwrong', amount: 100, amount_received: 100, status: 'succeeded', metadata: { kind: 'menu-order', requestId: RID5 } });
+  const reqWrong = (await ordersW5()).find(r => r.id === RID5);
+  t('v101 w5 M3: a menu-order PI for $1 does NOT book a $225 order as paid', !(reqWrong.payment && reqWrong.payment.status === 'paid'));
+  await whFixed('evt_w5_m3_menuok', 'payment_intent.succeeded', { id: 'pi_w5_menuok', amount: 22500, amount_received: 22500, status: 'succeeded', metadata: { kind: 'menu-order', requestId: RID5 } });
+  const reqOk = (await ordersW5()).find(r => r.id === RID5);
+  t('v101 w5 M3: the exact $225 menu-order PI pays the order in full', !!reqOk.payment && reqOk.payment.status === 'paid' && reqOk.payment.amountCents === 22500);
+}
+
+
+// ---------------- v101 wave 6: M9 trial tombstone + M10 email canonicalization ----------------
+{
+  const admW6 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW6 = admW6.j.token;
+  // M10: signup with a padded email stores the canonical address
+  const sp = await req2('POST', '/api/signup', { body: { name: 'W6 Space', email: '  w6-space@t.local  ', phone: '(707) 555-0141', password: 'custpass42', role: 'customer' } });
+  t('v101 w6 M10: signup accepts a padded email', sp.status === 201);
+  const lg = await req2('POST', '/api/login', { body: { email: 'w6-space@t.local', password: 'custpass42' } });
+  t('v101 w6 M10: the account logs in with the clean email (stored trimmed + lowercased)', !!lg.j.token && lg.j.user.email === 'w6-space@t.local');
+
+  // M9: use the free month, delete, re-register — the trial stays spent
+  const farm = await req2('POST', '/api/signup', { body: { name: 'W6 Farmer', email: 'w6-farm@t.local', phone: '(707) 555-0142', password: 'custpass42', role: 'customer' } });
+  const FT = farm.j.token;
+  const meF0 = await req2('GET', '/api/me', { token: FT });
+  t('v101 w6 setup: a fresh account has the free month available', meF0.j.user.freeMonthAvailable === true);
+  const coF = await req2('POST', '/api/stripe/checkout', { token: FT, body: { kind: 'homecare' } });
+  const sessF = Object.values(stripeState.sessions).slice(-1)[0];
+  await wh2('checkout.session.completed', { id: sessF.id, mode: 'subscription', payment_status: 'no_payment_required', subscription: sessF.subscription, customer: sessF.customer, metadata: sessF.metadata });
+  const meF1 = await req2('GET', '/api/me', { token: FT });
+  t('v101 w6 setup: the trial activation spends the free month', meF1.j.user.homeCareStatus === 'active' && meF1.j.user.freeMonthAvailable === false);
+  const del = await req2('POST', '/api/me/delete-account', { token: FT, body: { confirmEmail: 'w6-farm@t.local' } });
+  t('v101 w6 setup: the farmer deletes the account', del.status === 200);
+  const farm2 = await req2('POST', '/api/signup', { body: { name: 'W6 Farmer Again', email: 'w6-farm@t.local', phone: '(707) 555-0143', password: 'custpass42', role: 'customer' } });
+  const meF2 = await req2('GET', '/api/me', { token: farm2.j.token });
+  t('v101 w6 M9: re-registering the same email does NOT restore the free month (tombstone)', farm2.status === 201 && meF2.j.user.freeMonthAvailable === false);
+  const coF2 = await req2('POST', '/api/stripe/checkout', { token: farm2.j.token, body: { kind: 'homecare' } });
+  const sessF2 = Object.values(stripeState.sessions).slice(-1)[0];
+  t('v101 w6 M9: the re-registered account join session carries NO free-month trial', coF2.status === 200 && !(sessF2.metadata && sessF2.metadata.freeMonth === '1'));
+  // control: an account that never trialed deletes + re-registers and KEEPS eligibility
+  const ctl = await req2('POST', '/api/signup', { body: { name: 'W6 Control', email: 'w6-ctl@t.local', phone: '(707) 555-0144', password: 'custpass42', role: 'customer' } });
+  await req2('POST', '/api/me/delete-account', { token: ctl.j.token, body: { confirmEmail: 'w6-ctl@t.local' } });
+  const ctl2 = await req2('POST', '/api/signup', { body: { name: 'W6 Control Again', email: 'w6-ctl@t.local', phone: '(707) 555-0145', password: 'custpass42', role: 'customer' } });
+  const meC2 = await req2('GET', '/api/me', { token: ctl2.j.token });
+  t('v101 w6 M9 control: an account that never used a trial keeps eligibility after delete + re-register', meC2.j.user.freeMonthAvailable === true);
+}
+
+
+// ---------------- v101 wave 7: M24 — a failed cloud boot-load gates save() ----------------
+{
+  const fsW7 = await import('node:fs');
+  try { fsW7.unlinkSync('/tmp/ghs-w7.json'); } catch (e) {}
+  const childW7 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, { PORT: '8993', DATA_FILE: '/tmp/ghs-w7.json', SUPABASE_URL: 'http://127.0.0.1:8999', SUPABASE_SERVICE_KEY: 'sb_test_dead', STRIPE_SECRET_KEY: '', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: '' }), stdio: ['ignore', 'pipe', 'pipe'] });
+  const B7 = 'http://127.0.0.1:8993';
+  const reqW7 = async (method, path, opts) => { opts = opts || {}; const r = await fetch(B7 + path, { method, headers: Object.assign({ 'Content-Type': 'application/json' }, opts.token ? { Authorization: 'Bearer ' + opts.token } : {}), body: opts.body ? JSON.stringify(opts.body) : undefined }); let j = null; try { j = await r.json(); } catch (e) {} return { status: r.status, j }; };
+  let upW7 = false;
+  for (let i = 0; i < 60 && !upW7; i++) { try { const r = await fetch(B7 + '/'); upW7 = r.status > 0; } catch (e) { await new Promise(r => setTimeout(r, 250)); } }
+  t('v101 w7 setup: the instance boots even when the cloud load fails', upW7);
+  const saW7 = await reqW7('POST', '/api/setup-admin', { body: { name: 'W7 Admin', email: 'w7@t.local', password: 'adminpass1' } });
+  const lgW7 = await reqW7('POST', '/api/login', { body: { email: 'w7@t.local', password: 'adminpass1' } });
+  const M7 = await reqW7('GET', '/api/admin/money', { token: lgW7.j.token });
+  t('v101 w7 M24: the money report SURFACES the failed load + engaged gate (not console-only)', saW7.status < 300 && M7.j.system && M7.j.system.cloudLoad === 'failed' && M7.j.system.cloudGate && M7.j.system.cloudGate.blocked === true);
+  const localW7 = JSON.parse(fsW7.readFileSync('/tmp/ghs-w7.json', 'utf8'));
+  t('v101 w7 M24: while gated, state persists ONLY locally (the admin exists in the local file; nothing was pushed over the cloud)', (localW7.users || []).some(u => u.email === 'w7@t.local'));
+  const ovW7 = await reqW7('POST', '/api/admin/cloud-gate/override', { token: lgW7.j.token });
+  const M7b = await reqW7('GET', '/api/admin/money', { token: lgW7.j.token });
+  t('v101 w7 M24: an audited admin override releases the gate', ovW7.status === 200 && M7b.j.system.cloudLoad === 'override' && !M7b.j.system.cloudGate);
+  const ovW7b = await reqW7('POST', '/api/admin/cloud-gate/override', { token: lgW7.j.token });
+  t('v101 w7: the override refuses when the gate is not engaged', ovW7b.status === 400);
+  try { childW7.kill('SIGTERM'); } catch (e) {}
+}
+
+
+// ---------------- v101 wave 8: remaining MEDIA (ALTA-4/M13, M11/M15/M16, M12, M18/M19/M20, M23, M17, M7, M1) ----------------
+{
+  const admW8 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW8 = admW8.j.token;
+
+  // ALTA-4: rotating the spoofed FIRST XFF hop no longer defeats the login brake
+  await req2('POST', '/api/signup', { body: { name: 'W8 Victim', email: 'w8-victim@t.local', phone: '(707) 555-0136', password: 'custpass42', role: 'customer' } });
+  const loginXff = async (xff, pw) => { const r = await fetch(BASE2 + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-forwarded-for': xff }, body: JSON.stringify({ email: 'w8-victim@t.local', password: pw }) }); return r.status; };
+  let lastSt = 0;
+  for (let i = 0; i < 10; i++) lastSt = await loginXff('10.0.0.' + i + ', 9.9.9.9', 'wrongpass' + i);
+  const blockedSt = await loginXff('10.9.9.9, 9.9.9.9', 'custpass42');
+  t('v101 w8 ALTA-4: 10 failures via one real hop (rotating spoofed first hops) trip the brake — even the right password waits', lastSt === 401 && blockedSt === 429);
+  const otherHop = await loginXff('10.9.9.9, 8.8.8.8', 'custpass42');
+  t('v101 w8 ALTA-4: a genuinely different edge hop is NOT blocked', otherHop === 200);
+  t('v101 w8 static ALTA-4/M13: rightmost-hop parsing in clientIp + isHttpsReq', serverSrc.includes('hops[hops.length - 1]') && serverSrc.includes('parts[parts.length - 1]'));
+
+  // M15/M16 regression: forgot answers the generic 200 for real AND unknown emails
+  const fg1 = await req2('POST', '/api/auth/forgot', { body: { email: 'w8-victim@t.local' } });
+  const fg2 = await req2('POST', '/api/auth/forgot', { body: { email: 'w8-ghost@t.local' } });
+  t('v101 w8 M15/M16: forgot-password answers the same generic 200 for real and unknown emails', fg1.status === 200 && fg1.j.ok === true && fg2.status === 200 && fg2.j.ok === true);
+  t('v101 w8 static M11/M15/M16: dummy scrypt + per-IP reset cap + timing pad present', serverSrc.includes('dummyPwHash()') && serverSrc.includes("rateLimitHit('forgot-ip:'") && serverSrc.includes('setTimeout(r, 200)'));
+
+  // M12: session cap — past 10 live sessions the oldest dies
+  const capU = await req2('POST', '/api/signup', { body: { name: 'W8 Cap', email: 'w8-cap@t.local', phone: '(707) 555-0137', password: 'custpass42', role: 'customer' } });
+  const toks = [capU.j.token];
+  for (let i = 0; i < 50; i++) { const l = await req2('POST', '/api/login', { body: { email: 'w8-cap@t.local', password: 'custpass42' } }); toks.push(l.j.token); }
+  const oldMe = await req2('GET', '/api/me', { token: toks[0] });
+  const newMe = await req2('GET', '/api/me', { token: toks[50] });
+  t('v101 w8 M12: with 51 sessions minted, the oldest is pruned and the newest works (cap 50)', oldMe.status === 401 && newMe.status === 200);
+
+  // M18: anonymous request free-text fields are capped
+  const big = await req2('POST', '/api/requests', { body: { customerName: 'W8 Big', customerEmail: 'w8-big@t.local', customerPhone: '7075550138', service: 'S'.repeat(500), description: 'D'.repeat(6000), city: 'Fairfield', address: '1 W8 St', when: 'Today', estimateType: 'photo' } });
+  const bigR = ((await req2('GET', '/api/requests', { token: AW8 })).j.requests || []).find(r => r.id === (big.j.request && big.j.request.id));
+  t('v101 w8 M18: request fields are capped (service <=120, description <=2000)', big.status === 201 && !!bigR && bigR.service.length <= 120 && bigR.description.length <= 2000);
+
+  // M19: signup fields capped
+  const nm = await req2('POST', '/api/signup', { body: { name: 'N'.repeat(300), email: 'w8-name@t.local', phone: '(707) 555-0139', password: 'custpass42', role: 'customer' } });
+  t('v101 w8 M19: a 300-char signup name is stored capped at 80', nm.status === 201 && (nm.j.user.name || '').length <= 80);
+
+  // M23: the per-photo cap is enforced at intake (a >5,000,000-char "photo" is dropped)
+  const hugePhoto = 'data:image/png;base64,' + 'A'.repeat(5000001);
+  const hp = await req2('POST', '/api/requests', { body: { customerName: 'W8 Photo', customerEmail: 'w8-photo@t.local', customerPhone: '7075550147', service: 'Faucet', description: 'leak', city: 'Fairfield', estimateType: 'photo', photos: [hugePhoto, 'data:image/png;base64,AAAA'] } });
+  const hpR = ((await req2('GET', '/api/requests', { token: AW8 })).j.requests || []).find(r => r.id === (hp.j.request && hp.j.request.id));
+  t('v101 w8 M23: an over-cap photo is dropped at intake, a valid one survives', !!hpR && hpR.photos.length === 1);
+
+  // M20 static: the creation throttle guards the route families
+  t('v101 w8 M20 static: checkout creation throttle applied across the creation routes', (serverSrc.match(/checkoutCreateBlocked\(req\)\) return send\(res, 429/g) || []).length >= 8);
+
+  // M17 static: legacy ids still resolve but every resolution is audit-logged
+  t('v101 w8 M17 static: legacy-link audit logging wired into the cart/invoice/estimate pages', serverSrc.includes('function noteLegacyLinkUse') && serverSrc.includes("noteLegacyLinkUse('invoice'") && serverSrc.includes("noteLegacyLinkUse('cart'") && serverSrc.includes("noteLegacyLinkUse('estimate'"));
+
+  // M1: member-check behavior unchanged for a real member (fresh HomeCare
+  // activation inside this block — shared mock customer ids make older
+  // fixtures' membership state unreliable by this point in the run)
+  const mm8 = await mkMember('w8-member@t.local', '(707) 555-0148');
+  const sub8 = await req2('POST', '/api/stripe/homecare-subscribe', { token: mm8.token, body: {} });
+  await mockActivate(sub8.j.subscriptionId);
+  const conf8 = await req2('POST', '/api/stripe/homecare-confirm', { token: mm8.token, body: {} });
+  const cart8 = await req2('POST', '/api/admin/carts', { token: AW8, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 175 }] } });
+  const mc = await req2('POST', '/api/carts/' + cart8.j.cart.id + '/member-check', { body: { email: 'w8-member@t.local' } });
+  t('v101 w8 M1: member-check still recognizes a member email (only the oracle is throttled)', conf8.j.active === true && mc.status === 200 && mc.j.member === true);
+
+  // M7: refund after a worker payout → reversal-due ledger entry, no clawback
+  const W8R = await mkConnectWorker2('w8rev@t.local', '(707) 555-0140', 'workpass8');
+  await req2('POST', '/api/worker/connect/start', { token: W8R.token, body: {} });
+  await req2('GET', '/api/worker/connect/status', { token: W8R.token });
+  const c8 = await req2('POST', '/api/signup', { body: { name: 'W8 Cust', email: 'w8-cust@t.local', phone: '(707) 555-0146', password: 'custpass42', role: 'customer' } });
+  const rq8 = await req2('POST', '/api/requests', { token: c8.j.token, body: { service: 'Vanity Swap', description: 'menu order', address: '7 W8 Ave', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder: { serviceId: 'vanity-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 250, member: 200, due: 250 } } } });
+  const rid8 = rq8.j.request.id;
+  const py8 = await req2('POST', '/api/orders/pay', { token: c8.j.token, body: { requestId: rid8 } });
+  await mockPiStatus(py8.j.paymentIntentId, 'succeeded');
+  await req2('POST', '/api/orders/pay-confirm', { token: c8.j.token, body: { requestId: rid8, paymentIntentId: py8.j.paymentIntentId } });
+  const cj8 = await req2('POST', '/api/requests/' + rid8 + '/create-job', { token: AW8, body: { payOffer: 100 } });
+  await req2('POST', '/api/jobs/' + cj8.j.job.id + '/claim', { token: W8R.token, body: {} });
+  await req2('PATCH', '/api/jobs/' + cj8.j.job.id, { token: W8R.token, body: { photosDone: true } });
+  let j8 = null; for (let i = 0; i < 14; i++) { j8 = await adminJob2(cj8.j.job.id); if (j8 && j8.payoutStatus === 'paid') break; await sleep(200); }
+  t('v101 w8 setup: the worker payout went out on the paid, done job', !!j8 && j8.payoutStatus === 'paid' && !!j8.payoutTransferId);
+  const moneyBefore = await req2('GET', '/api/admin/money', { token: AW8 });
+  const rf8 = await req2('POST', '/api/requests/' + rid8 + '/refund', { token: AW8, body: {} });
+  const moneyAfter = await req2('GET', '/api/admin/money', { token: AW8 });
+  t('v101 w8 M7: refunding a paid-out order records a REVERSAL DUE in the ledger (no automatic clawback)', rf8.status === 200 && moneyAfter.j.payoutReversals.due === moneyBefore.j.payoutReversals.due + 1 && moneyAfter.j.payoutReversals.dueAmount >= moneyBefore.j.payoutReversals.dueAmount + 100);
+}
+
+
+// ---------------- v101 wave 9: books + visual (H1, money counters, members roster, plan order, invite dedupe, H4) ----------------
+{
+  const admW9 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW9 = admW9.j.token;
+
+  // H1: the public cart page must NOT pre-fill the customer's phone
+  const cart9 = await req2('POST', '/api/admin/carts', { token: AW9, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 175 }], customerName: 'W9 Person', customerEmail: 'w9-person@t.local', customerPhone: '(415) 555-0176' } });
+  const page9 = await (await fetch(BASE2 + '/cart/' + cart9.j.cart.id)).text();
+  t('v101 w9 H1: the public cart page keeps the name prefill but NEVER the phone (bearer-link exposure closed)', page9.includes('W9 Person') && !page9.includes('555-0176') && !page9.includes('(415) 555-0176'));
+
+  // H4 static: both reminder builders branch on payFull with full-payment wording
+  t('v101 w9 H4 static: cart reminder says FULL PAYMENT (EN+ES, html+text) for payFull carts, deposit otherwise', (serverSrc.match(/const full = !!c\.payFull/g) || []).length >= 2 && serverSrc.includes("full ? 'Full payment due today: '") && serverSrc.includes("full ? 'Pago completo hoy: '") && serverSrc.includes('full payment yet'));
+
+  // Money counters: a paid order + a paid invoice show up in collected
+  const c9 = await req2('POST', '/api/signup', { body: { name: 'W9 Buyer', email: 'w9-buyer@t.local', phone: '(707) 555-0151', password: 'custpass42', role: 'customer' } });
+  const rq9 = await req2('POST', '/api/requests', { token: c9.j.token, body: { service: 'Vanity Swap', description: 'menu order', address: '9 W9 Ave', city: 'Fairfield', when: 'Today', estimateType: 'menu', menuOrder: { serviceId: 'vanity-swap', extras: [], asap: false, joinedMembership: false, totals: { list: 250, member: 200, due: 250 } } } });
+  const py9 = await req2('POST', '/api/orders/pay', { token: c9.j.token, body: { requestId: rq9.j.request.id } });
+  await mockPiStatus(py9.j.paymentIntentId, 'succeeded');
+  await req2('POST', '/api/orders/pay-confirm', { token: c9.j.token, body: { requestId: rq9.j.request.id, paymentIntentId: py9.j.paymentIntentId } });
+  const inv9 = await req2('POST', '/api/admin/invoices', { token: AW9, body: { customerName: 'W9 Buyer', customerEmail: 'w9-buyer@t.local', items: [{ description: 'Labor', qty: 1, unitPrice: 200 }] } });
+  const pay9 = await req2('POST', '/api/invoices/' + inv9.j.invoice.id + '/pay', { body: {} });
+  const sess9 = { id: String(pay9.j.url || '').split('/').pop() }; // the mock session id rides the pay URL (stripeState is not readable this late in the run)
+  await wh2('checkout.session.completed', { id: sess9.id, payment_status: 'paid', amount_total: 20000, payment_intent: 'pi_w9_inv', metadata: { userId: c9.j.user.id, invoiceId: inv9.j.invoice.id, kind: 'invoice' } });
+  const money9 = await req2('GET', '/api/admin/money', { token: AW9 });
+  t('v101 w9 counters: collected revenue reflects the paid order ($250) and the paid invoice ($200) this month and all-time', money9.j.collected.month.orders >= 250 && money9.j.collected.month.invoices >= 200 && money9.j.collected.month.total >= 450 && money9.j.collected.all.total >= money9.j.collected.month.total);
+  t('v101 w9 static: the Dinero page renders the collected tile', appJsSrc.includes('S.collectedMonth') && appJsSrc.includes('d.collected'));
+
+  // Members roster
+  const ros = await req2('GET', '/api/admin/members', { token: AW9 });
+  const rosM = (ros.j.members || []).find(m => m.email === 'w8-member@t.local');
+  const rosY = (ros.j.members || []).find(m => m.email === 'w5-m4@t.local');
+  t('v101 w9 roster: GET /api/admin/members lists live members with plan + status (HomeCare active, Yard active)', ros.status === 200 && !!rosM && rosM.status === 'active' && !!rosY);
+  const rosNo = await req2('GET', '/api/admin/members', { token: c9.j.token });
+  t('v101 w9 roster: the members list is admin-only', rosNo.status === 403);
+
+  // Invite dedupe by person
+  const iv91 = await req2('POST', '/api/admin/invites', { token: AW9, body: { name: 'W9 Dup', email: 'w9-dup@t.local' } });
+  const iv92 = await req2('POST', '/api/admin/invites', { token: AW9, body: { name: 'W9 Dup', email: 'w9-dup@t.local' } });
+  const invList9 = await req2('GET', '/api/admin/invites', { token: AW9 });
+  const dupRows = (invList9.j.invites || []).filter(iv => iv.email === 'w9-dup@t.local');
+  t('v101 w9 invites: two invitations for the same person display as ONE row', dupRows.length === 1 && dupRows[0].id === iv92.j.invite.id);
+
+  // Memberships compare grid: Plus $100 first with the BEST badge (hierarchy law)
+  const gridStart = shellSrc.indexOf('id="compareGridBox"');
+  const gridEnd = shellSrc.indexOf('cg-foot', gridStart);
+  const grid = shellSrc.slice(gridStart, gridEnd);
+  t('v101 w9 plans: on the memberships page the FIRST card is HomeCare Plus $100 with the BEST badge — FREE no longer leads', grid.indexOf('cg-best') > -1 && grid.indexOf('cg-best') < grid.indexOf('cg-card free') && grid.indexOf('$100') < grid.indexOf('$0'));
+}
+
+
+// ---------------- v101 wave 10: BAJA batch ----------------
+{
+  const admW10 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW10 = admW10.j.token;
+  const auditCount = async (action) => ((await req2('GET', '/api/admin/audit', { token: AW10 })).j.entries || []).filter(e => e.action === action).length;
+
+  // BAJA-2: unrelated callers get the missing-record answer on both PATCHes
+  const stranger = await req2('POST', '/api/signup', { body: { name: 'W10 Stranger', email: 'w10-stranger@t.local', phone: '(707) 555-0155', password: 'custpass42', role: 'customer' } });
+  const ownReq = await req2('POST', '/api/requests', { token: stranger.j.token, body: { service: 'Faucet', description: 'drip', address: '3 W10 St', city: 'Fairfield', when: 'Today', estimateType: 'photo' } });
+  const other = await req2('POST', '/api/signup', { body: { name: 'W10 Other', email: 'w10-other@t.local', phone: '(707) 555-0156', password: 'custpass42', role: 'customer' } });
+  const patchStranger = await req2('PATCH', '/api/requests/' + ownReq.j.request.id, { token: other.j.token, body: { status: 'Cancelled' } });
+  t('v101 w10 BAJA-2: PATCHing a stranger request answers 404 (no existence oracle)', patchStranger.status === 404);
+  const W10W = await mkConnectWorker2('w10w@t.local', '(707) 555-0157', 'workpass10');
+  const patchJobStranger = await req2('PATCH', '/api/jobs/' + 'JOB-DOES-NOT-EXIST', { token: W10W.token, body: { status: 'On my way' } });
+  t('v101 w10 BAJA-2: PATCHing a missing job answers the same 404', patchJobStranger.status === 404);
+
+  // BAJA-5: a bogus reset token fails 400 AND lands in the audit log
+  const before5 = await auditCount('auth.reset_failed');
+  const badReset = await req2('POST', '/api/auth/reset', { body: { token: 'bogus-token-w10', password: 'newpassword1' } });
+  const after5 = await auditCount('auth.reset_failed');
+  t('v101 w10 BAJA-5: failed reset attempts are audited (and still rejected)', badReset.status === 400 && after5 === before5 + 1);
+
+  // BAJA-8: replacing a saved cart requires its token
+  const svA = await req2('POST', '/api/cart/save-recovery', { body: { email: 'w10-rec@t.local', items: [{ serviceId: 'faucet-replacement', qty: 1 }] } });
+  const svB = await req2('POST', '/api/cart/save-recovery', { body: { email: 'w10-rec@t.local', items: [{ serviceId: 'closet-doors', qty: 1 }] } });
+  const svC = await req2('POST', '/api/cart/save-recovery', { body: { email: 'w10-rec@t.local', items: [{ serviceId: 'closet-doors', qty: 1 }], recoveryToken: svA.j.token } });
+  t('v101 w10 BAJA-8: first save open, anonymous overwrite WITHOUT the token refused, WITH the token allowed', svA.status === 200 && svB.status === 403 && svC.status === 200);
+
+  // BAJA-12: a foreign payment against a SEALED cart balance alerts (any amount)
+  const cust10 = await mkMember('w10-seal@t.local', '(707) 555-0158');
+  const cart10 = await req2('POST', '/api/admin/carts', { token: AW10, body: { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 175 }], customerName: 'W10 Seal' } });
+  const cid10 = cart10.j.cart.id;
+  const det10 = { name: 'W10 Seal', phone: '7075550158', email: 'w10-seal@t.local', address: '4 W10 St', city: 'Fairfield', when: 'Today' };
+  await req2('POST', '/api/carts/' + cid10 + '/checkout', { token: cust10.token, body: det10 });
+  const sessA10 = sessionForCart(cid10, 'payment');
+  await mockSessionPaid(sessA10.id);
+  await fetch(BASE2 + '/cart/' + cid10 + '?paid=1&session_id=' + sessA10.id, { headers: { Authorization: 'Bearer ' + cust10.token } });
+  await req2('POST', '/api/carts/' + cid10 + '/checkout', { body: { balance: true } });
+  const sessB10 = sessionForCart(cid10, 'payment');
+  await mockSessionPaid(sessB10.id);
+  await fetch(BASE2 + '/cart/' + cid10 + '?paid=1&session_id=' + sessB10.id);
+  const sealed10 = ((await req2('GET', '/api/admin/carts', { token: AW10 })).j.carts || []).find(c => c.id === cid10);
+  const before12 = await auditCount('cart.payment_unmatched');
+  await wh2('payment_intent.succeeded', { id: 'pi_w10_foreign', status: 'succeeded', amount: 1234, amount_received: 1234, metadata: { kind: 'cart-order', cartId: cid10 } });
+  const after12 = await auditCount('cart.payment_unmatched');
+  const sealedAfter = ((await req2('GET', '/api/admin/carts', { token: AW10 })).j.carts || []).find(c => c.id === cid10);
+  t('v101 w10 BAJA-12: a foreign different-amount payment on a SEALED cart raises the unmatched-payment alert and changes nothing', !!sealed10 && !!sealed10.payState && sealed10.payState.balancePaid === true && after12 === before12 + 1 && JSON.stringify(sealedAfter.payState) === JSON.stringify(sealed10.payState));
+
+  // Statics for the rest of the batch
+  t('v101 w10 statics: BAJA-1 sweeps after role check; BAJA-3 uniform scrypt; BAJA-6 tombstone; BAJA-20 footer escaped; BAJA-22 array caps; BAJA-24 atomic writes', serverSrc.indexOf("requireRole(user, ['admin', 'worker', 'customer'], res)) return; // v101 (BAJA-1)") > -1 && serverSrc.includes('ghs-malformed-stored') && serverSrc.includes('db.adminEverExisted = true') && serverSrc.includes('escMail(footer ||') && (serverSrc.match(/slice\(0, 100\)/g) || []).length >= 2 && serverSrc.includes("DATA_FILE + '.tmp'"));
+  t('v101 w10 statics: BAJA-21 message throttle + thread caps on both message routes; BAJA-9 hold pointer first-writer-wins', (serverSrc.match(/rateLimitHit\('msg:' \+ user\.id, 120, 600000\)/g) || []).length === 2 && (serverSrc.match(/messages\.length >= 500/g) || []).length === 2 && serverSrc.includes('if (!r.lastHoldSessionId) r.lastHoldSessionId = s.id;'));
+}
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
 

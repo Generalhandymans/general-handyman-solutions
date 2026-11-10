@@ -24,31 +24,53 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
 const SB_URL = process.env.SUPABASE_URL || '';
 const SB_KEY = process.env.SUPABASE_SERVICE_KEY || '';
 let sbQueue = Promise.resolve();
+// v101 (M24): the boot-load outcome. 'local' = no cloud configured;
+// 'ok' = the cloud state (or a legitimately empty table) was loaded;
+// 'failed' = cloud configured but the load did not produce the cloud
+// state — in that case save() REFUSES to push the local (stale/empty)
+// state over the good cloud state until a good load or an explicit
+// admin override. This closes the audit's worst silent-loss path.
+let cloudLoadState = 'local';
+let cloudLoadError = '';
 function save() {
   if (SB_URL && SB_KEY) {
+    if (cloudLoadState === 'failed') {
+      db.cloudGate = { blocked: true, since: (db.cloudGate && db.cloudGate.since) || new Date().toISOString(), error: cloudLoadError };
+      console.error('supabase save BLOCKED (v101 M24): boot load failed — refusing to overwrite the cloud state with local data. Admin override: POST /api/admin/cloud-gate/override');
+      try { fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify(db, null, 2)); fs.renameSync(DATA_FILE + '.tmp', DATA_FILE); } catch (e) {} // v101 (BAJA-24): atomic replace — a crash mid-write can no longer corrupt data.json
+      return;
+    }
     const payload = JSON.stringify(db);
     sbQueue = sbQueue.then(() => fetch(SB_URL + '/rest/v1/ghs_state', {
       method: 'POST',
       headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify([{ key: 'app', value: JSON.parse(payload), updated_at: new Date().toISOString() }])
-    }).catch(e => console.error('supabase save failed', e.message)));
+    }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); if (db.saveError) delete db.saveError; })
+    .catch(e => { console.error('supabase save failed', e.message); db.saveError = { at: new Date().toISOString(), message: String((e && e.message) || e).slice(0, 200) }; })); // v101: save failures are admin-visible, not console-only
     return;
   }
-  fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2));
+  try { fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify(db, null, 2)); fs.renameSync(DATA_FILE + '.tmp', DATA_FILE); if (db.saveError) delete db.saveError; } // v101 (BAJA-24): atomic replace
+  catch (e) { db.saveError = { at: new Date().toISOString(), message: String((e && e.message) || e).slice(0, 200) }; console.error('local save failed', e.message); }
 }
 async function loadFromSupabase() {
-  if (!SB_URL || !SB_KEY) return;
+  if (!SB_URL || !SB_KEY) { cloudLoadState = 'local'; return; }
   try {
     const r = await fetch(SB_URL + '/rest/v1/ghs_state?key=eq.app&select=value', { headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY } });
+    if (!r.ok) throw new Error('HTTP ' + r.status); // v101 (M24): an HTTP error is a FAILED load, not an empty one
     const rows = await r.json();
-    if (Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users)) db = rows[0].value;
+    if (Array.isArray(rows) && rows.length === 0) { cloudLoadState = 'ok'; console.log('Supabase state table empty — first boot, local state is the seed.'); }
+    else {
+      if (!(Array.isArray(rows) && rows[0] && rows[0].value && Array.isArray(rows[0].value.users))) throw new Error('cloud state payload malformed'); // v101 (M24)
+      db = rows[0].value;
+      cloudLoadState = 'ok';
+    }
     if (!Array.isArray(db.notifications)) db.notifications = [];
     if (!Array.isArray(db.invoices)) db.invoices = [];
     if (!Array.isArray(db.yardVisits)) db.yardVisits = [];
 if (!Array.isArray(db.auditLog)) db.auditLog = [];
     if (!db.settings || typeof db.settings !== 'object') db.settings = {};
     console.log('Loaded state from Supabase (' + db.users.length + ' users, ' + db.requests.length + ' requests, ' + db.jobs.length + ' jobs)');
-  } catch (e) { console.error('supabase load failed', e.message); }
+  } catch (e) { cloudLoadState = 'failed'; cloudLoadError = String((e && e.message) || e).slice(0, 200); console.error('supabase load failed', e.message); }
 }
 // ---------- v80.14 RESPALDO Y SESIONES: persistent sessions ----------
 // Sessions used to live ONLY in this process's memory — every Render
@@ -78,7 +100,14 @@ function linkId(p) { return p + '-' + crypto.randomBytes(9).toString('hex').toUp
 // login/signup. Coerce at this boundary so the hash functions can
 // never throw on shape; handlers additionally reject non-strings.
 function hashPw(pw) { const s = crypto.randomBytes(16).toString('hex'); return s + ':' + crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); }
-function checkPw(pw, stored) { const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1]; if (!s || !h) return false; const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64).toString('hex'); try { return crypto.timingSafeEqual(Buffer.from(h), Buffer.from(t)); } catch (e) { return false; } }
+let DUMMY_PW_HASH = '';
+function dummyPwHash() { if (!DUMMY_PW_HASH) DUMMY_PW_HASH = hashPw('dummy-' + crypto.randomBytes(8).toString('hex')); return DUMMY_PW_HASH; }
+function checkPw(pw, stored) { // v101 (BAJA-3): malformed stored values still pay the full scrypt cost against a dummy salt — no early-exit timing tell; the comparison is on raw bytes with an explicit length gate
+  const parts = String(stored || '').split(':'); const s = parts[0], h = parts[1];
+  if (!s || !h || !/^[a-f0-9]+$/i.test(h)) { try { crypto.scryptSync(String(pw == null ? '' : pw), 'ghs-malformed-stored', 64); } catch (e) {} return false; }
+  const t = crypto.scryptSync(String(pw == null ? '' : pw), s, 64);
+  const exp = Buffer.from(h, 'hex');
+  return exp.length === t.length && crypto.timingSafeEqual(exp, t); }
 function pubUser(u) { const membershipPlan = membershipPlanOf(u); const captainArea = (u.role === 'worker' && Array.isArray(db.areas)) ? db.areas.find(a => a.captainId && a.captainId === u.id) : null; return { id: u.id, name: u.name, email: u.email, role: u.role, phone: u.phone || '', serviceAddress: u.serviceAddress || '', zipCode: u.zipCode || '', homeType: u.homeType || '', yardSize: u.yardSize || '', homeNotes: u.homeNotes || '', startPreference: normalizeStartPreference(u.startPreference), status: u.status || 'active', workerClass: u.role === 'worker' ? (u.workerClass === 'ayudante' ? 'ayudante' : 'tecnico') : undefined, skills: u.skills || [], vehicle: u.vehicle || '', profile: u.profile || {}, homeCareStatus: u.homeCareStatus || 'none', homeCareSince: u.homeCareSince || null, homeCareCancelAt: u.homeCareCancelAt || null, membershipPlan, membershipType: membershipPlan.type, membershipVisitsPerMonth: membershipPlan.visitsPerMonth, freeEstimateUsed: !!u.freeEstimateUsed, freeMonthAvailable: homeCareTrialEligible(u), lang: (u.lang === 'es' || u.lang === 'en') ? u.lang : null, favorites: cleanMenuIdList(u.favorites, 24), recents: cleanMenuIdList(u.recents, 8), payoutsSetup: u.stripeAccountId ? (!!u.stripePayoutsReady ? 'ready' : 'pending') : 'none', payoutsReady: !!u.stripePayoutsReady, locOptIn: u.role === 'worker' ? !!u.locOptInAt : undefined, lastLoc: u.role === 'worker' ? (u.lastLoc || null) : undefined, captainAreaId: captainArea ? captainArea.id : null, captainAreaName: captainArea ? captainArea.name : null, createdAt: u.createdAt, photo: u.role === 'worker' ? workerPhotoOf(u) : undefined, tradeSkills: u.role === 'worker' ? tradeSkillsOf(u) : undefined, skillsRated: u.role === 'worker' ? skillsRatedCount(u) : undefined, availability: u.role === 'worker' ? publicAvailability(u) : undefined }; }
 function send(res, code, obj, headers) {
   const body = typeof obj === 'string' ? obj : JSON.stringify(obj);
@@ -127,12 +156,43 @@ function auth(req) {
   const uid = sessionUserId(cookie.slice('ghs_session='.length));
   return db.users.find(u => u.id === uid) || null;
 }
-function newSession(u) { const token = crypto.randomBytes(32).toString('hex'); const now = Date.now(); sessionStore()[sha256hex(token)] = { uid: u.id, role: u.role || '', createdAt: now, exp: now + SESSION_TTL_MS }; save(); return token; }
+function newSession(u) {
+  const token = crypto.randomBytes(32).toString('hex'); const now = Date.now();
+  const store = sessionStore();
+  store[sha256hex(token)] = { uid: u.id, role: u.role || '', createdAt: now, exp: now + SESSION_TTL_MS };
+  // v101 (M12): cap live sessions per account at 50 — the oldest are
+  // pruned. (50 sits far above any human's device count — Gabriel
+  // included — while still bounding a stolen-credential sprawl.
+  // Privilege changes already rotate everything: a password reset
+  // invalidates ALL sessions, and demotion kills a worker's. The
+  // 30-day TTL is unchanged.)
+  const mine = Object.keys(store).filter(h => store[h] && store[h].uid === u.id).sort((a, b) => (store[a].createdAt || 0) - (store[b].createdAt || 0));
+  while (mine.length > 50) { const h = mine.shift(); delete store[h]; }
+  save(); return token;
+}
 function invalidateSessionsFor(userId) { const store = sessionStore(); let n = 0; for (const h of Object.keys(store)) { if (store[h] && store[h].uid === userId) { delete store[h]; n++; } } if (n) save(); }
 function dropSession(token) { if (!token) return; const store = sessionStore(); const h = sha256hex(token); if (store[h]) { delete store[h]; save(); } }
-function isHttpsReq(req) { return String((req.headers && req.headers['x-forwarded-proto']) || '').split(',')[0].trim() === 'https'; }
+function isHttpsReq(req) {
+  // v101 (M13): the Secure-cookie decision reads the RIGHTMOST
+  // x-forwarded-proto value (the platform edge's own claim) — a
+  // client-supplied proto value to the left can no longer strip the
+  // Secure flag. A directly-encrypted socket also counts.
+  if (req.socket && req.socket.encrypted) return true;
+  const parts = String((req.headers && req.headers['x-forwarded-proto']) || '').split(',').map(x => x.trim()).filter(Boolean);
+  return parts.length > 0 && parts[parts.length - 1] === 'https';
+}
 function sessionCookie(token, req) { return 'ghs_session=' + token + '; HttpOnly; Path=/; SameSite=Lax; Max-Age=2592000' + (isHttpsReq(req) ? '; Secure' : ''); }
-function clientIp(req) { const xff = String((req.headers && req.headers['x-forwarded-for']) || '').split(',')[0].trim(); return xff || (req.socket && req.socket.remoteAddress) || 'unknown'; }
+function clientIp(req) {
+  // v101 (ALTA-4): the FIRST XFF entry is client-supplied — rotating it
+  // defeated every IP-keyed brake (login throttle, public-link miss
+  // budget). The RIGHTMOST entry is the one the platform edge appended
+  // for the connection IT received. Documented assumption: exactly one
+  // trusted proxy hop (Render's edge) sits in front of the app, so the
+  // rightmost hop is the edge-observed peer; anything left of it is
+  // untrusted decoration.
+  const hops = String((req.headers && req.headers['x-forwarded-for']) || '').split(',').map(x => x.trim()).filter(Boolean);
+  return (hops.length ? hops[hops.length - 1] : '') || (req.socket && req.socket.remoteAddress) || 'unknown';
+}
 // ---------- Password reset (added 2026-10-21, v20) ----------
 // "Forgot my password": the raw token only ever travels in the emailed
 // link; the user record keeps ONLY its sha256 hash + a 60-minute expiry
@@ -188,6 +248,40 @@ function publicMissList(req) {
 }
 function publicLinkBlocked(req) { return publicMissList(req).length >= PUBLIC_MISS_MAX; }
 function notePublicMiss(req) { const arr = publicMissList(req); arr.push(Date.now()); publicMisses.set(clientIp(req), arr); }
+// Generic in-memory sliding-window limiter (v101): returns true when
+// the key has EXCEEDED max hits inside the window (the current hit
+// counts). Same in-memory discipline as the login throttle — a
+// restart forgives the counters, acceptable for backstop throttles.
+const rateLimitBuckets = new Map();
+function rateLimitHit(key, max, windowMs) {
+  const now = Date.now();
+  const arr = (rateLimitBuckets.get(key) || []).filter(ts => now - ts < windowMs);
+  arr.push(now);
+  rateLimitBuckets.set(key, arr);
+  return arr.length > max;
+}
+// v101 (M20): creating Stripe checkout sessions / payment intents is
+// unauthenticated on the public links and was completely unthrottled —
+// a backstop cap per IP shared by every creation route. The limit sits
+// far above any human pace; it exists to cut scripted abuse.
+function checkoutCreateBlocked(req) { return rateLimitHit('checkout-create:' + clientIp(req), 2000, 600000); }
+// v101 (M17): legacy 24-bit bearer ids (minted before v80.8's linkId)
+// still resolve — live customer links in the books use them, and
+// retiring them would break real proposals. Instead: every SUCCESSFUL
+// resolution of a legacy-format id on a public page is audit-logged
+// (throttled to one entry per id per hour), and the miss budget that
+// guards guessing now keys on the unspoofable rightmost-hop IP
+// (ALTA-4). New records keep minting 72-bit ids.
+const legacyLinkSeen = new Map();
+function noteLegacyLinkUse(kind, idStr, req) {
+  const suffix = String(idStr || '').split('-').pop() || '';
+  if (!/^[0-9A-Fa-f]{1,6}$/.test(suffix)) return;
+  const key = kind + ':' + idStr;
+  const now = Date.now();
+  if (legacyLinkSeen.has(key) && now - legacyLinkSeen.get(key) < 3600000) return;
+  legacyLinkSeen.set(key, now);
+  audit(null, 'public.legacy_link_use', String(idStr), kind + ' link (legacy 24-bit id) resolved from ' + clientIp(req));
+}
 // Which public credential family a path resolves against — null when the
 // path is not a public credential lookup at all.
 function publicCredTarget(p) {
@@ -500,8 +594,16 @@ function workerPaused(u) { return !!publicAvailability(u).paused; }
 // ONLY from the worker's own profile editor (POST /api/me/worker-profile)
 // or cleared by the Team (PATCH /api/workers/:id with photo: null) —
 // never at signup. Validation mirrors the yard-visit photo rule exactly
-// (data:image/ prefix, <= 5,000,000 chars).
-function isPhotoDataUrl(x) { return typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000; }
+// (strict data:image/...;base64 shape, <= 5,000,000 chars — v101).
+function isPhotoDataUrl(x) {
+  // v101 (ALTA-2): STRUCTURAL validation, not a prefix check. The value must
+  // be exactly data:image/<png|jpeg|gif|webp>;base64,<pure base64> — the
+  // payload charset (A-Za-z0-9+/=) contains no quotes, whitespace or angle
+  // brackets, so a stored photo can never break out of an <img src="...">
+  // attribute or smuggle an event handler, no matter who submitted it.
+  if (typeof x !== 'string' || x.length > 5000000) return false;
+  return /^data:image\/(?:png|jpe?g|gif|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(x);
+}
 function workerPhotoOf(u) { const p = u && u.profile && u.profile.photo; return isPhotoDataUrl(p) ? p : null; }
 // Duty location feed: a worker shares his position WHILE LOGGED IN
 // (u.liveLoc, separate from the job-trip j.liveLoc). The admin master
@@ -835,8 +937,26 @@ async function geocodeJobDestination(j) {
   } catch (e) { /* geocoding is best-effort — it must never block the job flow */ }
   finally { geoInFlight.delete(j.id); }
 }
+// v101 (ALTA-3): a job's customer is an ACCOUNT identity, never a phone
+// number. Signup accepts any phone with no verification and no uniqueness,
+// so a phone can never be an ownership key — anyone could register with a
+// real customer's number and inherit their jobs, threads and the tech's
+// live location. Resolution order: the job's stamped customerId (frozen at
+// dispatch, see POST /api/jobs), then the linked request's customerId.
+// The phone stays on the job as CONTACT data for the Team only.
+function jobCustomerId(j) {
+  if (j.customerId) return j.customerId;
+  if (j.requestId) { const r = db.requests.find(x => x.id === j.requestId); if (r && r.customerId) return r.customerId; }
+  return null;
+}
 function jobCustomer(j) {
-  return db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, '')) || null;
+  const cid = jobCustomerId(j);
+  return cid ? (db.users.find(x => x.id === cid && x.role === 'customer') || null) : null;
+}
+function customerOwnsJob(j, user) {
+  if (!user || user.role !== 'customer') return false;
+  const cid = jobCustomerId(j);
+  return !!cid && cid === user.id;
 }
 
 // ---------- Live event stream (SSE, added 2026-10-21, v23) ----------
@@ -853,11 +973,9 @@ function jobCustomer(j) {
 const SSE_HEARTBEAT_MS = Math.max(250, Number(process.env.SSE_HEARTBEAT_MS) || 25000);
 const sseClients = new Set(); // { res, user }
 function sseCustomerOwnsJob(j, user) {
-  const c = jobCustomer(j);
-  if (c && c.id === user.id) return true;
-  if (j.requestId) { const r = db.requests.find(x => x.id === j.requestId); if (r && r.customerId === user.id) return true; }
-  if (j.customerId && j.customerId === user.id) return true;
-  return false;
+  // v101 (ALTA-3): account identity only (customerId / linked request) —
+  // the old phone-match branch is gone.
+  return customerOwnsJob(j, user);
 }
 function sseWrite(client, type, payload) {
   try { client.res.write('event: ' + type + '\ndata: ' + JSON.stringify(payload) + '\n\n'); } catch (e) {}
@@ -941,6 +1059,12 @@ function mailReady() { return !!RESEND_API_KEY; }
 function googleReady() { return !!(GOOGLE_AUTOMATION_URL && GOOGLE_AUTOMATION_SECRET); }
 function senderEmail() { const m = RESEND_FROM.match(/<([^>]+)>/); return m ? m[1] : RESEND_FROM; }
 function escMail(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+// v101 (ALTA-1): JSON destined for an inline <script> block. JSON.stringify
+// does NOT escape '<', so a stored value containing '</script>' would break
+// out of the block and execute in the page's origin. Escaping <, > and & as
+// unicode escapes keeps the parsed value identical while making the
+// breakout impossible.
+function jsonScript(v) { const j = JSON.stringify(v); return j === undefined ? 'null' : j.replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026'); }
 function usd(n) { return '$' + money(n).toFixed(2); }
 async function sendMail(o) {
   if (!mailReady()) return { attempted: false, sent: false, reason: 'email is not connected yet (Resend API key missing)' };
@@ -961,7 +1085,7 @@ function mailShell(title, inner, footer, lang) {
     + '<div style="background:#0b0b0b;color:#fff;padding:18px 22px"><div style="font-size:20px;font-weight:bold">General Handyman Solutions</div><div style="color:#ff4444;margin-top:2px">Fairfield \u2022 Vacaville \u2022 Vallejo \u2022 Solano County</div></div>'
     + '<div style="padding:20px 22px"><h2 style="margin-top:0">' + escMail(title) + '</h2>' + inner
     + '<p style="margin-top:18px"><a href="' + APP_URL + '" style="background:#d92323;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">' + (es ? 'Abrir la app' : 'Open the app') + '</a></p>'
-    + '<p style="color:#666;font-size:13px">' + (footer || (es ? '¿Preguntas? Texto o llamada (707) 862-3773. Solo mano de obra \u2014 tú compras los materiales/partes salvo que acordemos otra cosa.' : 'Questions? Text or call (707) 862-3773. Labor only \u2014 you buy materials/parts unless we agree otherwise.')) + '</p></div></div>';
+    + '<p style="color:#666;font-size:13px">' + escMail(footer || (es ? '¿Preguntas? Texto o llamada (707) 862-3773. Solo mano de obra \u2014 tú compras los materiales/partes salvo que acordemos otra cosa.' : 'Questions? Text or call (707) 862-3773. Labor only \u2014 you buy materials/parts unless we agree otherwise.')) + '</p></div></div>';
 }
 const WORKER_FOOTER = 'Questions? Text or call the Team: (707) 862-3773.';
 const WORKER_FOOTER_ES = '¿Preguntas? Texto o llamada al Team: (707) 862-3773.';
@@ -1049,31 +1173,33 @@ function estimateReminderEmailText(rq) {
 // same per-surface pattern the cart page itself uses.
 function cartReminderEmailHtml(c) {
   const es = c.lang === 'es';
+  const full = !!c.payFull; // v101 (H4): a payFull cart is owed in FULL — never call it a deposit
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
   const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const items = (c.items || []).map(it => escMail(it.name || '') + ' ×' + (it.qty || 1)).join(' · ');
   const inner = es
     ? '<p>Hola ' + escMail(c.customerName || '') + ',</p>'
-      + '<p>Solo un recordatorio amistoso — tu propuesta de <b>General Handyman Solutions</b> sigue esperando. Todavía no recibimos el depósito, así que tu trabajo aún no está apartado.</p>'
+      + '<p>Solo un recordatorio amistoso — tu propuesta de <b>General Handyman Solutions</b> sigue esperando. ' + (full ? 'Todavía no recibimos el pago completo, así que tu trabajo aún no está apartado.' : 'Todavía no recibimos el depósito, así que tu trabajo aún no está apartado.') + '</p>'
       + (items ? '<p>' + items + '</p>' : '')
-      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · Para apartar hoy: <b>' + usd(dep) + '</b></p>'
+      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · ' + (full ? 'Pago completo hoy: ' : 'Para apartar hoy: ') + '<b>' + usd(dep) + '</b></p>'
       + '<p><a href="' + c.link + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Revisar y apartar tu trabajo</a></p>'
       + '<p style="color:#666;font-size:13px">Sin cuenta — revisa y paga desde el mismo link. ¿Ya lo resolviste o cambiaste de idea? Sin problema — ignora este correo; no enviaremos otro.</p>'
     : '<p>Hi ' + escMail(c.customerName || 'there') + ',</p>'
-      + '<p>Just a friendly nudge — your proposal from <b>General Handyman Solutions</b> is still waiting. We have not received the deposit yet, so your job is not booked yet.</p>'
+      + '<p>Just a friendly nudge — your proposal from <b>General Handyman Solutions</b> is still waiting. ' + (full ? 'We have not received the full payment yet, so your job is not booked yet.' : 'We have not received the deposit yet, so your job is not booked yet.') + '</p>'
       + (items ? '<p>' + items + '</p>' : '')
-      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · Due to book today: <b>' + usd(dep) + '</b></p>'
+      + '<p style="font-size:18px">Total: <b>' + usd(total) + '</b> · ' + (full ? 'Full payment due today: ' : 'Due to book today: ') + '<b>' + usd(dep) + '</b></p>'
       + '<p><a href="' + c.link + '" style="background:#1a7f37;color:#fff;padding:12px 18px;text-decoration:none;font-weight:bold;display:inline-block">Review & book your job</a></p>'
       + '<p style="color:#666;font-size:13px">No account needed — review and pay right from the link. Already taken care of, or changed your mind? No problem at all — just ignore this email; we will not send another one.</p>';
   return mailShell(es ? 'Tu propuesta sigue aquí — General Handyman Solutions' : 'Your proposal is still here — General Handyman Solutions', inner);
 }
 function cartReminderEmailText(c) {
   const es = c.lang === 'es';
+  const full = !!c.payFull; // v101 (H4)
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
   const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const head = 'General Handyman Solutions — ';
-  if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; aún no recibimos el depósito y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · Para apartar hoy: ' + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
-  return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; we have not received the deposit yet, so your job is not booked yet.', 'Total: ' + usd(total) + ' · Due to book today: ' + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
+  if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; ' + (full ? 'aún no recibimos el pago completo' : 'aún no recibimos el depósito') + ' y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · ' + (full ? 'Pago completo hoy: ' : 'Para apartar hoy: ') + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
+  return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; ' + (full ? 'we have not received the full payment yet' : 'we have not received the deposit yet') + ', so your job is not booked yet.', 'Total: ' + usd(total) + ' · ' + (full ? 'Full payment due today: ' : 'Due to book today: ') + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
 }
 // Trial-ending + payment-failed + review-ask emails: the builders
 // return BOTH language blocks; the dispatcher sends ONE language when
@@ -1542,8 +1668,12 @@ async function maybePayWorkerForJob(j, opts) {
     const w = db.users.find(x => x.id === j.assignedWorkerId);
     if (!w) return;
     if (!stripeReady()) { j.payoutStatus = 'stripe_off'; save(); return; }
+    // v101 (M6): the in-flight flag goes on BEFORE the awaited Connect
+    // refresh — previously a concurrent caller could pass the top check
+    // during that await and double-fire the transfer.
+    j.payoutInFlight = Date.now(); save();
     if (w.stripeAccountId && !w.stripePayoutsReady) await refreshWorkerConnect(w);
-    if (!w.stripeAccountId || !w.stripePayoutsReady) {
+    if (!w.stripeAccountId || !w.stripePayoutsReady) { delete j.payoutInFlight;
       // v80.8: THE hold. Since claims no longer require Connect, this is
       // the normal path for a gateless worker's finished job: NO
       // transfer is attempted — the pay waits in-app under
@@ -1558,7 +1688,7 @@ async function maybePayWorkerForJob(j, opts) {
     // exactly like a legacy captured hold (old jobs keep resolving on the
     // hold trail). New stamps say 'awaiting_payment'; the legacy
     // 'awaiting_capture' stamp still renders and sweeps for old jobs.
-    if (r && !requestIsPaid(r)) { j.payoutStatus = 'awaiting_payment'; save(); return; }
+    if (r && !requestIsPaid(r)) { delete j.payoutInFlight; j.payoutStatus = 'awaiting_payment'; save(); return; }
     // v80.11/v80.13: the sales commission (his own sold job, completed
     // by him) rides THIS SAME transfer — one payout event, payOffer +
     // commission (on a sold job the two lines sum to his 68% take).
@@ -1566,7 +1696,7 @@ async function maybePayWorkerForJob(j, opts) {
     const amount = Math.round((Number(j.payOffer) + commission811) * 100);
     j.payoutInFlight = Date.now(); save();
     let tr;
-    try { tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id }); }
+    try { tr = await stripeApi('/transfers', { amount, currency: 'usd', destination: w.stripeAccountId, transfer_group: j.id, description: 'GHS payout - job ' + j.id + ' (' + (j.service || 'job') + ')', 'metadata[jobId]': j.id, 'metadata[workerId]': w.id }, { idempotencyKey: 'ghs-job-payout-' + j.id + '-' + new Date().toISOString().slice(0, 10) }); } // v101 (M6): a lost response retries into the SAME transfer (same-day key); a next-day retry gets a fresh key
     finally { delete j.payoutInFlight; }
     j.payoutTransferId = tr.id; j.payoutStatus = 'paid'; j.payoutAt = new Date().toISOString(); j.workerPaid = true; delete j.payoutError;
     save();
@@ -1794,15 +1924,15 @@ async function maybePayReferralBounty(e) {
     const w = db.users.find(x => x.id === e.workerId);
     if (!w) { e.status = 'error'; e.payoutError = 'worker record gone'; save(); return; }
     if (!stripeReady()) { e.status = 'stripe_off'; save(); return; }
+    e.payoutInFlight = Date.now(); save(); // v101 (M6): flag BEFORE the awaited refresh
     if (w.stripeAccountId && !w.stripePayoutsReady) await refreshWorkerConnect(w);
-    if (!w.stripeAccountId || !w.stripePayoutsReady) {
+    if (!w.stripeAccountId || !w.stripePayoutsReady) { delete e.payoutInFlight;
       e.status = 'awaiting_worker_setup'; save();
       if (!e.setupNagAt) { e.setupNagAt = new Date().toISOString(); notifyAdmins('payment', 'Referral bounty ' + e.id + ' (' + usd(e.amount) + ') is earned by ' + w.name + ' but waits — he has not finished setting up payouts.'); save(); }
       return;
     }
-    e.payoutInFlight = Date.now(); save();
     let tr;
-    try { tr = await stripeApi('/transfers', { amount: Math.round(Number(e.amount) * 100), currency: 'usd', destination: w.stripeAccountId, transfer_group: e.id, description: 'GHS referral bounty ' + e.id, 'metadata[bountyId]': e.id, 'metadata[workerId]': w.id }); }
+    try { tr = await stripeApi('/transfers', { amount: Math.round(Number(e.amount) * 100), currency: 'usd', destination: w.stripeAccountId, transfer_group: e.id, description: 'GHS referral bounty ' + e.id, 'metadata[bountyId]': e.id, 'metadata[workerId]': w.id }, { idempotencyKey: 'ghs-bounty-' + e.id + '-' + new Date().toISOString().slice(0, 10) }); } // v101 (M6)
     finally { delete e.payoutInFlight; }
     e.transferId = tr.id; e.status = 'paid'; e.paidAt = new Date().toISOString(); delete e.payoutError;
     save();
@@ -2073,10 +2203,12 @@ function buildSystemHealth() {
   };
 }
 function stripeReady() { return !!STRIPE_SECRET_KEY; }
-async function stripeApi(path, params) {
+async function stripeApi(path, params, opts) {
   const body = new URLSearchParams();
   Object.keys(params || {}).forEach(k => { if (params[k] !== undefined && params[k] !== null) body.append(k, String(params[k])); });
-  const r = await fetch(STRIPE_API + path, { method: 'POST', headers: { Authorization: 'Bearer ' + STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' }, body: body.toString(), signal: AbortSignal.timeout(20000) });
+  const headers = { Authorization: 'Bearer ' + STRIPE_SECRET_KEY, 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (opts && opts.idempotencyKey) headers['Idempotency-Key'] = String(opts.idempotencyKey); // v101 (M6)
+  const r = await fetch(STRIPE_API + path, { method: 'POST', headers, body: body.toString(), signal: AbortSignal.timeout(20000) });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('stripe: ' + ((data && data.error && data.error.message) || ('HTTP ' + r.status)));
   return data;
@@ -2882,6 +3014,15 @@ function cartCheckoutsOf() { if (!Array.isArray(db.cartCheckouts)) db.cartChecko
 function settleCartCheckout(pc, pi) {
   if (pc.superseded) return null; // v78 refine: a replaced checkout NEVER settles
   if (pc.requestId) { const ex = db.requests.find(x => x.id === pc.requestId); if (ex) return ex; }
+  // v101 (M3): verify the money against the snapshot BEFORE booking —
+  // the PI must carry exactly the leg this checkout expects (the
+  // deposit when a balance remains, the full total otherwise). The
+  // session rail (settleHostedCartSession) already proved its amount
+  // and hands over exactly this leg, so it passes by construction.
+  { const _s0 = depositSplit(Math.round(Number(pc.totals.due) * 100));
+    const _got = Math.round(Number(pi && (pi.amount_received != null ? pi.amount_received : pi.amount)) || 0);
+    const _exp = _s0.balanceCents > 0 ? _s0.depositCents : Math.round(Number(pc.totals.due) * 100);
+    if (_got > 0 && _got !== _exp) { console.error('cart checkout settle: PI amount ' + _got + ' != expected ' + _exp + ' for ' + pc.id + ' — order NOT created'); notifyAdmins('payment', 'Cart checkout ' + pc.id + ': payment of ' + usd(_got / 100) + ' does not match the expected ' + usd(_exp / 100) + ' — no order was created. Review and refund/re-link.'); return null; } }
   const itemsTxt = pc.items.map(it => it.name + ' ×' + it.qty).join(', ');
   const r = { id: linkId('GHS'), customerId: pc.userId, customerName: pc.customerName, customerEmail: pc.customerEmail, customerPhone: pc.customerPhone, service: (pc.items[0] ? pc.items[0].name : 'Cart order') + (pc.items.length > 1 ? ' +' + (pc.items.length - 1) + ' more' : ''), description: 'Ordered from the in-app cart — ' + pc.items.map(it => it.name + ' ×' + it.qty + ' @ ' + usd(it.unitPrice)).join('; ') + (pc.notes ? ' Notes: ' + pc.notes : ''), city: pc.city, address: pc.address, when: pc.when, estimateType: 'menu', membership: pc.isMember ? 'member' : 'none', estimateDue: 75, status: 'New', quote: null, quoteNote: '', estimate: null, source: pc.source || null, menuOrder: { cart: true, checkoutId: pc.id, serviceId: pc.items[0] ? pc.items[0].serviceId : '', items: pc.items, totals: pc.totals, joinedMembership: !!pc.joinedMembership }, photos: [], messages: [{ from: 'customer', name: pc.customerName || 'Customer', text: 'Ordered from the in-app cart: ' + itemsTxt + '.', at: new Date().toISOString() }], createdAt: new Date().toISOString() };
   // v80.11: a self-serve order born under a tech's referral stamp is
@@ -3154,9 +3295,29 @@ function markInviteAccepted(inv, u, session) {
 // are never cleared either. Eligibility must be provable from the
 // account — when it cannot be established (no account), the
 // conservative answer is NO trial.
+// v101 (M9): the free month must survive account deletion. When an
+// account that USED its free month (or ever held HomeCare) is deleted,
+// its email leaves a tombstone holding ONLY the email + date; a future
+// signup with that email is born trial-ineligible. Without this, the
+// delete-and-re-register cycle farmed a fresh 30-day trial forever.
+function trialTombstonesOf() { if (!Array.isArray(db.trialTombstones)) db.trialTombstones = []; return db.trialTombstones; }
+function accountUsedTrial(u) {
+  if (!u) return false;
+  if (u.inviteFreeMonthUsed || u.homeCareSince) return true;
+  const st = u.membershipPlan;
+  return !!(st && st.type === 'homecare' && st.since);
+}
+function stampTrialTombstone(u) {
+  if (!accountUsedTrial(u)) return;
+  const e = String(u.email || '').trim().toLowerCase();
+  if (!e) return;
+  const t = trialTombstonesOf();
+  if (!t.some(x => x.email === e)) t.push({ email: e, at: new Date().toISOString() });
+}
 function homeCareTrialEligible(u) {
   if (!u || !u.id) return false;
   if (u.inviteFreeMonthUsed) return false;
+  { const e0 = String(u.email || '').trim().toLowerCase(); if (e0 && trialTombstonesOf().some(x => x.email === e0)) return false; } // v101 (M9)
   const stored = (u.membershipPlan && typeof u.membershipPlan === 'object' && MEMBERSHIP_PLANS[u.membershipPlan.planKey]) ? u.membershipPlan : null;
   if (stored) {
     if (stored.type === 'homecare' && stored.since) return false; // already held the HomeCare plan itself
@@ -3585,6 +3746,10 @@ function settleCartPayment(c, payInfo) {
   // now it also raises the unrecorded-payment alert. (The deposit's own
   // PI is excluded — v80.5 F: its late webhook is not a balance event.)
   if (c.status === 'paid' && c.payment && !c.payment.balanceAt && cents > 0 && payInfo.pi && payInfo.pi !== (c.payment.depositPi || '')) alertUnrecordedCartPayment(c, payInfo, cents);
+  // v101 (BAJA-12): a SEALED balance (balanceAt set) plus a proven payment
+  // of ANY other amount used to fall through silently too — real money,
+  // no alert, no booking. Same treatment: alert, never book.
+  if (c.status === 'paid' && c.payment && c.payment.balanceAt && cents > 0 && payInfo.pi && payInfo.pi !== (c.payment.depositPi || '') && payInfo.pi !== (c.payment.balancePi || '')) alertUnrecordedCartPayment(c, payInfo, cents);
   return false;
 }
 // ---------- Estimate authorization holds (added 2026-10-20, HOLD-PAYMENT-MODEL) ----------
@@ -3704,13 +3869,23 @@ async function startBalanceAuthorization(r, lang) {
 // whichever lands first wins and the second is a no-op.
 function settleInvoiceFromSession(inv, sess) {
   if (!inv || inv.status === 'paid') return false;
+  // v101 (M2/M4): settle ONLY on proof — the session must be the very
+  // one stamped on the invoice when its pay link was created, Stripe
+  // must report it PAID, and the amount collected must equal the
+  // invoice's CURRENT total + the session's tip. Editing an invoice
+  // retires its stamped session (PUT handler), so an old $500 session
+  // can never "pay" an invoice that now totals $800.
+  if (!sess || sess.payment_status !== 'paid') return false;
+  if (inv.paySessionId && sess.id !== inv.paySessionId) { notifyAdmins('payment', 'Invoice ' + inv.id + ': a checkout session (' + sess.id + ') tried to settle it but is NOT the session on record — refused. If money was taken, refund or re-send the pay link.'); return false; }
   const amount = Math.round(Number(sess.amount_total) || 0) / 100;
   const tipCents = Math.max(0, Math.round(Number(sess.metadata && sess.metadata.tipCents) || 0));
+  if (Math.round(Number(sess.amount_total) || 0) !== Math.round(Number(inv.total) * 100) + tipCents) { notifyAdmins('payment', 'Invoice ' + inv.id + ' checkout amount mismatch: the session collected ' + usd(amount) + ' but the invoice totals ' + usd((Math.round(Number(inv.total) * 100) + tipCents) / 100) + ' — NOT marked paid. Review the books.'); return false; }
   inv.status = 'paid';
   inv.paidAt = new Date().toISOString();
   inv.paidAmount = amount;
   inv.paidMethod = 'stripe';
   inv.stripeSessionId = sess.id;
+  inv.stripePi = sess.payment_intent || ''; // v101 (M8): lets charge.refunded find this invoice without an API round-trip
   inv.tip = tipCents / 100;
   notifyAdmins('payment', 'Invoice ' + inv.id + ' PAID online: $' + amount.toFixed(2) + (tipCents > 0 ? ' (incl. $' + (tipCents / 100).toFixed(2) + ' tip)' : '') + ' from ' + (inv.customerName || inv.customerEmail || '') + '.');
   const cust = inv.customerId && db.users.find(x => x.id === inv.customerId);
@@ -3720,6 +3895,7 @@ function settleInvoiceFromSession(inv, sess) {
 }
 function settleEstimateFromSession(r, sess, u) {
   if (!r || r.estimatePaid) return false;
+  if (!sess || sess.payment_status !== 'paid') return false; // v101 (M4): a completed-but-unpaid session settles nothing
   const amount = Math.round(Number(sess.amount_total) || 0) / 100;
   const tipCents = Math.max(0, Math.round(Number(sess.metadata && sess.metadata.tipCents) || 0));
   r.estimatePaid = { sessionId: sess.id, amount: amount, tip: tipCents / 100, at: new Date().toISOString() };
@@ -3730,10 +3906,40 @@ function settleEstimateFromSession(r, sess, u) {
   if (u) notifyAdmins('payment', 'Payment received: $' + amount.toFixed(2) + ' from ' + u.name + ' (' + u.email + ') on request ' + r.id + '.');
   return true;
 }
+// v101 (M5): Stripe delivers events at-least-once — this registry is the
+// delivery-level dedupe (money handlers keep their own state guards too).
+function stripeEventRegistry() { if (!Array.isArray(db.stripeEventIds)) db.stripeEventIds = []; return db.stripeEventIds; }
+// v101 (M4): a completed checkout session is not necessarily a PAID one.
+// 'paid' = money collected; 'no_payment_required' = nothing was due
+// (a free-month trial's $0 first charge). Anything else (notably
+// 'unpaid', from deferred/async payment methods) must activate NOTHING.
+function checkoutProvesPaid(sess) { return !!sess && (sess.payment_status === 'paid' || sess.payment_status === 'no_payment_required'); }
+function refundsOf() { if (!Array.isArray(db.refundLedger)) db.refundLedger = []; return db.refundLedger; }
+// v101 (M7): when an order is refunded AFTER money already went out
+// (worker payout transferred, captain override accrued), the books
+// record a REVERSAL DUE — a ledger entry, never an automatic clawback
+// transfer (recovering pay is Gabriel's decision, case by case).
+// Accrued-but-unpaid captain entries flip to 'reversed' so the Dinero
+// outstanding stops counting them.
+function reversalLedgerOf() { if (!Array.isArray(db.reversalLedger)) db.reversalLedger = []; return db.reversalLedger; }
+function recordPayoutReversalsForRefund(r) {
+  const entries = [];
+  const jobs = db.jobs.filter(j => j.requestId === r.id);
+  for (const j of jobs) {
+    if (j.payoutTransferId) entries.push({ id: id('REV'), at: new Date().toISOString(), kind: 'worker_payout', jobId: j.id, workerId: j.assignedWorkerId || '', transferId: j.payoutTransferId, amountCents: Math.round((Number(j.payOffer) + jobSalesCommission(j)) * 100), status: 'reversal_due', requestId: r.id });
+    for (const e of (db.captainLedger || [])) {
+      if (e.jobId === j.id && e.status === 'accrued') { e.status = 'reversed'; e.reversedAt = new Date().toISOString(); e.reversedReason = 'order ' + r.id + ' refunded'; entries.push({ id: id('REV'), at: new Date().toISOString(), kind: 'captain_accrual', jobId: j.id, captainId: e.captainId || '', ledgerId: e.id, amountCents: Math.round(Number(e.amount) * 100), status: 'reversed', requestId: r.id }); }
+    }
+  }
+  for (const e of entries) reversalLedgerOf().push(e);
+  if (entries.length) notifyAdmins('payment', 'Order ' + r.id + ' was refunded AFTER payouts went out: ' + entries.map(e => e.kind + ' ' + usd(e.amountCents / 100)).join(' · ') + ' — reversal entries recorded in the reversal ledger. NO money was clawed back automatically.');
+  return entries;
+}
 async function handleStripeEvent(event) {
   const type = event && event.type;
   const obj = event && event.data && event.data.object;
   if (!obj) return;
+  if (event.id) { const reg = stripeEventRegistry(); if (reg.includes(event.id)) return; reg.push(event.id); if (reg.length > 1000) reg.splice(0, reg.length - 1000); } // v101 (M5)
   if (type === 'checkout.session.completed') {
     const kind = obj.metadata && obj.metadata.kind;
     // Estimate holds are filed BEFORE the user lookup: a guest checkout has
@@ -3782,6 +3988,15 @@ async function handleStripeEvent(event) {
     }
     const u = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
     if (!u) { console.error('stripe webhook: no user for session ' + obj.id); return; }
+    // v101 (M4): every branch below this line ACTIVATES something
+    // (membership, estimate payment, invoice payment) — none of them may
+    // run on an unpaid session. The cart branches above already gate on
+    // payment_status; these now do too. If the money lands later, Stripe
+    // fires the paid twin and the same branches settle it then.
+    if (!checkoutProvesPaid(obj)) {
+      notifyAdmins('payment', 'Stripe checkout completed WITHOUT payment (kind ' + (kind || '?') + ', session ' + obj.id + ', payment_status ' + (obj.payment_status || 'missing') + ') — nothing was activated or marked paid.');
+      return;
+    }
     if (kind === 'homecare') {
       activateHomeCareFromCheckout(u, obj);
       // v54: a join that started on a public page finishes its page work
@@ -3830,6 +4045,23 @@ async function handleStripeEvent(event) {
       const inv = (db.invoices || []).find(x => x.id === (obj.metadata && obj.metadata.invoiceId));
       settleInvoiceFromSession(inv, obj);
     }
+  } else if (type === 'checkout.session.async_payment_failed') {
+    // v101 (M4): a deferred payment method failed AFTER its session
+    // completed. The payment_status gate means an unpaid session never
+    // activated anything; this branch keeps the books honest and undoes
+    // the one remaining race (a twin path activated the membership for
+    // this very subscription before the failure landed).
+    const kindF = obj.metadata && obj.metadata.kind;
+    const uF = db.users.find(x => x.id === (obj.metadata && obj.metadata.userId));
+    notifyAdmins('payment', 'ASYNC PAYMENT FAILED on Stripe checkout session ' + obj.id + ' (kind ' + (kindF || '?') + ')' + (uF ? ' for ' + uF.name + ' (' + uF.email + ')' : '') + ' — no money was collected.');
+    if (uF && obj.subscription) {
+      const curF = membershipPlanOf(uF);
+      if (curF.planKey && curF.subscriptionId && curF.subscriptionId === obj.subscription && (curF.status === 'active' || curF.status === 'trialing')) {
+        cancelMembershipPlan(uF, curF.planKey, { subscriptionId: obj.subscription });
+        notify(uF.id, 'payment', 'Your membership payment did not go through, so the membership is not active. You can join again anytime from the app.', '#memberships');
+      }
+    }
+    save();
   } else if (type === 'customer.subscription.created') {
     // Record WHICH plan each subscription is (from its price/metadata) as
     // soon as Stripe creates it. Only an already-paid (active/trialing)
@@ -3876,6 +4108,35 @@ async function handleStripeEvent(event) {
         notify(u.id, 'membership', planName + ' cancellation noted — your membership stays active until ' + until.toLocaleDateString('en-US') + '.', '#memberships');
       }
     }
+  } else if (type === 'charge.refunded') {
+    // v101 (M8): a refund issued in the Stripe dashboard used to be
+    // invisible here — a refunded invoice stayed 'paid' in the books
+    // forever. Now: a ledger entry always; a GHS invoice paid by the
+    // refunded charge flips to 'refunded' on a FULL refund (partial
+    // refunds are stamped on it); a membership charge refund is
+    // ledger + admin alert (Gabriel decides the membership's fate —
+    // a partial refund must never auto-cancel anyone).
+    const refundedC = Math.round(Number(obj.amount_refunded) || 0);
+    const totalC = Math.round(Number(obj.amount) || 0);
+    const entry = { id: id('RFL'), at: new Date().toISOString(), chargeId: obj.id || '', pi: obj.payment_intent || '', amountCents: totalC, refundedCents: refundedC, scope: 'unknown', refId: '' };
+    let invR = obj.payment_intent ? (db.invoices || []).find(x => x.stripePi && x.stripePi === obj.payment_intent) : null;
+    if (!invR && obj.payment_intent && stripeReady()) {
+      try { const piR = await stripeGet('/payment_intents/' + obj.payment_intent); const invIdR = piR && piR.metadata && piR.metadata.invoiceId; if (invIdR) invR = (db.invoices || []).find(x => x.id === invIdR) || null; } catch (e) {}
+    }
+    if (invR) {
+      entry.scope = 'invoice'; entry.refId = invR.id;
+      if (invR.status === 'paid' && refundedC > 0) {
+        if (totalC > 0 && refundedC >= totalC) { invR.status = 'refunded'; invR.refundedAt = new Date().toISOString(); }
+        invR.refundedCents = refundedC;
+      }
+      notifyAdmins('payment', 'REFUND in Stripe: invoice ' + invR.id + ' — ' + usd(refundedC / 100) + ' of ' + usd(totalC / 100) + ' refunded' + (invR.status === 'refunded' ? ' — the invoice is now marked REFUNDED in the books.' : ' (partial — invoice stays paid, refund stamped).'));
+    } else {
+      const uR = obj.customer ? db.users.find(x => x.stripeCustomerId === obj.customer) : null;
+      if (uR) { entry.scope = 'membership'; entry.refId = uR.id; }
+      notifyAdmins('payment', 'REFUND in Stripe: ' + usd(refundedC / 100) + ' of ' + usd(totalC / 100) + ' refunded on charge ' + (obj.id || '') + (uR ? ' (' + uR.name + ' — ' + uR.email + ')' : '') + ' — recorded in the refund ledger; no automatic membership change was made.');
+    }
+    refundsOf().push(entry);
+    save();
   } else if (type === 'invoice.payment_failed') {
     // Stripe is the single source of truth: a failed subscription payment means
     // the customer loses member status until payment succeeds again.
@@ -3936,7 +4197,19 @@ async function handleStripeEvent(event) {
     if (type === 'payment_intent.succeeded' && obj.metadata && (obj.metadata.kind === 'menu-order' || obj.metadata.kind === 'cart-order' || obj.metadata.kind === 'cart-checkout' || obj.metadata.kind === 'cart-checkout-hosted')) {
       if (obj.metadata.kind === 'menu-order' && obj.metadata.requestId) {
         const r = db.requests.find(x => x.id === obj.metadata.requestId);
-        if (r) { if (r.payment && r.payment.status === 'deposit') settleRequestBalance(r, obj.id, Number(obj.amount_received || obj.amount) || 0); else recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' }); }
+        if (r) {
+          if (r.payment && r.payment.status === 'deposit') settleRequestBalance(r, obj.id, Number(obj.amount_received || obj.amount) || 0);
+          else if (r.payment && r.payment.status === 'paid') recordRequestPayment(r, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0, kind: 'menu-order' }); // already settled: recordRequestPayment's own v80.5 duplicate discipline decides (same-PI silent, foreign-PI alert)
+          else {
+            // v101 (M3): the SAME exact-amount rule the pay-confirm twin
+            // enforces — a PI for any other amount settles nothing and
+            // raises the alarm instead of booking phantom revenue.
+            const dueC3 = r.menuOrder && r.menuOrder.totals ? Math.round(Number(r.menuOrder.totals.due) * 100) : 0;
+            const gotC3 = Math.round(Number(obj.amount_received || obj.amount) || 0);
+            if (dueC3 > 0 && gotC3 !== dueC3) notifyAdmins('payment', 'Menu-order payment ' + obj.id + ' arrived for ' + usd(gotC3 / 100) + ' but order ' + r.id + ' totals ' + usd(dueC3 / 100) + ' — NOT recorded. Review and refund/re-link.');
+            else recordRequestPayment(r, { pi: obj.id, amountCents: gotC3, kind: 'menu-order' });
+          }
+        }
       } else if (obj.metadata.kind === 'cart-order' && obj.metadata.cartId) {
         const c = cartsOf().find(x => x.id === obj.metadata.cartId);
         if (c) { settleCartPayment(c, { pi: obj.id, amountCents: Number(obj.amount_received || obj.amount) || 0 }); save(); }
@@ -4042,7 +4315,7 @@ function cleanStartPreference(v) {
 // e.g. Básico vs Completo); the top-level totals always mirror the
 // SELECTED bundle and each bundle keeps its own display snapshot.
 function normalizeEstItems(rawItems) {
-  return (Array.isArray(rawItems) ? rawItems : []).map(it => {
+  return (Array.isArray(rawItems) ? rawItems.slice(0, 100) : []).map(it => { // v101 (BAJA-22): line-array cap (was unbounded)
     const qty = Math.max(0, Math.min(999, Number(it && it.qty) || 0));
     const unitPrice = clampMoney(it && it.unitPrice);
     const description = cleanText(it && (it.description || it.desc || it.name), 180);
@@ -4155,7 +4428,7 @@ function applyMemberDiscount(est, request, customer) {
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue', 'cancelled'];
 function normalizeInvoice(input) {
   const raw = input && typeof input === 'object' ? input : {};
-  const items = (Array.isArray(raw.items) ? raw.items : []).map(it => {
+  const items = (Array.isArray(raw.items) ? raw.items.slice(0, 100) : []).map(it => { // v101 (BAJA-22)
     const qty = Math.max(0, Math.min(9999, Number(it && it.qty) || 0));
     const unitPrice = clampMoney(it && it.unitPrice);
     const description = cleanText(it && (it.description || it.desc || it.name), 180);
@@ -4304,7 +4577,7 @@ function invoicePageHtml(inv, langOverride, notice) {
     + '<p id="tipLine" style="margin:0;color:#a49d93;font-size:14px"></p>'
     + '</div>'
     + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 28px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + fillS(S.payNow, { amt: usd(pub.total) }) + '</button><p id="payMsg" style="color:#a49d93"></p>'
-    + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;var PAYNOW=' + JSON.stringify(S.payNow) + ';var TIPWORD=' + JSON.stringify(S.tipWord) + ';var OPENING=' + JSON.stringify(S.opening) + ';var FAILED=' + JSON.stringify(S.failed) + ';'
+    + '<script>var invCents=' + tipTotalCents + ';var tipCents=0;var PAYNOW=' + jsonScript(S.payNow) + ';var TIPWORD=' + jsonScript(S.tipWord) + ';var OPENING=' + jsonScript(S.opening) + ';var FAILED=' + jsonScript(S.failed) + ';'
     + 'function fmtC(c){return \"$\"+(c/100).toFixed(2);}'
     + 'function refreshPay(){var t=document.getElementById(\"tipLine\");t.textContent=tipCents>0?(TIPWORD+\": \"+fmtC(tipCents)):\"\";document.getElementById(\"payBtn\").textContent=PAYNOW.replace(\"{amt}\",fmtC(invCents+tipCents));}'
     + 'document.querySelectorAll(\".tipBtn\").forEach(function(b){b.onclick=function(){'
@@ -4317,7 +4590,7 @@ function invoicePageHtml(inv, langOverride, notice) {
     + 'refreshPay();};});'
     + 'document.getElementById(\"tipCustom\").oninput=function(){tipCents=Math.max(0,Math.round(parseFloat(this.value||\"0\")*100)||0);if(tipCents>invCents)tipCents=invCents;refreshPay();};'
     + 'document.querySelector(\".tipBtn\").click();'
-    + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=OPENING;try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents,lang:' + JSON.stringify(initLang) + '})});var d=await r.json();if(!r.ok)throw new Error(d.error||FAILED);location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
+    + 'document.getElementById(\"payBtn\").onclick=async()=>{var m=document.getElementById(\"payMsg\");m.textContent=OPENING;try{var r=await fetch(\"/api/invoices/' + pub.id + '/pay\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({tipCents:tipCents,lang:' + jsonScript(initLang) + '})});var d=await r.json();if(!r.ok)throw new Error(d.error||FAILED);location.href=d.url;}catch(e){m.textContent=e.message;}};</scr' + 'ipt>'
     : (pub.status === 'paid' ? '<p style="background:#0b2013;border:1px solid #1d5c38;border-radius:10px;padding:12px">' + S.paidFull + '</p>' : '<p style="color:#a49d93">' + fillS(S.isStatus, { s: String(statusLabel).toLowerCase() }) + '</p>');
   // Scheduling request (added 2026-10-12): shown on the paid confirmation.
   // This is a REQUEST, not a booking — Gabriel confirms the final schedule
@@ -4339,7 +4612,7 @@ function invoicePageHtml(inv, langOverride, notice) {
         + '<label style="display:block;margin:8px 0">' + S.schedTime + '<br><select id="schedTime" style="padding:10px;background:#1b1b1f;color:#e8e8ea;color-scheme:dark;border:1px solid #33333b;border-radius:8px;width:100%"><option value="morning">' + S.optMorning + '</option><option value="afternoon">' + S.optAfternoon + '</option><option value="evening">' + S.optEvening + '</option></select></label>'
         + '<label style="display:block;margin:8px 0">' + S.schedNotes + '<br><textarea id="schedNotes" placeholder="' + S.schedNotesPh + '" style="padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box" rows="3"></textarea></label>'
         + '<button id="schedBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:14px 26px;font-weight:700;font-size:16px;cursor:pointer;width:100%">' + S.schedBtn + '</button><p id="schedMsg" style="color:#a49d93"></p></div>'
-        + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent=' + JSON.stringify(S.schedPickDate) + ';return;}m.textContent=' + JSON.stringify(S.schedSending) + ';try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
+        + '<script>document.getElementById("schedBtn").onclick=async()=>{var m=document.getElementById("schedMsg");var d=document.getElementById("schedDate").value;if(!d){m.textContent=' + jsonScript(S.schedPickDate) + ';return;}m.textContent=' + jsonScript(S.schedSending) + ';try{var r=await fetch("/api/invoices/' + pub.id + '/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({preferredDate:d,preferredTime:document.getElementById("schedTime").value,scheduleNotes:document.getElementById("schedNotes").value})});var j=await r.json();if(!r.ok)throw new Error(j.error||"failed");location.reload();}catch(e){m.textContent=e.message;}};</scr' + 'ipt>';
     }
   }
   const other21 = initLang === 'es' ? 'en' : 'es';
@@ -4411,7 +4684,7 @@ function estimatePayPanelHtml(r, lang) {
   if (r.status === 'Approved' && r.holdSync && (r.holdSync.state === 'needs_balance' || r.holdSync.state === 'increment_failed')) {
     const missing = Math.max(0, target - pool - captured);
     if (missing > 0) balanceBtn = '<p style="margin:10px 0 2px"><button id="balBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:12px 22px;font-weight:700;cursor:pointer">' + PP.authorize + usd(missing / 100) + '</button> <span id="balMsg" style="color:#a49d93"></span></p>'
-      + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent=' + JSON.stringify(PP.opening) + ';fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||' + JSON.stringify(PP.failed) + ';}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
+      + '<script>document.getElementById("balBtn").onclick=function(){var m=document.getElementById("balMsg");m.textContent=' + jsonScript(PP.opening) + ';fetch("/api/requests/' + r.id + '/hold/customer-balance",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"}).then(function(res){return res.json();}).then(function(d){if(d.url){location.href=d.url;}else{m.textContent=d.error||' + jsonScript(PP.failed) + ';}}).catch(function(e){m.textContent=e.message;});};</scr' + 'ipt>';
   }
   // Live refresh while the customer watches — skipped while the estimate
   // is still awaiting their decision so a typed reply is never wiped.
@@ -4550,7 +4823,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
     + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
     + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">';
   const foot = '<p style="color:#a49d93;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
-    + '<script>var I18N=' + JSON.stringify(EI) + ';var LANG=' + JSON.stringify(initLang) + ';'
+    + '<script>var I18N=' + jsonScript(EI) + ';var LANG=' + jsonScript(initLang) + ';'
     + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
     + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsEstLang", l); }catch(e){}'
     + ' document.documentElement.lang=l;'
@@ -4601,7 +4874,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       + ((user) ? '' : '<label style="display:block;font-size:14px;color:#c9c4bc;margin:8px 0"><span data-i18n="passLabel">' + S.passLabel + '</span><input id="eJoinPass" type="password" autocomplete="new-password" style="padding:10px;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:8px;width:100%;box-sizing:border-box;margin-top:4px"></label>')
       + '<button id="estJoinBtn" style="background:#e42535;color:#fff;border:0;border-radius:999px;padding:13px 24px;font-weight:700;font-size:15px;cursor:pointer;width:100%;margin-top:10px">' + fillS(S.joinBtn, joinAmounts) + '</button>'
       + '<p id="joinMsg" style="color:#a49d93;margin:6px 0 0"></p></div>'
-      + '<script>var EST_ID=' + JSON.stringify(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ';'
+      + '<script>var EST_ID=' + jsonScript(r.id) + ', loggedIn=' + (user ? 'true' : 'false') + ';'
       + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();}'
       + 'function jpost(u,b){return fetch(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})}).then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});});}'
       + 'if($("eJoinEmail")){ $("eJoinEmail").addEventListener("blur",function(){ var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) return; jpost("/estimate/"+EST_ID+"/member-apply",{email:em}).then(function(o){ if(o.ok && o.d.member) location.reload(); }).catch(function(){}); }); }'
@@ -4614,7 +4887,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       + 'async function joinNow(){'
       + ' var em=val("eJoinEmail"); if(!/.+@.+\\..+/.test(em)) throw new Error(T("errEmail"));'
       + ' if(!loggedIn){ var pw=$("eJoinPass").value; if(pw.length<8) throw new Error(T("errPass"));'
-      + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:' + JSON.stringify(r.customerName || 'Customer') + ',email:em,password:pw,phone:' + JSON.stringify(r.customerPhone || '') + ',serviceAddress:' + JSON.stringify(r.address || '') + ',role:"customer"})});'
+      + ' var su=await fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:' + jsonScript(r.customerName || 'Customer') + ',email:em,password:pw,phone:' + jsonScript(r.customerPhone || '') + ',serviceAddress:' + jsonScript(r.address || '') + ',role:"customer"})});'
       + ' if(su.status!==201 && su.status!==409){ var sd=await su.json().catch(function(){return{};}); throw new Error(sd.error||T("errSignup")); }'
       + ' var lr=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:em,password:pw})});'
       + ' if(!lr.ok) throw new Error(T("errLogin")); loggedIn=true; }'
@@ -4622,7 +4895,7 @@ function estimatePageHtml(r, user, langOverride, notice) {
       + ' if(o.ok && o.d.member){ var ap=await jpost("/estimate/"+EST_ID+"/member-apply",{email:em}); if(ap.ok && ap.d.member){ location.reload(); return; } }'
       + ' if(!o.ok || !o.d.url) throw new Error((o.d && o.d.error)||T("errMemberFail"));'
       + ' location.href=o.d.url; }'
-      + '$("estJoinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("estJoinBtn"); btn.disabled=true; btn.textContent=T("joining"); m.textContent=""; try{ await joinNow(); }catch(e){ m.textContent=e.message; btn.disabled=false; btn.textContent=' + JSON.stringify(fillS(S.joinBtn, joinAmounts)) + '; } };'
+      + '$("estJoinBtn").onclick=async function(){ var m=$("joinMsg"); var btn=$("estJoinBtn"); btn.disabled=true; btn.textContent=T("joining"); m.textContent=""; try{ await joinNow(); }catch(e){ m.textContent=e.message; btn.disabled=false; btn.textContent=' + jsonScript(fillS(S.joinBtn, joinAmounts)) + '; } };'
       + '</scr' + 'ipt>';
   }
   // --- approve / decline / status blocks ---
@@ -5048,7 +5321,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div style="white-space:nowrap;padding-top:2px">' + langBtn('en', 'EN') + ' ' + langBtn('es', 'ES') + '</div></div>'
     + '<div style="background:#17171b;border:1px solid #2a2a31;border-top:0;border-radius:0 0 20px 20px;padding:18px 20px">';
   const foot = '<p style="color:#a49d93;font-size:13px" data-i18n="questions">' + S.questions + '</p></div>'
-    + '<script>var I18N=' + JSON.stringify(CI) + ';var LANG=' + JSON.stringify(initLang) + ';'
+    + '<script>var I18N=' + jsonScript(CI) + ';var LANG=' + jsonScript(initLang) + ';'
     + 'function T(k){ return (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k; }'
     + 'function setLang(l){ if(!I18N[l]) return; LANG=l; try{ localStorage.setItem("ghsCartLang", l); }catch(e){}'
     + ' document.documentElement.lang=l;'
@@ -5192,7 +5465,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div id="cartForm">'
     + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="yourInfo">' + S.yourInfo + '</h3>'
     + '<label style="' + lbl + '"><span data-i18n="fullName">' + S.fullName + '</span><input id="cName" autocomplete="name" value="' + escMail(user ? user.name : (c.customerName || '')) + '" style="' + inp + '"></label>'
-    + '<label style="' + lbl + '"><span data-i18n="phone">' + S.phone + '</span><input id="cPhone" type="tel" autocomplete="tel" value="' + escMail(user ? (user.phone || '') : (c.customerPhone || '')) + '" style="' + inp + '"></label>'
+    + '<label style="' + lbl + '"><span data-i18n="phone">' + S.phone + '</span><input id="cPhone" type="tel" autocomplete="tel" value="' + escMail(user ? (user.phone || '') : '') + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="email">' + S.email + '</span><input id="cEmail" type="email" autocomplete="email" value="' + escMail(user ? user.email : '') + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="address">' + S.address + '</span><input id="cAddr" autocomplete="street-address" value="' + escMail(user ? (user.serviceAddress || '') : '') + '" style="' + inp + '"></label>'
     + '<label style="' + lbl + '"><span data-i18n="city">' + S.city + '</span><input id="cCity" autocomplete="address-level2" style="' + inp + '"></label>'
@@ -5210,7 +5483,7 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<p style="color:#a49d93;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
-    + '<script>var CART_ID=' + JSON.stringify(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + JSON.stringify(usd(c.listTotal)) + ', MEMBER_S=' + JSON.stringify(usd(c.memberTotal)) + ', SAVE_S=' + JSON.stringify(usd(savings)) + ';'
+    + '<script>var CART_ID=' + jsonScript(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + jsonScript(usd(c.listTotal)) + ', MEMBER_S=' + jsonScript(usd(c.memberTotal)) + ', SAVE_S=' + jsonScript(usd(savings)) + ';'
     + 'var DEP_L=' + splitL100.depositCents + ', DEP_M=' + splitM100.depositCents + ', BAL_L=' + splitL100.balanceCents + ', BAL_M=' + splitM100.balanceCents + ', PAY_FULL=' + (c.payFull ? 'true' : 'false') + ';'
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (hcFreeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
@@ -5704,14 +5977,46 @@ async function buildMoneyReport() {
   const monthKey = dayKeyOf().slice(0, 7);
   let failCount = 0, failTotal = 0;
   for (const f of paymentFailuresOf()) { if (f && String(f.at || '').slice(0, 7) === monthKey) { failCount++; failTotal += (Number(f.amountCents) || 0) / 100; } }
+  // v101 (wave 9): COLLECTED revenue — money that actually landed, from
+  // paid orders + paid invoices + paid-but-unconverted link carts. The
+  // Dinero page historically showed only money OWED, so its counters
+  // read $0.00 in months with real paid work (Gabriel's audit flag).
+  // Deposit portions count in the month they landed (payment.at),
+  // balance portions in the month the balance landed (balanceAt);
+  // a converted cart is counted on its request, never twice.
+  const collected = { month: { orders: 0, invoices: 0, carts: 0, total: 0 }, all: { orders: 0, invoices: 0, carts: 0, total: 0 } };
+  const addCollected = (bucket, cents, atIso) => { if (!(cents > 0) || !atIso) return; const v = cents / 100; collected.all[bucket] = money(collected.all[bucket] + v); if (String(atIso).slice(0, 7) === monthKey) collected.month[bucket] = money(collected.month[bucket] + v); };
+  for (const r of db.requests) {
+    const pm = r.payment;
+    if (!pm || (pm.status !== 'deposit' && pm.status !== 'paid')) continue;
+    const depC = Number(pm.depositCents) || 0, amtC = Number(pm.amountCents) || 0;
+    if (depC > 0 && amtC >= depC) { addCollected('orders', depC, pm.at); if (amtC > depC) addCollected('orders', amtC - depC, pm.balanceAt || pm.at); }
+    else addCollected('orders', amtC, pm.at);
+    if (Number(pm.refundedCents) > 0) collected.all.orders = money(collected.all.orders - (Number(pm.refundedCents) / 100)); // partial refunds net against all-time (refundedCents carries no date of its own)
+  }
+  for (const c of cartsOf()) {
+    if (c.status !== 'paid' || !c.payment || c.requestId) continue;
+    const cp = c.payment;
+    if (cp.depositAt) addCollected('carts', Number(cp.depositCents) || 0, cp.depositAt);
+    if (cp.balanceAt) addCollected('carts', Number(cp.balanceCents) || 0, cp.balanceAt);
+    if (!cp.depositAt && !cp.balanceAt && Number(cp.amountCents) > 0) addCollected('carts', Number(cp.amountCents), cp.at || c.updatedAt || '');
+  }
+  for (const inv of (db.invoices || [])) {
+    if (inv.status !== 'paid') continue;
+    addCollected('invoices', Math.round(((Number(inv.paidAmount) || 0) - (Number(inv.refundedCents) || 0)) * 100), inv.paidAt || '');
+  }
+  for (const b of ['month', 'all']) collected[b].total = money(collected[b].orders + collected[b].invoices + collected[b].carts);
   let stripe = { available: false };
   if (stripeReady()) { try { stripe = await stripeMoneySnapshot(); } catch (e) { stripe = { available: false }; } }
   return {
+    collected,
     depositsWaiting: { count: depCount, collected: money(depCollected), balance: money(depBalance) },
     receivables: { total: money(depBalance + cartBal + invOpen), orderBalances: money(depBalance), cartBalances: money(cartBal), cartBalancesCount: cartBalCount, invoicesOpen: money(invOpen), invoicesOpenCount: invOpenCount },
     techPayouts: { byState: Object.values(byState).sort((a, b) => b.amount - a.amount), jobs: techJobs, amount: techAmount, bountiesPending: { count: bountyCount, amount: bountyAmount }, perTech: Object.values(perTech).sort((a, b) => (b.amount + b.bountyAmount) - (a.amount + a.bountyAmount)) },
     captains: { accrued: capAccrued, entries: capEntries, perCaptain: Object.values(capRows) },
     membershipFailures: { month: monthKey, count: failCount, total: money(failTotal) },
+    system: { cloudLoad: cloudLoadState, cloudGate: db.cloudGate || null, saveError: db.saveError || null }, // v101 (M24): the books screen shows a blocked/failed state sync instead of hiding it
+    payoutReversals: { due: reversalLedgerOf().filter(e => e.status === 'reversal_due').length, dueAmount: money(reversalLedgerOf().filter(e => e.status === 'reversal_due').reduce((a, e) => a + (Number(e.amountCents) || 0), 0) / 100) }, // v101 (M7)
     stripe
   };
 }
@@ -6041,15 +6346,21 @@ async function handleRequest(req, res) {
   if (p === '/api/setup-admin' && req.method === 'POST') {
     const b = await readBody(req);
     // One-time bootstrap: only works while no admin exists yet. After the first admin is created this endpoint closes (409).
-    if (db.users.some(u => u.role === 'admin')) return send(res, 409, { error: 'admin already exists' });
+    // v101 (BAJA-6): the closure is PERMANENT — a tombstone remembers an
+    // admin once existed, so deleting the admin account can never
+    // re-open the unauthenticated bootstrap to the first stranger.
+    if (db.users.some(u => u.role === 'admin')) db.adminEverExisted = true;
+    if (db.adminEverExisted) return send(res, 409, { error: 'admin already exists' });
+    db.adminEverExisted = true; // v101 (BAJA-6)
     const u = { id: id('USR'), name: b.name || 'Gabriel', email: (b.email || '').toLowerCase(), phone: b.phone || '', role: 'admin', status: 'active', pw: hashPw(b.password || ''), createdAt: new Date().toISOString() };
     if (!u.email || !b.password) return send(res, 400, { error: 'email and password required' });
     if (String(b.password).length < 8) return send(res, 400, { error: 'password must be at least 8 characters' });
     db.users.push(u); save(); return send(res, 201, { user: pubUser(u) });
   }
   if (p === '/api/signup' && req.method === 'POST') {
+    if (rateLimitHit('signup:' + clientIp(req), 1000, 600000)) return send(res, 429, { error: 'too many accounts created — try again in a few minutes' }); // v101 (M19)
     const b = await readBody(req);
-    const email = (b.email || '').toLowerCase();
+    const email = String(b.email || '').trim().toLowerCase(); // v101 (M10): canonical at the door — an untrimmed stored email could never be matched by the (trimmed) login lookup
     if (!email || !b.password || !b.name) return send(res, 400, { error: 'name, email and password required' });
     // v80.7 fix #1: a non-string password is a clean 400, never a scrypt throw
     if (typeof b.password !== 'string') return send(res, 400, { error: 'password must be at least 8 characters' });
@@ -6103,7 +6414,7 @@ async function handleRequest(req, res) {
     // required — ZIP included: Gabriel's "no obligatorio" rule).
     const homeFields = role === 'customer' ? homeFieldsFrom(b) : { zipCode: '', homeType: '', yardSize: '', homeNotes: '' };
     const startPreference = role === 'customer' ? cleanStartPreference(b.startPreference) : { type: 'asap', date: null };
-    const u = { id: id('USR'), name: b.name, email, phone: b.phone || '', serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, workerClass: workerClass || undefined, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
+    const u = { id: id('USR'), name: cleanText(b.name, 80), email, phone: cleanText(b.phone, 40), serviceAddress, zipCode: homeFields.zipCode, homeType: homeFields.homeType, yardSize: homeFields.yardSize, homeNotes: homeFields.homeNotes, startPreference, role, workerClass: workerClass || undefined, status: role === 'worker' ? 'review' : 'active', skills: Array.isArray(prof.skills) ? prof.skills : (b.skills || []), vehicle: prof.vehicleStyle || b.vehicle || '', profile: prof, tradeSkills, availability: signupAvailability, pw: hashPw(b.password), createdAt: new Date().toISOString() };
     if (cleanLang(b.lang)) u.lang = b.lang; // v80.19: the UI language at registration becomes the account's saved preference
     stampUserSource(u, b); // v79 P0-7: acquisition source on the record from day one
     db.users.push(u); claimOrphanRecords(u); // v80 P1-1: guest history under this email becomes theirs at signup
@@ -6111,14 +6422,18 @@ async function handleRequest(req, res) {
   }
   if (p === '/api/login' && req.method === 'POST') {
     const b = await readBody(req);
-    const email = (b.email || '').toLowerCase();
+    const email = String(b.email || '').trim().toLowerCase(); // v101 (M10): same canonicalization as signup
     const blocked = loginBlockedSecs(req, email);
     if (blocked > 0) return send(res, 429, { error: 'too many failed login attempts — try again in ' + Math.ceil(blocked / 60) + ' minute(s)' }, { 'Retry-After': String(blocked) });
     // v80.7 fix #1: a non-string/empty password gets the normal
     // invalid-credentials answer — it never reaches scrypt (throw = crash)
     if (typeof b.password !== 'string' || !b.password) { noteLoginFailure(req, email); return send(res, 401, { error: 'wrong email or password' }); }
     const u = db.users.find(x => x.email === email);
-    if (!u || !checkPw(b.password || '', u.pw)) { noteLoginFailure(req, email); audit(null, 'auth.login_failed', email, 'from ' + clientIp(req)); return send(res, 401, { error: 'wrong email or password' }); }
+    // v101 (M11): an unknown email still pays the scrypt cost (against a
+    // dummy hash) — otherwise the response time itself reveals whether
+    // the account exists.
+    const pwOkLogin = u ? checkPw(b.password || '', u.pw) : (checkPw(b.password || '', dummyPwHash()), false);
+    if (!u || !pwOkLogin) { noteLoginFailure(req, email); audit(null, 'auth.login_failed', email, 'from ' + clientIp(req)); return send(res, 401, { error: 'wrong email or password' }); }
     loginAttempts.delete(loginKey(req, email));
     if (u.role === 'admin') audit(u, 'auth.login', '', 'admin sign-in from ' + clientIp(req));
     claimOrphanRecords(u); // v80 P1-1: also at login — covers accounts created before the claim existed
@@ -6130,18 +6445,28 @@ async function handleRequest(req, res) {
     const email = (b.email || '').toLowerCase().trim();
     // ALWAYS the same generic answer — whether the email has an account or
     // not — so this endpoint can never be used to enumerate accounts.
-    if (email && pwResetRateOk(email)) {
+    // v101 (M16): the per-email cap alone let an attacker burn a
+    // victim's hourly reset budget from anywhere; a per-IP cap rides
+    // alongside. The generic answer never changes either way.
+    const forgotIpOk = !rateLimitHit('forgot-ip:' + clientIp(req), 20, 3600000);
+    if (email && pwResetRateOk(email) && forgotIpOk) {
       const u = db.users.find(x => x.email === email);
       if (u) {
         const token = crypto.randomBytes(32).toString('hex');
         u.pwReset = { hash: sha256hex(token), expiresAt: Date.now() + 3600000 }; // hash only, 60 minutes; replaces any previous token
         save();
         await sendPasswordResetEmail(u, token);
+      } else {
+        // v101 (M15): no account → no mail round-trip happens, which used
+        // to make the response measurably faster. A fixed pad narrows
+        // the timing gap (mitigation, not perfect equality).
+        await new Promise(r => setTimeout(r, 200));
       }
     }
     return send(res, 200, { ok: true, message: cleanLang(b.lang) === 'es' ? PW_RESET_GENERIC_ES : PW_RESET_GENERIC });
   }
   if (p === '/api/auth/reset' && req.method === 'POST') {
+    if (rateLimitHit('reset-try:' + clientIp(req), 30, 3600000)) return send(res, 429, { error: 'Too many reset attempts — wait a bit and request a fresh link.' }); // v101 (BAJA-5): per-IP attempt cap (was per-email only, on the request side)
     const b = await readBody(req);
     const token = String(b.token || '');
     const password = String(b.password || '');
@@ -6149,7 +6474,7 @@ async function handleRequest(req, res) {
     if (password.length < 8) return send(res, 400, { error: 'Your new password must be at least 8 characters.' });
     const hash = sha256hex(token);
     const u = db.users.find(x => x.pwReset && typeof x.pwReset.hash === 'string' && x.pwReset.hash.length === hash.length && crypto.timingSafeEqual(Buffer.from(x.pwReset.hash), Buffer.from(hash)));
-    if (!u) return send(res, 400, { error: 'This reset link is invalid or has already been used.' });
+    if (!u) { audit(null, 'auth.reset_failed', '', 'token not matched (ip ' + clientIp(req) + ')'); return send(res, 400, { error: 'This reset link is invalid or has already been used.' }); } // v101 (BAJA-5): failures are audited
     if (!u.pwReset.expiresAt || Number(u.pwReset.expiresAt) < Date.now()) {
       delete u.pwReset; save();
       return send(res, 400, { error: 'This reset link has expired — request a new one from the login form.' });
@@ -6703,6 +7028,8 @@ async function handleRequest(req, res) {
       if (v.userId === uid) { v.userId = null; v.anonymized = true; }
       if (v.assignedWorkerId === uid) v.assignedWorkerId = null;
     });
+    stampTrialTombstone(user); // v101 (M9): before the record goes
+    if (user.role === 'admin') db.adminEverExisted = true; // v101 (BAJA-6): bootstrap never re-opens
     // The user's own notifications and password-reset token die with the
     // account; every session is invalidated; then the record itself goes.
     db.notifications = (db.notifications || []).filter(n => n.userId !== uid);
@@ -6718,8 +7045,9 @@ async function handleRequest(req, res) {
   // Public: no account required. Anonymous requests store name/email/phone on
   // the request itself; logged-in customers keep member pricing + dashboard.
   if (p === '/api/requests' && req.method === 'POST') {
+    if (rateLimitHit('req-create:' + clientIp(req), 1500, 600000)) return send(res, 429, { error: 'too many requests — try again in a few minutes' }); // v101 (M18)
     const b = await readBody(req);
-    const photos = Array.isArray(b.photos) ? b.photos.filter(x => typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000).slice(0, 6) : [];
+    const photos = Array.isArray(b.photos) ? b.photos.filter(isPhotoDataUrl).slice(0, 6) : [];
     const formName = cleanText(b.customerName, 80);
     const formEmail = cleanText(b.customerEmail, 160).toLowerCase();
     const formPhone = cleanText(b.customerPhone, 40);
@@ -6782,7 +7110,8 @@ async function handleRequest(req, res) {
         clientDue: (clientDue != null && isFinite(clientDue)) ? Math.round(clientDue * 100) / 100 : undefined
       };
     }
-    const r = { id: linkId('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: b.service || '', description: b.description || '', city: b.city || '', address: b.address || '', when: b.when || '', estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (b.description || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], lang: cleanLang(b.lang), createdAt: new Date().toISOString() };
+    const reqDesc = cleanText(b.description, 2000); // v101 (M18): free-text fields are capped like everywhere else — they used to be stored raw, bounded only by the 24MB body limit
+    const r = { id: linkId('GHS'), customerId, customerName: name, customerEmail: email, customerPhone: user ? (user.phone || formPhone) : formPhone, service: cleanText(b.service, 120), description: reqDesc, city: cleanText(b.city, 80), address: cleanText(b.address, 300), when: cleanText(b.when, 200), estimateType: b.estimateType || 'inperson', membership: memberActive ? 'member' : 'none', estimateDue: b.estimateType === 'photo' ? 0 : (b.estimateType === 'menu' ? 75 : (memberActive ? 50 : 75)), status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder, photos, messages: [{ from: 'customer', name, text: (reqDesc || 'Request sent.') + (photos.length ? ' [' + photos.length + ' photo(s) attached]' : ''), at: new Date().toISOString() }], lang: cleanLang(b.lang), createdAt: new Date().toISOString() };
     // v79 P0-7: the order carries its acquisition source; a first order
     // also promotes the source onto the customer account (first touch).
     r.source = (user && user.source) || acquisitionSource(b) || null;
@@ -6855,7 +7184,7 @@ async function handleRequest(req, res) {
       if (b.action === 'approve') { r.status = 'Approved'; r.messages.push({ from: 'customer', name: user.name, text: 'Approved the quote. Ready to schedule.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' APPROVED the quote on ' + r.id + ' ($' + (r.quote || 0) + ').'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'approved' })); }
       if (b.action === 'approve') await tryHoldIncrementAfterApproval(r); // increment only — never a capture; failures land on r.holdSync
       if (b.action === 'decline') { r.status = 'Declined'; r.messages.push({ from: 'customer', name: user.name, text: 'Declined the quote for now.', at: new Date().toISOString() }); notifyAdmins('quote', user.name + ' declined the quote on ' + r.id + '.'); fireAutomation('quote_decision', Object.assign(requestAutomationPayload(r), { decision: 'declined' })); }
-    } else return send(res, 403, { error: 'not allowed' });
+    } else return send(res, 404, { error: 'request not found' }); // v101 (BAJA-2): unified with the missing-request answer — no existence oracle
     if (user && user.role === 'admin') { const parts = []; if (b.estimate || typeof b.quote === 'number') parts.push('quote $' + (r.quote || 0)); if (b.status) parts.push('status ' + b.status); audit(user, 'request.update', r.id, parts.join(' · ')); }
     save(); return send(res, 200, { request: r, automation });
   }
@@ -7028,7 +7357,7 @@ async function handleRequest(req, res) {
     let payOffer = Number(b.payOffer);
     if (soldTake) payOffer = soldTake.pay;
     if (!soldTake && (!payOffer || payOffer <= 0)) return send(res, 400, { error: 'worker pay (payOffer) is required' });
-    const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || (soldTake ? soldFinalTotal : null), customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
+    const j = { id: id('JOB'), status: soldHere ? 'Claimed' : 'Open', requestId: r.id, customerId: r.customerId || null, service: b.service || r.service || '', city: b.city || r.city || '', description: b.description || r.description || '', when: b.when || r.when || '', payOffer, customerPrice: Number(b.customerPrice) || r.quote || (soldTake ? soldFinalTotal : null), customerName: r.customerName || (cust ? cust.name : ''), customerPhone: cust ? (cust.phone || '') : '', address: r.address || '', notes: b.notes || '', assignedWorkerId: soldHere ? seller811.id : null, infoReleased: false, messages: [], createdAt: new Date().toISOString() };
     if (soldHere) { j.soldByWorkerId = seller811.id; j.salesCommission = soldTake ? soldTake.commission : SALES_COMMISSION; j.claimedAt = new Date().toISOString(); }
     jobEvent(j, 'created'); if (soldHere) jobEvent(j, 'assigned'); if (jobPaidForReview(j)) jobTimelineMarkPaid(j); // v81: the permanent timeline starts at birth
     db.jobs.push(j);
@@ -7059,10 +7388,12 @@ async function handleRequest(req, res) {
     const isOwner = user && user.role === 'customer' && r.customerId === user.id;
     const isTeam = user && user.role === 'admin';
     if (!isOwner && !isTeam) return send(res, 403, { error: 'not allowed' });
+    if (rateLimitHit('msg:' + user.id, 120, 600000)) return send(res, 429, { error: 'too many messages — give it a minute' }); // v101 (BAJA-21)
     const b = await readBody(req);
     const text = (b.text || '').toString().slice(0, 2000).trim();
     if (!text) return send(res, 400, { error: 'message required' });
     r.messages = r.messages || [];
+    if (r.messages.length >= 500) return send(res, 400, { error: 'this thread is full — text or call the Team at (707) 862-3773' }); // v101 (BAJA-21): thread cap
     r.messages.push({ from: isTeam ? 'team' : 'customer', name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
     if (isTeam) notify(r.customerId, 'message', 'New message from the General Handyman Solutions Team on request ' + r.id + '.', '#req=' + r.id);
     else notifyAdmins('message', 'New message from ' + user.name + ' on request ' + r.id + '.');
@@ -7120,7 +7451,13 @@ async function handleRequest(req, res) {
       // cards flag phoneless records as "incomplete — no phone".
       const effectivePhone = (typeof b.phone === 'string' ? cleanText(b.phone, 40) : '') || w.phone || '';
       if (b.status === 'active' && w.status !== 'active' && !effectivePhone) return send(res, 400, { error: 'worker has no phone on file — add a phone number before activating (incomplete record)', code: 'PHONE_REQUIRED' });
-      const was = w.status; w.status = b.status; if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status, lang: userLangOf(w) } }); }
+      const was = w.status; w.status = b.status;
+      // v101 (M14): leaving 'active' (to review or notfit) KILLS the
+      // worker's live sessions, mirroring DELETE — a deactivated tech must
+      // not keep driving an already-claimed job (and its payout path)
+      // through a stale session.
+      if (w.status !== 'active' && was !== w.status) invalidateSessionsFor(w.id);
+      if (w.status === 'active' && was !== 'active') { notify(w.id, 'account', 'Your worker account is now ACTIVE. You can see and claim open jobs in the app. Welcome to the team!', '#worker'); fireAutomation('worker_activated', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), worker: { name: w.name, email: w.email, phone: w.phone || '', status: w.status, lang: userLangOf(w) } }); }
     }
     // v84: the worker's CLASS (tecnico / ayudante) — Gabriel can
     // reclassify a worker at any time (a helper who proves himself moves
@@ -7311,7 +7648,16 @@ async function handleRequest(req, res) {
       const norm = normalizeInvoice(b);
       if (!norm.items.length) return send(res, 400, { error: 'add at least one priced line item' });
       if (!(norm.total > 0)) return send(res, 400, { error: 'invoice total must be more than $0' });
+      const prevTotalC = Math.round(Number(inv.total) * 100);
       inv.items = norm.items; inv.subtotal = norm.subtotal; inv.discount = norm.discount; inv.total = norm.total;
+      // v101 (M2): a total change retires the stamped pay session — it
+      // still charges the OLD amount. Best-effort expire at Stripe; the
+      // settle gate refuses any session that is not the stamped one
+      // regardless.
+      if (inv.paySessionId && Math.round(Number(inv.total) * 100) !== prevTotalC) {
+        const staleSid = inv.paySessionId; inv.paySessionId = '';
+        if (stripeReady()) { try { await stripeApi('/checkout/sessions/' + staleSid + '/expire', {}); } catch (e) {} }
+      }
       if (b.customerName !== undefined) { const n = cleanText(b.customerName, 120); if (n) inv.customerName = n; }
       if (b.customerEmail !== undefined) {
         inv.customerEmail = cleanText(b.customerEmail, 160).toLowerCase();
@@ -7386,6 +7732,18 @@ async function handleRequest(req, res) {
     const silent = !!(b.silent && assignedWorkerId);
     const j = { id: id('JOB'), status: assignedWorkerId ? 'Claimed' : 'Open', service: b.service || '', city: b.city || '', description: b.description || '', when: b.when || '', schedDate: cleanDate(b.schedDate), schedTime: cleanText(b.schedTime, 50), payOffer, customerPrice: Number(b.customerPrice) || null, customerName: b.customerName || '', customerPhone: b.customerPhone || '', address: b.address || '', notes: b.notes || '', assignedWorkerId, messages: [], createdAt: new Date().toISOString() };
     if (assignedWorkerId) j.claimedAt = j.createdAt;
+    // v101 (ALTA-3): stamp the owning account ONCE, here at dispatch. An
+    // explicit customerId from the Team wins; otherwise, if the
+    // Team-entered phone matches EXACTLY ONE existing customer account,
+    // bind to it. Ambiguous or absent -> unbound (the Team can link it
+    // later via PATCH). The binding is frozen: a LATER signup using the
+    // same phone number gains nothing.
+    if (b.customerId) { const cu = db.users.find(u => u.id === b.customerId && u.role === 'customer'); if (cu) j.customerId = cu.id; }
+    if (!j.customerId && j.customerPhone) {
+      const dg = String(j.customerPhone).replace(/\D/g, '');
+      const matches = db.users.filter(x => x.role === 'customer' && x.phone && x.phone.replace(/\D/g, '') === dg);
+      if (matches.length === 1) j.customerId = matches[0].id;
+    }
     jobEvent(j, 'created'); if (assignedWorkerId) jobEvent(j, 'assigned'); // v81: the permanent timeline starts at birth
     db.jobs.push(j);
     if (silent) {
@@ -7405,10 +7763,11 @@ async function handleRequest(req, res) {
     audit(user, 'job.create', j.id, (j.service || '') + ' · pay $' + (j.payOffer || 0));
     save(); return send(res, 201, { job: publicJob(j, user) });
   }
-  if (p === '/api/jobs' && req.method === 'GET') { sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders(); sweepFollowups(); sweepDailySnapshot();
-    if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return;
+  if (p === '/api/jobs' && req.method === 'GET') {
+    if (!requireRole(user, ['admin', 'worker', 'customer'], res)) return; // v101 (BAJA-1): role check FIRST — unauthenticated callers can no longer trigger the sweeps at will
+    sweepPendingPayouts(); sweepPendingBounties(); sweepCaptainOverrides(); sweepEstimateReminders(); sweepFollowups(); sweepDailySnapshot();
     if (user.role === 'customer') {
-      const mine = db.jobs.filter(j => j.assignedWorkerId && j.customerPhone && user.phone && j.customerPhone.replace(/\D/g, '') === user.phone.replace(/\D/g, ''));
+      const mine = db.jobs.filter(j => j.assignedWorkerId && customerOwnsJob(j, user)); // v101 (ALTA-3): account link, never phone match
       return send(res, 200, { jobs: mine.map(j => {
         const view = { id: j.id, status: j.status, service: j.service, city: j.city, description: j.description, when: j.when, createdAt: j.createdAt, messages: j.messages || [] };
         // v41: the technician card — the assigned worker's NAME and, when
@@ -7537,7 +7896,7 @@ async function handleRequest(req, res) {
     // flag — claims no longer consult it.
     j.status = 'Claimed'; j.assignedWorkerId = user.id; j.claimedAt = new Date().toISOString(); jobEvent(j, 'assigned'); // v81: timeline
     notifyAdmins('job', user.name + ' claimed job ' + j.id + ' (' + (j.service || '') + ' in ' + (j.city || '') + ').');
-    const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
+    const cust = jobCustomer(j); // v101 (ALTA-3)
     if (cust) notify(cust.id, 'job', 'A worker was assigned to your job (' + (j.service || 'service') + ' in ' + (j.city || '') + '). The Team will coordinate the details with you.', '#job=' + j.id);
     fireAutomation('job_claimed', { appUrl: APP_URL, businessEmail: BUSINESS_EMAIL, adminEmails: adminEmails(), customer: cust ? { name: cust.name, email: cust.email } : null, worker: { name: user.name, email: user.email }, job: { id: j.id, status: j.status, service: j.service || '', city: j.city || '', when: j.when || '', payOffer: j.payOffer || 0 } });
     save(); emitJobStatus(j, 'Open'); return send(res, 200, { job: publicJob(j, user) });
@@ -7556,9 +7915,13 @@ async function handleRequest(req, res) {
       if (b.schedTime !== undefined) j.schedTime = cleanText(b.schedTime, 50);
       if (b.notes !== undefined) j.notes = cleanText(b.notes, 1000);
       if (b.reviewPublished !== undefined) j.reviewPublished = !!b.reviewPublished; // v25 (C1): admin-only review publish flag
+      if (b.customerId !== undefined) { // v101 (ALTA-3): Team (re)links the owning account explicitly
+        if (b.customerId === null || b.customerId === '') delete j.customerId;
+        else { const cu = db.users.find(u => u.id === b.customerId && u.role === 'customer'); if (cu) j.customerId = cu.id; }
+      }
       if (b.infoReleased !== undefined) { const was = !!j.infoReleased; j.infoReleased = !!b.infoReleased; if (j.infoReleased && !was && j.assignedWorkerId) notify(j.assignedWorkerId, 'job', 'The Team confirmed job ' + j.id + ' - your address and time are now unlocked in the app. Check your jobs.', '#wjob=' + j.id); }
     }
-    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id && (b.photosDone || b.status)) {
+    else if (user && user.role === 'worker' && user.status === 'active' && j.assignedWorkerId === user.id && (b.photosDone || b.status)) { // v101 (M14): active only — a notfit/review tech cannot advance a job
       // Worker status flow (v22): Claimed -> On my way -> Arrived, then the
       // existing photos-done completion. Only the assigned worker can move
       // their own job, and only along this chain — anything else is a 409.
@@ -7577,7 +7940,8 @@ async function handleRequest(req, res) {
       if (b.photosDone) { j.photosReceived = true; applyJobStatus(j, 'Done — photos sent'); notifyAdmins('job', user.name + ' finished job ' + j.id + ' and marked photos sent.'); handled = true; }
       if (!handled) return send(res, 403, { error: 'not allowed' });
     }
-    else return send(res, 403, { error: 'not allowed' });
+    else if (user && user.role === 'worker' && j.assignedWorkerId === user.id) return send(res, 403, { error: 'not allowed' }); // v101 (BAJA-2): the assigned tech has a relationship — 403 stays honest there
+    else return send(res, 404, { error: 'job not found' }); // v101 (BAJA-2): everyone else gets the missing-job answer — no existence oracle
     if (user && user.role === 'admin') { const parts = []; if (b.status) parts.push('status ' + b.status); if (b.infoReleased !== undefined) parts.push('infoReleased ' + !!b.infoReleased); if (b.reviewPublished !== undefined) parts.push('reviewPublished ' + !!b.reviewPublished); if (parts.length) audit(user, 'job.update', j.id, parts.join(' · ')); }
     noteJobStatusChange(j, prevJobStatus); // v81: every status move lands on the permanent timeline
     save(); if (j.status !== prevJobStatus) emitJobStatus(j, prevJobStatus); if (j.status === 'Done — photos sent') { maybePayWorkerForJob(j); accrueCaptainOverride(j); } return send(res, 200, { job: publicJob(j, user) });
@@ -7893,15 +8257,17 @@ async function handleRequest(req, res) {
   if (jobMsgMatch && req.method === 'POST') {
     const j = db.jobs.find(x => x.id === jobMsgMatch[1]);
     if (!j) return send(res, 404, { error: 'job not found' });
-    const cust = db.users.find(x => x.role === 'customer' && j.customerPhone && x.phone && x.phone.replace(/\D/g, '') === String(j.customerPhone).replace(/\D/g, ''));
+    const cust = jobCustomer(j); // v101 (ALTA-3)
     const isTeam = user && user.role === 'admin';
     const isWorker = user && user.role === 'worker' && j.assignedWorkerId === user.id && user.status === 'active';
     const isCust = user && cust && cust.id === user.id && !!j.assignedWorkerId;
     if (!isTeam && !isWorker && !isCust) return send(res, 403, { error: 'not allowed' });
+    if (rateLimitHit('msg:' + user.id, 120, 600000)) return send(res, 429, { error: 'too many messages — give it a minute' }); // v101 (BAJA-21)
     const b = await readBody(req);
     const text = (b.text || '').toString().slice(0, 2000).trim();
     if (!text) return send(res, 400, { error: 'message required' });
     j.messages = j.messages || [];
+    if (j.messages.length >= 500) return send(res, 400, { error: 'this thread is full — text or call the Team at (707) 862-3773' }); // v101 (BAJA-21): thread cap
     const from = isTeam ? 'team' : (isWorker ? 'worker' : 'customer');
     j.messages.push({ from, name: isTeam ? 'General Handyman Solutions Team' : user.name, text, at: new Date().toISOString() });
     if (!isTeam) notifyAdmins('message', 'Job ' + j.id + ': new message from ' + user.name + '.');
@@ -7953,6 +8319,7 @@ async function handleRequest(req, res) {
     return send(res, 200, Object.assign({}, hBody, { cached: false, ageSec: 0 }));
   }
   if (p === '/api/stripe/checkout' && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     const b = await readBody(req);
     if (user && b) stashPendingSource(user, b.source); // v24 A5: campaign code rides the join call, lands at activation
     // Membership plans (added 2026-10-21): the plan key is validated
@@ -8034,7 +8401,12 @@ async function handleRequest(req, res) {
         // carries the hold detail (successDetailFor 'hold').
         const holdRet = r.estimate ? { successUrl: estimatePageLink(r) + '?hold=1&session_id={CHECKOUT_SESSION_ID}', cancelUrl: estimatePageLink(r) + '?cancelled=1' } : {};
         const s = await createCheckoutSession('estimate-hold', { id: r.customerId || '', email: r.customerEmail || '' }, Object.assign({ amountCents, requestId: r.id, holdKey: 'visit', label: 'In-person estimate — authorization hold (request ' + r.id + ') — General Handyman Solutions', lang: b.lang }, holdRet));
-        r.lastHoldSessionId = s.id; // v80.21: the estimate page files THIS hold on its ?hold=1 return
+        // v101 (BAJA-9): the return pointer is FIRST-writer-wins — a
+        // later public hold session cannot strand the real hold's
+        // return-filing by overwriting lastHoldSessionId. (The webhook
+        // files holds independently either way.)
+        if (!r.lastHoldSessionId) r.lastHoldSessionId = s.id; // v80.21: the estimate page files THIS hold on its ?hold=1 return
+        else audit(null, 'estimate.hold_pointer_kept', r.id, 'a new public hold session did not move the return pointer');
         save();
         return send(res, 200, { url: s.url, amount: amountCents / 100, hold: true });
       }
@@ -8138,6 +8510,16 @@ async function handleRequest(req, res) {
     if (!/.+@.+\..+/.test(email || '')) return send(res, 400, { error: 'a valid email is required to save the cart' });
     const snap = recoverySnapshot(b.items);
     if (!snap) return send(res, 400, { error: 'cart has an item we could not price' });
+    // v101 (BAJA-8): REPLACING a saved cart requires its current recovery
+    // token (or being signed in as that email's account). A first save
+    // stays open; knowing someone's email alone no longer wipes/rotates
+    // their saved cart.
+    const existingRec = recoverableCartsOf().find(x => x.email === email && !x.consumedAt);
+    const isOwner = !!(user && user.role === 'customer' && (user.email || '').toLowerCase() === email);
+    if (existingRec && !isOwner) {
+      const presented = String(b.recoveryToken || '');
+      if (!presented || sha256hex(presented) !== existingRec.tokenHash) return send(res, 403, { error: 'replacing a saved cart requires its recovery token' });
+    }
     const out = upsertRecoverableCart(email, snap);
     if (!out) return send(res, 400, { error: 'could not save the cart' });
     return send(res, 200, { ok: true, token: out.token, restorePath: '/#cart-recover=' + out.token, expiresAt: out.rec.expiresAt });
@@ -8183,6 +8565,7 @@ async function handleRequest(req, res) {
     return send(res, 200, { member, lines: t.lines, totals: { list: t.list, member: t.member, due: t.due } });
   }
   if (p === '/api/cart/checkout' && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     const b = await readBody(req);
     // Graceful degradation (brief): without Stripe there is nothing to
     // verify a payment against, so the checkout stops HERE — no
@@ -8332,6 +8715,7 @@ async function handleRequest(req, res) {
   // (settleHostedCartSession). P0-4 is untouched: NO order exists
   // until a verified settle.
   if (p === '/api/cart/checkout-hosted' && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     const b = await readBody(req);
     if (!stripeReady()) return send(res, 400, { error: 'payments are not connected yet — the Team will confirm your booking for now' });
     if (!Array.isArray(b.items) || !b.items.length) return send(res, 400, { error: 'your cart is empty — add a service first' });
@@ -8460,6 +8844,7 @@ async function handleRequest(req, res) {
   // v44: the FULL order total is charged right here (automatic capture) —
   // the old $75 manual-capture authorization hold is gone.
   if (p === '/api/orders/pay' && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     if (!user) return send(res, 401, { error: 'login required' });
     const b = await readBody(req);
     const r = db.requests.find(x => x.id === b.requestId);
@@ -8636,6 +9021,7 @@ async function handleRequest(req, res) {
     if (r.customerId) notify(r.customerId, 'payment', 'Order ' + r.id + ' cancelled — refund of ' + usd(refundedCents / 100) + ' issued' + (keptCents > 0 ? ' (' + usd(keptCents / 100) + ' booking fee kept — already dispatched)' : '') + '.', '#req=' + r.id);
     notifyAdmins('payment', 'Order ' + r.id + ' CANCELLED + refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' (kept ' + usd(keptCents / 100) + ' booking fee — was dispatched)' : ' (full refund — not dispatched)') + '.');
     audit(user, 'request.refund', r.id, 'refunded ' + usd(refundedCents / 100) + (keptCents > 0 ? ' · kept ' + usd(keptCents / 100) : '') + (dispatched ? ' · dispatched' : ' · not dispatched'));
+    recordPayoutReversalsForRefund(r); // v101 (M7)
     save();
     return send(res, 200, { ok: true, refunded: refundedCents / 100, keptFee: keptCents / 100, dispatched });
   }
@@ -8843,6 +9229,7 @@ async function handleRequest(req, res) {
   // public estimate / invoice links. No login needed to view or pay.
   const cartCheckMatch = p.match(/^\/api\/carts\/([\w-]+)\/member-check$/);
   if (cartCheckMatch && req.method === 'POST') {
+    if (rateLimitHit('member-check:' + clientIp(req), 30, 600000)) return send(res, 429, { member: false, error: 'too many checks — try again in a few minutes' }); // v101 (M1): discount-by-email is Gabriel's product rule and stays; the enumeration ORACLE gets a brake
     const c = cartsOf().find(x => x.id === cartCheckMatch[1]);
     if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
@@ -8884,9 +9271,38 @@ async function handleRequest(req, res) {
   //     phantom paid order.
   // ---------- v60: membership invites — admin creates them, the
   // invitee claims one from the public /join page (routes below) ------
+  if (p === '/api/admin/members' && req.method === 'GET') {
+    // v101 (wave 9): the members ROSTER the audit found missing — name,
+    // plan, live status (trialing included) and next charge date, all
+    // from state the app already keeps. (Next charge is best-effort
+    // from the stored plan record: period end, else trial end.)
+    if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
+    const members = [];
+    for (const u of db.users) {
+      if (!u || u.role !== 'customer') continue;
+      const plan = (u.membershipPlan && (u.membershipPlan.planKey || u.membershipPlan.kind)) ? u.membershipPlan : null;
+      const status = plan ? String(plan.status || '') : (u.homeCareStatus === 'active' ? 'active' : '');
+      if (!status || status === 'canceled' || status === 'cancelled' || status === 'incomplete_expired') continue;
+      members.push({ id: u.id, name: u.name || '', email: u.email || '', planKey: plan ? (plan.planKey || plan.kind) : 'homecare', planName: plan ? (plan.name || plan.planKey || plan.kind) : 'HomeCare', status: status, since: plan ? (plan.since || '') : (u.homeCareSince || ''), nextChargeAt: plan ? (plan.currentPeriodEnd || plan.trialEnd || null) : (u.homeCareTrialEnd || null) });
+    }
+    members.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+    return send(res, 200, { members });
+  }
   if (p === '/api/admin/invites' && req.method === 'GET') {
     if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
-    return send(res, 200, { invites: invitesOf().slice().reverse().map(publicInvite) });
+    // v101 (wave 9): dedupe the DISPLAY by person (the audit found the
+    // same member listed twice — once live, once 'revoked'). Newest row
+    // wins, except an ACCEPTED row always beats a non-accepted one; each
+    // kept row carries memberNow — the person's LIVE membership state.
+    const byKey = new Map();
+    for (const iv of invitesOf().slice().reverse().map(publicInvite)) {
+      const key = (iv.email || '').toLowerCase() || iv.phone || iv.id;
+      const u = (iv.acceptedByUserId && db.users.find(x => x.id === iv.acceptedByUserId)) || (iv.email && db.users.find(x => x.role === 'customer' && (x.email || '').toLowerCase() === iv.email.toLowerCase()));
+      iv.memberNow = !!(u && (u.homeCareStatus === 'active' || (u.membershipPlan && (u.membershipPlan.status === 'active' || u.membershipPlan.status === 'trialing'))));
+      const cur = byKey.get(key);
+      if (!cur || (cur.status !== 'accepted' && iv.status === 'accepted')) byKey.set(key, iv);
+    }
+    return send(res, 200, { invites: [...byKey.values()] });
   }
   if (p === '/api/admin/invites' && req.method === 'POST') {
     if (!user || user.role !== 'admin') return send(res, 403, { error: 'admin only' });
@@ -8937,6 +9353,7 @@ async function handleRequest(req, res) {
   }
   const joinCheckoutMatch = p.match(/^\/join\/([\w-]+)\/checkout$/);
   if (joinCheckoutMatch && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     const jb = await readBody(req).catch(() => ({}));
     const inv = invitesOf().find(x => x.id === joinCheckoutMatch[1]);
     if (!inv) return send(res, 404, { error: 'invite not found' });
@@ -8970,6 +9387,7 @@ async function handleRequest(req, res) {
   }
   const cartCheckoutMatch = p.match(/^\/api\/carts\/([\w-]+)\/checkout$/);
   if (cartCheckoutMatch && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     const c = cartsOf().find(x => x.id === cartCheckoutMatch[1]);
     if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer checkout' }); // v79 P0-2
     if (!c) return send(res, 404, { error: 'cart not found' });
@@ -9124,6 +9542,7 @@ async function handleRequest(req, res) {
   }
   const invPayMatch = p.match(/^\/api\/invoices\/([\w-]+)\/pay$/);
   if (invPayMatch && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     // Public: anyone with the invoice link can pay it. No login required — the
     // invoice id in the emailed link is the credential, same as estimate links.
     const inv = (db.invoices || []).find(x => x.id === invPayMatch[1]);
@@ -9231,6 +9650,7 @@ async function handleRequest(req, res) {
   const invPageMatch = p.match(/^\/invoice\/([\w-]+)$/);
   if (invPageMatch && req.method === 'GET') {
     const inv = (db.invoices || []).find(x => x.id === invPageMatch[1]);
+    if (inv) noteLegacyLinkUse('invoice', inv.id, req); // v101 (M17)
     if (!inv) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Invoice not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
     // v80.21 CHECKOUT UNO: paying an invoice returns HERE with ?paid=1 —
     // verify the session this invoice recorded and settle through the
@@ -9289,6 +9709,7 @@ async function handleRequest(req, res) {
   if (cartPageMatch && req.method === 'GET') {
     if (workerSessionBlocked(user)) return workerBlockedPage(res, 'cart'); // v79 P0-2
     const c = cartsOf().find(x => x.id === cartPageMatch[1]);
+    if (c) noteLegacyLinkUse('cart', c.id, req); // v101 (M17)
     if (!c) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px;background:#0a0a0c;color:#e8e8ea"><h2>Cart not found</h2><p>Check the link from the Team, or text/call (707) 862-3773.</p></body>');
     // v54 return verification: Stripe sends the customer back with
     // ?joined=1 / ?paid=1 AND the session_id — the flags alone change
@@ -9386,6 +9807,7 @@ async function handleRequest(req, res) {
   if (estPageMatch && req.method === 'GET') {
     if (workerSessionBlocked(user)) return workerBlockedPage(res, 'estimate'); // v79 P0-2
     const r = db.requests.find(x => x.id === estPageMatch[1]);
+    if (r && r.estimate) noteLegacyLinkUse('estimate', r.id, req); // v101 (M17)
     if (!r || !r.estimate) return send(res, 404, '<!doctype html><body style="font-family:system-ui;padding:32px"><h2>Estimate not found</h2><p>Check the link from your email, or text/call (707) 862-3773.</p></body>');
     // v54 join return verification — same rule as the cart page: the
     // ?joined=1 flag alone changes nothing; the server retrieves the
@@ -9490,6 +9912,7 @@ async function handleRequest(req, res) {
   // so the join was the only Elements left on this page.
   const estJoinCheckoutMatch = p.match(/^\/estimate\/([\w-]+)\/join-checkout$/);
   if (estJoinCheckoutMatch && req.method === 'POST') {
+    if (checkoutCreateBlocked(req)) return send(res, 429, { error: 'too many checkout attempts — try again in a few minutes' }); // v101 (M20)
     if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estJoinCheckoutMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
@@ -9522,6 +9945,7 @@ async function handleRequest(req, res) {
   // email matches and whose HomeCare/Plus plan is ACTIVE.
   const estMemberCheckMatch = p.match(/^\/estimate\/([\w-]+)\/member-check$/);
   if (estMemberCheckMatch && req.method === 'POST') {
+    if (rateLimitHit('member-check:' + clientIp(req), 30, 600000)) return send(res, 429, { member: false, error: 'too many checks — try again in a few minutes' }); // v101 (M1)
     if (workerSessionBlocked(user)) return send(res, 403, { code: 'WORKER_BLOCKED', error: 'technician sessions cannot use customer estimates' }); // v79 P0-2
     const r = db.requests.find(x => x.id === estMemberCheckMatch[1]);
     if (!r || !r.estimate) return send(res, 404, { error: 'estimate not found' });
@@ -9604,6 +10028,7 @@ async function handleRequest(req, res) {
       if (u.id === user.id) { skipped.push({ email, reason: 'cannot delete your own account' }); continue; }
       if (u.role !== 'customer') { skipped.push({ email, reason: 'not a customer account' }); continue; }
       const uid = u.id;
+      stampTrialTombstone(u); // v101 (M9): an admin-deleted account that used its free month leaves the same tombstone
       const myReqIds = new Set(db.requests.filter(r => r.customerId === uid).map(r => r.id));
       db.requests.forEach(r => {
         if (!myReqIds.has(r.id)) return;
@@ -9723,6 +10148,19 @@ async function handleRequest(req, res) {
     save(); return send(res, 200, { ok: true, deleted: gone.id });
   }
   // v80.12 DINERO: where the money sits (admin only).
+  if (p === '/api/admin/cloud-gate/override' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    // v101 (M24): the ONLY way past the boot-load gate besides a good
+    // load — a deliberate, audited admin decision (e.g. the cloud state
+    // is known-lost and the local state is the recovery source).
+    if (cloudLoadState !== 'failed') return send(res, 400, { error: 'the cloud gate is not engaged (load state: ' + cloudLoadState + ')' });
+    cloudLoadState = 'override';
+    const prevError = cloudLoadError;
+    delete db.cloudGate;
+    audit(user, 'cloud_gate.override', 'supabase', 'boot load had failed (' + prevError + ') — admin authorized saving local state to the cloud');
+    save();
+    return send(res, 200, { ok: true, cloudLoad: cloudLoadState });
+  }
   if (p === '/api/admin/money' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
     return send(res, 200, await buildMoneyReport());
@@ -9983,7 +10421,7 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
     if (!v) return send(res, 404, { error: 'yard visit not found' });
     if (v.assignedWorkerId !== user.id) return send(res, 403, { error: 'not your yard visit' });
     const b = await readBody(req);
-    const photoOk = (x) => typeof x === 'string' && x.startsWith('data:image/') && x.length <= 5000000;
+    const photoOk = isPhotoDataUrl; // v101: the one strict structural rule everywhere (ALTA-2/M21)
     for (const key of ['beforePhoto', 'afterPhoto']) {
       if (b[key] !== undefined) {
         if (v.status === 'done') return send(res, 409, { error: 'this visit is already done' });

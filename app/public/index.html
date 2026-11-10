@@ -274,19 +274,8 @@
     <p class="mut" id="membershipsIntro">One total monthly charge per plan — never a per-visit charge. Cancel anytime. <b>HomeCare starts with a FREE first month for everyone</b> — then $29/mo (one free month per account). Joining a membership needs a customer account: if you are not logged in, we take you to create one first, then straight to secure checkout.</p>
   <div id="compareGridBox">
     <div class="compare-grid">
-      <div class="cg-card free">
-        <h3>FREE</h3>
-        <div class="cg-price">$0</div>
-        <div class="cg-subline">No membership</div>
-        <ul>
-          <li>Free photo estimate</li>
-          <li>Pay per job</li>
-          <li>In-person estimate $75</li>
-        </ul>
-        <div class="grow"></div>
-        <button onclick="goFreeEstimate()">Get my free estimate</button>
-      </div>
-      <div class="cg-card">
+      <div class="cg-card cg-best-card">
+        <div class="cg-best">⭐ BEST — our most complete plan</div>
         <h3>HomeCare Plus</h3>
         <div class="cg-price">$100<span>/mo</span></div>
         <div class="cg-subline">1 yard visit / month</div>
@@ -347,6 +336,18 @@
         </ul>
         <div class="grow"></div>
         <button onclick="startMembershipCheckout('yardcare','yard2')">Join Yard Care</button>
+      </div>
+      <div class="cg-card free">
+        <h3>FREE</h3>
+        <div class="cg-price">$0</div>
+        <div class="cg-subline">No membership</div>
+        <ul>
+          <li>Free photo estimate</li>
+          <li>Pay per job</li>
+          <li>In-person estimate $75</li>
+        </ul>
+        <div class="grow"></div>
+        <button onclick="goFreeEstimate()">Get my free estimate</button>
       </div>
     </div>
     <p class="cg-foot">General Handyman Solutions · v1.0</p>
@@ -1105,6 +1106,7 @@
       <button class="black" onclick="createInvite()">Create invitation link</button>
       <div id="inviteLinkOut" style="margin-top:8px"></div>
     </div>
+    <div id="adminMembers"></div>
     <div id="adminInvites"></div>
     <h3 id="admSecWorkers">Workers (activate after review)</h3>
     <div style="margin:4px 0 8px"><span class="mut">Class:</span> <select id="adminWorkerClassFilter" onchange="loadAdminWorkers()" style="width:auto;display:inline-block;margin:0"><option value="">All classes</option><option value="tecnico">Técnicos</option><option value="ayudante">Ayudantes</option></select></div>
