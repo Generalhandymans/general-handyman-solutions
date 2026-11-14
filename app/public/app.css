@@ -614,3 +614,27 @@ button.ghost{background:#1b1b1f;color:#e8e8ea;border-color:#33333b}
 /* v101 (wave 9): BEST badge + best-card ring on the memberships compare grid (Plus $100 first — Gabriel's hierarchy law, matching the homepage) */
 #compareGridBox .cg-best{display:inline-block;background:#e42535;color:#fff;font-weight:900;font-size:12px;letter-spacing:.06em;padding:5px 12px;border-radius:999px;margin-bottom:8px}
 #compareGridBox .cg-card.cg-best-card{border:2px solid #e42535}
+
+/* v102: CONTACT ASSISTANT — dark brand theme (never white), brand red #e42535, mobile-first */
+#assistantFab{position:fixed;right:14px;bottom:86px;z-index:1201;background:#e42535;color:#fff;border:0;border-radius:999px;font-weight:800;font-size:15px;padding:13px 18px;box-shadow:0 6px 18px rgba(0,0,0,.5);cursor:pointer}
+#assistantPanel{position:fixed;right:12px;bottom:86px;z-index:1202;width:min(380px,calc(100vw - 24px));max-height:min(620px,calc(100dvh - 110px));display:flex;flex-direction:column;background:#101013;border:2px solid #e42535;border-radius:18px;overflow:hidden;box-shadow:0 14px 40px rgba(0,0,0,.6);color:#e8e8ea}
+#assistantHead{display:flex;align-items:center;gap:8px;background:#17171b;padding:12px 14px;border-bottom:1px solid #2a2a31}
+#assistantHead b{font-size:15px}
+#assistantHeadSub{display:block;font-size:12px;color:#9a968f;font-weight:400}
+#assistantClose{margin-left:auto;background:#1b1b1f;color:#e8e8ea;border:1px solid #33333b;border-radius:999px;width:32px;height:32px;cursor:pointer}
+#assistantMsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;min-height:180px}
+.as-msg{max-width:88%;padding:9px 12px;border-radius:14px;font-size:14.5px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+.as-msg.bot{background:#1b1b1f;border:1px solid #2a2a31;align-self:flex-start}
+.as-msg.me{background:#e42535;color:#fff;align-self:flex-end}
+.as-msg a{color:#9adcff;font-weight:700}
+.as-quote{background:#141416;border:1px solid #e42535}
+#assistantForm{border-top:1px solid #2a2a31;padding:10px 12px;display:flex;flex-direction:column;gap:7px;background:#17171b}
+#assistantForm input{background:#1b1b1f;border:1px solid #33333b;color:#e8e8ea;border-radius:10px;padding:10px;font-size:14.5px}
+#assistantFormBtns{display:flex;gap:8px;flex-wrap:wrap}
+#asBookBtn{background:#e42535;color:#fff;border:0;border-radius:10px;padding:11px 14px;font-weight:800;cursor:pointer;flex:1}
+#asEscBtn{border:1px solid #33333b;color:#e8e8ea;border-radius:10px;padding:11px 14px;cursor:pointer;background:#1b1b1f}
+#assistantBar{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid #2a2a31;background:#17171b}
+#assistantPhotoBtn{font-size:20px;cursor:pointer;padding:4px}
+#assistantInput{flex:1;background:#1b1b1f;border:1px solid #33333b;color:#e8e8ea;border-radius:999px;padding:11px 14px;font-size:14.5px}
+#assistantSend{background:#e42535;color:#fff;border:0;border-radius:999px;width:42px;height:42px;font-size:16px;cursor:pointer}
+@media(max-width:520px){#assistantPanel{bottom:80px;max-height:calc(100dvh - 96px)}#assistantFab{bottom:80px}}

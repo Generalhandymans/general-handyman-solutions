@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v101'"));
+t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v102'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4616,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v101: ghs-app-v101)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v101'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v102: ghs-app-v102)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v102'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5369,6 +5369,17 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   t('v80.8 links: the new cart + invoice pages load (200)', cartPage808.status === 200 && invPage808.status === 200);
   const bogus808 = await fetch(BASE2 + '/cart/CRT-ABCDEF');
   t('v80.8 links: an unknown old-style id answers 404, not 500', bogus808.status === 404);
+
+  // --- v102 cart photos: catalog lines carry their menu photo; custom lines never do ---
+  const cartPageHtml808 = await (await fetch(BASE2 + '/cart/' + cart808.j.cart.id)).text();
+  t('v102 cart photos: the catalog line renders its /menu-img/<id>.webp thumbnail', cartPageHtml808.includes('/menu-img/garbage-disposal-swap.webp'));
+  const curtain102 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'curtain-rod-install', name: 'Curtain Rod Install', qty: 2, unitPrice: 85 }], customerName: 'Curtain Pin' } });
+  t('v102 curtain price: 2x curtain-rod-install totals $170 list / $136 member (server reprices at $85/$68)', curtain102.j.cart.listTotal === 170 && curtain102.j.cart.memberTotal === 136);
+  const curtainPage102 = await (await fetch(BASE2 + '/cart/' + curtain102.j.cart.id)).text();
+  t('v102 cart photos + money: curtain page shows the curtain photo and $170.00 total / $50.00 deposit / $120.00 balance', curtainPage102.includes('/menu-img/curtain-rod-install.webp') && curtainPage102.includes('$170.00') && curtainPage102.includes('$50.00') && curtainPage102.includes('$120.00'));
+  const mixed102 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'curtain-rod-install', name: 'Curtain Rod Install', qty: 1, unitPrice: 85 }, { custom: true, kind: 'other', name: 'Materials — curtain rods', qty: 1, unitPrice: 30 }], customerName: 'Mixed Pin' } });
+  const mixedPage102 = await (await fetch(BASE2 + '/cart/' + mixed102.j.cart.id)).text();
+  t('v102 cart photos: a custom materials line gets NO thumbnail (exactly one /menu-img/ on the page)', (mixedPage102.match(/\/menu-img\//g) || []).length === 1 && mixedPage102.includes('/menu-img/curtain-rod-install.webp'));
 
   // --- HTTP: the public-link miss budget (isolated X-Forwarded-For bucket) ---
   const miss808 = { headers: { 'X-Forwarded-For': '203.0.113.77' } };
@@ -8375,6 +8386,85 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // Statics for the rest of the batch
   t('v101 w10 statics: BAJA-1 sweeps after role check; BAJA-3 uniform scrypt; BAJA-6 tombstone; BAJA-20 footer escaped; BAJA-22 array caps; BAJA-24 atomic writes', serverSrc.indexOf("requireRole(user, ['admin', 'worker', 'customer'], res)) return; // v101 (BAJA-1)") > -1 && serverSrc.includes('ghs-malformed-stored') && serverSrc.includes('db.adminEverExisted = true') && serverSrc.includes('escMail(footer ||') && (serverSrc.match(/slice\(0, 100\)/g) || []).length >= 2 && serverSrc.includes("DATA_FILE + '.tmp'"));
   t('v101 w10 statics: BAJA-21 message throttle + thread caps on both message routes; BAJA-9 hold pointer first-writer-wins', (serverSrc.match(/rateLimitHit\('msg:' \+ user\.id, 120, 600000\)/g) || []).length === 2 && (serverSrc.match(/messages\.length >= 500/g) || []).length === 2 && serverSrc.includes('if (!r.lastHoldSessionId) r.lastHoldSessionId = s.id;'));
+}
+
+// ---------------- v102: CONTACT ASSISTANT ----------------
+{
+  const admA = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AWA = admA.j.token;
+  const chat = (sid, lang, text) => req2('POST', '/api/assistant/message', { body: { sessionId: sid, lang, text } });
+
+  // Quoting accuracy vs the catalog (tv-mounting is $175 / member $140 in SERVER_MENU)
+  const tv = await chat('v102-tv', 'en', 'How much to mount my TV?');
+  t('v102 assistant: TV quote prices come from the catalog (list $175, member $140)', tv.status === 200 && tv.j.action === 'quote' && tv.j.quote.serviceId === 'tv-mounting' && tv.j.quote.list === 175 && tv.j.quote.member === 140);
+  t('v102 assistant: member discount is its OWN line under the list headline (spec 2.3)', tv.j.reply.includes('$175') && tv.j.reply.includes('−$35') && tv.j.reply.indexOf('$175') < tv.j.reply.indexOf('Member price'));
+  t('v102 assistant: deposit law on a $175 job = $50 flat, balance $125 (spec 2.1)', tv.j.quote.deposit === 50 && tv.j.quote.balance === 125);
+  t('v102 assistant: quote never adds the +$25 travel charge (spec 2.4)', !/Travel/.test(tv.j.reply) && !/travel/.test(tv.j.reply));
+
+  // The spec's settled add-on example: TV $175 + raceway $50 + soundbar $75 = $300
+  const tvx = await chat('v102-tvx', 'en', 'Mount my TV and hide the cables and mount my soundbar too');
+  t('v102 assistant: TV + raceway + soundbar = $300 list / $240 member / $50 deposit / $250 balance (spec 3.3 example)', tvx.j.quote && tvx.j.quote.list === 300 && tvx.j.quote.member === 240 && tvx.j.quote.deposit === 50 && tvx.j.quote.balance === 250);
+
+  // Deposit law above $300: 40% (water-heater $700 -> $280 / $420)
+  const wh = await chat('v102-wh', 'en', 'I need a water heater installed, no hot water');
+  t('v102 assistant: $700 job deposits 40% ($280) with $420 balance', wh.j.quote && wh.j.quote.serviceId === 'water-heater' && wh.j.quote.list === 700 && wh.j.quote.deposit === 280 && wh.j.quote.balance === 420);
+
+  // ES routing + ES answer (spec 7.1 example: "se me moja abajo del sink" -> plumbing)
+  const sink = await chat('v102-sink', 'es', 'se me moja abajo del sink, ¿cuánto cuesta?');
+  t('v102 assistant: ES sink leak routes to p-trap-swap and answers in Spanish', sink.j.action === 'quote' && sink.j.quote.serviceId === 'p-trap-swap' && sink.j.reply.includes('mano de obra') && sink.j.quote.list === 135 && sink.j.quote.member === 108);
+
+  // Concrete ALWAYS escalates, never a fixed price (spec 2.7)
+  const conc = await chat('v102-conc', 'en', 'How much to replace concrete driveway sections?');
+  t('v102 assistant: concrete escalates with NO quote', conc.j.action === 'escalate' && conc.j.reason === 'concrete' && !conc.j.quote);
+  t('v102 assistant: escalation promises Gabriel personally, Mon–Sat, public number — and NO response time (spec 5)', conc.j.reply.includes('Gabriel will reply to you personally') && conc.j.reply.includes('Monday to Saturday') && conc.j.reply.includes('(707) 862-3773') && !/\d+\s*(hour|hora)|within|later today|en \d+ horas/.test(conc.j.reply));
+
+  // Estimate-first (turbo) and human-request escalations
+  const turbo = await chat('v102-turbo', 'en', 'How much for a turbo replacement?');
+  t('v102 assistant: estimate-first turbo escalates, never priced (v82 law)', turbo.j.action === 'escalate' && !turbo.j.quote);
+  const human = await chat('v102-human', 'en', 'I want to talk to a person');
+  t('v102 assistant: asking for a person escalates', human.j.action === 'escalate' && human.j.reason === 'human_requested');
+
+  // Curtains + blinds route too (audit 2026-11-14: both are real menu jobs — Charla's curtain job — and were missing from the table)
+  const cur = await chat('v102-curtain', 'en', 'How much to hang curtains?');
+  t('v102 assistant: curtains route to curtain-rod-install at the confirmed $85/$68', cur.j.action === 'quote' && cur.j.quote.serviceId === 'curtain-rod-install' && cur.j.quote.list === 85 && cur.j.quote.member === 68);
+  const per = await chat('v102-blinds', 'es', '¿Cuánto cuesta instalar persianas?');
+  t('v102 assistant: ES persianas route to blinds-install at $85/$68', per.j.action === 'quote' && per.j.quote.serviceId === 'blinds-install' && per.j.quote.list === 85 && per.j.quote.member === 68);
+
+  // Photo validation rides the v101 ALTA-2 structural rule
+  const pngOk = await req2('POST', '/api/assistant/photo', { body: { sessionId: 'v102-conc', photo: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' } });
+  const svgBad = await req2('POST', '/api/assistant/photo', { body: { sessionId: 'v102-conc', photo: 'data:image/svg+xml;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==' } });
+  const scriptBad = await req2('POST', '/api/assistant/photo', { body: { sessionId: 'v102-conc', photo: 'data:image/png;base64,<script>alert(1)</script>' } });
+  t('v102 assistant: a real image data URL is accepted; SVG and script payloads are rejected (ALTA-2)', pngOk.status === 200 && pngOk.j.photos === 1 && svgBad.status === 400 && scriptBad.status === 400);
+
+  // Escalation capture = the 6 points of spec 5, visible in admin
+  const esc = await req2('POST', '/api/assistant/escalate', { body: { sessionId: 'v102-conc', lang: 'en', name: 'V102 Case', phone: '(707) 555-0199', email: 'v102case@t.local', address: '12 V102 St', city: 'Napa', serviceText: 'concrete driveway sections replaced' } });
+  t('v102 assistant: escalation with the 6 points creates a case', esc.status === 201 && !!esc.j.caseId);
+  const cases = await req2('GET', '/api/admin/assistant-cases', { token: AWA });
+  const myCase = (cases.j.cases || []).find(c => c.id === (esc.j && esc.j.caseId));
+  t('v102 assistant: the case is visible in admin with all 6 capture points (name, phone, address, service in their words, photos, 2-line summary)', !!myCase && myCase.sixPoints.name === 'V102 Case' && myCase.sixPoints.phone === '(707) 555-0199' && myCase.sixPoints.address === '12 V102 St' && /concrete/.test(myCase.sixPoints.serviceText) && myCase.sixPoints.photos === 1 && typeof myCase.sixPoints.summary === 'string' && myCase.sixPoints.summary.split('\n').length === 2);
+  const escMissing = await req2('POST', '/api/assistant/escalate', { body: { sessionId: 'v102-conc', name: 'No Addr', phone: '(707) 555-0199', serviceText: 'concrete' } });
+  t('v102 assistant: escalation without an address is refused (no half-captured case)', escMissing.status === 400);
+  const casesNo = await req2('GET', '/api/admin/assistant-cases', {});
+  t('v102 assistant: the admin case list is admin-only', casesNo.status === 401 || casesNo.status === 403);
+
+  // A completed flow creates a REAL cart through the existing cart path
+  const co = await req2('POST', '/api/assistant/checkout', { body: { sessionId: 'v102-tv', name: 'V102 Buyer', phone: '(707) 555-0198', address: '3 V102 Ave', city: 'Fairfield', serviceName: 'TV Mounting (up to 65")' } });
+  t('v102 assistant: checkout creates a real cart with the catalog total + deposit split', co.status === 201 && /\/cart\/CRT-/.test(co.j.link || '') && co.j.totals.list === 175 && co.j.totals.deposit === 50 && co.j.totals.balance === 125);
+  const admCarts = await req2('GET', '/api/admin/carts', { token: AWA });
+  const myCart = (admCarts.j.carts || []).find(c => c.id === (co.j.cart && co.j.cart.id));
+  t('v102 assistant: the assistant cart is in the admin cart list at the catalog price', !!myCart && myCart.listTotal === 175 && myCart.memberTotal === 140);
+
+  // Memberships: Plus first (hierarchy law), EN + ES
+  const mem = await chat('v102-mem', 'en', 'How do memberships work?');
+  t('v102 assistant: memberships answer leads with HomeCare Plus $100 (spec 4.4 + hierarchy)', mem.j.reply.includes('HomeCare Plus') && mem.j.reply.includes('$100') && mem.j.reply.indexOf('HomeCare Plus') < mem.j.reply.indexOf('HomeCare is $29'));
+  const memEs = await chat('v102-memes', 'es', '¿Cómo funcionan las membresías?');
+  t('v102 assistant: memberships answer works in Spanish too', memEs.j.reply.includes('HomeCare Plus') && memEs.j.reply.includes('$100'));
+
+  // Widget statics: dark panel, brand red, endpoints wired, no price math on the client
+  t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
+  t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
+  t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
+  t('v102 statics: SW cache bumped to ghs-app-v102', swSrc.includes("const CACHE = 'ghs-app-v102'"));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

@@ -1288,6 +1288,8 @@ function updateContactPill(){
   else if (isMembershipRoute()) show = true;
   else show = (!me || me.role === 'customer');
   pill.style.display = show ? 'flex' : 'none';
+  const asFab = document.getElementById('assistantFab'); // v102: the assistant rides the same customer-surface visibility as the contact pill
+  if (asFab) asFab.style.display = show ? '' : 'none';
   const fab = document.getElementById('photoFab');
   if (fab) fab.style.display = show ? 'block' : 'none';
 }
@@ -7369,3 +7371,110 @@ window.addEventListener('hashchange', checkResetHash);
 checkResetHash();
 loadMe().then(function(){ try { routeNotifHash(); } catch (e) {} try { cartRecoverFromHash(); } catch (e) {} });
 loadPublicReviews(); // v81: published reviews (public endpoint; the section stays hidden until real ones exist)
+
+// ---------- v102: CONTACT ASSISTANT (client) ----------
+// Thin chat client for the rule-based assistant. ALL prices come from
+// the server's catalog in the /api/assistant replies — this code never
+// computes a price, it only renders what the server answered. Language
+// follows the app's ONE unified toggle (menuLang() / ghsMenuLang).
+const AS_T = {
+  en: { fab: 'Chat', sub: 'Menu prices · free photo estimate', ph: 'Tell me what you need fixed…', name: 'Full name', phone: 'Phone', email: 'Email (optional)', addr: 'Job address', city: 'City', book: 'Get my booking link', esc: 'Send it to Gabriel', greet: 'Hi, this is General Handyman Solutions. We do carpentry, electrical, plumbing, yard work and mobile mechanic service across Solano County. Tell me what you need fixed, or send a photo and we\'ll take it from there.', photoOk: 'Photo received — it goes to Gabriel with your case.', needFields: 'I still need your name, phone and address.', working: 'One second…' },
+  es: { fab: 'Chat', sub: 'Precios del menú · estimado por foto gratis', ph: 'Dime qué necesitas arreglar…', name: 'Nombre completo', phone: 'Teléfono', email: 'Correo (opcional)', addr: 'Dirección del trabajo', city: 'Ciudad', book: 'Quiero mi link de apartado', esc: 'Mandárselo a Gabriel', greet: 'Hola, somos General Handyman Solutions. Hacemos carpintería, electricidad, plomería, jardinería y mecánica móvil en Solano County. Dime qué necesitas arreglar, o manda una foto y de ahí arrancamos.', photoOk: 'Foto recibida — le llega a Gabriel con tu caso.', needFields: 'Todavía necesito tu nombre, teléfono y dirección.', working: 'Un segundo…' }
+};
+let asSession = ''; try { asSession = localStorage.getItem('ghsAssistantSession') || ''; } catch (e) {}
+let asQuote = null, asLastAction = '', asLastUserText = '', asOpened = false;
+function asLang() { try { return (typeof menuLang === 'function') ? menuLang() : (localStorage.getItem('ghsMenuLang') === 'es' ? 'es' : 'en'); } catch (e) { return 'en'; } }
+function asT() { return AS_T[asLang()] || AS_T.en; }
+function asSaveSession(idv) { if (idv) { asSession = idv; try { localStorage.setItem('ghsAssistantSession', idv); } catch (e) {} } }
+function assistantChrome() {
+  const T = asT();
+  const fab = document.getElementById('assistantFabTxt'); if (fab) fab.textContent = T.fab;
+  const sub = document.getElementById('assistantHeadSub'); if (sub) sub.textContent = T.sub;
+  const inp = document.getElementById('assistantInput'); if (inp) inp.placeholder = T.ph;
+  const map = { asName: 'name', asPhone: 'phone', asEmail: 'email', asAddr: 'addr', asCity: 'city' };
+  Object.keys(map).forEach(function (idv) { const el = document.getElementById(idv); if (el) el.placeholder = T[map[idv]]; });
+  const bk = document.getElementById('asBookBtn'); if (bk) bk.textContent = T.book;
+  const es2 = document.getElementById('asEscBtn'); if (es2) es2.textContent = T.esc;
+}
+function assistantToggle() {
+  const p = document.getElementById('assistantPanel'); if (!p) return;
+  const open = p.style.display !== 'none' && p.style.display !== '';
+  if (open) { p.style.display = 'none'; return; }
+  p.style.display = 'flex'; assistantChrome();
+  if (!asOpened) { asOpened = true; assistantAddMsg(asT().greet, 'bot'); }
+  const inp = document.getElementById('assistantInput'); if (inp) inp.focus();
+}
+function assistantAddMsg(text, who, link) {
+  const box = document.getElementById('assistantMsgs'); if (!box) return;
+  const d = document.createElement('div'); d.className = 'as-msg ' + (who === 'me' ? 'me' : 'bot'); d.textContent = text || '';
+  if (link) { d.appendChild(document.createElement('br')); const a = document.createElement('a'); a.href = link; a.textContent = link; a.target = '_blank'; a.rel = 'noopener'; d.appendChild(a); }
+  box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+async function asPost(path, body) {
+  const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+  const d = await r.json().catch(function () { return {}; });
+  if (d.sessionId) asSaveSession(d.sessionId);
+  return { status: r.status, d };
+}
+async function assistantSend() {
+  const inp = document.getElementById('assistantInput'); if (!inp) return;
+  const text = inp.value.trim(); if (!text) return;
+  inp.value = ''; asLastUserText = text; assistantAddMsg(text, 'me');
+  try {
+    const out = await asPost('/api/assistant/message', { sessionId: asSession, text, lang: asLang() });
+    const d = out.d || {};
+    if (d.quote) asQuote = d.quote;
+    asLastAction = d.action || '';
+    assistantAddMsg(d.reply || d.error || '…', 'bot');
+    const form = document.getElementById('assistantForm');
+    if (form) {
+      if (d.action === 'quote' || d.action === 'escalate') { form.style.display = 'flex'; const bk = document.getElementById('asBookBtn'); if (bk) bk.style.display = d.action === 'quote' ? '' : 'none'; }
+    }
+  } catch (e) { assistantAddMsg('…', 'bot'); }
+}
+function asFields() {
+  const g = function (idv) { const el = document.getElementById(idv); return el ? el.value.trim() : ''; };
+  return { name: g('asName'), phone: g('asPhone'), email: g('asEmail'), address: g('asAddr'), city: g('asCity') };
+}
+function asFormMsg(t) { const m = document.getElementById('assistantFormMsg'); if (m) m.textContent = t || ''; }
+async function assistantCheckout() {
+  const f = asFields();
+  if (!f.name || !f.phone) { asFormMsg(asT().needFields); return; }
+  asFormMsg(asT().working);
+  try {
+    const body = Object.assign({ sessionId: asSession, lang: asLang(), serviceName: (asQuote && typeof svcName === 'function') ? svcName(asQuote.serviceId) : '' }, f);
+    const out = await asPost('/api/assistant/checkout', body);
+    const d = out.d || {};
+    if (out.status === 201 && d.link) { asFormMsg(''); assistantAddMsg(d.reply || d.link, 'bot', d.link); const form = document.getElementById('assistantForm'); if (form) form.style.display = 'none'; }
+    else if (d.escalate) { asLastAction = 'escalate'; assistantAddMsg(d.error || '', 'bot'); }
+    else asFormMsg(d.error || 'error');
+  } catch (e) { asFormMsg('error'); }
+}
+async function assistantEscalate() {
+  const f = asFields();
+  if (!f.name || !f.phone || !f.address) { asFormMsg(asT().needFields); return; }
+  asFormMsg(asT().working);
+  try {
+    const body = Object.assign({ sessionId: asSession, lang: asLang(), serviceText: asLastUserText }, f);
+    const out = await asPost('/api/assistant/escalate', body);
+    const d = out.d || {};
+    if (out.status === 201) { asFormMsg(''); assistantAddMsg(d.reply || '', 'bot'); const form = document.getElementById('assistantForm'); if (form) form.style.display = 'none'; }
+    else asFormMsg(d.error || 'error');
+  } catch (e) { asFormMsg('error'); }
+}
+(function assistantInit() {
+  const inp = document.getElementById('assistantInput');
+  if (inp) inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); assistantSend(); } });
+  const ph = document.getElementById('assistantPhoto');
+  if (ph) ph.addEventListener('change', async function () {
+    const file = ph.files && ph.files[0]; ph.value = '';
+    if (!file || typeof fileToDataUrl !== 'function') return;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const out = await asPost('/api/assistant/photo', { sessionId: asSession, photo: dataUrl });
+      if (out.status === 200) assistantAddMsg(asT().photoOk + ' (' + out.d.photos + ')', 'bot');
+      else assistantAddMsg((out.d && out.d.error) || 'error', 'bot');
+    } catch (e) {}
+  });
+  assistantChrome();
+})();

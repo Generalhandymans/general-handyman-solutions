@@ -5298,17 +5298,34 @@ function cartPageHtml(c, user, langOverride, notice) {
   const cartHasMaterials = (c.items || []).some(it => it.custom && it.kind !== 'labor');
   const rankOf = it => it.custom ? (it.kind === 'labor' ? 1 : 2) : 0;
   const orderedItems = (c.items || []).map((it, i) => ({ it, i })).sort((a, b) => (rankOf(a.it) - rankOf(b.it)) || (a.i - b.i)).map(x => x.it);
+  // v102: cada línea de catálogo enseña su foto del menú junto al
+  // nombre — la misma /menu-img/<serviceId>.webp que sirve el menú
+  // (patrón de svcImgHtml de app.js, ?v=4). Solo reciben <img> los
+  // ids que existen en SERVER_MENU, y el onerror la oculta, así un
+  // archivo faltante jamás se ve como imagen rota. Las líneas custom
+  // (labor/materiales/fees/travel) no traen serviceId y van sin
+  // miniatura. Presentación pura: no cambian montos, textos, ni el
+  // flujo de pago. (Portado del arreglo Fase 0 del clon viejo.)
+  const cartThumb = it => {
+    const sid = String((it && it.serviceId) || '');
+    if (!it || it.custom || !/^[a-z0-9][a-z0-9-]*$/.test(sid) || !Object.prototype.hasOwnProperty.call(SERVER_MENU, sid)) return '';
+    return '<img src="/menu-img/' + sid + '.webp?v=4" alt="" loading="lazy" width="54" height="54" style="width:54px;height:54px;object-fit:cover;border-radius:10px;flex:0 0 auto;background:#26262a" onerror="this.onerror=null;this.style.display=\'none\'">';
+  };
   const rows = orderedItems.map(it => {
     const mu = it.memberUnit != null ? it.memberUnit : it.unitPrice;
     const memLine = money(it.qty * mu);
     const eu = startMember ? mu : it.unitPrice;
     const el = money(it.qty * eu);
+    const thumb = cartThumb(it);
     const tag = !it.custom ? '' : (it.kind === 'labor'
       ? ' <span data-i18n="tagLabor" style="display:inline-block;background:#0b2013;border:1px solid #1d5c38;color:#2fbf71;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagLabor + '</span>'
       : ' <span data-i18n="tagMaterial" style="display:inline-block;background:#26262a;border:1px solid #33333b;color:#a49d93;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700">' + S.tagMaterial + '</span>');
     const hint = (mu < it.unitPrice)
       ? '<div class="memHint" style="color:#2fbf71;font-size:12.5px;font-weight:700' + (startMember ? ';display:none' : '') + '">Members ' + usd(memLine) + '</div>' : '';
-    return '<tr><td style="padding:8px;border-bottom:1px solid #26262a">' + escMail(it.name) + tag + hint + '</td>'
+    const nameCell = thumb
+      ? '<div style="display:flex;gap:10px;align-items:center">' + thumb + '<div>' + escMail(it.name) + tag + hint + '</div></div>'
+      : escMail(it.name) + tag + hint;
+    return '<tr><td style="padding:8px;border-bottom:1px solid #26262a">' + nameCell + '</td>'
       + '<td style="padding:8px;border-bottom:1px solid #26262a;text-align:center">' + escMail(it.qty) + '</td>'
       + '<td class="cEach" data-l="' + usd(it.unitPrice) + '" data-m="' + usd(mu) + '" style="padding:8px;border-bottom:1px solid #26262a;text-align:right">' + usd(eu) + '</td>'
       + '<td class="cLine" data-l="' + usd(it.lineTotal) + '" data-m="' + usd(memLine) + '" style="padding:8px;border-bottom:1px solid #26262a;text-align:right">' + usd(el) + '</td></tr>';
@@ -5810,6 +5827,254 @@ function serverCartTotals(items, isMember) {
     list += line.lineList; member += line.lineMember;
   }
   return { lines, list, member, due: isMember ? member : list };
+}
+
+// ---------- v102: CONTACT ASSISTANT (Gabriel, approved 2026-11-09; built 2026-11-10) ----------
+// Deterministic, rule-based chat assistant — NO free-form AI, NO external
+// LLM calls. Its prices come ONLY from SERVER_MENU (the same catalog the
+// menu, carts and charge audit use): if a price changes in the catalog,
+// the assistant's quotes change with it — it never quotes from memory,
+// never invents a price and never hardcodes one. Source of the rules:
+// ~/workspace/ghs-app/ASISTENTE-BASE-ENTRENAMIENTO.md (spec sections are
+// cited inline). Hard rules that live here and are never broken:
+//  - deposit law via depositSplit (<= $300 -> $50 flat, else 40%);
+//  - member -20% on LABOR shown as its OWN line, headline = list price;
+//  - menu prices are LABOR ONLY (the customer buys materials);
+//  - the +$25 travel charge is NEVER added or promised (Gabriel decides
+//    it case by case at the final payment — spec 2.4);
+//  - concrete is NEVER a menu price: it always escalates (spec 2.7);
+//  - estimate-route work, > $1,000, complaints, out-of-coverage and
+//    "talk to a person" escalate with the 6 capture points of spec 5;
+//  - escalation NEVER promises a response time or hour — the promise is
+//    Gabriel's PERSONAL attention, Monday-Saturday (spec 5 + PENDIENTES);
+//  - the only public number is (707) 862-3773 and the only domain shared
+//    is generalhandymans.app (spec 2.10).
+// Sessions are in-memory conversation state (like the v101 limiters — a
+// restart forgets them, acceptable for a chat). Escalations and carts are
+// NOT session state: they land in db.requests / db.carts and persist.
+const ASSISTANT_PUBLIC_PHONE = '(707) 862-3773';
+const ASSISTANT_COVERAGE_CITIES = ['fairfield', 'suisun city', 'vacaville', 'vallejo', 'benicia', 'dixon', 'rio vista', 'american canyon', 'napa'];
+const ASSISTANT_OUTSIDE_CITIES = ['sacramento', 'oakland', 'san francisco', 'san jose', 'stockton', 'santa rosa', 'berkeley', 'fremont', 'hayward', 'richmond', 'pittsburg', 'brentwood', 'modesto', 'fresno', 'los angeles', 'san diego'];
+// Routing table: common problem words (EN+ES) -> a REAL catalog id.
+// nameEn/nameEs are display labels only — every price is read live from
+// SERVER_MENU at quote time. est:true marks estimate-first services
+// (never priced, always escalate — v82 law rides along).
+const ASSISTANT_ROUTES = [
+  { id: 'p-trap-swap', trade: 'plumbing', nameEn: 'P-Trap Replacement', nameEs: 'Cambio de sifón (trampa P)', kw: ['leak under the sink', 'leaks under the sink', 'dripping under the sink', 'moja abajo del sink', 'moja debajo del fregadero', 'gotea bajo el fregadero', 'gotea debajo del sink', 'fuga bajo el fregadero', 'p-trap', 'p trap', 'sifon', 'trampa p', 'under sink leak'] },
+  { id: 'drain-unclog', trade: 'plumbing', nameEn: 'Drain Unclog — Basic', nameEs: 'Destape de drenaje — básico', kw: ['clogged drain', 'drain clogged', 'clog', 'drain is slow', 'destapar', 'drenaje tapado', 'tapado el drenaje', 'tapo el drenaje', 'se tapo', 'esta tapado', 'tapado', 'tapada', 'desague tapado', 'no baja el agua'] },
+  { id: 'faucet-replacement', trade: 'plumbing', nameEn: 'Faucet Replacement', nameEs: 'Cambio de llave / grifo', kw: ['faucet', 'grifo', 'llave de agua', 'llave del bano', 'mezcladora'] },
+  { id: 'toilet-repair', trade: 'plumbing', nameEn: 'Toilet Repair', nameEs: 'Reparación de inodoro', kw: ['toilet runs', 'toilet running', 'toilet leaks', 'toilet leak', 'inodoro', 'sanitario', 'taza del bano', 'wc '] },
+  { id: 'toilet-replacement', trade: 'plumbing', nameEn: 'Toilet Replacement', nameEs: 'Cambio de inodoro', kw: ['replace toilet', 'new toilet', 'install toilet', 'cambiar inodoro', 'instalar inodoro', 'poner inodoro nuevo'] },
+  { id: 'garbage-disposal-swap', trade: 'plumbing', nameEn: 'Garbage Disposal Replacement', nameEs: 'Cambio de triturador', kw: ['garbage disposal', 'disposal', 'triturador'] },
+  { id: 'showerhead-swap', trade: 'plumbing', nameEn: 'Showerhead Replacement', nameEs: 'Cambio de regadera', kw: ['showerhead', 'shower head', 'regadera', 'ducha'] },
+  { id: 'water-heater', trade: 'plumbing', nameEn: 'Water Heater Installation', nameEs: 'Instalación de calentador de agua', kw: ['water heater', 'calentador de agua', 'boiler', 'no hot water', 'sin agua caliente'] },
+  { id: 'washer-dryer-hookup', trade: 'plumbing', nameEn: 'Washer / Dryer Hookup', nameEs: 'Conexión de lavadora / secadora', kw: ['washer hookup', 'dryer hookup', 'lavadora', 'secadora'] },
+  { id: 'tv-mounting', trade: 'electrical', nameEn: 'TV Mounting (up to 65")', nameEs: 'Montaje de TV (hasta 65")', kw: ['tv mounting', 'mount my tv', 'mount a tv', 'hang my tv', 'hang a tv', 'montar tv', 'montar la tv', 'montaje de tv', 'montaje tv', 'tv mount', 'colgar la tv', 'colgar tv', 'instalar tv', 'instalar la tv', 'television'] },
+  { id: 'tv-mounting-large', trade: 'electrical', nameEn: 'TV Mounting (over 65")', nameEs: 'Montaje de TV (más de 65")', kw: ['mount 75', 'mount 85', 'big tv mount', 'tv grande'] },
+  { id: 'ceiling-fan', trade: 'electrical', nameEn: 'Ceiling Fan Install / Swap', nameEs: 'Instalación / cambio de ventilador de techo', kw: ['ceiling fan', 'ventilador de techo', 'abanico de techo'] },
+  { id: 'light-fixture-swap', trade: 'electrical', nameEn: 'Light Fixture Swap', nameEs: 'Cambio de lámpara', kw: ['light fixture', 'lampara', 'cambiar lampara', 'no light', 'sin luz', 'light not working'] },
+  { id: 'ring-doorbell', trade: 'electrical', nameEn: 'Ring / Video Doorbell Install', nameEs: 'Instalación de timbre con video', kw: ['doorbell', 'ring doorbell', 'timbre'] },
+  { id: 'smoke-co-detector-install', trade: 'electrical', nameEn: 'Smoke / CO Detector Install', nameEs: 'Instalación de detectores de humo / CO', kw: ['smoke detector', 'detector de humo', 'carbon monoxide'] },
+  { id: 'security-camera-install', trade: 'electrical', nameEn: 'Security Camera Install', nameEs: 'Instalación de cámara de seguridad', kw: ['security camera', 'camera install', 'camara de seguridad'] },
+  { id: 'exhaust-fan-swap', trade: 'electrical', nameEn: 'Bathroom Exhaust Fan Swap', nameEs: 'Cambio de extractor de baño', kw: ['exhaust fan', 'extractor'] },
+  { id: 'door-adjustment', trade: 'carpentry', nameEn: 'Door Adjustment', nameEs: 'Ajuste de puerta', kw: ['door sticks', 'door wont close', 'door won\'t close', 'door fell', 'puerta caida', 'puerta no cierra', 'puerta atorada', 'puerta se cayo', 'hinge', 'bisagra'] },
+  { id: 'door-knob-install', trade: 'carpentry', nameEn: 'Door Knob / Lever Install', nameEs: 'Instalación de perilla / manija', kw: ['door knob', 'doorknob', 'perilla', 'chapa de puerta'] },
+  { id: 'deadbolt-install', trade: 'carpentry', nameEn: 'Deadbolt Install', nameEs: 'Instalación de cerrojo', kw: ['deadbolt', 'cerrojo'] },
+  { id: 'smart-lock-install', trade: 'carpentry', nameEn: 'Smart Lock Install', nameEs: 'Instalación de cerradura inteligente', kw: ['smart lock', 'cerradura inteligente'] },
+  { id: 'drywall-patch-small', trade: 'carpentry', nameEn: 'Drywall Patch — Small', nameEs: 'Parche de drywall — chico', kw: ['drywall hole', 'hole in the wall', 'hoyo en la pared', 'agujero en la pared', 'parche'] },
+  { id: 'furniture-assembly', trade: 'carpentry', nameEn: 'Furniture Assembly', nameEs: 'Armado de muebles', kw: ['assemble furniture', 'furniture assembly', 'ikea', 'armar mueble', 'armado de mueble'] },
+  { id: 'picture-mirror-hanging', trade: 'carpentry', nameEn: 'Picture / Mirror Hanging', nameEs: 'Colgar cuadros / espejos', kw: ['hang a mirror', 'hang pictures', 'colgar espejo', 'colgar cuadro'] },
+  { id: 'curtain-rod-install', trade: 'carpentry', nameEn: 'Curtain Rod Install', nameEs: 'Instalación de cortinero', kw: ['curtain rod', 'curtain rods', 'hang curtains', 'hang curtain', 'curtains', 'curtain', 'cortinero', 'cortinas', 'colgar cortinas', 'instalar cortinas', 'poner cortinas'] },
+  { id: 'blinds-install', trade: 'carpentry', nameEn: 'Blinds Install (1-3 windows)', nameEs: 'Instalación de persianas (1-3 ventanas)', kw: ['blinds', 'persianas', 'instalar persianas', 'poner persianas', 'window blinds'] },
+  { id: 'paint-room', trade: 'carpentry', nameEn: 'Paint One Room', nameEs: 'Pintura de un cuarto', kw: ['paint a room', 'paint my room', 'pintar un cuarto', 'pintar cuarto', 'pintura de cuarto'] },
+  { id: 'fence-picket-repair', trade: 'carpentry', nameEn: 'Fence Picket Repair', nameEs: 'Reparación de cerca', kw: ['fence repair', 'fence picket', 'fence fixed', 'fix my fence', 'fence broken', 'fence', 'reparar cerca', 'cerca rota', 'arreglar la cerca'] },
+  { id: 'yard-cleanup', trade: 'gardening', nameEn: 'Yard Cleanup', nameEs: 'Limpieza de yarda', kw: ['yard cleanup', 'clean my yard', 'overgrown', 'limpieza de yarda', 'limpiar la yarda', 'limpiar yarda', 'yarda abandonada', 'overgrown yard'] },
+  { id: 'gutter-cleaning', trade: 'gardening', nameEn: 'Gutter Cleaning', nameEs: 'Limpieza de canales / canalones', kw: ['gutter', 'canalones', 'canales de lluvia'] },
+  { id: 'pressure-washing', trade: 'gardening', nameEn: 'Pressure Washing — Standard Area', nameEs: 'Lavado a presión — área estándar', kw: ['pressure wash', 'power wash', 'lavado a presion'] },
+  { id: 'junk-minimum', trade: 'gardening', nameEn: 'Junk Removal — Minimum Load', nameEs: 'Retiro de escombro — carga mínima', kw: ['junk removal', 'haul junk', 'retirar escombro', 'sacar basura', 'junk'] },
+  { id: 'sprinkler-irrigation', trade: 'gardening', nameEn: 'Sprinkler / Irrigation Repair', nameEs: 'Reparación de sprinklers / riego', kw: ['sprinkler', 'irrigation', 'riego', 'aspersor'] },
+  { id: 'battery-replacement', trade: 'mechanic', nameEn: 'Car Battery Replacement', nameEs: 'Cambio de batería de carro', kw: ['car battery', 'battery died', 'bateria del carro', 'bateria muerta', 'no arranca bateria'] },
+  { id: 'oil-change', trade: 'mechanic', nameEn: 'Oil Change & Fluids', nameEs: 'Cambio de aceite y fluidos', kw: ['oil change', 'cambio de aceite'] },
+  { id: 'brake-pads', trade: 'mechanic', nameEn: 'Brake Pads (per pair)', nameEs: 'Pastillas de freno (por par)', kw: ['brake pads', 'brakes', 'frenos', 'pastillas de freno', 'balatas'] },
+  { id: 'starter-replacement', trade: 'mechanic', nameEn: 'Starter Replacement', nameEs: 'Cambio de motor de arranque', kw: ['starter', 'motor de arranque', 'marcha del carro', 'car clicks no start', 'wont start', 'won\'t start', 'clicks and wont start', 'no arranca', 'no enciende', 'no prende'] },
+  { id: 'check-engine-diagnostics', trade: 'mechanic', nameEn: 'Check-Engine Diagnostics', nameEs: 'Diagnóstico de check engine', kw: ['check engine', 'diagnostic', 'diagnostico', 'luz del motor'] },
+  { id: 'turbo-replacement', trade: 'mechanic', est: true, nameEn: 'Turbo Replacement', nameEs: 'Cambio de turbo', kw: ['turbo'] },
+  { id: 'alternator-replacement', trade: 'mechanic', nameEn: 'Alternator Replacement — Easy', nameEs: 'Cambio de alternador — fácil', kw: ['alternator', 'alternador'] }
+];
+const ASSISTANT_TRADE_WORDS = {
+  plumbing: ['plumb', 'plomer', 'sink', 'fregadero', 'pipe', 'tuberia', 'leak', 'fuga', 'gotea', 'water', 'agua'],
+  electrical: ['electric', 'elec', 'outlet', 'enchufe', 'switch', 'apagador', 'breaker', 'light', 'luz'],
+  carpentry: ['carpint', 'wood', 'madera', 'door', 'puerta', 'cabinet', 'gabinete'],
+  gardening: ['yard', 'yarda', 'jardin', 'garden', 'lawn', 'cesped', 'grass'],
+  mechanic: ['mechanic', 'mecan', 'carro', 'coche', 'engine', 'motor', 'vehicle', 'vehiculo']
+};
+function assistantNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+const assistantSessions = new Map();
+function assistantSession(sessionId) {
+  const sid = /^[\w-]{4,64}$/.test(sessionId || '') ? sessionId : ('AS-' + crypto.randomBytes(6).toString('hex').toUpperCase());
+  let s = assistantSessions.get(sid);
+  if (!s) {
+    if (assistantSessions.size > 500) { const first = assistantSessions.keys().next().value; if (first) assistantSessions.delete(first); }
+    s = { id: sid, lang: 'en', serviceId: '', addonIds: [], asap: false, isMember: false, name: '', phone: '', email: '', address: '', city: '', serviceText: '', photos: [], pendingEscalation: '', transcript: [], createdAt: Date.now() };
+    assistantSessions.set(sid, s);
+  }
+  s.touchedAt = Date.now();
+  return s;
+}
+function assistantRoute(text) {
+  const t = ' ' + assistantNorm(text) + ' ';
+  let best = null, bestScore = 0, tie = null;
+  for (const r of ASSISTANT_ROUTES) {
+    let score = 0;
+    for (const kw of r.kw) { const k = assistantNorm(kw); if (k && t.includes(k)) score += k.length >= 8 ? 3 : 2; }
+    if (score > bestScore) { best = r; bestScore = score; tie = null; }
+    else if (score && score === bestScore && best && r.id !== best.id) tie = r;
+  }
+  if (!best) {
+    for (const trade of Object.keys(ASSISTANT_TRADE_WORDS)) {
+      if (ASSISTANT_TRADE_WORDS[trade].some(w => t.includes(assistantNorm(w)))) return { tradeOnly: trade };
+    }
+    return null;
+  }
+  return { route: best, tie };
+}
+function assistantQuoteFor(serviceId, addonIds, isMember, asap) {
+  const t = serverMenuTotals(serviceId, addonIds || [], !!isMember, !!asap);
+  if (!t) return null;
+  const due = t.due, member = t.member;
+  const split = depositSplit(Math.round(due * 100));
+  const mSplit = depositSplit(Math.round(member * 100));
+  return { serviceId, list: t.list, member, due, asapFee: t.asapFee || 0, extras: t.extras, memberSavings: money(t.list - member), deposit: split.depositCents / 100, balance: split.balanceCents / 100, memberDeposit: mSplit.depositCents / 100, memberBalance: mSplit.balanceCents / 100 };
+}
+function assistantSuggestedAddons(serviceId) {
+  const svc = SERVER_MENU[serviceId];
+  if (!svc || !svc.a) return [];
+  return Object.keys(svc.a).map(aid => ({ id: aid, name: svc.a[aid][2], price: svc.a[aid][0], nodisc: !!svc.a[aid][1] }));
+}
+const ASSISTANT_T = {
+  greeting: { en: 'Hi, this is General Handyman Solutions. We do carpentry, electrical, plumbing, yard work and mobile mechanic service across Solano County. Tell me what you need fixed, or send a photo and we\'ll take it from there.', es: 'Hola, somos General Handyman Solutions. Hacemos carpintería, electricidad, plomería, jardinería y mecánica móvil en Solano County. Dime qué necesitas arreglar, o manda una foto y de ahí arrancamos.' },
+  coverage: { en: 'We cover Solano County — Fairfield, Vacaville, Vallejo and the surrounding cities. Mobile mechanic service is Fairfield / Vacaville / Vallejo. Send me your address and what you need, and I\'ll confirm we can take it.', es: 'Cubrimos Solano County — Fairfield, Vacaville, Vallejo y las ciudades de la zona. La mecánica móvil es Fairfield / Vacaville / Vallejo. Mándame tu dirección y qué necesitas, y te confirmo si lo podemos tomar.' },
+  memberships: { en: 'HomeCare Plus is our main plan: $100/mo with 1 yard visit included (or $175/mo with 2) — members get 20% off labor on the whole menu. HomeCare is $29/mo and your first month is free. Yard Care is $75/mo for 1 yard visit a month or $150 for 2. And the FREE plan is $0. HomeCare cancels anytime. You can join right in the app: generalhandymans.app', es: 'HomeCare Plus es nuestro plan principal: $100/mes con 1 visita de yarda incluida (o $175/mes con 2) — los miembros tienen 20% de descuento en labor en todo el menú. HomeCare cuesta $29/mes y tu primer mes es gratis. Yard Care es $75/mes por 1 visita de yarda al mes o $150 por 2. Y el plan GRATIS es $0. HomeCare se cancela cuando quieras. Te puedes unir en la app: generalhandymans.app' },
+  deposit: { en: 'Booking is simple: your link shows the full price, you pay the deposit to hold your date, and the balance is only due when the job is done. Deposits are $50 flat on jobs up to $300, and 40% on jobs over $300. Everything runs through the app — no cash needed to book.', es: 'Apartar es simple: tu link muestra el precio completo, pagas el depósito para apartar tu fecha, y el saldo se paga solo cuando el trabajo está terminado. El depósito es $50 fijo en trabajos de hasta $300, y 40% en trabajos de más de $300. Todo va por la app — no necesitas efectivo para apartar.' },
+  materials: { en: 'Our menu prices are labor only — normally you buy the materials and we install them. If you\'d rather we supply them, we add them as a priced line: materials are paid in full upfront, plus the deposit for the work. That way everything\'s on site the day we come.', es: 'Nuestros precios del menú son solo mano de obra — normalmente tú compras los materiales y nosotros los instalamos. Si prefieres que los suplamos nosotros, los agregamos como línea cotizada: los materiales se pagan completos por adelantado, más el depósito del trabajo. Así todo está en el sitio el día que llegamos.' },
+  hours: { en: 'You can reach us at (707) 862-3773, or order anytime in the app: generalhandymans.app — the menu, prices and booking are all right there. Gabriel\'s personal attention runs Monday to Saturday.', es: 'Nos puedes contactar al (707) 862-3773, u ordenar a cualquier hora en la app: generalhandymans.app — el menú, los precios y el apartado están ahí. La atención personal de Gabriel es de lunes a sábado.' },
+  photoFree: { en: 'You can also send a photo right here in this chat — the photo estimate is free. Add your address and phone and Gabriel will price exactly what\'s there.', es: 'También puedes mandar una foto aquí mismo en este chat — el estimado por foto es gratis. Agrega tu dirección y tu teléfono y Gabriel cotiza exactamente lo que hay.' },
+  escalation: { en: 'That one needs Gabriel\'s eyes on it — it\'s not a fixed menu price. I\'ve got your info and photos saved, and Gabriel will reply to you personally. His personal attention runs Monday to Saturday. You can also reach the team anytime at (707) 862-3773.', es: 'Ese trabajo necesita que Gabriel lo revise — no es precio fijo del menú. Ya guardé tus datos y tus fotos, y Gabriel te va a responder personalmente. Su atención personal es de lunes a sábado. También puedes contactar al equipo cuando quieras al (707) 862-3773.' },
+  askDetails: { en: 'So Gabriel has everything, tell me: your name, your phone, the job address, and in your own words what you need. You can add photos right here too.', es: 'Para que Gabriel tenga todo, dime: tu nombre, tu teléfono, la dirección del trabajo y, en tus palabras, qué necesitas. También puedes agregar fotos aquí mismo.' },
+  fallback: { en: 'Let me get you to the right place. We do carpentry, electrical, plumbing, yard work and mobile mechanic work. Tell me what\'s going on in your own words — for example "it leaks under the sink" — or send a photo and I\'ll route it.', es: 'Déjame llevarte al lugar correcto. Hacemos carpintería, electricidad, plomería, jardinería y mecánica. Dime qué pasa en tus palabras — por ejemplo "se moja abajo del sink" — o manda una foto y lo enruto.' }
+};
+function assistantEscalationReply(s) { return ASSISTANT_T.escalation[s.lang] + ' ' + ASSISTANT_T.askDetails[s.lang]; }
+function assistantQuoteText(s, q) {
+  const route = ASSISTANT_ROUTES.find(r => r.id === q.serviceId);
+  const name = route ? (s.lang === 'es' ? route.nameEs : route.nameEn) : q.serviceId;
+  const lines = [];
+  if (s.lang === 'es') {
+    lines.push('Ese tiene precio fijo en nuestro menú: ' + name + ' — $' + q.list + ', solo mano de obra.');
+    for (const e of q.extras) lines.push('Incluye: ' + e.name + ' — $' + e.price + '.');
+    if (q.asapFee) lines.push('Servicio ASAP: +$' + q.asapFee + ' (25% sobre la labor). Total: $' + q.due + '.');
+    lines.push('Precio de miembro (HomeCare/Plus): $' + q.member + ' — el descuento de miembro es su propia línea: −$' + q.memberSavings + ' (−20% en labor).');
+    lines.push('Depósito para apartar: $' + q.deposit + ' · Saldo al terminar: $' + q.balance + '.');
+    lines.push('Si quieres, te genero tu link de apartado aquí mismo. ¿Me confirmas tu nombre, teléfono y dirección?');
+  } else {
+    lines.push('That one\'s a fixed price on our menu: ' + name + ' — $' + q.list + ', labor only.');
+    for (const e of q.extras) lines.push('Includes: ' + e.name + ' — $' + e.price + '.');
+    if (q.asapFee) lines.push('ASAP service: +$' + q.asapFee + ' (25% on labor). Total: $' + q.due + '.');
+    lines.push('Member price (HomeCare/Plus): $' + q.member + ' — the member discount is its own line: −$' + q.memberSavings + ' (−20% on labor).');
+    lines.push('Deposit to book: $' + q.deposit + ' · Balance when the job is done: $' + q.balance + '.');
+    lines.push('If you want, I\'ll generate your booking link right here. Can you confirm your name, phone and address?');
+  }
+  return lines.join('\n');
+}
+function assistantDetectCity(text) {
+  const t = assistantNorm(text);
+  for (const c of ASSISTANT_OUTSIDE_CITIES) if (t.includes(c)) return { city: c, outside: true };
+  for (const c of ASSISTANT_COVERAGE_CITIES) if (t.includes(c)) return { city: c, outside: false };
+  return null;
+}
+function assistantClassify(text) {
+  const t = ' ' + assistantNorm(text) + ' ';
+  if (/concrete|concreto|cemento|sidewalk|banqueta|driveway|entrada de carros| slab /.test(t)) return { kind: 'escalate', reason: 'concrete' };
+  if (/talk to a person|speak to a person|real person|human|hablar con una persona|con una persona|una persona real|humano|encargado|gabriel en persona|owner|dueno/.test(t)) return { kind: 'escalate', reason: 'human_requested' };
+  if (/complaint|complain|refund|queja|reclamo|devolucion|bad job|mal trabajo|not happy|no quede contento/.test(t)) return { kind: 'escalate', reason: 'complaint' };
+  if (/remodel|remodelacion|whole house|toda la casa|complete floor|piso completo|full floor|new circuit|circuito nuevo|electrical panel|panel electrico|gas line|linea de gas|structural|estructural|permit|permiso|multi day|varios dias|deck build|build a deck|cerca completa|complete fence|transmission|transmision|engine rebuild|internal engine/.test(t)) return { kind: 'escalate', reason: 'estimate_route' };
+  return null;
+}
+function assistantHandleMessage(s, rawText) {
+  const text = cleanText(rawText, 1000);
+  const t = ' ' + assistantNorm(text) + ' ';
+  s.transcript.push({ from: 'customer', text, at: new Date().toISOString() });
+  if (s.transcript.length > 40) s.transcript = s.transcript.slice(-40);
+  if (text) s.serviceText = s.serviceText || text;
+  const cityHit = assistantDetectCity(text);
+  if (cityHit && cityHit.outside) { s.pendingEscalation = 'out_of_coverage'; s.city = cityHit.city; return { reply: assistantEscalationReply(s), action: 'escalate', reason: 'out_of_coverage' }; }
+  if (cityHit) s.city = cityHit.city;
+  const cls = assistantClassify(text);
+  if (cls) { s.pendingEscalation = cls.reason; return { reply: assistantEscalationReply(s), action: 'escalate', reason: cls.reason }; }
+  if (/asap|same day|hoy mismo|urgent|urgente|emergency|emergencia/.test(t)) s.asap = true;
+  if (/price|how much|cuesta|cuanto|precio|cost|cotiz|quote/.test(t) || true) {
+    const found = assistantRoute(text);
+    if (found && found.route) {
+      const route = found.route;
+      if (route.est || isEstimateFirst(route.id)) { s.pendingEscalation = 'estimate_route'; return { reply: assistantEscalationReply(s), action: 'escalate', reason: 'estimate_route' }; }
+      // natural add-ons the spec names (TV example): raceway + soundbar
+      if (route.id === 'tv-mounting' || route.id === 'tv-mounting-large') {
+        if (/raceway|cable|cables|esconder|hide/.test(t) && !s.addonIds.includes('raceway')) s.addonIds.push('raceway');
+        if (/soundbar|sound bar|barra de sonido/.test(t) && !s.addonIds.includes('soundbar')) s.addonIds.push('soundbar');
+      }
+      s.serviceId = route.id;
+      const q = assistantQuoteFor(route.id, s.addonIds, s.isMember, s.asap);
+      if (!q) { s.pendingEscalation = 'estimate_route'; return { reply: assistantEscalationReply(s), action: 'escalate', reason: 'estimate_route' }; }
+      if (q.due > 1000) { s.pendingEscalation = 'over_1000'; return { reply: assistantEscalationReply(s), action: 'escalate', reason: 'over_1000' }; }
+      const out = { reply: assistantQuoteText(s, q), action: 'quote', quote: q, suggestedAddons: assistantSuggestedAddons(route.id).filter(a => !s.addonIds.includes(a.id)) };
+      if (found.tie) out.clarify = [route.id, found.tie.id];
+      return out;
+    }
+    if (found && found.tradeOnly) {
+      const trades = { plumbing: ['Plumbing', 'Plomería'], electrical: ['Electrical', 'Electricidad'], carpentry: ['Carpentry', 'Carpintería'], gardening: ['Yard work', 'Jardinería'], mechanic: ['Mobile mechanic', 'Mecánica móvil'] };
+      const nm = trades[found.tradeOnly] ? trades[found.tradeOnly][s.lang === 'es' ? 1 : 0] : found.tradeOnly;
+      return { reply: (s.lang === 'es' ? 'Eso suena a ' + nm + '. ' : 'That sounds like ' + nm + '. ') + ASSISTANT_T.fallback[s.lang] + ' ' + ASSISTANT_T.photoFree[s.lang], action: 'clarify', trade: found.tradeOnly };
+    }
+  }
+  if (/membership|membresia|homecare|miembro|member|planes|plans/.test(t)) return { reply: ASSISTANT_T.memberships[s.lang], action: 'info' };
+  if (/deposit|deposito|apartar|book|reserva|booking/.test(t)) return { reply: ASSISTANT_T.deposit[s.lang], action: 'info' };
+  if (/material/.test(t)) return { reply: ASSISTANT_T.materials[s.lang], action: 'info' };
+  if (/cover|cobertura|area|zona|ciudad|city|where|donde/.test(t)) return { reply: ASSISTANT_T.coverage[s.lang], action: 'info' };
+  if (/hours|horario|hora|contact|contacto|telefono|phone number|llamar/.test(t)) return { reply: ASSISTANT_T.hours[s.lang], action: 'info' };
+  if (/hola|hello|hi|buenas|hey/.test(t) && t.length < 30) return { reply: ASSISTANT_T.greeting[s.lang], action: 'info' };
+  return { reply: ASSISTANT_T.fallback[s.lang] + ' ' + ASSISTANT_T.photoFree[s.lang], action: 'clarify' };
+}
+function assistantCreateCase(s, fields) {
+  const name = cleanText(fields.name || s.name, 80);
+  const phone = cleanText(fields.phone || s.phone, 40);
+  const address = cleanText(fields.address || s.address, 300);
+  const city = cleanText(fields.city || s.city, 80);
+  const serviceText = cleanText(fields.serviceText || s.serviceText, 500);
+  if (!name || !phone || !address || !serviceText) return { error: 'name, phone, address and the service in your words are all needed' };
+  const reason = cleanText(fields.reason || s.pendingEscalation || 'off_menu', 60);
+  const summary = 'Assistant escalation (' + reason + '): ' + serviceText.slice(0, 160) + '\n' + 'Captured in the app chat — ' + (s.photos.length ? s.photos.length + ' photo(s) attached' : 'no photos') + (city ? ' · ' + city : '') + '. Gabriel: personal attention, no time was promised.';
+  const r = { id: linkId('GHS'), customerId: null, customerName: name, customerEmail: cleanText(fields.email || s.email, 160).toLowerCase(), customerPhone: phone, service: serviceText.slice(0, 120), description: summary, city, address, when: '', estimateType: 'photo', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: null, photos: s.photos.slice(0, 6), messages: [{ from: 'customer', name, text: serviceText, at: new Date().toISOString() }, { from: 'team', name: 'General Handyman Solutions Assistant', text: summary, at: new Date().toISOString() }], lang: s.lang, source: 'assistant', assistantCase: { reason, sixPoints: { name, phone, address, serviceText, photos: s.photos.length, summary }, transcript: s.transcript.slice(-20), serviceId: s.serviceId || '', createdAt: new Date().toISOString() }, createdAt: new Date().toISOString() };
+  db.requests.push(r);
+  notifyAdmins('request', 'New assistant case ' + r.id + ' (' + reason + '): ' + r.service + ' in ' + (city || '') + ' from ' + name + '.');
+  save();
+  return { request: r, summary };
+}
+function assistantCreateCart(s, fields) {
+  if (!s.serviceId || !SERVER_MENU[s.serviceId]) return { error: 'pick a menu service first' };
+  if (isEstimateFirst(s.serviceId)) return { error: 'estimate-first service — it is quoted on an estimate, never sold at a menu price' };
+  const q = assistantQuoteFor(s.serviceId, s.addonIds, s.isMember, s.asap);
+  if (!q) return { error: 'could not price this order' };
+  if (q.due > 1000) return { error: 'over the $1,000 menu guardrail — this escalates to Gabriel', escalate: 'over_1000' };
+  const svc = SERVER_MENU[s.serviceId];
+  const route = ASSISTANT_ROUTES.find(r => r.id === s.serviceId);
+  const items = [{ serviceId: s.serviceId, name: cleanText(fields.serviceName, 120) || (route ? route.nameEn : s.serviceId), qty: 1, unitPrice: svc.p, lineTotal: money(svc.p), memberUnit: svc.m }];
+  for (const e of q.extras) items.push({ serviceId: '', name: e.name, qty: 1, unitPrice: e.price, lineTotal: money(e.price), memberUnit: e.nodisc ? e.price : money(e.price * 0.8), addonOf: s.serviceId, addonId: e.id });
+  const totals = cartTotals(items);
+  const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: 'Created by the app contact assistant (chat).' + (s.asap ? ' ASAP requested.' : ''), customerName: cleanText(fields.name || s.name, 80), customerPhone: cleanText(fields.phone || s.phone, 40), customerEmail: cleanText(fields.email || s.email, 160).toLowerCase(), lang: s.lang, status: 'open', customer: null, memberApplied: !!s.isMember, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: 'assistant', assistantPhotos: s.photos.slice(0, 6), source: 'assistant', createdAt: new Date().toISOString() };
+  cartsOf().push(c);
+  save();
+  const due = s.isMember ? totals.memberTotal : totals.listTotal;
+  const split = depositSplit(Math.round(due * 100));
+  return { cart: c, link: cartLink(c), totals: { list: totals.listTotal, member: totals.memberTotal, due, deposit: split.depositCents / 100, balance: split.balanceCents / 100 } };
 }
 
 // ---------- v80.12 TRÁFICO Y DINERO (Gabriel, 2026-11-01) ----------
@@ -6336,6 +6601,59 @@ async function handleRequest(req, res) {
     res.on('close', cleanup);
     res.on('error', cleanup);
     return; // the stream stays open — no res.end()
+  }
+
+  // ---------- v102: contact assistant endpoints ----------
+  // Public chat (no account — same door as the free photo estimate).
+  // Every price in every answer is recomputed from SERVER_MENU at reply
+  // time; the client sends words and picks, never prices.
+  if (p === '/api/assistant/message' && req.method === 'POST') {
+    if (rateLimitHit('assistant-msg:' + clientIp(req), 300, 600000)) return send(res, 429, { error: 'too many messages — give it a minute' });
+    const b = await readBody(req);
+    const s = assistantSession(cleanText(b.sessionId, 64));
+    if (b.lang === 'es' || b.lang === 'en') s.lang = b.lang;
+    if (user && user.role === 'customer' && user.homeCareStatus === 'active') s.isMember = true;
+    const out = assistantHandleMessage(s, b.text);
+    s.transcript.push({ from: 'assistant', text: out.reply, at: new Date().toISOString() });
+    return send(res, 200, { ok: true, sessionId: s.id, reply: out.reply, action: out.action || 'info', reason: out.reason || '', quote: out.quote || null, suggestedAddons: out.suggestedAddons || [], trade: out.trade || '' });
+  }
+  if (p === '/api/assistant/photo' && req.method === 'POST') {
+    if (rateLimitHit('assistant-photo:' + clientIp(req), 60, 600000)) return send(res, 429, { error: 'too many photos — give it a minute' });
+    const b = await readBody(req);
+    const s = assistantSession(cleanText(b.sessionId, 64));
+    // v101 (ALTA-2) structural validation, reused as-is: only real image
+    // data URLs with a pure base64 payload ever get stored.
+    if (!isPhotoDataUrl(b.photo)) return send(res, 400, { error: 'that file is not a valid photo' });
+    if (s.photos.length >= 6) return send(res, 400, { error: 'up to 6 photos per chat' });
+    s.photos.push(b.photo);
+    return send(res, 200, { ok: true, sessionId: s.id, photos: s.photos.length });
+  }
+  if (p === '/api/assistant/checkout' && req.method === 'POST') {
+    if (rateLimitHit('assistant-checkout:' + clientIp(req), 60, 600000)) return send(res, 429, { error: 'too many booking attempts — try again in a few minutes' });
+    const b = await readBody(req);
+    const s = assistantSession(cleanText(b.sessionId, 64));
+    if (b.lang === 'es' || b.lang === 'en') s.lang = b.lang;
+    if (user && user.role === 'customer' && user.homeCareStatus === 'active') s.isMember = true;
+    const name = cleanText(b.name, 80), phone = cleanText(b.phone, 40);
+    if (!name || !phone) return send(res, 400, { error: 'name and phone are needed to build your booking link' });
+    s.name = name; s.phone = phone; if (b.email) s.email = cleanText(b.email, 160); if (b.address) s.address = cleanText(b.address, 300); if (b.city) s.city = cleanText(b.city, 80);
+    const out = assistantCreateCart(s, b);
+    if (out.error) return send(res, out.escalate ? 422 : 400, { error: out.error, escalate: out.escalate || '' });
+    return send(res, 201, { ok: true, cart: publicCart(out.cart), link: out.link, totals: out.totals, reply: (s.lang === 'es' ? 'Listo — aquí está tu link de apartado: ' : 'Done — here is your booking link: ') + out.link + (s.lang === 'es' ? ' El depósito es $' + out.totals.deposit + ' y el saldo de $' + out.totals.balance + ' se paga al terminar.' : ' The deposit is $' + out.totals.deposit + ' and the $' + out.totals.balance + ' balance is due when the job is done.') });
+  }
+  if (p === '/api/assistant/escalate' && req.method === 'POST') {
+    if (rateLimitHit('assistant-escalate:' + clientIp(req), 60, 600000)) return send(res, 429, { error: 'too many cases — try again in a few minutes' });
+    const b = await readBody(req);
+    const s = assistantSession(cleanText(b.sessionId, 64));
+    if (b.lang === 'es' || b.lang === 'en') s.lang = b.lang;
+    const out = assistantCreateCase(s, b);
+    if (out.error) return send(res, 400, { error: out.error });
+    return send(res, 201, { ok: true, caseId: out.request.id, reply: ASSISTANT_T.escalation[s.lang] });
+  }
+  if (p === '/api/admin/assistant-cases' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const cases = db.requests.filter(r => r && r.assistantCase).slice().reverse().map(r => ({ id: r.id, status: r.status, createdAt: r.createdAt, reason: r.assistantCase.reason, sixPoints: r.assistantCase.sixPoints, customerName: r.customerName || '', customerPhone: r.customerPhone || '', address: r.address || '', city: r.city || '', photos: (r.photos || []).length }));
+    return send(res, 200, { ok: true, cases });
   }
 
   // ---------- auth ----------

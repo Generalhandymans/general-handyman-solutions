@@ -51,6 +51,26 @@
 </header>
 <div id="notifPanel" class="card" style="display:none;max-width:880px;margin:10px auto"></div>
 <div id="teamContactPill"><a href="tel:+17078623773" id="pillCall">📞 Call the Team</a><a class="sms" href="sms:+17078623773" id="pillText">💬 Text the Team</a><span id="photoFab"><a href="https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8" target="_blank" rel="noopener" id="pillPhoto">📸 Free estimate</a></span></div>
+<!-- v102: CONTACT ASSISTANT widget (rule-based chat; prices come from the server catalog, never from this page) -->
+<button type="button" id="assistantFab" onclick="assistantToggle()" aria-label="Chat with General Handyman Solutions">💬 <span id="assistantFabTxt">Chat</span></button>
+<div id="assistantPanel" style="display:none" role="dialog" aria-label="General Handyman Solutions assistant">
+  <div id="assistantHead"><b>General Handyman Solutions</b><span id="assistantHeadSub">Menu prices · free photo estimate</span><button type="button" id="assistantClose" onclick="assistantToggle()" aria-label="Close chat">✕</button></div>
+  <div id="assistantMsgs"></div>
+  <div id="assistantForm" style="display:none">
+    <input id="asName" autocomplete="name" placeholder="Full name">
+    <input id="asPhone" autocomplete="tel" placeholder="Phone">
+    <input id="asEmail" autocomplete="email" placeholder="Email (optional)">
+    <input id="asAddr" autocomplete="street-address" placeholder="Job address">
+    <input id="asCity" autocomplete="address-level2" placeholder="City">
+    <div id="assistantFormBtns"><button type="button" id="asBookBtn" onclick="assistantCheckout()">Get my booking link</button><button type="button" id="asEscBtn" class="ghost" onclick="assistantEscalate()">Send it to Gabriel</button></div>
+    <div id="assistantFormMsg" class="mut"></div>
+  </div>
+  <div id="assistantBar">
+    <label id="assistantPhotoBtn" title="Send a photo — free estimate">📸<input id="assistantPhoto" type="file" accept="image/*" style="display:none"></label>
+    <input id="assistantInput" type="text" placeholder="Tell me what you need fixed…">
+    <button type="button" id="assistantSend" onclick="assistantSend()">➤</button>
+  </div>
+</div>
 
 <div class="wrap">
   <!-- PLAN COMPARISON (added 2026-10-21) — front-page grid: no membership vs membership -->
