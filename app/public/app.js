@@ -5539,7 +5539,12 @@ function renderCart(){
     // savings row + the member total.
     const unit = l.unitList;
     const line = l.lineList;
-    let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
+    // v103 (Gabriel 2026-11-14): every line shows its service photo, the
+    // same /menu-img/<id>.webp the menu and the public cart page use.
+    // cartCalc lines always carry a catalog id (cartLoad filters to
+    // MENU_CATALOG), so every line here is a catalog line; svcImgHtml
+    // falls back to the category photo if a file ever goes missing.
+    let s = '<div class="cart-line">' + svcImgHtml(l.id, (SVC_GROUP_OF[l.id] || {}).key || 'otro', 'cart-line-img') + '<div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
     s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';
@@ -5649,7 +5654,8 @@ function renderCcLines(){
     // unchanged). The v80.3 tease for guests / join-unchecked stands.
     const unit = l.unitList;
     const line = l.lineList;
-    let s = '<div class="cart-line"><div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
+    // v103: same per-service photo as the cart view above (svcImgHtml).
+    let s = '<div class="cart-line">' + svcImgHtml(l.id, (SVC_GROUP_OF[l.id] || {}).key || 'otro', 'cart-line-img') + '<div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
     l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
     s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';

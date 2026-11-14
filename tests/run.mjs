@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v102'"));
+t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v103'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4616,7 +4616,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v102: ghs-app-v102)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v102'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v102: ghs-app-v102)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v103'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5380,6 +5380,20 @@ t('v80.6 server: the second call inside the TTL answers from cache (cached:true 
   const mixed102 = await req2('POST', '/api/admin/carts', { token: A808, body: { items: [{ serviceId: 'curtain-rod-install', name: 'Curtain Rod Install', qty: 1, unitPrice: 85 }, { custom: true, kind: 'other', name: 'Materials — curtain rods', qty: 1, unitPrice: 30 }], customerName: 'Mixed Pin' } });
   const mixedPage102 = await (await fetch(BASE2 + '/cart/' + mixed102.j.cart.id)).text();
   t('v102 cart photos: a custom materials line gets NO thumbnail (exactly one /menu-img/ on the page)', (mixedPage102.match(/\/menu-img\//g) || []).length === 1 && mixedPage102.includes('/menu-img/curtain-rod-install.webp'));
+
+  // --- v103 in-app cart photos: the SPA cart view (renderCart) and the
+  // checkout lines (renderCcLines) show the same per-service photo as the
+  // public cart page — the gap the v102 note left open ---
+  run("me = null; location.hash = ''; localStorage.removeItem('ghsCart');");
+  run("cartAdd('curtain-rod-install'); cartAdd('curtain-rod-install');");
+  run('renderCart();');
+  const inCart103 = el('cartLines').innerHTML;
+  t('v103 in-app cart: the cart-view line renders its /menu-img/curtain-rod-install.webp photo', inCart103.includes('/menu-img/curtain-rod-install.webp') && inCart103.includes('cart-line-img'));
+  t('v103 in-app cart: curtain money stays exact in the SPA totals ($170 list / $136 member hook)', el('cartTotals').innerHTML.includes('$170') && el('cartTotals').innerHTML.includes('$136'));
+  run('renderCcLines();');
+  t('v103 in-app cart: the checkout lines render the same photo', el('ccLines').innerHTML.includes('/menu-img/curtain-rod-install.webp'));
+  t('v103 in-app cart: static — renderCart + renderCcLines build the thumbnail via svcImgHtml(l.id, ...) and the .cart-line-img style exists', /function renderCart\(\)[\s\S]{0,4000}svcImgHtml\(l\.id/.test(appJsSrc) && /function renderCcLines\(\)[\s\S]{0,4000}svcImgHtml\(l\.id/.test(appJsSrc) && appCssSrc.includes('.cart-line-img{'));
+  run('cartClearAll();');
 
   // --- HTTP: the public-link miss budget (isolated X-Forwarded-For bucket) ---
   const miss808 = { headers: { 'X-Forwarded-For': '203.0.113.77' } };
@@ -8464,7 +8478,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v102 statics: SW cache bumped to ghs-app-v102', swSrc.includes("const CACHE = 'ghs-app-v102'"));
+  t('v102 statics: SW cache bumped to ghs-app-v102', swSrc.includes("const CACHE = 'ghs-app-v103'"));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
