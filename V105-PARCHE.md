@@ -14,7 +14,7 @@ Orden de Gabriel: fortalecer Junk & Hauling de punta a punta — 5 servicios nue
 
 - Garage Cleanout y Debris entran al ancla de la carga mediana ($325); su descripción dice "From $325 — final price follows the load tiers" (el framing va en el texto, NO en el flag `from:` — ese flag está cableado al rango del turbo y renderizaría "$325–$300").
 - Fluyen por todo lo existente: `SERVER_MENU` (server.js) + `MENU_CATALOG`/`MENU_GROUPS`/`MENU_ES` (app.js) en espejo exacto, `MENU_TRADE` = gardening, `SERVICE_HOURS` (1h/1h/1h/2h/2h), `CAPTAIN_EXCLUDED_SERVICE_IDS` (basura = $0 override del capitán, como los tiers), filas PROPUESTA en `MASTER-SERVICE-LIST.md` §4, carrito, split de depósito ($50 plano ≤$300, 40% arriba), matemática de miembro, admin y bot.
-- Fotos de menú NUEVAS, creadas (fotorrealistas, estilo cinematic claro, sin texto): `menu-img/{junk-single-item,appliance-removal,mattress-removal,garage-cleanout,debris-removal}.webp` (512×341, como todo el set; 107 imágenes en total).
+- Fotos de menú NUEVAS, creadas (fotorrealistas, estilo cinematic claro, sin texto): `menu-img/{junk-single-item,appliance-removal,mattress-removal,garage-cleanout,debris-removal}.webp` (512×341, como todo el set; 107 imágenes en total). ⚠️ **EN VIVO QUEDARON EN FALLBACK (ver nota de publicación):** el conector de GitHub no transporta binarios (push_files valida UTF-8 y create_or_update_file codifica el string que recibe), así que las 5 fotos reales viven en el commit local `32cceb6` listas para subir cuando haya una ruta binaria (git push con credenciales), y en vivo las tarjetas usan el fallback diseñado del sistema: foto de categoría Jardinería en el menú y miniatura oculta en la página del carrito. Las fotos NO se perdieron.
 - Confirmados INTACTOS: tiers $250/$325/$425/$650, Green Waste $250, add-ons haul-* $50 nodisc.
 
 ## 2) Landing `/junk-removal`
@@ -34,7 +34,7 @@ Orden de Gabriel: fortalecer Junk & Hauling de punta a punta — 5 servicios nue
 ## 4) IndexNow
 
 - Key generada: `08228ae9460ae3105f0709c73a626eec` — archivo `app/public/08228ae9460ae3105f0709c73a626eec.txt` (contenido = la key) servido por ruta explícita en server.js (modelo BingSiteAuth): `GET /08228ae9460ae3105f0709c73a626eec.txt` → 200 text/plain.
-- Envío ÚNICO al desplegar (one-time, sin jobs de fondo): POST https://api.indexnow.org/indexnow con las 6 URLs del sitemap. Resultado en el reporte de publicación.
+- Envío ÚNICO al desplegar (one-time, sin jobs de fondo): POST https://api.indexnow.org/indexnow con las 6 URLs del sitemap. **Resultado: HTTP 202 Accepted** (2026-11-15, con el key file ya sirviendo en vivo).
 
 ## Housekeeping
 
@@ -42,3 +42,9 @@ Orden de Gabriel: fortalecer Junk & Hauling de punta a punta — 5 servicios nue
 - Pins de conteo del suite actualizados 102→107 servicios / 108→113 tarjetas; pins del sitemap (v80.18, v97 byte-idéntico, v97 www) extendidos a 6 puertas; pins de SW a v105.
 - Tests nuevos (bloque v105, 23): catálogo PROPUESTA + confirmados intactos, 11 rutas del bot EN/ES con precio/depósito exactos, 2 regresiones de instalación, checkout del bot crea carrito real de mattress-removal y la página pública del carrito muestra su foto + línea de miembro $100.00, puerta /junk-removal (200, canonical, CTA, src válido y hostil), sitemap de 6 URLs exactas, key file de IndexNow.
 - **Suite completo: 2,015 PASS / 0 FAIL, corrido DOS VECES** (baseline v104: 1,992; +23 nuevos).
+
+## Nota de publicación (transparencia total)
+
+- Snapshot de texto a GitHub main vía push_files: commit `bcfbbbc2406ee7fa8334e871ab9f4005a4b4a2d6` (8 paths: server.js, app.js, sw.js, junk-removal.html, key IndexNow, MASTER-SERVICE-LIST.md, tests, este parche). Antes de empujar se verificó divergencia por SHA de blob: los 5 archivos ya sincronizados coincidían byte a byte con el estado local v104.
+- Las 5 fotos .webp se intentaron por create_or_update_file con base64: la API guardó el TEXTO base64 como contenido (doble codificación — el servidor codifica el string que recibe y su spec prohíbe mandar base64). push_files las rechazó por no-UTF-8 (validación documentada). El push por git directo no tiene credenciales de escritura en esta VM (solo lectura). Los 5 archivos corruptos se BORRARON de main con delete_file (head final del día: ver registro de sync) para no dejar basura servida; las fotos reales quedan en el commit local `32cceb6` y en el working tree.
+- Verificación en vivo post-despliegue: homepage + 4 puertas + /junk-removal en 200, sitemap con 6 URLs, key file 200 con la key exacta, app.js en vivo con los 5 servicios y precios exactos, bot en vivo cotiza junk-single-item $150/$120 dep $50, carrito de Charla intacto ($170/$50/$120, miembro $136) y carritos de Ernest intactos ($3,675 + $1,885).
