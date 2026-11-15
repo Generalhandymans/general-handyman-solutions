@@ -6432,25 +6432,40 @@ async function handleRequest(req, res) {
   if (req.method === 'GET' && p === '/tecnico') { res.writeHead(302, { Location: '/#worker?class=tecnico' }); return res.end(); }
   if (req.method === 'GET' && p === '/ayudante') { res.writeHead(302, { Location: '/#worker?class=ayudante' }); return res.end(); }
   if (req.method === 'GET' && p === '/tech') { res.writeHead(302, { Location: '/#worker' }); return res.end(); }
-  // v80.9 FUSIÓN — the promo's direct door (Gabriel, 2026-11-01): the bio/QR
-  // link generalhandymans.app/plus lands the customer straight on the
-  // HomeCare Plus $100 join (#join-plus1), never on the homepage. Any query
-  // (?src=CODE) moves INSIDE the fragment, where the client's join-route
-  // parser reads it (e.g. #join-plus1?src=INSTA1). /plus2 is the 2-visit twin.
-  if (req.method === 'GET' && (p === '/plus' || p === '/plus2')) {
-    const frag = p === '/plus' ? '#join-plus1' : '#join-plus2';
-    const qs = url.search ? url.search.slice(1) : '';
-    res.writeHead(302, { Location: '/' + frag + (qs ? '?' + qs : '') });
-    return res.end();
-  }
-  // v80.11 ALCANCE: the twin doors for the other two plans Gabriel
-  // promotes — /homecare lands on the $29 join, /yard on the 1-visit
-  // Yard join. Same contract as /plus: query moves inside the fragment.
-  if (req.method === 'GET' && (p === '/homecare' || p === '/yard')) {
-    const frag = p === '/homecare' ? '#join-homecare' : '#join-yard1';
-    const qs = url.search ? url.search.slice(1) : '';
-    res.writeHead(302, { Location: '/' + frag + (qs ? '?' + qs : '') });
-    return res.end();
+  // v104 (Gabriel, 2026-11-15: «páginas reales ya») — the four promo doors
+  // are REAL landing pages now. History: v80.9/v80.11 302'd /plus, /plus2,
+  // /homecare and /yard straight onto the SPA join fragments — great for a
+  // bio/QR tap, invisible to search: Google Search Console flagged all
+  // four "Redirect error" and Bing would not crawl them, yet the sitemap
+  // lists them. Each door now serves its own server-rendered plan page
+  // (app/public/landings/, dark brand theme, EN|ES one-language toggle on
+  // the app's ghsMenuLang store) with a 200 and full indexable text.
+  // The JOIN CONTRACT IS UNCHANGED: the page's CTA points at the SAME
+  // fragment the 302 used to target (/#join-plus1, /#join-plus2,
+  // /#join-homecare, /#join-yard1 — plus /#join-yard2 for the Yard page's
+  // 2-visit option), and a ?src=CODE campaign stamp still rides INSIDE
+  // that fragment, exactly where the client's join-route parser reads it
+  // (e.g. /plus?src=INSTA1 → CTA /#join-plus1?src=INSTA1). The stamp is
+  // charset-validated before it is written into the page; anything else
+  // is dropped, never reflected.
+  const LANDING_DOORS = {
+    '/plus': { file: 'plus.html', join: '#join-plus1' },
+    '/plus2': { file: 'plus2.html', join: '#join-plus2' },
+    '/homecare': { file: 'homecare.html', join: '#join-homecare' },
+    '/yard': { file: 'yard.html', join: '#join-yard1', join2: '#join-yard2' }
+  };
+  if (req.method === 'GET' && LANDING_DOORS[p]) {
+    const door = LANDING_DOORS[p];
+    const rawSrc = (url.searchParams.get('src') || '').trim();
+    const src = /^[A-Za-z0-9_-]{1,40}$/.test(rawSrc) ? rawSrc : '';
+    const href = frag => '/' + frag + (src ? '?src=' + src : '');
+    let body;
+    try { body = fs.readFileSync(path.join(__dirname, 'public', 'landings', door.file), 'utf8'); }
+    catch (e) { res.writeHead(404); return res.end('not found'); }
+    body = body.split('%%JOIN%%').join(href(door.join));
+    if (door.join2) body = body.split('%%JOIN2%%').join(href(door.join2));
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    return res.end(body);
   }
   if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
     return serveTextFile(req, res, path.join(__dirname, 'public', 'index.html'), 'text/html; charset=utf-8');
@@ -6534,7 +6549,7 @@ async function handleRequest(req, res) {
   }
   // SEO doors (v80.18): robots.txt + sitemap.xml at the apex root. The
   // sitemap lists only the real public customer doors (the homepage and
-  // the four membership join doors the server 302s onto their fragments).
+  // the four membership plan doors — real landing pages since v104).
   // v97: ONE canonical sitemap builder behind every sitemap door — the
   // <loc> entries ALWAYS carry the base passed in, never the host that
   // happened to serve the fetch, so every door hands Bing the same

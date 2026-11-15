@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v103'"));
+t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v104'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4133,17 +4133,35 @@ t('static v63: /tecnico + /tech redirect to the worker entry; the activation ema
   t('v63: GET /tecnico and /tech 302 to /#worker', r1.status === 302 && (r1.headers.get('location') || '').includes('#worker') && r2.status === 302);
 }
 
-// ---------------- v80.9 FUSIÓN: /plus — the promo's direct door to the $100 Plus join ----------------
-t('static v80.9: /plus + /plus2 doors exist in server.js, landing on the Plus join fragments',
-  serverSrc.includes("p === '/plus'") && serverSrc.includes("'#join-plus1'") && serverSrc.includes("'#join-plus2'"));
+// ---------------- v104: /plus + /plus2 — REAL landing pages (v80.9's 302 doors retired; the join contract lives on in the page CTAs) ----------------
+t('static v104: the four plan doors are LANDING_DOORS in server.js, serving real pages from public/landings (no 302 left)',
+  serverSrc.includes('const LANDING_DOORS = {') && serverSrc.includes("'#join-plus1'") && serverSrc.includes("'#join-plus2'") &&
+  serverSrc.includes("'#join-homecare'") && serverSrc.includes("'#join-yard1'") && serverSrc.includes("'#join-yard2'") &&
+  ['plus.html', 'plus2.html', 'homecare.html', 'yard.html'].every(f => fs.existsSync(path.join(APP_DIR, 'public', 'landings', f))));
+{
+  const landingSrc = f => fs.readFileSync(path.join(APP_DIR, 'public', 'landings', f), 'utf8');
+  t('static v104: every landing carries its own canonical + the settled plan price, the brand red, the phone, REPORTING FOR DUTY and the EN|ES one-language toggle on ghsMenuLang',
+    landingSrc('plus.html').includes('<link rel="canonical" href="https://generalhandymans.app/plus">') && landingSrc('plus.html').includes('$100') &&
+    landingSrc('plus2.html').includes('<link rel="canonical" href="https://generalhandymans.app/plus2">') && landingSrc('plus2.html').includes('$175') &&
+    landingSrc('homecare.html').includes('<link rel="canonical" href="https://generalhandymans.app/homecare">') && landingSrc('homecare.html').includes('$29') &&
+    landingSrc('yard.html').includes('<link rel="canonical" href="https://generalhandymans.app/yard">') && landingSrc('yard.html').includes('$75') && landingSrc('yard.html').includes('$150') &&
+    ['plus.html', 'plus2.html', 'homecare.html', 'yard.html'].every(f => { const s = landingSrc(f); return s.includes('#e42535') && s.includes('ghsMenuLang') && s.includes('data-lang="es"') && s.includes('%%JOIN%%') && s.includes('(707) 862-3773') && s.includes('REPORTING FOR DUTY'); }) &&
+    landingSrc('yard.html').includes('Unused visits do not roll over'));
+}
 {
   const p1 = await fetch(BASE2 + '/plus', { redirect: 'manual' });
+  const p1Body = await p1.text();
   const p2 = await fetch(BASE2 + '/plus?src=PROMO1', { redirect: 'manual' });
+  const p2Body = await p2.text();
   const p3 = await fetch(BASE2 + '/plus2', { redirect: 'manual' });
-  t('v80.9: GET /plus 302 to /#join-plus1; ?src moves inside the fragment; /plus2 to /#join-plus2',
-    p1.status === 302 && (p1.headers.get('location') || '') === '/#join-plus1' &&
-    p2.status === 302 && (p2.headers.get('location') || '') === '/#join-plus1?src=PROMO1' &&
-    p3.status === 302 && (p3.headers.get('location') || '') === '/#join-plus2');
+  const p3Body = await p3.text();
+  t('v104: GET /plus is a REAL page (200, no redirect) — HomeCare Plus $100 with its join CTA on the old fragment',
+    p1.status === 200 && !p1.headers.get('location') && p1Body.includes('HomeCare Plus') && p1Body.includes('$100') &&
+    p1Body.includes('href="/#join-plus1"') && p1Body.includes('<link rel="canonical" href="https://generalhandymans.app/plus">'));
+  t('v104: GET /plus?src=PROMO1 keeps the campaign stamp — it rides inside the CTA fragment, exactly like the old 302 contract',
+    p2.status === 200 && p2Body.includes('href="/#join-plus1?src=PROMO1"'));
+  t('v104: GET /plus2 is a REAL page (200) — HomeCare Plus 2 visits $175, CTA /#join-plus2',
+    p3.status === 200 && p3Body.includes('$175') && p3Body.includes('href="/#join-plus2"'));
 }
 
 // ---------------- v72: approved cleanup (29 proposals + ideas) ----------------
@@ -4616,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v102: ghs-app-v102)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v103'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v104: ghs-app-v104)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v104'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -5612,7 +5630,7 @@ t('static v80.11: bounty award sites fire ONLY on real money (paid session with 
 t('static v80.11: sales commission is $10 and rides the SAME payout transfer as job pay (payOffer + commission, one event)', serverSrc.includes('const SALES_COMMISSION = 10') && serverSrc.includes('function jobSalesCommission(') && serverSrc.includes('Number(j.payOffer) + commission811'));
 t('static v80.11: tech-zone endpoints exist (referrals / sales-menu / seller carts / estimates)', serverSrc.includes("p === '/api/worker/referrals'") && serverSrc.includes("p === '/api/worker/sales-menu'") && serverSrc.includes("p === '/api/worker/carts'") && serverSrc.includes("p === '/api/worker/estimates'"));
 t('static v80.11: tech estimates are born flagged + seller-stamped and audited (no approval step in the path)', serverSrc.includes('techCreated: true') && serverSrc.includes('soldByWorkerId: user.id') && serverSrc.includes("audit(user, 'estimate.tech_create'"));
-t('static v80.11: short doors /homecare + /yard mirror /plus (fragment targets join-homecare / join-yard1)', serverSrc.includes("p === '/homecare' || p === '/yard'") && serverSrc.includes("'#join-yard1'"));
+t('static v104 (was v80.11): the short doors /homecare + /yard are LANDING_DOORS whose page CTAs carry the join fragments (join-homecare / join-yard1 + join-yard2)', serverSrc.includes("'/homecare': { file: 'homecare.html', join: '#join-homecare' }") && serverSrc.includes("'/yard': { file: 'yard.html', join: '#join-yard1', join2: '#join-yard2' }"));
 t('static v80.11: apex is the APP_URL default and the worker emails print the apex (item 7)', serverSrc.includes("process.env.APP_URL || 'https://generalhandymans.app/'") && !serverSrc.includes("(p.appUrl || 'https://app.generalhandymans.app')") && !serverSrc.includes('re-apply anytime at app.generalhandymans.app'));
 t('static v80.11: invoice pay is email-guarded — looksLikeEmail at session creation, sanitize + admin flag in the pay handler', serverSrc.includes('function looksLikeEmail(') && serverSrc.includes('looksLikeEmail(user.email)') && serverSrc.includes('inv.emailInvalid = true') && serverSrc.includes('emailInvalid: !!inv.emailInvalid'));
 t('static v80.11 client: tech zone carries the sales / estimates / referrals sections and their loaders', htmlSrc.includes('id="workerSales"') && htmlSrc.includes('id="workerEstimates"') && htmlSrc.includes('id="workerReferrals"') && htmlSrc.includes('function loadWorkerSales(') && htmlSrc.includes('function loadWorkerEstimates(') && htmlSrc.includes('function loadWorkerReferrals('));
@@ -5733,14 +5751,18 @@ const wFar = await mkWorker3('far@t.local', 'Far Fred', '(707) 555-0212', 'Elk G
 const custX = await mkCustomer3('custx@t.local', 'Cust X', '(707) 555-0111');
 const CX = custX.token;
 
-// --- item 6: short doors ---
+// --- item 6: short doors (v104: real landing pages; the v80.11 302 contract lives on in the page CTAs) ---
 async function raw3(p) { const r = await fetch(BASE3 + p, { redirect: 'manual' }); return { status: r.status, loc: r.headers.get('location') || '' }; }
-const doorHc = await raw3('/homecare');
-t('v80.11 doors: GET /homecare -> 302 /#join-homecare', doorHc.status === 302 && doorHc.loc === '/#join-homecare');
-const doorYd = await raw3('/yard?src=ABC');
-t('v80.11 doors: GET /yard?src=ABC -> 302 /#join-yard1?src=ABC (query moves inside the fragment, like /plus)', doorYd.status === 302 && doorYd.loc === '/#join-yard1?src=ABC');
+const doorHcR = await fetch(BASE3 + '/homecare', { redirect: 'manual' });
+const doorHcBody = await doorHcR.text();
+t('v104 doors: GET /homecare is a REAL page (200, no redirect) — HomeCare $29, first month FREE, CTA /#join-homecare',
+  doorHcR.status === 200 && !doorHcR.headers.get('location') && doorHcBody.includes('HomeCare') && doorHcBody.includes('$29') && doorHcBody.includes('href="/#join-homecare"'));
+const doorYdR = await fetch(BASE3 + '/yard?src=ABC', { redirect: 'manual' });
+const doorYdBody = await doorYdR.text();
+t('v104 doors: GET /yard?src=ABC is a REAL page (200) — Yard $75, both CTAs carry the stamp inside the fragment (/#join-yard1?src=ABC + /#join-yard2?src=ABC)',
+  doorYdR.status === 200 && doorYdBody.includes('$75') && doorYdBody.includes('href="/#join-yard1?src=ABC"') && doorYdBody.includes('href="/#join-yard2?src=ABC"'));
 const doorPlus = await raw3('/plus');
-t('v80.11 doors: GET /plus is unchanged -> /#join-plus1', doorPlus.status === 302 && doorPlus.loc === '/#join-plus1');
+t('v104 doors: GET /plus is a page now, not a redirect (200, no Location header)', doorPlus.status === 200 && doorPlus.loc === '');
 
 // --- item 2: referrals surface ---
 const ref0 = await req3('GET', '/api/worker/referrals', { token: wSeller.token });
@@ -6437,14 +6459,18 @@ t('static v80.17: the guest is never trapped — exitJoinPromo disarms, any non-
     appJs817.includes("'#join-yard1': { kind: 'yardcare', plan: 'yard1'") &&
     appJs817.includes("'#join-homecare': { kind: 'homecare', plan: 'homecare'"));
   const dPlus817 = await fetch(BASE + '/plus', { redirect: 'manual' });
+  const dPlusBody817 = await dPlus817.text();
   const dPlusSrc817 = await fetch(BASE + '/plus?src=PUERTA817', { redirect: 'manual' });
+  const dPlusSrcBody817 = await dPlusSrc817.text();
   const dYard817 = await fetch(BASE + '/yard', { redirect: 'manual' });
+  const dYardBody817 = await dYard817.text();
   const dHome817 = await fetch(BASE + '/homecare', { redirect: 'manual' });
-  t('v80.17 doors: /plus, /yard and /homecare still 302 onto their join fragments, and ?src still rides INSIDE the fragment',
-    dPlus817.status === 302 && (dPlus817.headers.get('location') || '') === '/#join-plus1' &&
-    dPlusSrc817.status === 302 && (dPlusSrc817.headers.get('location') || '') === '/#join-plus1?src=PUERTA817' &&
-    dYard817.status === 302 && (dYard817.headers.get('location') || '') === '/#join-yard1' &&
-    dHome817.status === 302 && (dHome817.headers.get('location') || '') === '/#join-homecare');
+  const dHomeBody817 = await dHome817.text();
+  t('v104 doors (was v80.17): /plus, /yard and /homecare are REAL pages (200, no 302) whose CTAs land on their join fragments, and ?src still rides INSIDE the fragment',
+    dPlus817.status === 200 && dPlusBody817.includes('href="/#join-plus1"') &&
+    dPlusSrc817.status === 200 && dPlusSrcBody817.includes('href="/#join-plus1?src=PUERTA817"') &&
+    dYard817.status === 200 && dYardBody817.includes('href="/#join-yard1"') &&
+    dHome817.status === 200 && dHomeBody817.includes('href="/#join-homecare"'));
   t('v80.17 src: the client still captures the source from inside the hash on the promo door (ghsSrc stash intact)',
     appJs817.includes('function captureCampaignSource(){') && appJs817.includes("sessionStorage.setItem('ghsSrc'"));
   const jsResp98 = await fetch(BASE + '/app.js');
@@ -8478,7 +8504,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v102 statics: SW cache bumped to ghs-app-v102', swSrc.includes("const CACHE = 'ghs-app-v103'"));
+  t('v104 statics: SW cache bumped to ghs-app-v104', swSrc.includes("const CACHE = 'ghs-app-v104'"));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
