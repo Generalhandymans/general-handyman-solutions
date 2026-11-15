@@ -624,7 +624,7 @@ const MENU_TRADE = {
   'closet-doors': 'carpentry', 'door-knob-install': 'carpentry', 'deadbolt-install': 'carpentry', 'deadbolt-knob-combo': 'carpentry', 'smart-lock-install': 'carpentry', 'door-adjustment': 'carpentry', 'weatherstripping': 'carpentry', 'screen-door-install': 'carpentry', 'sliding-door-service': 'carpentry', 'window-screen-repair': 'carpentry', 'pet-door-install': 'carpentry', 'furniture-assembly': 'carpentry', 'furniture-assembly-large': 'carpentry', 'floating-shelves': 'carpentry', 'cabinet-hardware-install': 'carpentry', 'baby-gate-install': 'carpentry', 'picture-mirror-hanging': 'carpentry', 'mirror-cabinet-install': 'carpentry', 'curtain-rod-install': 'carpentry', 'blinds-install': 'carpentry', 'blinds-install-deal': 'carpentry', 'baseboard-install': 'carpentry', 'baseboard-repair': 'carpentry', 'laminate-floor-repair': 'carpentry', 'carpet-repair': 'carpentry', 'transition-strip-install': 'carpentry', 'drywall-patch-small': 'carpentry', 'drywall-patch-medium': 'carpentry', 'drywall-holes-set': 'carpentry', 'paint-room': 'carpentry', 'paint-room-large': 'carpentry', 'paint-room-large-ceiling': 'carpentry', 'accent-wall-painting': 'carpentry', 'interior-door-painting': 'carpentry', 'fence-picket-repair': 'carpentry', 'fence-post-replacement': 'carpentry', 'deck-board-replacement': 'carpentry', 'gate-repair': 'carpentry',
   'tv-mounting': 'electrical', 'tv-mounting-large': 'electrical', 'soundbar-mounting': 'electrical', 'chandelier-swap': 'electrical', 'light-fixture-swap': 'electrical', 'exhaust-fan-swap': 'electrical', 'dimmer-switch-swap': 'electrical', 'smoke-co-detector-install': 'electrical', 'smart-thermostat-install': 'electrical', 'security-camera-install': 'electrical', 'garage-opener': 'electrical', 'holiday-lights': 'electrical', 'holiday-lights-two-story': 'electrical', 'holiday-lights-takedown': 'electrical', 'holiday-lights-takedown-two-story': 'electrical', 'window-ac-install': 'electrical',
   'toilet-repair': 'plumbing', 'garbage-disposal-swap': 'plumbing', 'showerhead-swap': 'plumbing', 'tub-shower-recaulk': 'plumbing', 'grab-bar-install': 'plumbing', 'p-trap-swap': 'plumbing', 'bidet-seat-install': 'plumbing', 'dryer-vent-cleaning': 'plumbing', 'washer-dryer-hookup': 'plumbing', 'bathroom-accessories-install': 'plumbing', 'hose-bibb-swap': 'plumbing',
-  'gutter-cleaning': 'gardening', 'gutter-cleaning-two-story': 'gardening', 'pressure-washing': 'gardening', 'pressure-washing-large': 'gardening', 'sprinkler-irrigation': 'gardening', 'junk-minimum': 'gardening', 'junk-medium': 'gardening', 'junk-large': 'gardening', 'junk-full': 'gardening', 'mailbox-install': 'gardening',
+  'gutter-cleaning': 'gardening', 'gutter-cleaning-two-story': 'gardening', 'pressure-washing': 'gardening', 'pressure-washing-large': 'gardening', 'sprinkler-irrigation': 'gardening', 'junk-minimum': 'gardening', 'junk-medium': 'gardening', 'junk-large': 'gardening', 'junk-full': 'gardening', 'junk-single-item': 'gardening', 'appliance-removal': 'gardening', 'mattress-removal': 'gardening', 'garage-cleanout': 'gardening', 'debris-removal': 'gardening', 'mailbox-install': 'gardening',
   'fuel-pump-replacement': 'mechanic', 'fuel-pump-tank-drop': 'mechanic', 'alternator-difficult': 'mechanic', 'spark-plug-v6v8': 'mechanic', 'turbo-replacement': 'mechanic', 'check-engine-diagnostics': 'mechanic', 'belt-hose-replacement': 'mechanic', 'spark-plug-replacement': 'mechanic', 'headlight-replacement': 'mechanic',
   'heavy-furniture-move': 'handyman'
 };
@@ -654,7 +654,7 @@ function tradeForService(service, serviceId) {
 // manual (the owner marks them paid); no Connect auto-transfers, no
 // sign-up bounties (not signed yet), no customer-facing captain display.
 const CAPTAIN_OVERRIDE_RATE = 0.05;
-const CAPTAIN_EXCLUDED_SERVICE_IDS = ['oil-change', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste'];
+const CAPTAIN_EXCLUDED_SERVICE_IDS = ['oil-change', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste', 'junk-single-item', 'appliance-removal', 'mattress-removal', 'garage-cleanout', 'debris-removal'];
 const CAPTAIN_AREA_SEED = [
   { name: 'Fairfield', cities: ['Fairfield', 'Suisun City', 'Dixon', 'Rio Vista', 'Benicia'], fixed: true },
   { name: 'Vacaville', cities: ['Vacaville'] },
@@ -1782,7 +1782,7 @@ function minTotalForSoldMargin() { return STRIPE_FEE_FLAT / (1 - MARGIN_FLOOR - 
 // Typical hours per catalog service — the SAME hours the prices were
 // built from (menu metas + MASTER-SERVICE-LIST). Standard tech pay for
 // a service is $50/hr × these hours, min $50 (Gabriel's pay model).
-const SERVICE_HOURS = { 'closet-doors': 2.5, 'door-slab-swap': 2, 'door-knob-install': 1, 'deadbolt-install': 0.75, 'deadbolt-knob-combo': 1, 'smart-lock-install': 1.5, 'door-adjustment': 1, 'weatherstripping': 1, 'screen-door-install': 2, 'sliding-door-service': 1.5, 'window-screen-repair': 1, 'pet-door-install': 2, 'furniture-assembly': 1.5, 'furniture-assembly-large': 2.5, 'closet-organizer': 3, 'floating-shelves': 1, 'cabinet-hardware-install': 1, 'baby-gate-install': 1, 'picture-mirror-hanging': 1, 'mirror-cabinet-install': 1, 'curtain-rod-install': 0.75, 'blinds-install': 0.5, 'blinds-install-deal': 0.5, 'baseboard-install': 3, 'baseboard-repair': 1.5, 'laminate-floor-repair': 3, 'carpet-repair': 2.5, 'transition-strip-install': 1, 'drywall-patch-small': 1.5, 'drywall-patch-medium': 3, 'drywall-holes-set': 1, 'paint-room': 4, 'paint-room-large': 6, 'paint-room-large-ceiling': 8, 'accent-wall-painting': 2.5, 'interior-door-painting': 1, 'fence-picket-repair': 2, 'fence-post-replacement': 1.25, 'deck-board-replacement': 2, 'gate-repair': 1.5, 'tv-mounting': 2, 'tv-mounting-large': 2.5, 'soundbar-mounting': 1, 'ceiling-fan': 1.5, 'chandelier-swap': 1.5, 'light-fixture-swap': 1, 'exhaust-fan-swap': 2, 'dimmer-switch-swap': 0.75, 'smoke-co-detector-install': 1, 'ring-doorbell': 1, 'smart-thermostat-install': 1.5, 'security-camera-install': 1, 'garage-opener': 3, 'holiday-lights': 2.5, 'holiday-lights-two-story': 3.5, 'holiday-lights-takedown': 1, 'holiday-lights-takedown-two-story': 3, 'window-ac-install': 1.5, 'faucet-replacement': 1.5, 'toilet-replacement': 2.5, 'toilet-repair': 1, 'garbage-disposal-swap': 2, 'showerhead-swap': 0.75, 'tub-shower-recaulk': 1.5, 'grab-bar-install': 1, 'p-trap-swap': 1.5, 'bidet-seat-install': 1.5, 'dryer-vent-cleaning': 1.5, 'washer-dryer-hookup': 1.5, 'drain-unclog': 1, 'dishwasher-swap': 2, 'vanity-swap': 3, 'bathroom-accessories-install': 1, 'hose-bibb-swap': 1.5, 'water-heater': 3.5, 'gutter-cleaning': 2, 'gutter-cleaning-two-story': 3, 'pressure-washing': 2, 'pressure-washing-large': 3, 'yard-cleanup': 2, 'sprinkler-irrigation': 1.5, 'green-waste': 1.5, 'junk-minimum': 1.5, 'junk-medium': 2, 'junk-large': 2.5, 'junk-full': 3, 'mailbox-install': 1.5, 'fuel-pump-replacement': 4, 'battery-replacement': 1, 'check-engine-diagnostics': 1, 'oil-change': 1, 'brake-pads': 1, 'alternator-replacement': 2, 'starter-replacement': 2.5, 'belt-hose-replacement': 1.5, 'spark-plug-replacement': 1.5, 'fuel-pump-tank-drop': 5.5, 'alternator-difficult': 3, 'spark-plug-v6v8': 2.5, 'turbo-replacement': 3, 'headlight-replacement': 0.75, 'heavy-furniture-move': 1 };
+const SERVICE_HOURS = { 'closet-doors': 2.5, 'door-slab-swap': 2, 'door-knob-install': 1, 'deadbolt-install': 0.75, 'deadbolt-knob-combo': 1, 'smart-lock-install': 1.5, 'door-adjustment': 1, 'weatherstripping': 1, 'screen-door-install': 2, 'sliding-door-service': 1.5, 'window-screen-repair': 1, 'pet-door-install': 2, 'furniture-assembly': 1.5, 'furniture-assembly-large': 2.5, 'closet-organizer': 3, 'floating-shelves': 1, 'cabinet-hardware-install': 1, 'baby-gate-install': 1, 'picture-mirror-hanging': 1, 'mirror-cabinet-install': 1, 'curtain-rod-install': 0.75, 'blinds-install': 0.5, 'blinds-install-deal': 0.5, 'baseboard-install': 3, 'baseboard-repair': 1.5, 'laminate-floor-repair': 3, 'carpet-repair': 2.5, 'transition-strip-install': 1, 'drywall-patch-small': 1.5, 'drywall-patch-medium': 3, 'drywall-holes-set': 1, 'paint-room': 4, 'paint-room-large': 6, 'paint-room-large-ceiling': 8, 'accent-wall-painting': 2.5, 'interior-door-painting': 1, 'fence-picket-repair': 2, 'fence-post-replacement': 1.25, 'deck-board-replacement': 2, 'gate-repair': 1.5, 'tv-mounting': 2, 'tv-mounting-large': 2.5, 'soundbar-mounting': 1, 'ceiling-fan': 1.5, 'chandelier-swap': 1.5, 'light-fixture-swap': 1, 'exhaust-fan-swap': 2, 'dimmer-switch-swap': 0.75, 'smoke-co-detector-install': 1, 'ring-doorbell': 1, 'smart-thermostat-install': 1.5, 'security-camera-install': 1, 'garage-opener': 3, 'holiday-lights': 2.5, 'holiday-lights-two-story': 3.5, 'holiday-lights-takedown': 1, 'holiday-lights-takedown-two-story': 3, 'window-ac-install': 1.5, 'faucet-replacement': 1.5, 'toilet-replacement': 2.5, 'toilet-repair': 1, 'garbage-disposal-swap': 2, 'showerhead-swap': 0.75, 'tub-shower-recaulk': 1.5, 'grab-bar-install': 1, 'p-trap-swap': 1.5, 'bidet-seat-install': 1.5, 'dryer-vent-cleaning': 1.5, 'washer-dryer-hookup': 1.5, 'drain-unclog': 1, 'dishwasher-swap': 2, 'vanity-swap': 3, 'bathroom-accessories-install': 1, 'hose-bibb-swap': 1.5, 'water-heater': 3.5, 'gutter-cleaning': 2, 'gutter-cleaning-two-story': 3, 'pressure-washing': 2, 'pressure-washing-large': 3, 'yard-cleanup': 2, 'sprinkler-irrigation': 1.5, 'green-waste': 1.5, 'junk-minimum': 1.5, 'junk-medium': 2, 'junk-large': 2.5, 'junk-full': 3, 'junk-single-item': 1, 'appliance-removal': 1, 'mattress-removal': 1, 'garage-cleanout': 2, 'debris-removal': 2, 'mailbox-install': 1.5, 'fuel-pump-replacement': 4, 'battery-replacement': 1, 'check-engine-diagnostics': 1, 'oil-change': 1, 'brake-pads': 1, 'alternator-replacement': 2, 'starter-replacement': 2.5, 'belt-hose-replacement': 1.5, 'spark-plug-replacement': 1.5, 'fuel-pump-tank-drop': 5.5, 'alternator-difficult': 3, 'spark-plug-v6v8': 2.5, 'turbo-replacement': 3, 'headlight-replacement': 0.75, 'heavy-furniture-move': 1 };
 // Documented flat pays that beat the hours model (hauling: the worker
 // is paid per trip — Gabriel's green-waste split, $120/trip).
 const SERVICE_PAY_FLAT = { 'green-waste': 120 };
@@ -5725,6 +5725,11 @@ const SERVER_MENU = {
   "junk-medium":{p:325,m:260},
   "junk-large":{p:425,m:340},
   "junk-full":{p:650,m:520},
+  "junk-single-item":{p:150,m:120},
+  "appliance-removal":{p:150,m:120},
+  "mattress-removal":{p:125,m:100},
+  "garage-cleanout":{p:325,m:260},
+  "debris-removal":{p:325,m:260},
   "mailbox-install":{p:175,m:140},
   "fuel-pump-replacement":{p:350,m:280},
   "fuel-pump-tank-drop":{p:450,m:360},
@@ -5891,7 +5896,15 @@ const ASSISTANT_ROUTES = [
   { id: 'yard-cleanup', trade: 'gardening', nameEn: 'Yard Cleanup', nameEs: 'Limpieza de yarda', kw: ['yard cleanup', 'clean my yard', 'overgrown', 'limpieza de yarda', 'limpiar la yarda', 'limpiar yarda', 'yarda abandonada', 'overgrown yard'] },
   { id: 'gutter-cleaning', trade: 'gardening', nameEn: 'Gutter Cleaning', nameEs: 'Limpieza de canales / canalones', kw: ['gutter', 'canalones', 'canales de lluvia'] },
   { id: 'pressure-washing', trade: 'gardening', nameEn: 'Pressure Washing — Standard Area', nameEs: 'Lavado a presión — área estándar', kw: ['pressure wash', 'power wash', 'lavado a presion'] },
-  { id: 'junk-minimum', trade: 'gardening', nameEn: 'Junk Removal — Minimum Load', nameEs: 'Retiro de escombro — carga mínima', kw: ['junk removal', 'haul junk', 'retirar escombro', 'sacar basura', 'junk'] },
+  { id: 'junk-minimum', trade: 'gardening', nameEn: 'Junk Removal — Minimum Load', nameEs: 'Retiro de escombro — carga mínima', kw: ['junk removal', 'haul junk', 'haul away', 'get rid of', 'retirar escombro', 'sacar basura', 'tirar basura', 'junk'] },
+  { id: 'junk-medium', trade: 'gardening', nameEn: 'Junk Removal — Medium Load', nameEs: 'Retiro de escombro — carga mediana', kw: ['medium load', 'carga mediana', 'media carga', 'a room of furniture', 'un cuarto de muebles'] },
+  { id: 'junk-large', trade: 'gardening', nameEn: 'Junk Removal — Large Load', nameEs: 'Retiro de escombro — carga grande', kw: ['large load', 'big load', 'carga grande', 'half a garage', 'medio garaje'] },
+  { id: 'junk-full', trade: 'gardening', nameEn: 'Junk Removal — Full Load (truck & trailer)', nameEs: 'Retiro de escombro — carga completa', kw: ['full load', 'truck and trailer', 'carga completa', 'house cleanout', 'limpieza de casa completa'] },
+  { id: 'junk-single-item', trade: 'gardening', nameEn: 'Single-Item Pickup', nameEs: 'Retiro de un solo artículo', kw: ['single item pickup', 'one item pickup', 'pick up a couch', 'pickup a couch', 'remove a couch', 'remove my couch', 'couch removal', 'sofa removal', 'remove a sofa', 'haul away a couch', 'haul away my couch', 'one bulky item', 'just one item', 'couch', 'sofa', 'retirar un sillon', 'quitar un sillon', 'recoger un sillon', 'un solo articulo', 'retirar un mueble', 'sillon'] },
+  { id: 'appliance-removal', trade: 'gardening', nameEn: 'Appliance Removal', nameEs: 'Retiro de electrodomésticos', kw: ['appliance removal', 'remove my fridge', 'remove the fridge', 'refrigerator removal', 'haul away the fridge', 'haul away my fridge', 'fridge removal', 'remove my refrigerator', 'remove a refrigerator', 'remove my washer', 'haul away the washer', 'remove my dryer', 'haul away my dryer', 'remove the water heater', 'haul away the water heater', 'old appliance', 'fridge', 'refrigerator', 'washer', 'dryer', 'water heater', 'quitar la nevera', 'retirar la nevera', 'nevera vieja', 'nevera', 'quitar el refrigerador', 'retirar el refrigerador', 'refrigerador', 'quitar la lavadora', 'retirar la lavadora', 'lavadora', 'quitar la secadora', 'retirar la secadora', 'secadora', 'quitar el calentador', 'electrodomestico'] },
+  { id: 'mattress-removal', trade: 'gardening', nameEn: 'Mattress Removal', nameEs: 'Retiro de colchón', kw: ['mattress removal', 'remove my mattress', 'remove a mattress', 'haul away a mattress', 'mattress disposal', 'dispose of a mattress', 'box spring', 'mattress', 'colchon', 'quitar el colchon', 'retirar el colchon', 'sacar el colchon'] },
+  { id: 'garage-cleanout', trade: 'gardening', nameEn: 'Garage Cleanout', nameEs: 'Limpieza total de garaje', kw: ['garage cleanout', 'clean out my garage', 'clean out the garage', 'cleanout', 'clean my garage', 'garage full of junk', 'limpieza de garaje', 'limpiar el garaje', 'limpiar mi garaje', 'vaciar el garaje', 'garaje lleno'] },
+  { id: 'debris-removal', trade: 'gardening', nameEn: 'Construction Debris Removal', nameEs: 'Retiro de escombro de construcción', kw: ['construction debris', 'debris removal', 'remove debris', 'remodel debris', 'renovation debris', 'drywall debris', 'escombro de construccion', 'escombros de construccion', 'retirar escombros', 'sacar escombros', 'escombro'] },
   { id: 'sprinkler-irrigation', trade: 'gardening', nameEn: 'Sprinkler / Irrigation Repair', nameEs: 'Reparación de sprinklers / riego', kw: ['sprinkler', 'irrigation', 'riego', 'aspersor'] },
   { id: 'battery-replacement', trade: 'mechanic', nameEn: 'Car Battery Replacement', nameEs: 'Cambio de batería de carro', kw: ['car battery', 'battery died', 'bateria del carro', 'bateria muerta', 'no arranca bateria'] },
   { id: 'oil-change', trade: 'mechanic', nameEn: 'Oil Change & Fluids', nameEs: 'Cambio de aceite y fluidos', kw: ['oil change', 'cambio de aceite'] },
@@ -5938,6 +5951,7 @@ function assistantRoute(text) {
   }
   return { route: best, tie };
 }
+const ASSISTANT_JUNK_IDS = ['junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'junk-single-item', 'appliance-removal', 'mattress-removal', 'garage-cleanout', 'debris-removal', 'green-waste'];
 function assistantQuoteFor(serviceId, addonIds, isMember, asap) {
   const t = serverMenuTotals(serviceId, addonIds || [], !!isMember, !!asap);
   if (!t) return null;
@@ -5959,6 +5973,7 @@ const ASSISTANT_T = {
   materials: { en: 'Our menu prices are labor only — normally you buy the materials and we install them. If you\'d rather we supply them, we add them as a priced line: materials are paid in full upfront, plus the deposit for the work. That way everything\'s on site the day we come.', es: 'Nuestros precios del menú son solo mano de obra — normalmente tú compras los materiales y nosotros los instalamos. Si prefieres que los suplamos nosotros, los agregamos como línea cotizada: los materiales se pagan completos por adelantado, más el depósito del trabajo. Así todo está en el sitio el día que llegamos.' },
   hours: { en: 'You can reach us at (707) 862-3773, or order anytime in the app: generalhandymans.app — the menu, prices and booking are all right there. Gabriel\'s personal attention runs Monday to Saturday.', es: 'Nos puedes contactar al (707) 862-3773, u ordenar a cualquier hora en la app: generalhandymans.app — el menú, los precios y el apartado están ahí. La atención personal de Gabriel es de lunes a sábado.' },
   photoFree: { en: 'You can also send a photo right here in this chat — the photo estimate is free. Add your address and phone and Gabriel will price exactly what\'s there.', es: 'También puedes mandar una foto aquí mismo en este chat — el estimado por foto es gratis. Agrega tu dirección y tu teléfono y Gabriel cotiza exactamente lo que hay.' },
+  junkAsk: { en: 'Quick check so we price the right load: what items are going, and about how much space do they take? You can also send a photo right here — the photo estimate is free, and the final price follows the actual load.', es: 'Revisión rápida para cotizar la carga correcta: ¿qué artículos se van y más o menos cuánto espacio ocupan? También puedes mandar una foto aquí mismo — el estimado por foto es gratis, y el precio final sigue la carga real.' },
   escalation: { en: 'That one needs Gabriel\'s eyes on it — it\'s not a fixed menu price. I\'ve got your info and photos saved, and Gabriel will reply to you personally. His personal attention runs Monday to Saturday. You can also reach the team anytime at (707) 862-3773.', es: 'Ese trabajo necesita que Gabriel lo revise — no es precio fijo del menú. Ya guardé tus datos y tus fotos, y Gabriel te va a responder personalmente. Su atención personal es de lunes a sábado. También puedes contactar al equipo cuando quieras al (707) 862-3773.' },
   askDetails: { en: 'So Gabriel has everything, tell me: your name, your phone, the job address, and in your own words what you need. You can add photos right here too.', es: 'Para que Gabriel tenga todo, dime: tu nombre, tu teléfono, la dirección del trabajo y, en tus palabras, qué necesitas. También puedes agregar fotos aquí mismo.' },
   fallback: { en: 'Let me get you to the right place. We do carpentry, electrical, plumbing, yard work and mobile mechanic work. Tell me what\'s going on in your own words — for example "it leaks under the sink" — or send a photo and I\'ll route it.', es: 'Déjame llevarte al lugar correcto. Hacemos carpintería, electricidad, plomería, jardinería y mecánica. Dime qué pasa en tus palabras — por ejemplo "se moja abajo del sink" — o manda una foto y lo enruto.' }
@@ -5983,6 +5998,7 @@ function assistantQuoteText(s, q) {
     lines.push('Deposit to book: $' + q.deposit + ' · Balance when the job is done: $' + q.balance + '.');
     lines.push('If you want, I\'ll generate your booking link right here. Can you confirm your name, phone and address?');
   }
+  if (ASSISTANT_JUNK_IDS.includes(q.serviceId)) lines.push(ASSISTANT_T.junkAsk[s.lang]);
   return lines.join('\n');
 }
 function assistantDetectCity(text) {
@@ -6452,7 +6468,8 @@ async function handleRequest(req, res) {
     '/plus': { file: 'plus.html', join: '#join-plus1' },
     '/plus2': { file: 'plus2.html', join: '#join-plus2' },
     '/homecare': { file: 'homecare.html', join: '#join-homecare' },
-    '/yard': { file: 'yard.html', join: '#join-yard1', join2: '#join-yard2' }
+    '/yard': { file: 'yard.html', join: '#join-yard1', join2: '#join-yard2' },
+    '/junk-removal': { file: 'junk-removal.html', join: '#menu' }
   };
   if (req.method === 'GET' && LANDING_DOORS[p]) {
     const door = LANDING_DOORS[p];
@@ -6559,7 +6576,7 @@ async function handleRequest(req, res) {
   // can reach: the Render origin host itself (whose /sitemap.xml still
   // lists the canonical apex URLs) and the www-base variant below; the
   // apex /sitemap.xml body is byte-identical to the v80.18 original.
-  const SITEMAP_DOORS = ['/', '/plus', '/plus2', '/homecare', '/yard'];
+  const SITEMAP_DOORS = ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal'];
   const sitemapBody = base => '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     SITEMAP_DOORS.map(d => '  <url><loc>' + base + d + '</loc></url>').join('\n') + '\n</urlset>\n';
   if (req.method === 'GET' && p === '/robots.txt') {
@@ -6587,6 +6604,15 @@ async function handleRequest(req, res) {
     const file = path.join(__dirname, 'public', 'BingSiteAuth.xml');
     if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
     res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
+    return res.end(fs.readFileSync(file));
+  }
+  // IndexNow key file (v105): proves domain ownership to the IndexNow
+  // protocol — the file name IS the key and its content is the key.
+  // Served like BingSiteAuth, from app/public (single source of truth).
+  if (req.method === 'GET' && p === '/08228ae9460ae3105f0709c73a626eec.txt') {
+    const file = path.join(__dirname, 'public', '08228ae9460ae3105f0709c73a626eec.txt');
+    if (!fs.existsSync(file)) { res.writeHead(404); return res.end('not found'); }
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
     return res.end(fs.readFileSync(file));
   }
   // Membership plan card images (added 2026-10-21) + app logo banner (v40)

@@ -289,6 +289,11 @@ no se repiten aquí.*
 | Junk removal — medium load | $325 | per load | ~2 h | CONFIRMADO |
 | Junk removal — large load | $425 | per load | ~2.5 h | CONFIRMADO |
 | Junk removal — full load (truck + trailer) | $650 | per load | ~3 h | CONFIRMADO |
+| Single-item pickup | $150 | flat | ~1 h | PROPUESTA |
+| Appliance removal | $150 | flat | ~1 h | PROPUESTA |
+| Mattress removal | $125 | flat | ~1 h | PROPUESTA |
+| Garage cleanout | $325 | per load | ~2 h | PROPUESTA |
+| Construction debris removal | $325 | per load | ~2 h | PROPUESTA |
 
 *Nota junk removal (Gabriel, 2026-10-22): cada nivel se describe por
 lo que lleva — lo que el cliente puede meter — para que se ubique

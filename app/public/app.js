@@ -5298,6 +5298,11 @@ const MENU_CATALOG = {
   'junk-medium': { name: 'Junk Removal — Medium load', meta: 'One room of furniture or a garage corner', price: 325, member: 260 },
   'junk-large': { name: 'Junk Removal — Large load', meta: 'About 2 rooms or half a one-car garage', price: 425, member: 340 },
   'junk-full': { name: 'Junk Removal — Full load (truck & trailer)', meta: 'Full garage or house cleanout', price: 650, member: 520 },
+  'junk-single-item': { name: 'Single-Item Pickup', meta: 'One couch, fridge or bulky item — we haul it away', price: 150, member: 120 },
+  'appliance-removal': { name: 'Appliance Removal', meta: 'Fridge, washer, dryer or water heater haul-away', price: 150, member: 120 },
+  'mattress-removal': { name: 'Mattress Removal', meta: 'Mattress + box spring set, hauled away', price: 125, member: 100 },
+  'garage-cleanout': { name: 'Garage Cleanout', meta: 'From $325 — final price follows the load tiers', price: 325, member: 260 },
+  'debris-removal': { name: 'Construction Debris Removal', meta: 'From $325 — final price follows the load tiers', price: 325, member: 260 },
   'mailbox-install': { name: 'Mailbox Install', meta: '~1.5 h · Flat', price: 175, member: 140 },
   // ---------- Mecánica (master list section 5) ----------
   'fuel-pump-replacement': { name: 'Fuel Pump Replacement', meta: '~4 h · Flat', price: 350, member: 280 },
@@ -6308,7 +6313,7 @@ const MENU_GROUPS = [
   { key: 'carpentry', es: 'Carpintería', en: 'Carpentry & installs', services: ['tv-mounting', 'tv-mounting-large', 'furniture-assembly', 'door-slab-swap', 'closet-organizer', 'drywall-patch-medium', 'closet-doors', 'door-knob-install', 'deadbolt-install', 'deadbolt-knob-combo', 'smart-lock-install', 'door-adjustment', 'weatherstripping', 'screen-door-install', 'sliding-door-service', 'window-screen-repair', 'pet-door-install', 'furniture-assembly-large', 'floating-shelves', 'cabinet-hardware-install', 'baby-gate-install', 'picture-mirror-hanging', 'mirror-cabinet-install', 'curtain-rod-install', 'blinds-install', 'blinds-install-deal', 'baseboard-install', 'baseboard-repair', 'laminate-floor-repair', 'carpet-repair', 'transition-strip-install', 'drywall-patch-small', 'drywall-holes-set', 'paint-room', 'paint-room-large', 'paint-room-large-ceiling', 'accent-wall-painting', 'interior-door-painting', 'fence-picket-repair', 'fence-post-replacement', 'deck-board-replacement', 'gate-repair', 'heavy-furniture-move'] },
   { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener', 'soundbar-mounting', 'chandelier-swap', 'light-fixture-swap', 'exhaust-fan-swap', 'dimmer-switch-swap', 'smoke-co-detector-install', 'smart-thermostat-install', 'security-camera-install', 'holiday-lights-two-story', 'holiday-lights-takedown', 'holiday-lights-takedown-two-story', 'window-ac-install'] },
   { key: 'plumbing', es: 'Plomería', en: 'Plumbing', services: ['toilet-replacement', 'water-heater', 'drain-unclog', 'faucet-replacement', 'dishwasher-swap', 'vanity-swap', 'toilet-repair', 'garbage-disposal-swap', 'showerhead-swap', 'tub-shower-recaulk', 'grab-bar-install', 'p-trap-swap', 'bidet-seat-install', 'dryer-vent-cleaning', 'washer-dryer-hookup', 'bathroom-accessories-install', 'hose-bibb-swap'] },
-  { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'green-waste', 'gutter-cleaning-two-story', 'pressure-washing', 'pressure-washing-large', 'sprinkler-irrigation', 'mailbox-install'] },
+  { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'junk-single-item', 'appliance-removal', 'mattress-removal', 'garage-cleanout', 'debris-removal', 'green-waste', 'gutter-cleaning-two-story', 'pressure-washing', 'pressure-washing-large', 'sprinkler-irrigation', 'mailbox-install'] },
   { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'alternator-difficult', 'starter-replacement', 'fuel-pump-replacement', 'fuel-pump-tank-drop', 'check-engine-diagnostics', 'belt-hose-replacement', 'spark-plug-replacement', 'spark-plug-v6v8', 'turbo-replacement', 'headlight-replacement'] }
 ];
 const wzState = { step: 1, cat: '', est: 'inperson', city: '', when: '' };
@@ -6562,6 +6567,11 @@ const MENU_ES = {
   'junk-medium': ['Retiro de basura — carga mediana', 'Un cuarto de muebles o una esquina del garaje'],
   'junk-large': ['Retiro de basura — carga grande', 'Unos 2 cuartos o medio garaje de un carro'],
   'junk-full': ['Retiro de basura — carga completa (camión y remolque)', 'Garaje completo o limpieza de casa'],
+'junk-single-item': ['Retiro de un solo artículo', 'Un sillón, refrigerador o artículo grande — lo retiramos'],
+'appliance-removal': ['Retiro de electrodomésticos', 'Retiro de refrigerador, lavadora, secadora o calentador'],
+'mattress-removal': ['Retiro de colchón', 'Colchón + base (box spring), retirado'],
+'garage-cleanout': ['Limpieza total de garaje', 'Desde $325 — el precio final sigue las tarifas por carga'],
+'debris-removal': ['Retiro de escombro de construcción', 'Desde $325 — el precio final sigue las tarifas por carga'],
   'mailbox-install': ['Instalación de buzón', '~1.5 h · Precio fijo'],
   'fuel-pump-replacement': ['Cambio de bomba de gasolina', '~4 h · Precio fijo'],
   'fuel-pump-tank-drop': ['Reemplazo de bomba de gasolina — bajando el tanque', '~5–6 h · Sin panel de acceso — se baja el tanque'],

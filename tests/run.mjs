@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v101', swSrc.includes("const CACHE = 'ghs-app-v104'"));
+t('static: SW cache is ghs-app-v105', swSrc.includes("const CACHE = 'ghs-app-v105'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -163,7 +163,7 @@ const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSr
 const catalogIds42 = [...catBlock.matchAll(/'([a-z0-9-]+)': \{ name:/g)].map(m => m[1]);
 const grpBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_GROUPS = ['), htmlSrc.indexOf('const wzState'));
 const groupIds42 = [...grpBlock.matchAll(/services: \[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z0-9-]+)'/g)].map(x => x[1]));
-t('static v42: MENU_GROUPS covers the whole catalog exactly once (102 services since v82, no dupes, no extras)', catalogIds42.length === 102 && groupIds42.length === 102 && new Set(groupIds42).size === 102 && catalogIds42.every(id => groupIds42.includes(id)));
+t('static v42: MENU_GROUPS covers the whole catalog exactly once (107 services since v105, no dupes, no extras)', catalogIds42.length === 107 && groupIds42.length === 107 && new Set(groupIds42).size === 107 && catalogIds42.every(id => groupIds42.includes(id)));
 const wzBlock = htmlSrc.slice(htmlSrc.indexOf('id="wizardCard"'), htmlSrc.indexOf('id="menuBox"'));
 t('static v42: wizard customer copy says technician, never worker', !/worker/i.test(wzBlock) && htmlSrc.includes('we schedule your technician'));
 t('static v42: stale "50% deposit" copy is gone from the request flow', !htmlSrc.includes('50% deposit locks approved work'));
@@ -1325,10 +1325,10 @@ run("setMenuLang('en');"); // v80.19: the EN|ES toggle is ONE switch now — the
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
-t('v42 menu: renders all 102 catalog services as cards (full master list since v43; +4 mechanic lines in v82) + the 6 pinned Popular cards since v80.9 = 108', (menuHtml42.match(/class="menu-card"/g) || []).length === 108);
+t('v42 menu: renders all 107 catalog services as cards (full master list since v43; +4 mechanic lines in v82; +5 junk lines in v105) + the 6 pinned Popular cards since v80.9 = 113', (menuHtml42.match(/class="menu-card"/g) || []).length === 113);
 t('v42 menu: cards order into the CART (v79: orderNow → #cart; the #order page is retired)', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("orderNow('" + id + "')")));
 t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the v43 cut, water heater $700 / $560)', menuHtml42.includes('$125') && menuHtml42.includes('Members $100') && menuHtml42.includes('$700') && menuHtml42.includes('Members $560'));
-t('v42 menu: EVERY card shows a member price — the discount is universal (108 of 108 since the v80.9 Popular row; the v82 turbo card shows its member FROM price like every other card)', (menuHtml42.match(/Members \$/g) || []).length === 108);
+t('v42 menu: EVERY card shows a member price — the discount is universal (113 of 113 since the v105 junk lines; the v82 turbo card shows its member FROM price like every other card)', (menuHtml42.match(/Members \$/g) || []).length === 113);
 // wizard navigation + progress
 run('wzGo(2);');
 t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label shows step 2 of 4 (v80.19: single-language label — EN here; was the bilingual composite)', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Step 2 of 4'));
@@ -2473,7 +2473,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     'Closet doors (pair)': 'closet-doors', 'Interior door slab swap': 'door-slab-swap', 'Door knob / lever install': 'door-knob-install', 'Deadbolt install — single': 'deadbolt-install', 'Deadbolt + knob combo install': 'deadbolt-knob-combo', 'Smart lock install & setup': 'smart-lock-install', "Door adjustment (sticks / won't latch)": 'door-adjustment', 'Weatherstripping': 'weatherstripping', 'Screen door install': 'screen-door-install', 'Sliding door roller / track service': 'sliding-door-service', 'Window screen rescreen / repair': 'window-screen-repair', 'Pet door install (in door)': 'pet-door-install', 'Furniture assembly, standard (1 piece)': 'furniture-assembly', 'Furniture assembly, large/complex (wardrobe, bunk bed)': 'furniture-assembly-large', 'Closet organizer system install': 'closet-organizer', 'Floating shelves (set of 2)': 'floating-shelves', 'Cabinet hardware install (up to 10 pulls)': 'cabinet-hardware-install', 'Baby gate install': 'baby-gate-install', 'Picture & mirror hanging (up to 3 pieces)': 'picture-mirror-hanging', 'Mirror / medicine cabinet install': 'mirror-cabinet-install', 'Curtain rod install': 'curtain-rod-install', 'Blinds install (1–3 windows)': 'blinds-install', 'Blinds install — deal (4+ windows)': 'blinds-install-deal', 'Baseboard install (1 room, up to ~40 linear ft)': 'baseboard-install', 'Baseboard repair / section replace': 'baseboard-repair', 'Laminate / LVP plank repair (a few planks)': 'laminate-floor-repair', 'Carpet repair (general)': 'carpet-repair', 'Transition strip / threshold install': 'transition-strip-install', 'Drywall patch, small (up to ~1 ft)': 'drywall-patch-small', 'Drywall patch, medium (up to 2×2 ft, texture match)': 'drywall-patch-medium', 'Small-holes patch set (up to 3: doorknob, anchors)': 'drywall-holes-set', 'Paint one room — standard (walls only, labor)': 'paint-room', 'Paint large room (walls only, labor)': 'paint-room-large', 'Paint large room with ceiling (labor)': 'paint-room-large-ceiling', 'Accent wall painting': 'accent-wall-painting', 'Interior door painting': 'interior-door-painting', 'Fence picket repair (up to 5 pickets)': 'fence-picket-repair', 'Fence post replacement (add-on to a fence repair visit)': 'fence-post-replacement', 'Deck board replacement (up to 5 boards)': 'deck-board-replacement', 'Gate repair / adjustment': 'gate-repair',
     'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
     'Faucet swap': 'faucet-replacement', 'Toilet replacement (full swap)': 'toilet-replacement', 'Toilet repair (fill valve / flapper)': 'toilet-repair', 'Garbage disposal swap': 'garbage-disposal-swap', 'Showerhead swap': 'showerhead-swap', 'Tub / shower re-caulk': 'tub-shower-recaulk', 'Grab bar install': 'grab-bar-install', 'P-trap / drain assembly swap': 'p-trap-swap', 'Bidet seat install': 'bidet-seat-install', 'Dryer vent cleaning': 'dryer-vent-cleaning', 'Washer & dryer hookup / install (existing connections)': 'washer-dryer-hookup', 'Drain unclog — basic (sink / shower, 1 drain)': 'drain-unclog', 'Dishwasher swap (existing hookups)': 'dishwasher-swap', 'Vanity swap': 'vanity-swap', 'Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces)': 'bathroom-accessories-install', 'Hose bibb / outdoor faucet swap': 'hose-bibb-swap', 'Water heater installation': 'water-heater',
-    'Gutter cleaning (single story)': 'gutter-cleaning', 'Gutter cleaning (two-story house)': 'gutter-cleaning-two-story', 'Pressure washing — standard area (2-car driveway OR patio)': 'pressure-washing', 'Pressure washing — large area (long driveway, large patio or deck)': 'pressure-washing-large', 'Yard cleanup (general)': 'yard-cleanup', 'Sprinkler & drip irrigation basics (heads, timers, small leaks)': 'sprinkler-irrigation', 'Green waste hauling': 'green-waste', 'Junk removal — minimum load': 'junk-minimum', 'Junk removal — medium load': 'junk-medium', 'Junk removal — large load': 'junk-large', 'Junk removal — full load (truck + trailer)': 'junk-full', 'Mailbox install': 'mailbox-install',
+    'Gutter cleaning (single story)': 'gutter-cleaning', 'Gutter cleaning (two-story house)': 'gutter-cleaning-two-story', 'Pressure washing — standard area (2-car driveway OR patio)': 'pressure-washing', 'Pressure washing — large area (long driveway, large patio or deck)': 'pressure-washing-large', 'Yard cleanup (general)': 'yard-cleanup', 'Sprinkler & drip irrigation basics (heads, timers, small leaks)': 'sprinkler-irrigation', 'Green waste hauling': 'green-waste', 'Junk removal — minimum load': 'junk-minimum', 'Junk removal — medium load': 'junk-medium', 'Junk removal — large load': 'junk-large', 'Junk removal — full load (truck + trailer)': 'junk-full', 'Single-item pickup': 'junk-single-item', 'Appliance removal': 'appliance-removal', 'Mattress removal': 'mattress-removal', 'Garage cleanout': 'garage-cleanout', 'Construction debris removal': 'debris-removal', 'Mailbox install': 'mailbox-install',
     'Fuel pump replacement': 'fuel-pump-replacement', 'Fuel pump replacement — tank-drop (sin panel de acceso)': 'fuel-pump-tank-drop', 'Battery replacement': 'battery-replacement', 'Check-engine diagnostics / scan': 'check-engine-diagnostics', 'Oil change & fluid service': 'oil-change', 'Brake pads': 'brake-pads', 'Alternator replacement — Easy': 'alternator-replacement', 'Alternator replacement — Difficult (enterrado)': 'alternator-difficult', 'Starter replacement': 'starter-replacement', 'Belt / hose replacement (basics)': 'belt-hose-replacement', 'Spark plug replacement (4-cylinder)': 'spark-plug-replacement', 'Spark plug replacement (V6 / V8)': 'spark-plug-v6v8', 'Turbo replacement': 'turbo-replacement', 'Headlight / bulb replacement': 'headlight-replacement',
     'Heavy furniture move (2 workers)': 'heavy-furniture-move'
   };
@@ -2494,9 +2494,9 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 master: every orderable master row maps to a catalog id (plan rows live outside the service sections; estimate + hourly labor excluded by design)', unmapped43.length === 0);
   if (unmapped43.length) console.log('  unmapped master rows:', unmapped43.map(r => r.name).join(' | '));
   const priceBad43 = rows43.filter(r => { const c = cat43[NAME_TO_ID43[r.name]]; return !c || c.price !== r.price; });
-  t('v43 master<->catalog: all 102 service prices identical to the master list, post-cut (v82: +4 mechanic rows — tank-drop $450, alternator difficult $250, plugs V6/V8 $215, turbo from $450)', rows43.length === 102 && priceBad43.length === 0);
+  t('v43 master<->catalog: all 107 service prices identical to the master list, post-cut (v82: +4 mechanic rows; v105: +5 junk rows PROPUESTA)', rows43.length === 107 && priceBad43.length === 0);
   const memBad43 = Object.entries(cat43).filter(([id, c]) => c.member !== Math.round(c.price * 0.8));
-  t('v43 catalog: member == round(price x 0.8) for ALL 102 entries — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 102 && memBad43.length === 0);
+  t('v43 catalog: member == round(price x 0.8) for ALL 107 entries — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 107 && memBad43.length === 0);
   t('v43 master: the $135 tier is gone from the service tables (v80.20 supersedes: $135 is BACK as exactly the approved 1.5h block — 17 table rows, Gabriel 2026-11-01)', (masterSrc43.match(/^\| [^|]*\| \$135 \|/gm) || []).length === 17);
   const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]] };
   const addonBad43 = [];
@@ -3063,7 +3063,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     }
   }
   const catIds = Object.keys(catEntries);
-  t('v46 audit: catalog parsed — 102 services on both sides (v82: +4 mechanic)', catIds.length === 102 && Object.keys(srvEntries).length === 102);
+  t('v46 audit: catalog parsed — 107 services on both sides (v82: +4 mechanic; v105: +5 junk)', catIds.length === 107 && Object.keys(srvEntries).length === 107);
   let drift = [];
   for (const id of catIds) {
     const c = catEntries[id], s = srvEntries[id];
@@ -3137,9 +3137,9 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 menu: cards + wizard rows load /menu-img/<id>.webp with the category photo as fallback (v80.18)', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
   run("location.hash = ''; render(); setMenuLang('en');");
   const menuEn = elById.get('menuGroups').innerHTML;
-  t('v46 menu EN: per-service photos on the cards (102 catalog + 6 Popular = 108 imgs since v80.9; v82 catalog)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 108 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
+  t('v46 menu EN: per-service photos on the cards (107 catalog + 6 Popular = 113 imgs since v105)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 113 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
   // --- menu EN|ES: one language at a time, persisted ---
-  t('v46 i18n: MENU_ES covers all 102 services', run('Object.keys(MENU_ES).length') === 102 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
+  t('v46 i18n: MENU_ES covers all 107 services', run('Object.keys(MENU_ES).length') === 107 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
   run("setMenuLang('es');");
   const menuEs = elById.get('menuGroups').innerHTML;
   t('v46 menu ES: names + group titles + buttons switch fully to Spanish', menuEs.includes('Cambio de mezcladora / llave') && menuEs.includes('Plomería') && !menuEs.includes('Plomería · Plumbing') && menuEs.includes('Miembros $100') && menuEs.includes('>Ordenar<') && !menuEs.includes('Faucet Replacement'));
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v104: ghs-app-v104)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v104'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v105: ghs-app-v105)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v105'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6529,12 +6529,12 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     robotsTxt818.includes('Sitemap: https://generalhandymans.app/sitemap.xml'));
   const sitemap818 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt818 = await sitemap818.text();
-  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing exactly the five public customer doors',
+  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing the public customer doors (v105: six, + /junk-removal)',
     sitemap818.status === 200 && String(sitemap818.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt818.includes('<urlset') &&
     ['<loc>https://generalhandymans.app/</loc>', '<loc>https://generalhandymans.app/plus</loc>',
      '<loc>https://generalhandymans.app/plus2</loc>', '<loc>https://generalhandymans.app/homecare</loc>',
-     '<loc>https://generalhandymans.app/yard</loc>'].every(x => sitemapTxt818.includes(x)) &&
+     '<loc>https://generalhandymans.app/yard</loc>', '<loc>https://generalhandymans.app/junk-removal</loc>'].every(x => sitemapTxt818.includes(x)) &&
     !sitemapTxt818.includes('/tecnico'));
   const bing93 = await fetch(BASE + '/BingSiteAuth.xml');
   const bingTxt93 = await bing93.text();
@@ -6543,18 +6543,18 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     bingTxt93.includes('<user>CA95D6E2EB6DDA53B4F4B72A8D883928</user>'));
   const sitemap97 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt97 = await sitemap97.text();
-  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all five apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs',
+  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all six apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs (v105: + /junk-removal)',
     sitemap97.status === 200 && String(sitemap97.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt97 === '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-      ['/', '/plus', '/plus2', '/homecare', '/yard'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
+      ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
   const sitemapWww97 = await fetch(BASE + '/sitemap-www.xml');
   const sitemapWwwTxt97 = await sitemapWww97.text();
-  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same five doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
+  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same six doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
     sitemapWww97.status === 200 && String(sitemapWww97.headers.get('content-type') || '').includes('xml') &&
     sitemapWwwTxt97.includes('<urlset') &&
     ['<loc>https://www.generalhandymans.app/</loc>', '<loc>https://www.generalhandymans.app/plus</loc>',
      '<loc>https://www.generalhandymans.app/plus2</loc>', '<loc>https://www.generalhandymans.app/homecare</loc>',
-     '<loc>https://www.generalhandymans.app/yard</loc>'].every(x => sitemapWwwTxt97.includes(x)) &&
+     '<loc>https://www.generalhandymans.app/yard</loc>', '<loc>https://www.generalhandymans.app/junk-removal</loc>'].every(x => sitemapWwwTxt97.includes(x)) &&
     !sitemapWwwTxt97.includes('<loc>https://generalhandymans.app/'));
   const robots97 = await fetch(BASE + '/robots.txt');
   const robotsTxt97 = await robots97.text();
@@ -7520,14 +7520,14 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   t('v80.28 VM (2): category + search combine — plumbing keeps the toilets, carpentry loses them, nothing else moves',
     run("menuVisibleIds('toilet', 'plumbing').includes('toilet-replacement')") === true && run("menuVisibleIds('toilet', 'plumbing').includes('toilet-repair')") === true
     && run("menuVisibleIds('toilet', 'carpentry').length") === 0 && run("menuVisibleIds('toilet', 'all').includes('faucet-replacement')") === false);
-  t('v80.28 VM (2): clearing the filters restores the whole catalog (102 ids since v82; per-trade counts intact — mechanic 14 with the v82 lines, prices untouched)',
-    run("menuVisibleIds('', 'all').length") === 102 && run("menuVisibleIds('', 'mechanic').length") === 14 && run("menuVisibleIds('', 'plumbing').length") === 17
+  t('v80.28 VM (2): clearing the filters restores the whole catalog (107 ids since v105; per-trade counts intact — mechanic 14 with the v82 lines, prices untouched)',
+    run("menuVisibleIds('', 'all').length") === 107 && run("menuVisibleIds('', 'mechanic').length") === 14 && run("menuVisibleIds('', 'plumbing').length") === 17
     && run("MENU_CATALOG['water-heater'].price") === 700 && run("MENU_CATALOG['toilet-replacement'].price") === 215);
   run("toggleFav('oil-change');");
-  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (108 since v82)',
+  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (113 since v105)',
     run("favsLoad().join(',')") === 'oil-change' && (run("localStorage.getItem('ghsMenuFavs')") || '').includes('oil-change')
     && elById.get('menuGroups').innerHTML.includes('data-group="favorites"') && elById.get('menuGroups').innerHTML.includes('My favorites')
-    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 108);
+    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 113);
   run("noteRecent('gutter-cleaning'); renderMenu();");
   t('v80.28 VM (3): a noted recent renders its strip (EN), newest first',
     run("recentsLoad()[0]") === 'gutter-cleaning' && elById.get('menuGroups').innerHTML.includes('data-group="recents"') && elById.get('menuGroups').innerHTML.includes('Gutter Cleaning'));
@@ -8504,7 +8504,99 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v104 statics: SW cache bumped to ghs-app-v104', swSrc.includes("const CACHE = 'ghs-app-v104'"));
+  t('v105 statics: SW cache bumped to ghs-app-v105', swSrc.includes("const CACHE = 'ghs-app-v105'"));
+}
+
+// ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
+{
+  const chat = (sid, lang, text) => req2('POST', '/api/assistant/message', { body: { sessionId: sid, lang, text } });
+
+  // Catalog pins: PROPUESTA prices in SERVER_MENU, confirmed prices untouched
+  t('v105 junk: the 5 new services sit in SERVER_MENU at the PROPUESTA prices with exact 80% member math',
+    serverSrc.includes('"junk-single-item":{p:150,m:120}') && serverSrc.includes('"appliance-removal":{p:150,m:120}') &&
+    serverSrc.includes('"mattress-removal":{p:125,m:100}') && serverSrc.includes('"garage-cleanout":{p:325,m:260}') &&
+    serverSrc.includes('"debris-removal":{p:325,m:260}'));
+  t('v105 junk: confirmed junk prices UNTOUCHED (tiers 250/325/425/650, green waste 250)',
+    serverSrc.includes('"junk-minimum":{p:250,m:200}') && serverSrc.includes('"junk-medium":{p:325,m:260}') &&
+    serverSrc.includes('"junk-large":{p:425,m:340}') && serverSrc.includes('"junk-full":{p:650,m:520}') &&
+    serverSrc.includes('"green-waste":{p:250,m:200}'));
+  t('v105 statics: /junk-removal is a LANDING_DOORS page into the app menu + the IndexNow key route is registered',
+    serverSrc.includes("'/junk-removal': { file: 'junk-removal.html', join: '#menu' }") && serverSrc.includes("'/08228ae9460ae3105f0709c73a626eec.txt'"));
+
+  // Bot routes EN
+  const couch = await chat('v105-couch', 'en', 'Can you remove a couch from my house?');
+  t('v105 bot: EN couch routes to single-item pickup ($150/$120, $50 deposit, $100 balance) + asks items/size + invites a photo',
+    couch.status === 200 && couch.j.action === 'quote' && couch.j.quote.serviceId === 'junk-single-item' && couch.j.quote.list === 150 && couch.j.quote.member === 120 && couch.j.quote.deposit === 50 && couch.j.quote.balance === 100 && couch.j.reply.includes('how much space') && couch.j.reply.includes('photo'));
+  const fridge = await chat('v105-fridge', 'en', 'I need to haul away the fridge, it died');
+  t('v105 bot: EN dead fridge routes to appliance removal ($150/$120)',
+    fridge.j.action === 'quote' && fridge.j.quote.serviceId === 'appliance-removal' && fridge.j.quote.list === 150 && fridge.j.quote.member === 120);
+  const matt = await chat('v105-matt', 'en', 'How much for mattress removal?');
+  t('v105 bot: EN mattress routes to mattress removal ($125/$100, $50 deposit, $75 balance)',
+    matt.j.action === 'quote' && matt.j.quote.serviceId === 'mattress-removal' && matt.j.quote.list === 125 && matt.j.quote.member === 100 && matt.j.quote.deposit === 50 && matt.j.quote.balance === 75);
+  const gar = await chat('v105-garage', 'en', 'I need a garage cleanout, it is packed');
+  t('v105 bot: EN garage cleanout routes to garage-cleanout ($325/$260, 40% deposit $130)',
+    gar.j.action === 'quote' && gar.j.quote.serviceId === 'garage-cleanout' && gar.j.quote.list === 325 && gar.j.quote.member === 260 && gar.j.quote.deposit === 130 && gar.j.quote.balance === 195);
+  const deb = await chat('v105-debris', 'en', 'Construction debris removal, drywall and wood');
+  t('v105 bot: EN construction debris routes to debris removal ($325/$260)',
+    deb.j.action === 'quote' && deb.j.quote.serviceId === 'debris-removal' && deb.j.quote.list === 325 && deb.j.quote.member === 260);
+  const med = await chat('v105-medium', 'en', 'I have a medium load of junk to haul');
+  t('v105 bot: EN medium load routes to the medium tier ($325/$260)',
+    med.j.action === 'quote' && med.j.quote.serviceId === 'junk-medium' && med.j.quote.list === 325 && med.j.quote.member === 260);
+
+  // Bot routes ES
+  const sillon = await chat('v105-sillon', 'es', 'Necesito retirar un sillon viejo');
+  t('v105 bot: ES sillon routes to single-item pickup and the size/photo ask rides in Spanish',
+    sillon.j.action === 'quote' && sillon.j.quote.serviceId === 'junk-single-item' && sillon.j.reply.includes('carga correcta'));
+  const nevera = await chat('v105-nevera', 'es', 'Quiero quitar la nevera vieja');
+  t('v105 bot: ES nevera vieja routes to appliance removal ($150)',
+    nevera.j.action === 'quote' && nevera.j.quote.serviceId === 'appliance-removal' && nevera.j.quote.list === 150);
+  const colchon = await chat('v105-colchon', 'es', 'Cuanto cuesta sacar el colchon?');
+  t('v105 bot: ES colchon routes to mattress removal ($125/$100)',
+    colchon.j.action === 'quote' && colchon.j.quote.serviceId === 'mattress-removal' && colchon.j.quote.list === 125 && colchon.j.quote.member === 100);
+  const garaje = await chat('v105-garaje', 'es', 'Necesito limpieza de garaje, esta lleno');
+  t('v105 bot: ES limpieza de garaje routes to garage cleanout (NOT yard cleanup)',
+    garaje.j.action === 'quote' && garaje.j.quote.serviceId === 'garage-cleanout' && garaje.j.quote.list === 325);
+  const escombro = await chat('v105-escombro', 'es', 'Tengo escombro de construccion para retirar');
+  t('v105 bot: ES escombro de construccion routes to debris removal ($325)',
+    escombro.j.action === 'quote' && escombro.j.quote.serviceId === 'debris-removal' && escombro.j.quote.list === 325);
+
+  // Regression: removal keywords did not steal the install routes
+  const lavadora = await chat('v105-lavadora', 'es', 'Necesito conectar mi lavadora y secadora');
+  t('v105 bot: ES conectar lavadora stays on the hookup route (removal kws did not steal installs)',
+    lavadora.j.action === 'quote' && lavadora.j.quote.serviceId === 'washer-dryer-hookup');
+  const wh = await chat('v105-wh', 'en', 'My water heater died, I need a new water heater installed');
+  t('v105 bot: EN water heater install stays on the install route ($700)',
+    wh.j.action === 'quote' && wh.j.quote.serviceId === 'water-heater' && wh.j.quote.list === 700);
+
+  // The bot builds a REAL cart for a new service, and the cart page carries its photo
+  const cc = await chat('v105-cart', 'en', 'Please remove my mattress and box spring');
+  const co = await req2('POST', '/api/assistant/checkout', { body: { sessionId: 'v105-cart', name: 'Junk Tester', phone: '(707) 555-0111', address: '9 Junk Way', city: 'Fairfield', serviceName: 'Mattress Removal' } });
+  t('v105 bot: checkout builds a REAL cart for mattress removal ($125 list, $50 deposit, $75 balance)',
+    cc.j.action === 'quote' && cc.j.quote.serviceId === 'mattress-removal' && co.status === 201 && /\/cart\/CRT-/.test(co.j.link || '') && co.j.totals.list === 125 && co.j.totals.deposit === 50 && co.j.totals.balance === 75);
+  const cartId105 = (co.j.link || '').split('/cart/')[1] || '';
+  const cartPage = await (await fetch(BASE2 + '/cart/' + cartId105)).text();
+  t('v105 junk: the public cart page shows the mattress photo + the $100.00 member line',
+    !!cartId105 && cartPage.includes('/menu-img/mattress-removal.webp') && cartPage.includes('Mattress Removal') && cartPage.includes('$100.00'));
+
+  // Landing door, src contract, sitemap, IndexNow key file
+  const junkDoor = await fetch(BASE2 + '/junk-removal');
+  const junkHtml = await junkDoor.text();
+  t('v105 doors: GET /junk-removal is a REAL page (200) — SEO title, self canonical, tiers + new services at real prices, CTA into the app menu',
+    junkDoor.status === 200 && junkHtml.includes('Junk Removal in Fairfield & Solano County') && junkHtml.includes('rel="canonical" href="https://generalhandymans.app/junk-removal"') && junkHtml.includes('href="/#menu"') && junkHtml.includes('Single-Item Pickup') && junkHtml.includes('$150') && junkHtml.includes('Mattress Removal') && junkHtml.includes('Garage Cleanout') && junkHtml.includes('Construction Debris Removal') && junkHtml.includes('REPORTING FOR DUTY') && junkHtml.includes('(707) 862-3773'));
+  const junkSrc = await (await fetch(BASE2 + '/junk-removal?src=JUNK1')).text();
+  t('v105 doors: ?src rides INSIDE the menu fragment (/#menu?src=JUNK1)',
+    junkSrc.includes('href="/#menu?src=JUNK1"'));
+  const junkBad = await (await fetch(BASE2 + '/junk-removal?src=' + encodeURIComponent('"><script>alert(1)</script>'))).text();
+  t('v105 doors: hostile src is dropped, never reflected',
+    !junkBad.includes('<script>alert(1)</script>') && junkBad.includes('href="/#menu"'));
+  const smRes = await fetch(BASE2 + '/sitemap.xml');
+  const smTxt = await smRes.text();
+  t('v105 sitemap: exactly 6 URLs now, /junk-removal included',
+    smRes.status === 200 && (smTxt.match(/<loc>/g) || []).length === 6 && smTxt.includes('<loc>https://generalhandymans.app/junk-removal</loc>'));
+  const keyRes = await fetch(BASE2 + '/08228ae9460ae3105f0709c73a626eec.txt');
+  const keyTxt = await keyRes.text();
+  t('v105 indexnow: the key file serves at /<key>.txt with the key as its content',
+    keyRes.status === 200 && keyTxt.trim() === '08228ae9460ae3105f0709c73a626eec');
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
