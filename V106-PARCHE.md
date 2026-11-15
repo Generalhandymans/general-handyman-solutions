@@ -31,4 +31,7 @@ Lo que ya existía (v80.3/v80.4, intacto): el «Members pay $X» en verde por l�
 
 ## Nota de publicación
 
-- Snapshot de texto a GitHub main vía push_files con SOLO los archivos de este parche: `app/server.js`, `app/public/app.js`, `app/public/index.html`, `app/public/sw.js`, `tests/run.mjs`, este parche. Sin binarios en esta versión.
+- Snapshot de texto a GitHub main vía push_files con SOLO los archivos de este parche: `app/server.js`, `app/public/app.js`, `app/public/index.html`, `app/public/sw.js`, `tests/run.mjs`, este parche. Sin binarios en esta versión. **Commit: `d2723f2dfab2d20819442a301a39213d594d1c6d`** (commit local `c01821a`).
+- Divergencia verificada ANTES de empujar, por SHA de blob: los 5 archivos existentes coincidían byte a byte con el HEAD local `3830ad6` en el head remoto `8e92dbd9` — ese commit («Add 5 junk-removal menu photos (v105)», la subida web de Gabriel de las 5 fotos) aterrizó durante esta construcción y no tocó ninguno de estos paths; `V106-PARCHE.md` no existía remotamente.
+- Verificación en vivo post-despliegue (2026-11-15): homepage + las 5 puertas en 200, sitemap con 6 URLs, **sw sirve `ghs-app-v106`**, el app.js en vivo trae las cadenas v106 (línea EN+ES + `loadAdminBotStats`), `GET /api/admin/bot-stats` sin admin responde 401 (ruta viva, solo admin), carrito de Charla intacto ($170/$50/$120, miembro $136) y carritos de Ernest intactos (trabajo $3,675 — miembro $3,040 — y materiales $1,885).
+- ⚠️ Honestidad: el render en vivo del banner para miembro vs no-miembro NO se ejercitó contra la app en producción (requiere sesión real de navegador con carrito); queda pineado por la suite VM (invitado/miembro/ahorro-$0/checkout) y el código exacto desplegado se verificó en el app.js servido.
