@@ -5922,6 +5922,22 @@ const ASSISTANT_TRADE_WORDS = {
   mechanic: ['mechanic', 'mecan', 'carro', 'coche', 'engine', 'motor', 'vehicle', 'vehiculo']
 };
 function assistantNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+// ---------- v106: BOT FUNNEL COUNTERS (Gabriel, 2026-11-15) ----------
+// Lightweight persistent counters in db.botStats, following the
+// trafficOf() lazy-store pattern. Conversations have no durable record
+// (sessions live in the in-memory Map below), so counting starts at
+// v106 and the admin panel labels the start date — historical numbers
+// are never invented. Bot carts and escalations ALSO exist as real
+// records (assistant carts + assistantCase requests); the admin
+// endpoint reports both views, each labeled for what it is.
+function botStatsOf() {
+  if (!db.botStats || typeof db.botStats !== 'object' || Array.isArray(db.botStats)) db.botStats = { since: new Date().toISOString(), conversations: 0, carts: 0, escalations: 0 };
+  const b = db.botStats;
+  if (!b.since) b.since = new Date().toISOString();
+  for (const k of ['conversations', 'carts', 'escalations']) if (typeof b[k] !== 'number' || !(b[k] >= 0)) b[k] = 0;
+  return b;
+}
+function botStatsBump(key) { const b = botStatsOf(); b[key] = (Number(b[key]) || 0) + 1; save(); }
 const assistantSessions = new Map();
 function assistantSession(sessionId) {
   const sid = /^[\w-]{4,64}$/.test(sessionId || '') ? sessionId : ('AS-' + crypto.randomBytes(6).toString('hex').toUpperCase());
@@ -5930,6 +5946,7 @@ function assistantSession(sessionId) {
     if (assistantSessions.size > 500) { const first = assistantSessions.keys().next().value; if (first) assistantSessions.delete(first); }
     s = { id: sid, lang: 'en', serviceId: '', addonIds: [], asap: false, isMember: false, name: '', phone: '', email: '', address: '', city: '', serviceText: '', photos: [], pendingEscalation: '', transcript: [], createdAt: Date.now() };
     assistantSessions.set(sid, s);
+    botStatsBump('conversations'); // v106: a brand-new session = a new conversation
   }
   s.touchedAt = Date.now();
   return s;
@@ -6070,6 +6087,7 @@ function assistantCreateCase(s, fields) {
   const summary = 'Assistant escalation (' + reason + '): ' + serviceText.slice(0, 160) + '\n' + 'Captured in the app chat — ' + (s.photos.length ? s.photos.length + ' photo(s) attached' : 'no photos') + (city ? ' · ' + city : '') + '. Gabriel: personal attention, no time was promised.';
   const r = { id: linkId('GHS'), customerId: null, customerName: name, customerEmail: cleanText(fields.email || s.email, 160).toLowerCase(), customerPhone: phone, service: serviceText.slice(0, 120), description: summary, city, address, when: '', estimateType: 'photo', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: null, photos: s.photos.slice(0, 6), messages: [{ from: 'customer', name, text: serviceText, at: new Date().toISOString() }, { from: 'team', name: 'General Handyman Solutions Assistant', text: summary, at: new Date().toISOString() }], lang: s.lang, source: 'assistant', assistantCase: { reason, sixPoints: { name, phone, address, serviceText, photos: s.photos.length, summary }, transcript: s.transcript.slice(-20), serviceId: s.serviceId || '', createdAt: new Date().toISOString() }, createdAt: new Date().toISOString() };
   db.requests.push(r);
+  botStatsBump('escalations'); // v106: the case landed — count the escalation
   notifyAdmins('request', 'New assistant case ' + r.id + ' (' + reason + '): ' + r.service + ' in ' + (city || '') + ' from ' + name + '.');
   save();
   return { request: r, summary };
@@ -6087,6 +6105,7 @@ function assistantCreateCart(s, fields) {
   const totals = cartTotals(items);
   const c = { id: linkId('CRT'), items, listTotal: totals.listTotal, memberTotal: totals.memberTotal, note: 'Created by the app contact assistant (chat).' + (s.asap ? ' ASAP requested.' : ''), customerName: cleanText(fields.name || s.name, 80), customerPhone: cleanText(fields.phone || s.phone, 40), customerEmail: cleanText(fields.email || s.email, 160).toLowerCase(), lang: s.lang, status: 'open', customer: null, memberApplied: !!s.isMember, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: 'assistant', assistantPhotos: s.photos.slice(0, 6), source: 'assistant', createdAt: new Date().toISOString() };
   cartsOf().push(c);
+  botStatsBump('carts'); // v106: the bot built a real cart — count it
   save();
   const due = s.isMember ? totals.memberTotal : totals.listTotal;
   const split = depositSplit(Math.round(due * 100));
@@ -6695,6 +6714,14 @@ async function handleRequest(req, res) {
     if (!requireRole(user, ['admin'], res)) return;
     const cases = db.requests.filter(r => r && r.assistantCase).slice().reverse().map(r => ({ id: r.id, status: r.status, createdAt: r.createdAt, reason: r.assistantCase.reason, sixPoints: r.assistantCase.sixPoints, customerName: r.customerName || '', customerPhone: r.customerPhone || '', address: r.address || '', city: r.city || '', photos: (r.photos || []).length }));
     return send(res, 200, { ok: true, cases });
+  }
+  // v106: the bot funnel for the admin panel — the persistent counters
+  // (counting since v106, start date included) plus the all-time counts
+  // derived from the records the system already keeps.
+  if (p === '/api/admin/bot-stats' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = botStatsOf();
+    return send(res, 200, { ok: true, since: b.since, conversations: b.conversations, carts: b.carts, escalations: b.escalations, recordedCarts: cartsOf().filter(c => c && (c.source === 'assistant' || c.createdBy === 'assistant')).length, recordedCases: db.requests.filter(r => r && r.assistantCase).length });
   }
 
   // ---------- auth ----------

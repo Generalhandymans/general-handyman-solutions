@@ -873,6 +873,7 @@ en: {
   cartSubtotal: 'Subtotal', cartSavingsRow: 'HomeCare member savings (−20%)', cartTotalWord: 'Total',
   cartMemberApplied: '✓ Your HomeCare member price is applied.', cartMembersPayTpl: 'Members pay ${member} — save ${savings}',
   cartOfferTitle: '⭐ HomeCare — first month FREE', cartOfferBody: 'Join at checkout (first month FREE) and the member price applies to this order right away.',
+  cartHcSaveTpl: 'With HomeCare this job would cost you ${savings} less', cartJoinCta: 'Join HomeCare — first month FREE →',
   ccLinesTitle: 'Your services — tap to fix anything', ccMembersWord: ' · members $', ccInCart: 'In cart ×', ccAdd: '＋ Add',
   cartMemberPriceRow: 'HomeCare member price (−20%)', cartJoinRow: 'HomeCare membership — first month', cartFreeWord: 'FREE',
   cartDepositDue: 'Deposit due today', cartBalanceRow: 'Balance at completion',
@@ -1006,6 +1007,7 @@ es: {
   cartSubtotal: 'Subtotal', cartSavingsRow: 'Ahorro de miembro HomeCare (−20%)', cartTotalWord: 'Total',
   cartMemberApplied: '✓ Tu precio de miembro HomeCare está aplicado.', cartMembersPayTpl: 'Miembros pagan ${member} — ahorras ${savings}',
   cartOfferTitle: '⭐ HomeCare — primer mes GRATIS', cartOfferBody: 'Únete en el checkout (primer mes GRATIS) y el precio de miembro aplica a esta orden de inmediato.',
+  cartHcSaveTpl: 'Con HomeCare este trabajo te salía ${savings} menos', cartJoinCta: 'Únete a HomeCare — primer mes GRATIS →',
   ccLinesTitle: 'Tus servicios — toca para corregir lo que sea', ccMembersWord: ' · miembros $', ccInCart: 'En el carrito ×', ccAdd: '＋ Agregar',
   cartMemberPriceRow: 'Precio de miembro HomeCare (−20%)', cartJoinRow: 'Membresía HomeCare — primer mes', cartFreeWord: 'GRATIS',
   cartDepositDue: 'Depósito a pagar hoy', cartBalanceRow: 'Saldo al terminar',
@@ -4315,6 +4317,7 @@ async function loadAdmin(){
   loadAdminSources();
   loadAdminTraffic();
   loadAdminMoney();
+  loadAdminBotStats();
   loadAdminSprint();
   loadAdminSystem();
   loadAdminCarts();
@@ -4549,6 +4552,28 @@ async function loadAdminMoney(){
     h += '<div class="card"><b>' + S.memFail + ':</b> ' + (mf.count || 0) + ' · ' + moneyFmt(mf.total || 0) + '</div>';
     h += '<div class="card"><b>' + S.stripeBox + ':</b> ' + (st.available ? moneyFmt(st.balanceAvailable || 0) + ' ' + S.avail + ' · ' + moneyFmt(st.balancePending || 0) + ' ' + S.pendingBal + (st.nextPayout ? '<br><span class="mut">' + S.nextPayout + ':</span> ' + moneyFmt(st.nextPayout.amount) + (st.nextPayout.date ? ' · ' + escHtml(st.nextPayout.date) : '') + (st.nextPayout.status ? ' · ' + escHtml(st.nextPayout.status) : '') : '') : '<span class="mut">' + S.noStripe + '</span>') + '</div>';
     host.innerHTML = h;
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+// ---------- v106: Assistant bot funnel (admin) ----------
+// Labels follow the ADM812 pattern (EN/ES by the app language). Every
+// number comes from GET /api/admin/bot-stats: the counters live in
+// db.botStats and count since v106 (labeled with their start date —
+// conversations were never recorded before, so no history is invented),
+// and the recorded line counts the assistant's own carts/cases that
+// already live in the app records.
+const ADM106 = {
+  en: { funnel: 'Bot funnel', conv: 'conversations', cartsBuilt: 'carts built', esc: 'escalated to Gabriel', since: 'Counting since', recordedTpl: 'In the app records (all time): {carts} assistant carts · {cases} assistant cases', couldNot: 'Could not load.' },
+  es: { funnel: 'Embudo del bot', conv: 'conversaciones', cartsBuilt: 'carritos creados', esc: 'escalados a Gabriel', since: 'Contando desde', recordedTpl: 'En los registros de la app (histórico): {carts} carritos del asistente · {cases} casos del asistente', couldNot: 'No se pudo cargar.' }
+};
+async function loadAdminBotStats(){
+  const host = document.getElementById('adminBotStats'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM106[menuLang()] || ADM106.en;
+  try {
+    const d = await api('/api/admin/bot-stats');
+    const since = d.since ? String(d.since).slice(0, 10) : '';
+    host.innerHTML = '<div class="card"><b>' + S.funnel + ':</b> ' + (d.conversations || 0) + ' ' + S.conv + ' → ' + (d.carts || 0) + ' ' + S.cartsBuilt + ' → ' + (d.escalations || 0) + ' ' + S.esc
+      + (since ? '<br><span class="mut">' + S.since + ' ' + escHtml(since) + ' (v106)</span>' : '')
+      + '<br><span class="mut">' + S.recordedTpl.replace('{carts}', d.recordedCarts || 0).replace('{cases}', d.recordedCases || 0) + '</span></div>';
   } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
 }
 // ---------- v81: Sprint board (admin) ----------
@@ -5575,7 +5600,15 @@ function renderCart(){
       // green, directly below the regular Total — the pink box below is
       // now only the join invitation (it no longer repeats the prices).
       s += '<div class="cart-total-row cart-members-total"><span>' + CU('cartMembersPayTpl').replace('{member}', t.member).replace('{savings}', t.savings) + '</span></div>';
-      s += '<div class="auth-offer" style="margin-top:10px"><b>' + CU('cartOfferTitle') + '</b><p class="mut" style="margin:4px 0 0">' + CU('cartOfferBody') + '</p></div>';
+      // v106 (Gabriel 2026-11-15): the offer box gains the ONE clear
+      // savings line in dollars + a real join CTA into the existing
+      // #join-homecare flow. Display + link only — the figure is
+      // cartCalc's own savings (list − member, from the catalog's real
+      // member prices); no price, deposit or checkout behavior changes.
+      // This branch only runs for NON-members with savings > 0.
+      s += '<div class="auth-offer" style="margin-top:10px"><b>' + CU('cartOfferTitle') + '</b><p class="mut" style="margin:4px 0 0">' + CU('cartOfferBody') + '</p>'
+        + '<p style="margin:8px 0 0"><b>' + CU('cartHcSaveTpl').replace('{savings}', t.savings) + '</b></p>'
+        + '<p style="margin:10px 0 0"><a href="#join-homecare" style="display:inline-block;background:#e42535;color:#fff;font-weight:700;border-radius:999px;padding:10px 18px;text-decoration:none">' + CU('cartJoinCta') + '</a></p></div>';
     }
   }
   th.innerHTML = s + '</div>';
@@ -5602,6 +5635,11 @@ function renderCartTotalsDue(){
   let s = '<div class="cart-total-row"><span>' + CU('cartSubtotal') + '</span><span>$' + t.list + '</span></div>';
   if ((member || joinOn) && savings > 0) s += '<div class="cart-total-row" style="color:#2fbf71"><span>' + CU('cartMemberPriceRow') + '</span><span>−$' + savings + '</span></div>';
   if (joinOn) s += '<div class="cart-total-row"><span>' + CU('cartJoinRow') + '</span><span><b>' + CU('cartFreeWord') + '</b></span></div>';
+  // v106: a NON-member at a fresh checkout (no payment context armed)
+  // sees the same clear HomeCare savings line here. Members and
+  // join-checked carts already carry their savings row above; a
+  // mid-payment context never gets a join push. Display only.
+  if (!member && !joinOn && !cartPayCtx && savings > 0) s += '<div class="cart-total-row" style="color:#2fbf71"><span>' + CU('cartHcSaveTpl').replace('{savings}', savings) + '</span></div>';
   const depOf79 = function (tot) { tot = Number(tot) || 0; return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100; };
   const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : depOf79(due);
   const bal79 = Math.max(0, Math.round((due - dep79) * 100) / 100);

@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v105', swSrc.includes("const CACHE = 'ghs-app-v105'"));
+t('static: SW cache is ghs-app-v106', swSrc.includes("const CACHE = 'ghs-app-v106'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v105: ghs-app-v105)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v105'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v106: ghs-app-v106)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v106'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8504,7 +8504,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v105 statics: SW cache bumped to ghs-app-v105', swSrc.includes("const CACHE = 'ghs-app-v105'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106', swSrc.includes("const CACHE = 'ghs-app-v106'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8597,6 +8597,62 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const keyTxt = await keyRes.text();
   t('v105 indexnow: the key file serves at /<key>.txt with the key as its content',
     keyRes.status === 200 && keyTxt.trim() === '08228ae9460ae3105f0709c73a626eec');
+}
+
+// ---------------- v106: MEMBERSHIP PUSH LINE + BOT METRICS ----------------
+{
+  // ---- Feature 1 (client VM): the clear savings line + join CTA ----
+  run("me = null; location.hash = '#cart'; setMenuLang('en');");
+  run("cartSave([{ id: 'tv-mounting-large', q: 1 }, { id: 'furniture-assembly', q: 1 }]);");
+  run('renderCart();');
+  const tot106 = el('cartTotals').innerHTML;
+  t('v106 cart push: a NON-member with a discountable cart sees the clear line "With HomeCare this job would cost you $68 less" (savings = cartCalc list-member from the real catalog member prices)', tot106.includes('With HomeCare this job would cost you $68 less'));
+  t('v106 cart push: the box carries a real join CTA into the existing #join-homecare flow, first month FREE up front', tot106.includes('href="#join-homecare"') && tot106.includes('Join HomeCare — first month FREE'));
+  run("setMenuLang('es');"); run('renderCart();');
+  const tot106es = el('cartTotals').innerHTML;
+  t('v106 cart push ES: the line reads "Con HomeCare este trabajo te salía $68 menos" with the ES CTA', tot106es.includes('Con HomeCare este trabajo te salía $68 menos') && tot106es.includes('Únete a HomeCare — primer mes GRATIS'));
+  run("setMenuLang('en');");
+  // verified member: NO push anywhere — they already pay member prices
+  run("me = { id:'USR-V106M', role:'customer', name:'Mem Ber', email:'mem106@t.local', homeCareStatus:'active' };");
+  run('renderCart();');
+  const memTot106 = el('cartTotals').innerHTML;
+  t('v106 cart push: a verified member NEVER sees the push line or the join CTA', !memTot106.includes('would cost you') && !memTot106.includes('href="#join-homecare"'));
+  run('me = null;');
+  // savings = 0 (materials-style line, member == list): NO push at all
+  run("MENU_CATALOG['zz-materials-106'] = { name: 'Materials (test)', meta: '', price: 100, member: 100 };");
+  run("cartSave([{ id: 'zz-materials-106', q: 1 }]);"); run('renderCart();');
+  const zeroTot106 = el('cartTotals').innerHTML;
+  t('v106 cart push: a cart with $0 member savings shows NO push line and NO CTA', !zeroTot106.includes('would cost you') && !zeroTot106.includes('href="#join-homecare"'));
+  run("delete MENU_CATALOG['zz-materials-106']; cartSave([]);");
+  // fresh checkout totals (no payment context armed): same line rides along
+  run("cartSave([{ id: 'tv-mounting', q: 1 }]); cartPayCtx = null; cartQuote = null;");
+  run('renderCartTotalsDue();');
+  const due106 = el('cartTotalsDue').innerHTML;
+  t('v106 checkout push: the fresh checkout totals carry the savings line for a non-member (tv-mounting $175 -> $35 less)', due106.includes('With HomeCare this job would cost you $35 less'));
+  run('cartSave([]);');
+
+  // ---- Feature 2 (server): bot funnel counters + admin endpoint ----
+  const adm106 = await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } });
+  const AW106 = adm106.j.token;
+  const noAuth106 = await req2('GET', '/api/admin/bot-stats', {});
+  t('v106 bot-stats: the endpoint is admin-only', noAuth106.status === 401 || noAuth106.status === 403);
+  const before106 = (await req2('GET', '/api/admin/bot-stats', { token: AW106 })).j;
+  t('v106 bot-stats: counters ship with an honest start label (since = ISO timestamp) and numeric counters', /^\d{4}-\d{2}-\d{2}T/.test(before106.since || '') && typeof before106.conversations === 'number' && typeof before106.carts === 'number' && typeof before106.escalations === 'number');
+  const chat106 = (sid, lang, text) => req2('POST', '/api/assistant/message', { body: { sessionId: sid, lang, text } });
+  await chat106('v106-bot', 'en', 'How much to mount my TV?');
+  await chat106('v106-bot', 'en', 'And what about the deposit?');
+  const mid106 = (await req2('GET', '/api/admin/bot-stats', { token: AW106 })).j;
+  t('v106 bot-stats: a NEW session counts ONE conversation — a second message in the same session does not double-count', mid106.conversations === before106.conversations + 1);
+  const co106 = await req2('POST', '/api/assistant/checkout', { body: { sessionId: 'v106-bot', name: 'V106 Buyer', phone: '(707) 555-0131', address: '7 V106 Ave', city: 'Fairfield', serviceName: 'TV Mounting (up to 65")' } });
+  const esc106 = await req2('POST', '/api/assistant/escalate', { body: { sessionId: 'v106-esc', lang: 'en', name: 'V106 Case', phone: '(707) 555-0132', email: 'v106case@t.local', address: '9 V106 St', city: 'Napa', serviceText: 'concrete driveway sections replaced' } });
+  const after106 = (await req2('GET', '/api/admin/bot-stats', { token: AW106 })).j;
+  t('v106 bot-stats: a bot checkout increments the carts counter by exactly 1', co106.status === 201 && after106.carts === before106.carts + 1);
+  t('v106 bot-stats: a bot escalation increments escalations by exactly 1 (and its new session counts one more conversation)', esc106.status === 201 && after106.escalations === before106.escalations + 1 && after106.conversations === before106.conversations + 2);
+  t('v106 bot-stats: recorded counts derive from the real records (assistant carts + assistantCase requests already in the db)', typeof after106.recordedCarts === 'number' && after106.recordedCarts >= 1 && typeof after106.recordedCases === 'number' && after106.recordedCases >= 1);
+
+  // ---- statics ----
+  t('v106 statics: server counters + endpoint wired (botStatsOf, one bump per event, admin-only route)', serverSrc.includes('function botStatsOf()') && serverSrc.includes("botStatsBump('conversations')") && serverSrc.includes("botStatsBump('carts')") && serverSrc.includes("botStatsBump('escalations')") && serverSrc.includes("p === '/api/admin/bot-stats'"));
+  t('v106 statics: admin bot section + loader wired; the push line + CTA ship in the client (EN+ES)', htmlSrc.includes('id="adminBotStats"') && appJsSrc.includes('function loadAdminBotStats(') && appJsSrc.includes('With HomeCare this job would cost you') && appJsSrc.includes('Con HomeCare este trabajo te salía') && appJsSrc.includes('href="#join-homecare"'));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
