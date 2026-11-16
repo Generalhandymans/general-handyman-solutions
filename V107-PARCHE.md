@@ -24,4 +24,6 @@ Orden de Gabriel: «Arregla eso» — tras la auditoría en vivo del aviso de Se
 
 ## Nota de publicación
 
-- (Se completa tras publicar y verificar en vivo.)
+- Snapshot de texto a GitHub main vía push_files con SOLO los archivos de este parche: `app/server.js`, `app/public/sw.js`, `tests/run.mjs`, este parche. Sin binarios en esta versión. **Commit: `192d203a2e01c86f6712756587d83a4f498983ea`** (commit local `c7e8d94`).
+- Divergencia verificada ANTES de empujar, por SHA de blob: los 3 archivos existentes (`app/server.js` 0777a93f…, `app/public/sw.js` 94bad386…, `tests/run.mjs` 8418966b…) coincidían byte a byte con el HEAD local `173af9e` en el head remoto `8c133fb` (la nota de publicación de v106, sobre el código v106 `d2723f2` y las fotos `8e92dbd`); `V107-PARCHE.md` no existía remotamente.
+- Verificación en vivo post-despliegue (2026-11-16): `GET /robots.txt` devuelve byte a byte `User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n` — **exactamente UNA línea Sitemap, la principal**; sw sirve `ghs-app-v107`; homepage + las 5 puertas en 200; `/sitemap.xml` sigue con sus 6 URLs y `/sitemap-www.xml` sigue sirviendo 200 (puerta conservada, solo desanunciada); carrito de Charla intacto ($170/$50/$120, miembro $136) y carritos de Ernest intactos (trabajo $3,675 — miembro $3,040 — y materiales $1,885).
