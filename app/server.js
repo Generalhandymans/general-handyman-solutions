@@ -6600,7 +6600,7 @@ async function handleRequest(req, res) {
     SITEMAP_DOORS.map(d => '  <url><loc>' + base + d + '</loc></url>').join('\n') + '\n</urlset>\n';
   if (req.method === 'GET' && p === '/robots.txt') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
-    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\nSitemap: https://general-handyman-solutions-app.onrender.com/sitemap.xml\nSitemap: https://generalhandymans.app/sitemap-www.xml\n');
+    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n');
   }
   if (req.method === 'GET' && p === '/sitemap.xml') {
     res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
