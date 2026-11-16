@@ -4318,6 +4318,7 @@ async function loadAdmin(){
   loadAdminTraffic();
   loadAdminMoney();
   loadAdminBotStats();
+  loadAdminCartRescue();
   loadAdminSprint();
   loadAdminSystem();
   loadAdminCarts();
@@ -4575,6 +4576,42 @@ async function loadAdminBotStats(){
       + (since ? '<br><span class="mut">' + S.since + ' ' + escHtml(since) + ' (v106)</span>' : '')
       + '<br><span class="mut">' + S.recordedTpl.replace('{carts}', d.recordedCarts || 0).replace('{cases}', d.recordedCases || 0) + '</span></div>';
   } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+// ---------- v108: Cart rescue (admin) ----------
+// The rescue list: open proposals whose deposit has not landed yet,
+// biggest deposit first, with the one-tap reminder that fires the SAME
+// email the app sends automatically at 48 hours. Every number comes
+// from GET /api/admin/cart-rescue — this renderer invents nothing.
+const ADM108 = {
+  en: { title: 'Cart rescue', openTpl: '{n} open carts', waitingTpl: '{amt} in deposits waiting', total: 'Total', depositDue: 'Deposit due', daysOldTpl: '{d} days old', today: 'created today', remind: 'Remind', reminded: 'Reminder sent', manualTpl: '{n} by hand', noEmail: 'No email on file', none: 'No open carts — every proposal already has its deposit. 🎉', confirmTpl: 'Send the deposit reminder for {id}?\n\nThe customer gets the same reminder email the app sends automatically at 48 hours, with the link to review and pay the deposit.', notSent: 'The reminder email did not go through. Reason: ', couldNot: 'Could not load.' },
+  es: { title: 'Rescate de carritos', openTpl: '{n} carritos abiertos', waitingTpl: '{amt} en depósitos esperando', total: 'Total', depositDue: 'Depósito pendiente', daysOldTpl: 'hace {d} días', today: 'creado hoy', remind: 'Recordar', reminded: 'Recordatorio enviado', manualTpl: '{n} a mano', noEmail: 'Sin correo registrado', none: 'No hay carritos abiertos — cada propuesta ya tiene su depósito. 🎉', confirmTpl: '¿Enviar el recordatorio de depósito de {id}?\n\nEl cliente recibe el mismo correo que la app manda automáticamente a las 48 horas, con el link para revisar y pagar el depósito.', notSent: 'El correo de recordatorio no salió. Motivo: ', couldNot: 'No se pudo cargar.' }
+};
+async function loadAdminCartRescue(){
+  const host = document.getElementById('adminCartRescue'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM108[menuLang()] || ADM108.en;
+  try {
+    const d = await api('/api/admin/cart-rescue');
+    const rows = d.carts || [];
+    if (!rows.length) { host.innerHTML = '<div class="card"><b>' + S.title + ':</b> ' + S.none + '</div>'; return; }
+    let h = '<div class="card"><b>' + S.title + ':</b> ' + S.openTpl.replace('{n}', d.count || rows.length) + ' · <b>' + S.waitingTpl.replace('{amt}', moneyFmt(d.totalDepositDue || 0)) + '</b></div>';
+    h += rows.map(r => {
+      const contact = [r.customerEmail, r.customerPhone].filter(Boolean).map(escHtml).join(' • ');
+      const age = r.ageDays > 0 ? S.daysOldTpl.replace('{d}', r.ageDays) : S.today;
+      const rem = r.remindedAt ? ' · <span class="mut">' + S.reminded + (r.manualReminders ? ' (' + S.manualTpl.replace('{n}', r.manualReminders) + ')' : '') + '</span>' : '';
+      const btn = r.customerEmail ? '<button class="black" onclick="cartRescueRemind(\'' + r.id + '\')">' + S.remind + '</button>' : '<button class="ghost" disabled title="' + S.noEmail + '">' + S.remind + '</button>';
+      return '<div class="card"><b>' + escHtml(r.id) + '</b> — ' + escHtml(r.customerName || '') + '<br><span class="mut">' + contact + (contact ? ' · ' : '') + age + '</span>' + rem + '<div style="margin-top:6px">' + S.total + ': <b>' + moneyFmt(r.total || 0) + '</b> · ' + S.depositDue + ': <b class="st">' + moneyFmt(r.depositDue || 0) + '</b></div><div class="row" style="margin-top:8px">' + btn + '</div></div>';
+    }).join('');
+    host.innerHTML = h;
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+async function cartRescueRemind(id){
+  const S = ADM108[menuLang()] || ADM108.en;
+  if (!await appConfirm(S.confirmTpl.replace('{id}', id))) return;
+  try {
+    const d = await api('/api/admin/carts/' + id + '/remind', { method: 'POST', body: '{}' });
+    if (d.automation && !d.automation.sent) alert(S.notSent + (d.automation.reason || 'not configured'));
+    loadAdminCartRescue();
+  } catch (e) { alert(e.message); }
 }
 // ---------- v81: Sprint board (admin) ----------
 // Labels follow the ADM812 pattern (EN/ES by the app language). Every

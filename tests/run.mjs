@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v107', swSrc.includes("const CACHE = 'ghs-app-v107'"));
+t('static: SW cache is ghs-app-v108', swSrc.includes("const CACHE = 'ghs-app-v108'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v107: ghs-app-v107)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v107'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v108: ghs-app-v108)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v108'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8504,7 +8504,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v107: ghs-app-v107)', swSrc.includes("const CACHE = 'ghs-app-v107'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v108: ghs-app-v108)', swSrc.includes("const CACHE = 'ghs-app-v108'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8671,7 +8671,102 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107', swSrc.includes("const CACHE = 'ghs-app-v107'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v108: ghs-app-v108)', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+}
+
+// ---------------- v108: CART RESCUE PANEL ----------------
+{
+  // A dedicated instance on the shared mocks (Resend capture at :8981),
+  // fixtures ONLY — the manual reminder is exercised against fake
+  // customers, never a real one. Two phases like v80.15: build through
+  // the real API, then kill/backdate/seed the file, then respawn.
+  const DATA_FILE9 = '/tmp/ghs-v17-test/data-v108.json';
+  const BASE9 = 'http://127.0.0.1:8995';
+  const env108 = { PORT: '8995', DATA_FILE: DATA_FILE9, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+  try { fs.unlinkSync(DATA_FILE9); } catch (e) {}
+  let child9 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env108), stdio: ['ignore', 'pipe', 'pipe'] });
+  child9.stderr.on('data', d => process.stderr.write('[app9] ' + d));
+  async function req9(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE9 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp9() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE9 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v108 app9: the cart-rescue instance boots', await waitUp9());
+  await req9('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin9@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+  const A9 = (await req9('POST', '/api/login', { body: { email: 'admin9@t.local', password: 'adminpass1' } })).j.token;
+  const ADM9ID = (await req9('GET', '/api/me', { token: A9 })).j.user.id;
+  // --- fixtures through the real API ---
+  const mkCart108 = async (email, extra) => (await req9('POST', '/api/admin/carts', { token: A9, body: Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 125 }], customerName: 'Cart ' + (email || 'nomail'), customerEmail: email }, extra || {}) })).j.cart;
+  const cBig108 = await mkCart108('v108-big@t.local', { items: [{ serviceId: 'water-heater-install', name: 'Water Heater Install', qty: 1, unitPrice: 1000 }] });
+  const cSmall108 = await mkCart108('v108-small@t.local', { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 250 }] });
+  const cFull108 = await mkCart108('v108-full@t.local', { items: [{ serviceId: 'materials-run', name: 'Materials Run', qty: 1, unitPrice: 500 }], payFull: true });
+  const cNoMail108 = await mkCart108('', { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 100 }] });
+  const cCancel108 = await mkCart108('v108-cancel@t.local', { items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 700 }] });
+  await req9('POST', '/api/admin/carts/' + cCancel108.id + '/cancel', { token: A9, body: {} });
+  t('v108 fixtures: five carts built through the real API (one cancelled)', !!cBig108.id && !!cSmall108.id && !!cFull108.id && !!cNoMail108.id && !!cCancel108.id && cBig108.listTotal === 1000 && cSmall108.listTotal === 250 && cFull108.listTotal === 500 && cFull108.payFull === true);
+  // --- kill, backdate + seed the file-only fixtures, respawn ---
+  try { child9.kill('SIGTERM'); } catch (e) {}
+  await sleep(600);
+  const agoH108 = (h) => new Date(Date.now() - h * 3600 * 1000).toISOString();
+  const seed108 = JSON.parse(fs.readFileSync(DATA_FILE9, 'utf8'));
+  for (const c of seed108.carts) {
+    if (c.id === cBig108.id) c.createdAt = agoH108(10 * 24 + 1);
+    if (c.id === cSmall108.id) c.createdAt = agoH108(3 * 24 + 1);
+    if (c.id === cFull108.id) c.createdAt = agoH108(25);
+    if (c.id === cNoMail108.id) c.createdAt = agoH108(5 * 24 + 1);
+  }
+  const seedCart108 = (o) => seed108.carts.push(Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 125, lineTotal: 125, memberUnit: 100 }], listTotal: 125, memberTotal: 100, note: '', customerName: 'Seed', customerPhone: '', customerEmail: '', lang: 'en', payFull: false, status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: ADM9ID, createdAt: agoH108(5 * 24 + 1) }, o));
+  seedCart108({ id: 'CRT-108M', customerName: 'Member Mary', customerEmail: 'v108-member@t.local', customerPhone: '(707) 555-0108', listTotal: 1000, memberTotal: 800, memberApplied: true }); // member-priced: total $800, deposit $320
+  seedCart108({ id: 'CRT-108P', customerName: 'Paid Pete', customerEmail: 'v108-paid@t.local', status: 'paid', requestId: 'GHS-108X', paidAt: agoH108(40), payment: { depositCents: 5000, balanceCents: 7500, amountCents: 5000 } }); // deposit landed — NOT rescue
+  seedCart108({ id: 'CRT-108E', customerName: 'Edge Ed', customerEmail: 'v108-edge@t.local', payment: { depositCents: 5000, balanceCents: 7500, amountCents: 5000 } }); // still 'open' on paper but a deposit IS recorded — NOT rescue
+  fs.writeFileSync(DATA_FILE9, JSON.stringify(seed108));
+  child9 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env108), stdio: ['ignore', 'pipe', 'pipe'] });
+  child9.stderr.on('data', d => process.stderr.write('[app9] ' + d));
+  t('v108 app9: respawned on the seeded file', await waitUp9());
+  const A9B = (await req9('POST', '/api/login', { body: { email: 'admin9@t.local', password: 'adminpass1' } })).j.token;
+  const subj108 = (id) => 'Reminder: your proposal (' + id + ') is still waiting — General Handyman Solutions';
+  const mails108 = async (id) => (await mockEmails()).filter(e => (e.subject || '') === subj108(id));
+  // --- the listing: auth, membership, math, sorting, totals, age ---
+  const noAuth108 = await req9('GET', '/api/admin/cart-rescue', {});
+  t('v108 rescue: the listing endpoint is admin-only', noAuth108.status === 401 || noAuth108.status === 403);
+  const list108 = (await req9('GET', '/api/admin/cart-rescue', { token: A9B })).j;
+  const rows108 = list108.carts || [];
+  const row108 = (id) => rows108.find(r => r.id === id);
+  t('v108 rescue: exactly the 5 open unpaid carts are listed — paid, cancelled and deposit-recorded carts are excluded', list108.count === 5 && rows108.length === 5 && !!row108(cBig108.id) && !!row108(cSmall108.id) && !!row108(cFull108.id) && !!row108(cNoMail108.id) && !!row108('CRT-108M') && !row108('CRT-108P') && !row108('CRT-108E') && !row108(cCancel108.id));
+  t('v108 rescue: deposit math rides the app law — $1,000 -> $400 (40%), $250 -> $50 flat, payFull $500 -> $500, member $800 -> $320',
+    row108(cBig108.id).total === 1000 && row108(cBig108.id).depositDue === 400 && row108(cSmall108.id).total === 250 && row108(cSmall108.id).depositDue === 50 && row108(cFull108.id).total === 500 && row108(cFull108.id).depositDue === 500 && row108('CRT-108M').total === 800 && row108('CRT-108M').depositDue === 320);
+  t('v108 rescue: rows are sorted by deposit due, descending (payFull $500 first)', rows108.every((r, i) => i === 0 || rows108[i - 1].depositDue >= r.depositDue) && rows108[0].id === cFull108.id);
+  t('v108 rescue: the totals header is computed from the records — 5 carts, $1,320 in deposits pending', list108.totalDepositDue === 1320);
+  t('v108 rescue: age in days comes from createdAt (10 / 3 / 1) and the contact is shown exactly as stored', row108(cBig108.id).ageDays === 10 && row108(cSmall108.id).ageDays === 3 && row108(cFull108.id).ageDays === 1 && row108('CRT-108M').customerName === 'Member Mary' && row108('CRT-108M').customerPhone === '(707) 555-0108' && row108('CRT-108M').customerEmail === 'v108-member@t.local');
+  // --- the one-tap reminder: auth first, then exactly one send per tap ---
+  const remNoAuth108 = await req9('POST', '/api/admin/carts/' + cSmall108.id + '/remind', { body: {} });
+  t('v108 rescue: the remind endpoint is admin-only and an unauthenticated tap sends NOTHING', (remNoAuth108.status === 401 || remNoAuth108.status === 403) && (await mails108(cSmall108.id)).length === 0);
+  const rem108 = await req9('POST', '/api/admin/carts/' + cSmall108.id + '/remind', { token: A9B, body: {} });
+  const smallMail108 = await mails108(cSmall108.id);
+  t('v108 rescue: ONE tap fires the existing cart_reminder exactly once — same subject, to the customer, with the cart link', rem108.status === 200 && rem108.j.sent === true && smallMail108.length === 1 && JSON.stringify(smallMail108[0].to) === JSON.stringify(['v108-small@t.local']) && (smallMail108[0].text || '').includes('/cart/' + cSmall108.id));
+  const list108b = (await req9('GET', '/api/admin/cart-rescue', { token: A9B })).j;
+  const smallRow108b = (list108b.carts || []).find(r => r.id === cSmall108.id);
+  const disk108 = JSON.parse(fs.readFileSync(DATA_FILE9, 'utf8'));
+  const aud108 = await req9('GET', '/api/admin/audit', { token: A9B });
+  t('v108 rescue: the manual send stamps remindedAt + manualReminderCount on the record and lands in the audit log', !!smallRow108b.remindedAt && smallRow108b.manualReminders === 1 && !!disk108.carts.find(c => c.id === cSmall108.id).remindedAt && disk108.carts.find(c => c.id === cSmall108.id).manualReminderCount === 1 && (aud108.j.entries || []).some(en => en.action === 'cart.reminder' && en.target === cSmall108.id));
+  const remNoMail108 = await req9('POST', '/api/admin/carts/' + cNoMail108.id + '/remind', { token: A9B, body: {} });
+  const remPaid108 = await req9('POST', '/api/admin/carts/CRT-108P/remind', { token: A9B, body: {} });
+  const remGhost108 = await req9('POST', '/api/admin/carts/CRT-108GHOST/remind', { token: A9B, body: {} });
+  t('v108 rescue: no-email -> 400, paid -> 400, unknown cart -> 404, and none of them sends', remNoMail108.status === 400 && remPaid108.status === 400 && remGhost108.status === 404 && (await mails108(cNoMail108.id)).length === 0 && (await mails108('CRT-108P')).length === 0);
+  // --- the shared stamp: the 48h sweep must NOT re-remind the rescued cart ---
+  await req9('GET', '/api/jobs', { token: A9B }); // ordinary admin activity triggers the sweeps
+  let bigMail108 = [];
+  for (let i = 0; i < 30 && !bigMail108.length; i++) { bigMail108 = await mails108(cBig108.id); if (!bigMail108.length) await sleep(200); }
+  await sleep(600);
+  t('v108 rescue: after the sweep, the manually-rescued cart still has exactly ONE reminder (shared stamp), while the other due carts got their automatic one', (await mails108(cSmall108.id)).length === 1 && bigMail108.length === 1 && (await mails108('CRT-108M')).length === 1 && (await mails108(cFull108.id)).length === 0);
+  // --- statics ---
+  t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
+  t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
+  t('v108 statics: SW cache bumped to ghs-app-v108', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+  try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

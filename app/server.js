@@ -3240,6 +3240,26 @@ function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
   return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, payFull: !!c.payFull, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
 }
+// ---------- v108: CART RESCUE rows (admin) ----------
+// Gabriel's rescue list: every cart still OPEN with no deposit recorded
+// — work already sold, money not yet collected. A cart leaves this list
+// the moment its deposit lands (the conversion stamps status 'paid');
+// the payment guard also keeps out any open record that somehow already
+// carries a deposit. The money rides the SAME math the cart page and
+// the 48h reminder email use — total = memberApplied ? memberTotal :
+// listTotal, split by cartSplit — so the panel can never quote a
+// different deposit than the customer is actually asked to pay.
+function cartRescueRows() {
+  const now = Date.now();
+  return cartsOf()
+    .filter(c => c && c.status === 'open' && !(c.payment && Number(c.payment.depositCents) > 0))
+    .map(c => {
+      const total = c.memberApplied ? (Number(c.memberTotal) || 0) : (Number(c.listTotal) || 0);
+      const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : NaN;
+      return { id: c.id, customerName: c.customerName || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', customerPhone: c.customerPhone || '', total, depositDue: cartSplit(c, Math.round(total * 100)).depositCents / 100, createdAt: c.createdAt || '', ageDays: isNaN(createdMs) ? 0 : Math.max(0, Math.floor((now - createdMs) / 86400000)), remindedAt: c.remindedAt || null, manualReminders: Number(c.manualReminderCount) || 0, link: cartLink(c) };
+    })
+    .sort((a, b) => b.depositDue - a.depositDue);
+}
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
 // is a single-use link (/join/INV-…) whose holder joins HomeCare with
@@ -6723,6 +6743,14 @@ async function handleRequest(req, res) {
     const b = botStatsOf();
     return send(res, 200, { ok: true, since: b.since, conversations: b.conversations, carts: b.carts, escalations: b.escalations, recordedCarts: cartsOf().filter(c => c && (c.source === 'assistant' || c.createdBy === 'assistant')).length, recordedCases: db.requests.filter(r => r && r.assistantCase).length });
   }
+  // v108: the cart-rescue panel data — every open cart whose deposit has
+  // not landed, biggest deposit first, plus the totals header (open-cart
+  // count + total deposits pending), all computed from the live records.
+  if (p === '/api/admin/cart-rescue' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const rows = cartRescueRows();
+    return send(res, 200, { ok: true, count: rows.length, totalDepositDue: Math.round(rows.reduce((s, r) => s + r.depositDue, 0) * 100) / 100, carts: rows });
+  }
 
   // ---------- auth ----------
   if (p === '/setup' && req.method === 'GET') {
@@ -9475,6 +9503,32 @@ async function handleRequest(req, res) {
     audit(user, 'cart.cancel', c.id, '');
     save();
     return send(res, 200, { cart: publicCart(c) });
+  }
+  // v108: one-tap MANUAL cart reminder — the rescue panel's button. It
+  // fires the EXACT mechanism the 48h sweep uses (sendAutomation
+  // 'cart_reminder' with publicCart — same channel, same template), and
+  // on a successful send it stamps the SAME c.remindedAt the sweep
+  // checks, so a cart rescued by hand never gets a second, automatic
+  // reminder (the stamp-sharing rule the invoice reminder already uses).
+  // No 48h wait: the tap IS Gabriel's decision. One tap = one send.
+  const cartRemindMatch = p.match(/^\/api\/admin\/carts\/([\w-]+)\/remind$/);
+  if (cartRemindMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = cartsOf().find(x => x.id === cartRemindMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status !== 'open') return send(res, 400, { error: 'only open carts can be reminded' });
+    if (c.payment && Number(c.payment.depositCents) > 0) return send(res, 400, { error: 'this cart already has its deposit — nothing to remind' });
+    const email = c.customerEmail || (c.customer && c.customer.email) || '';
+    if (!email.includes('@')) return send(res, 400, { error: 'this cart has no customer email on file' });
+    const automation = await sendAutomation('cart_reminder', { cart: publicCart(c) });
+    if (automation && automation.sent) {
+      c.remindedAt = new Date().toISOString();
+      c.manualReminderCount = (Number(c.manualReminderCount) || 0) + 1;
+      c.lastManualReminderAt = c.remindedAt;
+      audit(user, 'cart.reminder', c.id, 'manual one-tap reminder emailed to ' + email);
+      save();
+    }
+    return send(res, 200, { ok: true, sent: !!(automation && automation.sent), automation, cart: publicCart(c) });
   }
   // v55: edit an OPEN cart in place — same link, new lines (Gabriel:
   // "make me the opportunity to change the open orders from cart").
