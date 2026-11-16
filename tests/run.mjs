@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v108', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+t('static: SW cache is ghs-app-v109', swSrc.includes("const CACHE = 'ghs-app-v109'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v108: ghs-app-v108)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v108'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v109: ghs-app-v109)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v109'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6529,12 +6529,19 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     robotsTxt818.includes('Sitemap: https://generalhandymans.app/sitemap.xml'));
   const sitemap818 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt818 = await sitemap818.text();
-  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing the public customer doors (v105: six, + /junk-removal)',
+  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing the public customer doors (v109: nineteen — the six + 8 city + 5 trade doors)',
     sitemap818.status === 200 && String(sitemap818.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt818.includes('<urlset') &&
     ['<loc>https://generalhandymans.app/</loc>', '<loc>https://generalhandymans.app/plus</loc>',
      '<loc>https://generalhandymans.app/plus2</loc>', '<loc>https://generalhandymans.app/homecare</loc>',
-     '<loc>https://generalhandymans.app/yard</loc>', '<loc>https://generalhandymans.app/junk-removal</loc>'].every(x => sitemapTxt818.includes(x)) &&
+     '<loc>https://generalhandymans.app/yard</loc>', '<loc>https://generalhandymans.app/junk-removal</loc>',
+     '<loc>https://generalhandymans.app/handyman-fairfield</loc>', '<loc>https://generalhandymans.app/handyman-suisun-city</loc>',
+     '<loc>https://generalhandymans.app/handyman-vacaville</loc>', '<loc>https://generalhandymans.app/handyman-vallejo</loc>',
+     '<loc>https://generalhandymans.app/handyman-benicia</loc>', '<loc>https://generalhandymans.app/handyman-napa</loc>',
+     '<loc>https://generalhandymans.app/handyman-concord</loc>', '<loc>https://generalhandymans.app/handyman-antioch</loc>',
+     '<loc>https://generalhandymans.app/carpentry-fairfield</loc>', '<loc>https://generalhandymans.app/electrical-fairfield</loc>',
+     '<loc>https://generalhandymans.app/plumbing-fairfield</loc>', '<loc>https://generalhandymans.app/yard-work-fairfield</loc>',
+     '<loc>https://generalhandymans.app/mobile-mechanic-fairfield</loc>'].every(x => sitemapTxt818.includes(x)) &&
     !sitemapTxt818.includes('/tecnico'));
   const bing93 = await fetch(BASE + '/BingSiteAuth.xml');
   const bingTxt93 = await bing93.text();
@@ -6543,18 +6550,29 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     bingTxt93.includes('<user>CA95D6E2EB6DDA53B4F4B72A8D883928</user>'));
   const sitemap97 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt97 = await sitemap97.text();
-  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all six apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs (v105: + /junk-removal)',
+  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all nineteen apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs (v109: + the 13 city/trade doors)',
     sitemap97.status === 200 && String(sitemap97.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt97 === '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-      ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
+      ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal',
+       '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo',
+       '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch',
+       '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield',
+       '/mobile-mechanic-fairfield'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
   const sitemapWww97 = await fetch(BASE + '/sitemap-www.xml');
   const sitemapWwwTxt97 = await sitemapWww97.text();
-  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same six doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
+  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same nineteen doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
     sitemapWww97.status === 200 && String(sitemapWww97.headers.get('content-type') || '').includes('xml') &&
     sitemapWwwTxt97.includes('<urlset') &&
     ['<loc>https://www.generalhandymans.app/</loc>', '<loc>https://www.generalhandymans.app/plus</loc>',
      '<loc>https://www.generalhandymans.app/plus2</loc>', '<loc>https://www.generalhandymans.app/homecare</loc>',
-     '<loc>https://www.generalhandymans.app/yard</loc>', '<loc>https://www.generalhandymans.app/junk-removal</loc>'].every(x => sitemapWwwTxt97.includes(x)) &&
+     '<loc>https://www.generalhandymans.app/yard</loc>', '<loc>https://www.generalhandymans.app/junk-removal</loc>',
+     '<loc>https://www.generalhandymans.app/handyman-fairfield</loc>', '<loc>https://www.generalhandymans.app/handyman-suisun-city</loc>',
+     '<loc>https://www.generalhandymans.app/handyman-vacaville</loc>', '<loc>https://www.generalhandymans.app/handyman-vallejo</loc>',
+     '<loc>https://www.generalhandymans.app/handyman-benicia</loc>', '<loc>https://www.generalhandymans.app/handyman-napa</loc>',
+     '<loc>https://www.generalhandymans.app/handyman-concord</loc>', '<loc>https://www.generalhandymans.app/handyman-antioch</loc>',
+     '<loc>https://www.generalhandymans.app/carpentry-fairfield</loc>', '<loc>https://www.generalhandymans.app/electrical-fairfield</loc>',
+     '<loc>https://www.generalhandymans.app/plumbing-fairfield</loc>', '<loc>https://www.generalhandymans.app/yard-work-fairfield</loc>',
+     '<loc>https://www.generalhandymans.app/mobile-mechanic-fairfield</loc>'].every(x => sitemapWwwTxt97.includes(x)) &&
     !sitemapWwwTxt97.includes('<loc>https://generalhandymans.app/'));
   const robots97 = await fetch(BASE + '/robots.txt');
   const robotsTxt97 = await robots97.text();
@@ -8504,7 +8522,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v108: ghs-app-v108)', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8591,8 +8609,8 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     !junkBad.includes('<script>alert(1)</script>') && junkBad.includes('href="/#menu"'));
   const smRes = await fetch(BASE2 + '/sitemap.xml');
   const smTxt = await smRes.text();
-  t('v105 sitemap: exactly 6 URLs now, /junk-removal included',
-    smRes.status === 200 && (smTxt.match(/<loc>/g) || []).length === 6 && smTxt.includes('<loc>https://generalhandymans.app/junk-removal</loc>'));
+  t('v105 sitemap: exactly 6 URLs then (v109: exactly 19 now — the 6 + 13 city/trade doors), /junk-removal included',
+    smRes.status === 200 && (smTxt.match(/<loc>/g) || []).length === 19 && smTxt.includes('<loc>https://generalhandymans.app/junk-removal</loc>'));
   const keyRes = await fetch(BASE2 + '/08228ae9460ae3105f0709c73a626eec.txt');
   const keyTxt = await keyRes.text();
   t('v105 indexnow: the key file serves at /<key>.txt with the key as its content',
@@ -8671,7 +8689,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v108: ghs-app-v108)', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8765,8 +8783,109 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108', swSrc.includes("const CACHE = 'ghs-app-v108'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
+}
+
+// ---------------- v109: CITY + TRADE LANDING PAGES (Gabriel, 2026-11-16) ----------------
+// 13 new doors, GENERATED from the source of truth by
+// tools/gen-landings-v109.mjs (SERVER_MENU + MENU_TRADE in server.js,
+// MENU_CATALOG + MENU_ES in app.js): 8 city pages listing the whole menu
+// and 5 Fairfield trade pages. The fidelity checks below re-derive every
+// row from the SAME sources — a price or name edit in the menu that is
+// not regenerated into the pages fails here. Zero money-flow change.
+{
+  const DOORS109 = [
+    ['/handyman-fairfield', 'handyman-fairfield.html', 'Handyman in Fairfield, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-suisun-city', 'handyman-suisun-city.html', 'Handyman in Suisun City, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-vacaville', 'handyman-vacaville.html', 'Handyman in Vacaville, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-vallejo', 'handyman-vallejo.html', 'Handyman in Vallejo, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-benicia', 'handyman-benicia.html', 'Handyman in Benicia, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-napa', 'handyman-napa.html', 'Handyman in Napa, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-concord', 'handyman-concord.html', 'Handyman in Concord, CA — Services & Prices | General Handyman Solutions'],
+    ['/handyman-antioch', 'handyman-antioch.html', 'Handyman in Antioch, CA — Services & Prices | General Handyman Solutions'],
+    ['/carpentry-fairfield', 'carpentry-fairfield.html', 'Carpentry in Fairfield, CA — Services & Prices | General Handyman Solutions'],
+    ['/electrical-fairfield', 'electrical-fairfield.html', 'Electrical Services in Fairfield, CA — Prices | General Handyman Solutions'],
+    ['/plumbing-fairfield', 'plumbing-fairfield.html', 'Plumbing in Fairfield, CA — Services & Prices | General Handyman Solutions'],
+    ['/yard-work-fairfield', 'yard-work-fairfield.html', 'Yard Work in Fairfield, CA — Services & Prices | General Handyman Solutions'],
+    ['/mobile-mechanic-fairfield', 'mobile-mechanic-fairfield.html', 'Mobile Mechanic in Fairfield, CA — Services & Prices | General Handyman Solutions']
+  ];
+  const TRADE109 = { '/carpentry-fairfield': 'carpentry', '/electrical-fairfield': 'electrical', '/plumbing-fairfield': 'plumbing', '/yard-work-fairfield': 'gardening', '/mobile-mechanic-fairfield': 'mechanic' };
+  t('v109 statics: the 13 city/trade doors are LANDING_DOORS in server.js with the #menu join + the generator is committed',
+    DOORS109.every(([route, file]) => serverSrc.includes("'" + route + "': { file: '" + file + "', join: '#menu' }")) &&
+    fs.existsSync(path.join(APP_DIR, '..', 'tools', 'gen-landings-v109.mjs')));
+  t('v109 statics: SITEMAP_DOORS lists exactly the 19 doors (the 6 + the 13 new)',
+    DOORS109.every(([route]) => serverSrc.includes("'" + route + "'")) &&
+    ((serverSrc.match(/const SITEMAP_DOORS = \[([\s\S]*?)\];/) || ['', ''])[1].match(/'\/[a-z0-9-]*'/g) || []).length === 19);
+  const files109 = {};
+  let filesOk109 = true;
+  for (const [route, file] of DOORS109) {
+    const fp = path.join(APP_DIR, 'public', 'landings', file);
+    if (!fs.existsSync(fp)) { filesOk109 = false; continue; }
+    files109[route] = fs.readFileSync(fp, 'utf8');
+  }
+  t('v109 statics: all 13 landing files exist with self-canonical, unique title, meta description, OG, JSON-LD, brand red, EN|ES toggle on ghsMenuLang, phone, REPORTING FOR DUTY and the %%JOIN%% CTA slot',
+    filesOk109 && DOORS109.every(([route, file, title]) => {
+      const s = files109[route] || '';
+      return s.includes('<link rel="canonical" href="https://generalhandymans.app' + route + '">') &&
+        s.includes('<title>' + title + '</title>') && s.includes('<meta name="description"') &&
+        s.includes('property="og:title"') && s.includes('application/ld+json') && s.includes('#e42535') &&
+        s.includes("localStorage.setItem('ghsMenuLang'") && s.includes('data-lang="es"') &&
+        s.includes('(707) 862-3773') && s.includes('REPORTING FOR DUTY') && s.includes('href="%%JOIN%%"');
+    }) && new Set(DOORS109.map(d => d[2])).size === 13);
+  // --- price fidelity, re-derived from the sources of truth ---
+  const smBlock109 = serverSrc.slice(serverSrc.indexOf('const SERVER_MENU = {'), serverSrc.indexOf('const ESTIMATE_FIRST_SERVICES'));
+  const prices109 = {};
+  for (const m of smBlock109.matchAll(/"([a-z0-9-]+)":\{p:(\d+),m:(\d+)[,}]/g)) prices109[m[1]] = { p: +m[2], m: +m[3] };
+  const tradeBlock109 = serverSrc.slice(serverSrc.indexOf('const MENU_TRADE = {'), serverSrc.indexOf('function tradeForService'));
+  const tradeOf109 = {};
+  for (const m of tradeBlock109.matchAll(/'([a-z0-9-]+)': '(carpentry|electrical|plumbing|gardening|mechanic|handyman)'/g)) tradeOf109[m[1]] = m[2];
+  const nameEn109 = {}, nameEs109 = {}, flags109 = {};
+  for (const line of catBlock.split('\n')) {
+    const m = line.match(/'([a-z0-9-]+)': \{ name: '((?:[^'\\]|\\.)*)'/);
+    if (m) { nameEn109[m[1]] = m[2].replace(/\\'/g, "'"); flags109[m[1]] = { est: /est: true/.test(line), from: /from: true/.test(line) }; }
+  }
+  const esBlock109 = appJsSrc.slice(appJsSrc.indexOf('const MENU_ES = {'), appJsSrc.indexOf('const MENU_UI'));
+  for (const m of esBlock109.matchAll(/'([a-z0-9-]+)': \['((?:[^'\\]|\\.)*)'/g)) nameEs109[m[1]] = m[2].replace(/\\'/g, "'");
+  const esc109 = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rowOk109 = (half, id, lang) => {
+    const pr = prices109[id]; if (!pr) return false;
+    const name = lang === 'en' ? nameEn109[id] : nameEs109[id];
+    const href = flags109[id] && flags109[id].est ? 'href="https://generalhandymans.app/"' : 'href="https://generalhandymans.app/#order/' + id + '"';
+    const label = (flags109[id] && flags109[id].from ? (lang === 'en' ? 'From $' : 'Desde $') : '$') + pr.p;
+    const member = (lang === 'en' ? 'Members $' : 'Miembros $') + pr.m;
+    return half.includes(href + '>' + esc109(name) + '</a>') && half.includes('>' + label + '<span class="pm">' + member + '</span>');
+  };
+  const halves109 = route => { const s = files109[route] || ''; const cut = s.indexOf('<div data-lang="es"'); return [s.slice(0, cut), s.slice(cut)]; };
+  const allIds109 = Object.keys(prices109);
+  t('v109 fidelity setup: sources parse completely (107 priced services, EN+ES names, trade map)',
+    allIds109.length === 107 && Object.keys(nameEn109).length === 107 && Object.keys(nameEs109).length === 107 && Object.keys(tradeOf109).length === 107);
+  for (const [route] of DOORS109) {
+    const isCity = !TRADE109[route];
+    const want = isCity ? allIds109 : allIds109.filter(id => tradeOf109[id] === TRADE109[route]);
+    const [en, es] = halves109(route);
+    const fidelity = want.every(id => rowOk109(en, id, 'en') && rowOk109(es, id, 'es'));
+    const isolation = isCity ? true : allIds109.filter(id => tradeOf109[id] !== TRADE109[route])
+      .every(id => !en.includes('href="https://generalhandymans.app/#order/' + id + '"') && !es.includes('href="https://generalhandymans.app/#order/' + id + '"'));
+    t('v109 fidelity: ' + route + ' shows the REAL menu rows (name + list price + member price, EN+ES) for its ' + (isCity ? 'whole menu' : TRADE109[route] + ' trade') + (isCity ? '' : ' — and no other trade\u2019s order links'),
+      fidelity && isolation);
+  }
+  // --- live (main instance) ---
+  for (const [route, , title] of DOORS109) {
+    const r = await fetch(BASE + route, { redirect: 'manual' });
+    const body = await r.text();
+    t('v109 live: GET ' + route + ' answers 200 (no redirect) with its canonical, title and the substituted menu CTA',
+      r.status === 200 && !r.headers.get('location') &&
+      body.includes('<link rel="canonical" href="https://generalhandymans.app' + route + '">') &&
+      body.includes('<title>' + title + '</title>') && body.includes('href="/#menu"') && body.includes('(707) 862-3773'));
+  }
+  const src109 = await (await fetch(BASE + '/handyman-napa?src=SEO1')).text();
+  t('v109 doors: a valid ?src rides inside the menu fragment, exactly like the v104 doors', src109.includes('href="/#menu?src=SEO1"'));
+  const bad109 = await (await fetch(BASE + '/handyman-napa?src=' + encodeURIComponent('"><script>alert(1)</script>'))).text();
+  t('v109 doors: hostile src is dropped, never reflected', !bad109.includes('<script>alert(1)</script>') && bad109.includes('href="/#menu"'));
+  const sm109 = await (await fetch(BASE + '/sitemap.xml')).text();
+  t('v109 live sitemap: exactly 19 URLs, all 13 new doors included',
+    (sm109.match(/<loc>/g) || []).length === 19 && DOORS109.every(([route]) => sm109.includes('<loc>https://generalhandymans.app' + route + '</loc>')));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

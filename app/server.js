@@ -6508,7 +6508,27 @@ async function handleRequest(req, res) {
     '/plus2': { file: 'plus2.html', join: '#join-plus2' },
     '/homecare': { file: 'homecare.html', join: '#join-homecare' },
     '/yard': { file: 'yard.html', join: '#join-yard1', join2: '#join-yard2' },
-    '/junk-removal': { file: 'junk-removal.html', join: '#menu' }
+    '/junk-removal': { file: 'junk-removal.html', join: '#menu' },
+    // v109 (Gabriel, 2026-11-16): city + trade doors — real pages like
+    // the v104/v105 doors, GENERATED from the source of truth
+    // (tools/gen-landings-v109.mjs reads SERVER_MENU + MENU_TRADE here
+    // and MENU_CATALOG + MENU_ES in app.js), so the prices and names on
+    // these pages ARE the menu's — the suite re-derives every row from
+    // the same sources and fails on any drift. CTA into the app menu,
+    // same ?src contract as /junk-removal.
+    '/handyman-fairfield': { file: 'handyman-fairfield.html', join: '#menu' },
+    '/handyman-suisun-city': { file: 'handyman-suisun-city.html', join: '#menu' },
+    '/handyman-vacaville': { file: 'handyman-vacaville.html', join: '#menu' },
+    '/handyman-vallejo': { file: 'handyman-vallejo.html', join: '#menu' },
+    '/handyman-benicia': { file: 'handyman-benicia.html', join: '#menu' },
+    '/handyman-napa': { file: 'handyman-napa.html', join: '#menu' },
+    '/handyman-concord': { file: 'handyman-concord.html', join: '#menu' },
+    '/handyman-antioch': { file: 'handyman-antioch.html', join: '#menu' },
+    '/carpentry-fairfield': { file: 'carpentry-fairfield.html', join: '#menu' },
+    '/electrical-fairfield': { file: 'electrical-fairfield.html', join: '#menu' },
+    '/plumbing-fairfield': { file: 'plumbing-fairfield.html', join: '#menu' },
+    '/yard-work-fairfield': { file: 'yard-work-fairfield.html', join: '#menu' },
+    '/mobile-mechanic-fairfield': { file: 'mobile-mechanic-fairfield.html', join: '#menu' }
   };
   if (req.method === 'GET' && LANDING_DOORS[p]) {
     const door = LANDING_DOORS[p];
@@ -6605,7 +6625,8 @@ async function handleRequest(req, res) {
   }
   // SEO doors (v80.18): robots.txt + sitemap.xml at the apex root. The
   // sitemap lists only the real public customer doors (the homepage and
-  // the four membership plan doors — real landing pages since v104).
+  // the four membership plan doors — real landing pages since v104;
+  // /junk-removal since v105; the 8 city + 5 trade doors since v109).
   // v97: ONE canonical sitemap builder behind every sitemap door — the
   // <loc> entries ALWAYS carry the base passed in, never the host that
   // happened to serve the fetch, so every door hands Bing the same
@@ -6615,7 +6636,12 @@ async function handleRequest(req, res) {
   // can reach: the Render origin host itself (whose /sitemap.xml still
   // lists the canonical apex URLs) and the www-base variant below; the
   // apex /sitemap.xml body is byte-identical to the v80.18 original.
-  const SITEMAP_DOORS = ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal'];
+  const SITEMAP_DOORS = ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal',
+    // v109: the 8 city doors + 5 Fairfield trade doors (real pages, above)
+    '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo',
+    '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch',
+    '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield',
+    '/mobile-mechanic-fairfield'];
   const sitemapBody = base => '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
     SITEMAP_DOORS.map(d => '  <url><loc>' + base + d + '</loc></url>').join('\n') + '\n</urlset>\n';
   if (req.method === 'GET' && p === '/robots.txt') {
