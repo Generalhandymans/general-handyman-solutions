@@ -5019,7 +5019,11 @@ function installPageHtml(langOverride, ua) {
     androidH: 'En Android (Chrome)', androidSteps: 'Toca el botón Instalar de arriba. Si no sale la ventana: menú ⋮ del navegador → «Instalar app».',
     iosH: 'En iPhone / iPad (Safari)', iosSteps: '1) Toca el botón Compartir (el cuadro con la flecha hacia arriba). 2) Elige «Agregar a pantalla de inicio». 3) Toca «Agregar».',
     otherH: '¿Otro navegador?', otherSteps: 'Abre esta misma página en Chrome (Android) o Safari (iPhone) y sigue los pasos.',
-    foot: 'Gratis — sin tienda de apps. ¿Dudas? Texto o llamada al (707) 862-3773.'
+    foot: 'Gratis — sin tienda de apps. ¿Dudas? Texto o llamada al (707) 862-3773.',
+    sheetT: 'Ya casi — sigue estos pasos', sFirst: '⚠️ Este navegador no puede instalar la app. Abre esta misma página en <b>Safari</b> y vuelve a tocar Instalar.',
+    s1: 'Toca el botón <b>Compartir</b>', s1b: 'El cuadro con la flecha hacia arriba, en la barra de abajo de Safari.',
+    s2: 'Elige <b>«Agregar a pantalla de inicio»</b>', s2b: 'Si no lo ves, desliza el menú un poco hacia arriba.',
+    s3: 'Toca <b>«Agregar»</b>', s3b: 'Arriba a la derecha — y el martillo queda en tu pantalla de inicio.', close: 'Cerrar'
   } : {
     title: 'Install the app', sub: 'General Handyman Solutions on your home screen — book services, follow your order and pay, like a real app.',
     btn: '📲 Install the app', open: 'Open the app', already: '✅ You already have the app', alreadyBody: 'Open it from the hammer on your home screen.',
@@ -5027,7 +5031,11 @@ function installPageHtml(langOverride, ua) {
     androidH: 'On Android (Chrome)', androidSteps: 'Tap the Install button above. If no window pops up: browser menu ⋮ → "Install app".',
     iosH: 'On iPhone / iPad (Safari)', iosSteps: '1) Tap the Share button (the square with the arrow pointing up). 2) Choose "Add to Home Screen". 3) Tap "Add".',
     otherH: 'Another browser?', otherSteps: 'Open this same page in Chrome (Android) or Safari (iPhone) and follow the steps.',
-    foot: 'Free — no app store needed. Questions? Text or call (707) 862-3773.'
+    foot: 'Free — no app store needed. Questions? Text or call (707) 862-3773.',
+    sheetT: 'Almost there — follow these steps', sFirst: '⚠️ This browser can\'t install the app. Open this same page in <b>Safari</b>, then tap Install again.',
+    s1: 'Tap the <b>Share</b> button', s1b: 'The square with the arrow pointing up, in Safari\'s bottom bar.',
+    s2: 'Choose <b>"Add to Home Screen"</b>', s2b: 'If you don\'t see it, scroll the menu up a little.',
+    s3: 'Tap <b>"Add"</b>', s3b: 'Top right corner — and the hammer lands on your home screen.', close: 'Close'
   };
   const other = lang === 'es' ? 'en' : 'es';
   return '<!doctype html><html lang="' + lang + '"><head><meta charset="utf-8">'
@@ -5048,7 +5056,19 @@ function installPageHtml(langOverride, ua) {
     + '.foot{margin-top:22px;color:#8a8a92;font-size:13px;line-height:1.5}'
     + '#doneBox{display:none;background:#12260f;border:1px solid #2c5b21;border-radius:14px;padding:14px;margin-bottom:14px}'
     + '#alreadyBox{display:none;background:#141416;border:1px solid #2c5b21;border-radius:14px;padding:14px;margin-bottom:14px}'
-    + '.openBtn{display:inline-block;margin-top:8px;background:#26262b;color:#fff;border-radius:10px;padding:10px 18px;font-weight:700;text-decoration:none}</style></head>'
+    + '.openBtn{display:inline-block;margin-top:8px;background:#26262b;color:#fff;border-radius:10px;padding:10px 18px;font-weight:700;text-decoration:none}'
+    + '.card.flash{animation:ghsFlash 1.1s ease 2}@keyframes ghsFlash{0%,100%{border-color:#26262b}50%{border-color:#e42535;box-shadow:0 0 0 3px rgba(228,37,53,.35)}}'
+    + '#iosSheet{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:60}'
+    + '.sheet{position:absolute;left:0;right:0;bottom:0;max-width:430px;margin:0 auto;background:#141416;border-top:3px solid #e42535;border-radius:20px 20px 0 0;padding:20px 20px 14px;text-align:left}'
+    + '.sheetH{font-size:18px;font-weight:800;margin:0 0 12px;text-align:center}'
+    + '.sFirst{background:#2a1215;border:1px solid #e42535;border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.5;margin-bottom:12px;color:#f2d7da}'
+    + '.sRow{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #26262b}'
+    + '.sNum{flex:0 0 30px;width:30px;height:30px;border-radius:50%;background:#e42535;color:#fff;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px}'
+    + '.sT{font-size:15.5px}.sB{color:#a9a9b1;font-size:13px;line-height:1.45;margin-top:2px}'
+    + '.sIco{margin-left:auto;flex:0 0 auto;background:#26262b;border-radius:10px;padding:7px 8px 3px}'
+    + '#sheetClose{width:100%;margin-top:14px;background:#26262b;color:#fff;border:none;border-radius:12px;padding:13px;font-size:15.5px;font-weight:700;cursor:pointer}'
+    + '.sArrow{text-align:center;font-size:24px;color:#e42535;animation:ghsBob 1s ease-in-out infinite;margin-top:6px}@keyframes ghsBob{0%,100%{transform:translateY(0)}50%{transform:translateY(6px)}}'
+    + '</style></head>'
     + '<body><div class="wrap" id="ghsInstallPage">'
     + '<img class="icon" src="/icons/icon-512.png" alt="General Handyman Solutions">'
     + '<h1>' + T.title + '</h1><p class="sub">' + T.sub + '</p>'
@@ -5058,14 +5078,26 @@ function installPageHtml(langOverride, ua) {
     + platformCards(T, ua)
     + '<div class="lang"><a href="?lang=' + other + '">' + (lang === 'es' ? 'View in English' : 'Ver en español') + '</a></div>'
     + '<p class="foot">' + T.foot + '</p>'
+    + '<div id="iosSheet"><div class="sheet"><div class="sheetH">' + T.sheetT + '</div>'
+    + '<div id="safariFirst" class="sFirst" style="display:none">' + T.sFirst + '</div>'
+    + '<div class="sRow"><div class="sNum">1</div><div><div class="sT">' + T.s1 + '</div><div class="sB">' + T.s1b + '</div></div><div class="sIco"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="M7.5 8L12 3.5L16.5 8"/><path d="M5 13.5V20a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 20v-6.5"/></svg></div></div>'
+    + '<div class="sRow"><div class="sNum">2</div><div><div class="sT">' + T.s2 + '</div><div class="sB">' + T.s2b + '</div></div></div>'
+    + '<div class="sRow"><div class="sNum">3</div><div><div class="sT">' + T.s3 + '</div><div class="sB">' + T.s3b + '</div></div></div>'
+    + '<button id="sheetClose" type="button">' + T.close + '</button><div class="sArrow">↓</div></div></div>'
     + '</div><script>(function(){try{'
     + 'var btn=document.getElementById("instBtn"),done=document.getElementById("doneBox"),already=document.getElementById("alreadyBox");'
     + 'var standalone=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;'
     + 'if(standalone){already.style.display="block";return;}'
     + 'var deferred=null;var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);'
+    + 'var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i.test(navigator.userAgent);'
+    + 'var sheet=document.getElementById("iosSheet");'
     + 'window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();deferred=e;btn.style.display="block";});'
     + 'if(isIOS){btn.style.display="block";}'
-    + 'btn.addEventListener("click",function(){if(deferred){deferred.prompt();deferred.userChoice.then(function(){deferred=null;});}else{window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"});}});'
+    + 'btn.addEventListener("click",function(){if(deferred){deferred.prompt();deferred.userChoice.then(function(){deferred=null;});return;}'
+    + 'if(isIOS){if(notSafari){document.getElementById("safariFirst").style.display="block";}sheet.style.display="block";return;}'
+    + 'var c=document.getElementById("myCard");if(c){c.scrollIntoView({behavior:"smooth",block:"center"});c.classList.remove("flash");void c.offsetWidth;c.classList.add("flash");}});'
+    + 'sheet.addEventListener("click",function(e){if(e.target===sheet){sheet.style.display="none";}});'
+    + 'document.getElementById("sheetClose").addEventListener("click",function(){sheet.style.display="none";});'
     + 'window.addEventListener("appinstalled",function(){btn.style.display="none";done.style.display="block";});'
     + '}catch(e){}})();</script></body></html>';
 }
@@ -5073,11 +5105,11 @@ function installPageHtml(langOverride, ua) {
 // v72 (P-2): the visitor's own platform card goes FIRST on the install
 // page — nobody should have to read the half that is not theirs.
 function platformCards(T, ua) {
-  const card = (h, s) => '<div class="card"><h3>' + h + '</h3><p>' + s + '</p></div>';
+  const card = (h, s, id) => '<div class="card"' + (id ? ' id="' + id + '"' : '') + '><h3>' + h + '</h3><p>' + s + '</p></div>';
   const android = card(T.androidH, T.androidSteps), ios = card(T.iosH, T.iosSteps), other = card(T.otherH, T.otherSteps);
   const u = String(ua || '');
-  if (/iphone|ipad|ipod/i.test(u)) return ios + android + other;
-  return android + ios + other;
+  if (/iphone|ipad|ipod/i.test(u)) return card(T.iosH, T.iosSteps, 'myCard') + android + other;
+  return card(T.androidH, T.androidSteps, 'myCard') + ios + other;
 }
 
 // v72 (P-1): the post-payment landing pages wear the brand — dark
