@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v109', swSrc.includes("const CACHE = 'ghs-app-v109'"));
+t('static: SW cache is ghs-app-v111', swSrc.includes("const CACHE = 'ghs-app-v111'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v109: ghs-app-v109)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v109'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v110: ghs-app-v111)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v111'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8522,7 +8522,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v110: ghs-app-v111)', swSrc.includes("const CACHE = 'ghs-app-v111'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8677,19 +8677,21 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
 {
   // Static: the robots body in the server is byte-exact — allow-all lines
   // untouched, exactly one Sitemap line (the main apex sitemap).
-  t('v107 statics: the server robots body is exactly allow-all + the ONE main Sitemap line',
-    serverSrc.includes("res.end('User-agent: *\\nAllow: /\\nSitemap: https://generalhandymans.app/sitemap.xml\\n')"));
+  // v111 SUPERSEDES the byte-exact body: Disallow /api/ joins it (the SEO
+  // bundle); the v107 contract — exactly ONE Sitemap line — still holds.
+  t('v107 statics (body superseded by v111): the server robots body is allow-all + Disallow /api/ + the ONE main Sitemap line',
+    serverSrc.includes("res.end('User-agent: *\\nAllow: /\\nDisallow: /api/\\nSitemap: https://generalhandymans.app/sitemap.xml\\n')"));
   // Live: GET /robots.txt returns that exact body, one Sitemap line total.
   const robots107 = await fetch(BASE + '/robots.txt');
   const robotsTxt107 = await robots107.text();
-  t('v107 robots: GET /robots.txt body is byte-exact (User-agent/Allow unchanged, single main Sitemap line)',
+  t('v107 robots (body superseded by v111): GET /robots.txt body is byte-exact (User-agent/Allow unchanged, Disallow /api/ added, single main Sitemap line)',
     robots107.status === 200 &&
-    robotsTxt107 === 'User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n');
+    robotsTxt107 === 'User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://generalhandymans.app/sitemap.xml\n');
   // The un-advertised doors still serve (only the advertisement changed).
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v110: ghs-app-v111)', swSrc.includes("const CACHE = 'ghs-app-v111'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8783,7 +8785,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v109: ghs-app-v109)', swSrc.includes("const CACHE = 'ghs-app-v109'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v110: ghs-app-v111)', swSrc.includes("const CACHE = 'ghs-app-v111'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8886,6 +8888,130 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sm109 = await (await fetch(BASE + '/sitemap.xml')).text();
   t('v109 live sitemap: exactly 19 URLs, all 13 new doors included',
     (sm109.match(/<loc>/g) || []).length === 19 && DOORS109.every(([route]) => sm109.includes('<loc>https://generalhandymans.app' + route + '</loc>')));
+}
+
+// ---------------- v110: CART RESCUE — TEXT CHANNEL ----------------
+{
+  // The v108 panel's second channel: carts whose customer lives on
+  // Google Voice TEXT (phone on file, no email) get a ready-to-copy
+  // reminder text in the rescue payload, and the Copy tap stamps the
+  // cart through an endpoint that SENDS NOTHING. Dedicated instance on
+  // the shared mocks; fixtures ONLY, two phases like v108.
+  const DATA_FILE10 = '/tmp/ghs-v17-test/data-v110.json';
+  const BASE10 = 'http://127.0.0.1:8996';
+  const env110 = { PORT: '8996', DATA_FILE: DATA_FILE10, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+  try { fs.unlinkSync(DATA_FILE10); } catch (e) {}
+  let child10 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env110), stdio: ['ignore', 'pipe', 'pipe'] });
+  child10.stderr.on('data', d => process.stderr.write('[app10] ' + d));
+  async function req10(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE10 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp10() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE10 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v110 app10: the text-rescue instance boots', await waitUp10());
+  await req10('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin10@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+  const A10 = (await req10('POST', '/api/login', { body: { email: 'admin10@t.local', password: 'adminpass1' } })).j.token;
+  const ADM10ID = (await req10('GET', '/api/me', { token: A10 })).j.user.id;
+  // --- fixtures through the real API ---
+  const mkCart110 = async (extra) => (await req10('POST', '/api/admin/carts', { token: A10, body: Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 250 }] }, extra || {}) })).j.cart;
+  const cEn110 = await mkCart110({ customerName: 'Tom Texter', customerEmail: '', customerPhone: '(707) 555-0110' }); // phone-only, EN, $250 -> $50
+  const cEs110 = await mkCart110({ customerName: 'Teresa Texto', customerEmail: 'v110-es@t.local', customerPhone: '(707) 555-0111', lang: 'es', items: [{ serviceId: 'water-heater-install', name: 'Water Heater Install', qty: 1, unitPrice: 1000 }] }); // ES, $1,000 -> $400
+  const cNoPhone110 = await mkCart110({ customerName: 'No Phone Ned', customerEmail: 'v110-nophone@t.local', customerPhone: '' });
+  const cCancel110 = await mkCart110({ customerName: 'Cancel Cal', customerEmail: '', customerPhone: '(707) 555-0112' });
+  await req10('POST', '/api/admin/carts/' + cCancel110.id + '/cancel', { token: A10, body: {} });
+  t('v110 fixtures: four carts built through the real API (one cancelled)', !!cEn110.id && !!cEs110.id && !!cNoPhone110.id && !!cCancel110.id && cEn110.listTotal === 250 && cEs110.listTotal === 1000 && cEs110.lang === 'es' && cEn110.customerPhone === '(707) 555-0110');
+  // --- kill, seed the paid / deposit-recorded guards, respawn ---
+  try { child10.kill('SIGTERM'); } catch (e) {}
+  await sleep(600);
+  const seed110 = JSON.parse(fs.readFileSync(DATA_FILE10, 'utf8'));
+  const seedCart110 = (o) => seed110.carts.push(Object.assign({ items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 125, lineTotal: 125, memberUnit: 100 }], listTotal: 125, memberTotal: 100, note: '', customerName: 'Seed', customerPhone: '(707) 555-0113', customerEmail: '', lang: 'en', payFull: false, status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: ADM10ID, createdAt: new Date().toISOString() }, o));
+  seedCart110({ id: 'CRT-110P', customerName: 'Paid Pam', status: 'paid', requestId: 'GHS-110X', paidAt: new Date().toISOString(), payment: { depositCents: 5000, balanceCents: 7500, amountCents: 5000 } });
+  seedCart110({ id: 'CRT-110E', customerName: 'Edge Edna', payment: { depositCents: 5000, balanceCents: 7500, amountCents: 5000 } }); // open on paper, deposit recorded
+  fs.writeFileSync(DATA_FILE10, JSON.stringify(seed110));
+  child10 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env110), stdio: ['ignore', 'pipe', 'pipe'] });
+  child10.stderr.on('data', d => process.stderr.write('[app10] ' + d));
+  t('v110 app10: respawned on the seeded file', await waitUp10());
+  const A10B = (await req10('POST', '/api/login', { body: { email: 'admin10@t.local', password: 'adminpass1' } })).j.token;
+  const subj110 = (id) => 'Reminder: your proposal (' + id + ') is still waiting — General Handyman Solutions';
+  const mails110 = async (id) => (await mockEmails()).filter(e => (e.subject || '') === subj110(id));
+  const subjEs110 = (id) => 'Recordatorio: tu propuesta (' + id + ') sigue esperando — General Handyman Solutions';
+  const mailsEs110 = async (id) => (await mockEmails()).filter(e => (e.subject || '') === subjEs110(id));
+  const diskCart110 = (id) => JSON.parse(fs.readFileSync(DATA_FILE10, 'utf8')).carts.find(c => c.id === id);
+  // --- the payload: text built server-side, per cart, in its language ---
+  const noAuth110 = await req10('GET', '/api/admin/cart-rescue', {});
+  t('v110 rescue: the listing stays admin-only', noAuth110.status === 401 || noAuth110.status === 403);
+  const list110 = (await req10('GET', '/api/admin/cart-rescue', { token: A10B })).j;
+  const rows110 = list110.carts || [];
+  const row110 = (id) => rows110.find(r => r.id === id);
+  const enRow110 = row110(cEn110.id), esRow110 = row110(cEs110.id);
+  t('v110 rescue: the EN phone-only row carries the ready text — greeting, totals, deposit via cartSplit, the cart link, the business phone',
+    !!enRow110 && enRow110.customerPhone === '(707) 555-0110' && enRow110.textReminder.includes('Hi Tom, this is General Handyman Solutions.') && enRow110.textReminder.includes('Total: $250.00') && enRow110.textReminder.includes('Due to book today: $50.00') && enRow110.textReminder.includes('/cart/' + cEn110.id) && enRow110.textReminder.includes('(707) 862-3773'));
+  t('v110 rescue: the ES row carries the text in Spanish with the same live values ($1,000 -> $400)',
+    !!esRow110 && esRow110.textReminder.includes('Hola Teresa, te escribimos de General Handyman Solutions.') && esRow110.textReminder.includes('Total: $1000.00') && esRow110.textReminder.includes('Para apartar hoy: $400.00') && esRow110.textReminder.includes('/cart/' + cEs110.id));
+  t('v110 rescue: text stamps start empty (textedAt null, manualTexts 0) on every row',
+    !!enRow110 && enRow110.textedAt === null && enRow110.manualTexts === 0 && !!esRow110 && esRow110.textedAt === null && esRow110.manualTexts === 0);
+  // --- the stamp endpoint: auth, stamp + audit, ZERO sends ---
+  const stampNoAuth110 = await req10('POST', '/api/admin/carts/' + cEn110.id + '/remind-text', { body: {} });
+  t('v110 text: the remind-text endpoint is admin-only and an unauthenticated tap stamps NOTHING',
+    (stampNoAuth110.status === 401 || stampNoAuth110.status === 403) && !diskCart110(cEn110.id).manualTextCount && (await mails110(cEn110.id)).length === 0);
+  const stamp110 = await req10('POST', '/api/admin/carts/' + cEn110.id + '/remind-text', { token: A10B, body: {} });
+  const aud110a = await req10('GET', '/api/admin/audit', { token: A10B });
+  t('v110 text: ONE tap stamps manualTextCount + lastManualTextAt and audits cart.reminder_text — and sends ZERO emails',
+    stamp110.status === 200 && stamp110.j.sent === false && stamp110.j.manualTexts === 1 && diskCart110(cEn110.id).manualTextCount === 1 && !!diskCart110(cEn110.id).lastManualTextAt && !diskCart110(cEn110.id).remindedAt && (aud110a.j.entries || []).some(en => en.action === 'cart.reminder_text' && en.target === cEn110.id) && (await mails110(cEn110.id)).length === 0);
+  const stamp110b = await req10('POST', '/api/admin/carts/' + cEn110.id + '/remind-text', { token: A10B, body: {} });
+  const list110b = (await req10('GET', '/api/admin/cart-rescue', { token: A10B })).j;
+  const enRow110b = (list110b.carts || []).find(r => r.id === cEn110.id);
+  t('v110 text: a second tap counts ×2 and the listing shows the stamp (textedAt + manualTexts)',
+    stamp110b.status === 200 && stamp110b.j.manualTexts === 2 && !!enRow110b && enRow110b.manualTexts === 2 && !!enRow110b.textedAt);
+  // --- channel independence: text does NOT block the email, email does NOT touch the text stamp ---
+  const stampEs110 = await req10('POST', '/api/admin/carts/' + cEs110.id + '/remind-text', { token: A10B, body: {} });
+  const remEs110 = await req10('POST', '/api/admin/carts/' + cEs110.id + '/remind', { token: A10B, body: {} });
+  const esMail110 = await mailsEs110(cEs110.id);
+  t('v110 text: a texted cart still gets its email reminder (the text stamp never sets remindedAt), exactly one send, and the email leaves the text count alone',
+    stampEs110.status === 200 && !stampEs110.j.error && remEs110.status === 200 && remEs110.j.sent === true && esMail110.length === 1 && (esMail110[0].text || '').includes('/cart/' + cEs110.id) && !!diskCart110(cEs110.id).remindedAt && diskCart110(cEs110.id).manualTextCount === 1);
+  // --- guards ---
+  const gNoPhone110 = await req10('POST', '/api/admin/carts/' + cNoPhone110.id + '/remind-text', { token: A10B, body: {} });
+  const gCancel110 = await req10('POST', '/api/admin/carts/' + cCancel110.id + '/remind-text', { token: A10B, body: {} });
+  const gPaid110 = await req10('POST', '/api/admin/carts/CRT-110P/remind-text', { token: A10B, body: {} });
+  const gEdge110 = await req10('POST', '/api/admin/carts/CRT-110E/remind-text', { token: A10B, body: {} });
+  const gGhost110 = await req10('POST', '/api/admin/carts/CRT-110GHOST/remind-text', { token: A10B, body: {} });
+  t('v110 text guards: no-phone -> 400, cancelled -> 400, paid -> 400, deposit-recorded -> 400, unknown -> 404 — and none of them stamps or sends',
+    gNoPhone110.status === 400 && gCancel110.status === 400 && gPaid110.status === 400 && gEdge110.status === 400 && gGhost110.status === 404 && !diskCart110(cNoPhone110.id).manualTextCount && !diskCart110(cCancel110.id).manualTextCount && (await mails110(cNoPhone110.id)).length === 0);
+  // --- statics ---
+  t('v110 statics: server text builder + payload fields + stamp-only endpoint wired (audit cart.reminder_text, no sendAutomation on the text path)',
+    serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
+  t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
+    appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
+  t('v110 statics: SW cache bumped to ghs-app-v111', swSrc.includes("const CACHE = 'ghs-app-v111'"));
+  try { child10.kill('SIGTERM'); } catch (e) {}
+}
+
+// ---------------- v111: MINI-FIX BUNDLE + SPEED PASS ----------------
+// Audit items #2-#7 of 2026-11-16: social proof (configured Google review
+// link + since-2020), homepage explore links to all 19 doors, the free
+// photo-estimate CTA on every door (/#estimate deep link), lazy Stripe.js +
+// Leaflet, the branded 404 (JSON kept for /api/), and the SEO bundle
+// (homepage canonical, enriched JSON-LD, robots Disallow /api/).
+{
+  const nf111 = await fetch(BASE + '/esto-no-existe-v111');
+  const nfBody111 = await nf111.text();
+  t('v111 404: an unknown WEB path returns the branded HTML 404 (cap logo, bilingual not-found, menu + Call buttons)', nf111.status === 404 && String(nf111.headers.get('content-type') || '').includes('text/html') && nfBody111.includes('Page not found') && nfBody111.includes('Página no encontrada') && nfBody111.includes('logo-header.png') && nfBody111.includes('href="https://generalhandymans.app/"') && nfBody111.includes('tel:+17078623773'));
+  const nfApi111 = await fetch(BASE + '/api/esto-no-existe-v111');
+  const nfApiBody111 = await nfApi111.text();
+  t('v111 404: an unknown API path keeps the JSON error exactly as before (no HTML)', nfApi111.status === 404 && nfApiBody111.includes('"not found"') && !nfApiBody111.includes('Page not found'));
+  const robots111 = await (await fetch(BASE + '/robots.txt')).text();
+  t('v111 robots: Disallow /api/ added and exactly ONE Sitemap line remains (the apex one, v107 contract)', robots111.includes('Disallow: /api/') && (robots111.match(/Sitemap:/g) || []).length === 1 && robots111.includes('Sitemap: https://generalhandymans.app/sitemap.xml'));
+  const home111 = await (await fetch(BASE + '/')).text();
+  t('v111 SEO: the homepage carries its self-canonical + enriched JSON-LD (sameAs: Instagram + the configured Google review link, foundingDate 2020)', home111.includes('<link rel="canonical" href="https://generalhandymans.app/">') && home111.includes('"sameAs"') && home111.includes('https://www.instagram.com/generalhandymans') && home111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && home111.includes('"foundingDate":"2020"'));
+  const door111 = await (await fetch(BASE + '/handyman-fairfield')).text();
+  const door111b = await (await fetch(BASE + '/homecare')).text();
+  t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
+  t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
+  t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 19 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
+  t('v111 statics: SW cache bumped to ghs-app-v111', swSrc.includes("const CACHE = 'ghs-app-v111'"));
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

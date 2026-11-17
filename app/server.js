@@ -1201,6 +1201,23 @@ function cartReminderEmailText(c) {
   if (es) return [head + 'recordatorio de tu propuesta (' + c.id + ')', '', 'Tu propuesta sigue esperando; ' + (full ? 'aún no recibimos el pago completo' : 'aún no recibimos el depósito') + ' y tu trabajo aún no está apartado.', 'Total: ' + usd(total) + ' · ' + (full ? 'Pago completo hoy: ' : 'Para apartar hoy: ') + usd(dep), '', 'Revisa y aparta aquí (sin cuenta): ' + c.link, '', '¿Ya lo resolviste? Ignora este correo — no enviaremos otro.', 'Preguntas? Texto/llamada (707) 862-3773.'].join('\n');
   return [head + 'a quick reminder about your proposal (' + c.id + ')', '', 'Your proposal is still waiting; ' + (full ? 'we have not received the full payment yet' : 'we have not received the deposit yet') + ', so your job is not booked yet.', 'Total: ' + usd(total) + ' · ' + (full ? 'Full payment due today: ' : 'Due to book today: ') + usd(dep), '', 'Review & book here (no account needed): ' + c.link, '', 'Already taken care of? Just ignore this email — we will not send another one.', 'Questions? Text/call (707) 862-3773.'].join('\n');
 }
+// ---------- v110: the cart reminder as a TEXT MESSAGE ----------
+// The SMS twin of the reminder above, modeled on the same copy and
+// built from the SAME live values — total (member price when applied)
+// and the deposit-to-book from cartSplit, the cart link, the cart's
+// own language — but sized for a text message. The app NEVER sends it:
+// the rescue panel hands it to Gabriel ready to copy, and he pastes it
+// into Google Voice himself (the channel the biggest open carts
+// actually live on — they have a phone on file and no email).
+function cartReminderText(c) {
+  const es = c.lang === 'es';
+  const full = !!c.payFull; // v101 (H4): a payFull cart is owed in FULL — never call it a deposit
+  const total = c.memberApplied ? (Number(c.memberTotal) || 0) : (Number(c.listTotal) || 0);
+  const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
+  const first = String(c.customerName || '').trim().split(/\s+/)[0] || '';
+  if (es) return 'Hola' + (first ? ' ' + first : '') + ', te escribimos de General Handyman Solutions. Tu propuesta sigue esperando y tu trabajo aún no está apartado. Total: ' + usd(total) + ' · ' + (full ? 'Pago completo hoy: ' : 'Para apartar hoy: ') + usd(dep) + '. Revisa y paga aquí (sin cuenta): ' + cartLink(c) + ' ¿Ya lo resolviste? Ignora este mensaje. ¿Preguntas? Texto/llamada (707) 862-3773.';
+  return 'Hi' + (first ? ' ' + first : '') + ', this is General Handyman Solutions. Your proposal is still waiting and your job is not booked yet. Total: ' + usd(total) + ' · ' + (full ? 'Full payment due today: ' : 'Due to book today: ') + usd(dep) + '. Review & pay here (no account needed): ' + cartLink(c) + ' Already taken care of? Just ignore this message. Questions? Text/call (707) 862-3773.';
+}
 // Trial-ending + payment-failed + review-ask emails: the builders
 // return BOTH language blocks; the dispatcher sends ONE language when
 // the account carries a saved preference (v80.19: u.lang / the request
@@ -3249,6 +3266,10 @@ function publicCart(c) {
 // the 48h reminder email use — total = memberApplied ? memberTotal :
 // listTotal, split by cartSplit — so the panel can never quote a
 // different deposit than the customer is actually asked to pay.
+// v110: each row also carries the ready-to-copy TEXT reminder
+// (cartReminderText — same values, the cart's language), the text
+// stamp (lastManualTextAt) and the manual text count, so the panel
+// can reach the phone-only carts the email channel cannot.
 function cartRescueRows() {
   const now = Date.now();
   return cartsOf()
@@ -3256,7 +3277,7 @@ function cartRescueRows() {
     .map(c => {
       const total = c.memberApplied ? (Number(c.memberTotal) || 0) : (Number(c.listTotal) || 0);
       const createdMs = c.createdAt ? new Date(c.createdAt).getTime() : NaN;
-      return { id: c.id, customerName: c.customerName || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', customerPhone: c.customerPhone || '', total, depositDue: cartSplit(c, Math.round(total * 100)).depositCents / 100, createdAt: c.createdAt || '', ageDays: isNaN(createdMs) ? 0 : Math.max(0, Math.floor((now - createdMs) / 86400000)), remindedAt: c.remindedAt || null, manualReminders: Number(c.manualReminderCount) || 0, link: cartLink(c) };
+      return { id: c.id, customerName: c.customerName || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', customerPhone: c.customerPhone || '', total, depositDue: cartSplit(c, Math.round(total * 100)).depositCents / 100, createdAt: c.createdAt || '', ageDays: isNaN(createdMs) ? 0 : Math.max(0, Math.floor((now - createdMs) / 86400000)), remindedAt: c.remindedAt || null, manualReminders: Number(c.manualReminderCount) || 0, link: cartLink(c), textReminder: cartReminderText(c), textedAt: c.lastManualTextAt || null, manualTexts: Number(c.manualTextCount) || 0 };
     })
     .sort((a, b) => b.depositDue - a.depositDue);
 }
@@ -6417,6 +6438,12 @@ const ALLOWED_ORIGINS = ['https://generalhandymans.app', 'https://www.generalhan
 // inside a handler must LOG and answer 500, never terminate the process
 // (Node ≥15 kills the process on unhandled rejections by default).
 process.on('unhandledRejection', e => { console.error('unhandledRejection (process kept alive):', (e && e.message) || e); });
+// v111: the branded 404 for unknown WEB paths (a human followed a stale
+// link — old texts, the retired subdomain's URLs, printed material). Dark
+// brand page: cap logo, bilingual not-found, the menu and the phone.
+// Unknown /api/* paths keep the JSON error they have always returned.
+const NOT_FOUND_HTML = '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>Page not found — General Handyman Solutions</title>\n<meta name="theme-color" content="#0b0b0b">\n<meta name="color-scheme" content="dark">\n<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">\n<style>html,body{background:#0a0a0c}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#f4f4f5;text-align:center;padding:34px 18px 44px}.logo img{width:min(360px,86vw);height:auto}.tag{letter-spacing:.35em;font-weight:800;font-size:12px;color:#e42535;margin-top:8px;text-transform:uppercase}h1{font-size:34px;margin:26px 0 6px}p{color:#b9b9c0;font-size:16.5px;line-height:1.55;margin:6px 0}.btn{display:block;max-width:420px;margin:14px auto 0;background:#e42535;color:#fff;text-align:center;font-weight:900;font-size:18px;text-decoration:none;border-radius:14px;padding:15px 18px}.btn.alt{background:#1d1d21;border:1px solid #3a3a41}</style>\n</head>\n<body>\n<a class="logo" href="https://generalhandymans.app/"><img src="/logo-header.png" alt="General Handyman Solutions"></a>\n<div class="tag">Reporting for duty</div>\n<h1>Page not found</h1>\n<p>That link is not here anymore — but we are. Browse the menu and order right in the app, or call the Team.</p>\n<p>Página no encontrada — ese link ya no está aquí, pero nosotros sí. Mira el menú y pide directo en la app, o llama al Team.</p>\n<a class="btn" href="https://generalhandymans.app/">See the menu &amp; prices · Ver el menú</a>\n<a class="btn alt" href="tel:+17078623773">📞 Call (707) 862-3773</a>\n</body>\n</html>\n';
+
 const server = http.createServer((req, res) => {
   handleRequest(req, res).catch(e => {
     console.error('request handler error (500 returned):', (e && e.message) || e);
@@ -6540,6 +6567,13 @@ async function handleRequest(req, res) {
     catch (e) { res.writeHead(404); return res.end('not found'); }
     body = body.split('%%JOIN%%').join(href(door.join));
     if (door.join2) body = body.split('%%JOIN2%%').join(href(door.join2));
+    // v111: social proof + the free photo estimate ride the same serve-time
+    // substitution — %%REVIEW%% is the CONFIGURED Google review link
+    // (googleReviewUrl(): the admin override or the built-in official one),
+    // never a hardcoded copy, and %%ESTIMATE%% deep-links the app's free
+    // photo-estimate wizard under the same validated ?src contract.
+    body = body.split('%%REVIEW%%').join(googleReviewUrl());
+    body = body.split('%%ESTIMATE%%').join(href('#estimate'));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     return res.end(body);
   }
@@ -6646,7 +6680,10 @@ async function handleRequest(req, res) {
     SITEMAP_DOORS.map(d => '  <url><loc>' + base + d + '</loc></url>').join('\n') + '\n</urlset>\n';
   if (req.method === 'GET' && p === '/robots.txt') {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
-    return res.end('User-agent: *\nAllow: /\nSitemap: https://generalhandymans.app/sitemap.xml\n');
+    // v111: Disallow /api/ joins the body (crawlers stop burning visits on
+    // POST-only API routes — the /api/me/lang 404 in the GSC Pages report);
+    // the v107 contract stands: exactly ONE Sitemap line, the apex one.
+    return res.end('User-agent: *\nAllow: /\nDisallow: /api/\nSitemap: https://generalhandymans.app/sitemap.xml\n');
   }
   if (req.method === 'GET' && p === '/sitemap.xml') {
     res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=86400' });
@@ -9556,6 +9593,29 @@ async function handleRequest(req, res) {
     }
     return send(res, 200, { ok: true, sent: !!(automation && automation.sent), automation, cart: publicCart(c) });
   }
+  // v110: the rescue panel's TEXT channel — the "Copy text" tap lands
+  // here. This endpoint SENDS NOTHING: Gabriel copies the ready text
+  // (cartReminderText, in the GET payload) and sends it himself through
+  // Google Voice. The tap only STAMPS the cart — manualTextCount +
+  // lastManualTextAt + audit — so the panel can show "Texted · date".
+  // The stamp is INDEPENDENT of the email channel on purpose: it does
+  // NOT set c.remindedAt, so the 48h sweep can still send its one-shot
+  // email reminder to a texted cart, and the email flow is untouched.
+  const cartRemindTextMatch = p.match(/^\/api\/admin\/carts\/([\w-]+)\/remind-text$/);
+  if (cartRemindTextMatch && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const c = cartsOf().find(x => x.id === cartRemindTextMatch[1]);
+    if (!c) return send(res, 404, { error: 'cart not found' });
+    if (c.status !== 'open') return send(res, 400, { error: 'only open carts can be texted' });
+    if (c.payment && Number(c.payment.depositCents) > 0) return send(res, 400, { error: 'this cart already has its deposit — nothing to remind' });
+    const phone = c.customerPhone || (c.customer && c.customer.phone) || '';
+    if (!phone) return send(res, 400, { error: 'this cart has no customer phone on file' });
+    c.manualTextCount = (Number(c.manualTextCount) || 0) + 1;
+    c.lastManualTextAt = new Date().toISOString();
+    audit(user, 'cart.reminder_text', c.id, 'manual text reminder copied for ' + phone + ' (sent by Gabriel via Google Voice)');
+    save();
+    return send(res, 200, { ok: true, sent: false, manualTexts: c.manualTextCount, textedAt: c.lastManualTextAt, cart: publicCart(c) });
+  }
   // v55: edit an OPEN cart in place — same link, new lines (Gabriel:
   // "make me the opportunity to change the open orders from cart").
   // Lines are validated by the same normalizeCartItems as create and
@@ -10953,7 +11013,11 @@ if (!Array.isArray(db.auditLog)) db.auditLog = [];
     save(); return send(res, 200, { ok: true });
   }
 
-  return send(res, 404, { error: 'not found' });
+  // v111: unknown API paths keep the JSON error exactly as always; an
+  // unknown WEB path gets the branded 404 (NOT_FOUND_HTML, above).
+  if (p.startsWith('/api/')) return send(res, 404, { error: 'not found' });
+  res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+  return res.end(NOT_FOUND_HTML);
 }
 
 loadFromSupabase().then(() => { ensureWorkerClasses(); if (pruneExpiredSessions()) save(); server.listen(PORT, () => console.log('GHS app running on port ' + PORT)); });

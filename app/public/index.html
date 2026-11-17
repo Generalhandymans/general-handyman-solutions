@@ -11,6 +11,7 @@
 <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png">
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png">
 <meta name="description" content="General Handyman Solutions — handyman, mobile mechanic and yard care in Solano County, CA. Order, book and pay right in the app.">
+<link rel="canonical" href="https://generalhandymans.app/">
 <meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />
 <meta property="og:title" content="General Handyman Solutions">
 <meta property="og:description" content="Handyman, mobile mechanic and yard care in Solano County, CA. Order, book and pay right in the app.">
@@ -20,18 +21,18 @@
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"Handyman","name":"General Handyman Solutions","url":"https://generalhandymans.app/","telephone":"+1-707-862-3773","image":"https://generalhandymans.app/og-image.jpg","priceRange":"$75/hr","areaServed":"Solano County, CA"}
+{"@context":"https://schema.org","@type":"Handyman","name":"General Handyman Solutions","url":"https://generalhandymans.app/","telephone":"+1-707-862-3773","image":"https://generalhandymans.app/og-image.jpg","priceRange":"$75/hr","areaServed":"Solano County, CA","foundingDate":"2020","sameAs":["https://www.instagram.com/generalhandymans","https://g.page/r/Ce0oW03tmveIEBM/review"]}
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="mobile-web-app-capable" content="yes">
 <title>General Handyman Solutions — App</title>
-<script src="https://js.stripe.com/v3/"></script>
-<!-- v22 live tracking map: Leaflet + OpenStreetMap tiles (no API key). If this
-     CDN ever fails, window.L stays undefined and the app falls back to a
-     plain status panel — the job view must never break over a map. -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- v111 SPEED: Stripe.js and Leaflet are NO LONGER loaded here — they
+     blocked the first paint for every visitor. app.js injects them lazily:
+     Stripe.js via loadStripeJs() when a payment step is reached, Leaflet
+     (JS + CSS) via ensureLeaflet() when a map actually opens. If a CDN
+     ever fails, the app still falls back to its plain status panels —
+     no view breaks over a missing map or payment script. -->
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>

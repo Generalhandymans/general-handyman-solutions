@@ -104,7 +104,9 @@ const COPY = {
   doorsH: { en: 'Memberships & more', es: 'Membresías y más' },
   goodToKnow: { en: 'Good to know', es: 'Bueno saber' },
   browseAll: { en: 'Browse all services & prices →', es: 'Ver todos los servicios y precios →' },
-  callLine: { en: 'Questions? Call the Team: (707) 862-3773', es: '¿Preguntas? Llama al Team: (707) 862-3773' }
+  callLine: { en: 'Questions? Call the Team: (707) 862-3773', es: '¿Preguntas? Llama al Team: (707) 862-3773' },
+  photoCta: { en: '📸 Free photo estimate — get a price from a photo', es: '📸 Estimado gratis por foto — precio desde una foto' },
+  reviewsLink: { en: '⭐ See our reviews on Google →', es: '⭐ Mira nuestras reseñas en Google →' }
 };
 
 const CITIES = [
@@ -468,6 +470,7 @@ const STYLE = `
   .prices .pm{display:block;color:#2fbf71;font-size:13px;font-weight:700}
   .cta{display:block;background:#e42535;color:#fff;text-align:center;font-weight:900;font-size:19px;text-decoration:none;border-radius:14px;padding:16px 18px;margin:20px 0 8px}
   .cta:hover{background:#c11b29}
+  .cta.alt{background:#1d1d21;border:1px solid #3a3a41;color:#fff}
   .form-note{text-align:center;color:#a7a7b0;font-size:14px;margin:0 0 6px}
   .steps{display:grid;gap:12px}
   .step{display:flex;gap:12px;align-items:flex-start}
@@ -537,7 +540,8 @@ function langBlock(page, lang, kind) {
   out += '<div class="card"><h2>' + t('howH') + '</h2><div class="steps">' + COPY.steps[L].map((s, i) => '<div class="step"><div class="step-badge">' + (i + 1) + '</div><div><b>' + s[0] + '</b><span>' + s[1] + '</span></div></div>').join('') + '</div></div>\n    ';
   out += areasCard(L, page.slug) + '\n    ';
   out += '<a class="cta" href="%%JOIN%%">' + t('orderCtaCity') + '</a>\n    ';
-  out += '<div class="links"><a href="https://generalhandymans.app/">' + t('browseAll') + '</a><a href="tel:+17078623773">' + t('callLine') + '</a></div>';
+  out += '<a class="cta alt" href="%%ESTIMATE%%">' + t('photoCta') + '</a>\n    ';
+  out += '<div class="links"><a href="%%REVIEW%%" target="_blank" rel="noopener">' + t('reviewsLink') + '</a><a href="https://generalhandymans.app/">' + t('browseAll') + '</a><a href="tel:+17078623773">' + t('callLine') + '</a></div>';
   return out;
 }
 
@@ -561,7 +565,7 @@ function pageHtml(page, kind) {
     '<header class="top">\n  <a class="logo" href="https://generalhandymans.app/" aria-label="General Handyman Solutions — home"><img src="/logo-header.png" alt="General Handyman Solutions"></a>\n  <div class="tag">REPORTING FOR DUTY</div>\n  <div class="lang-toggle" role="group" aria-label="Language / Idioma"><button type="button" id="lgEn" class="on" onclick="ghsLang(\'en\')">EN</button><button type="button" id="lgEs" onclick="ghsLang(\'es\')">ES</button></div>\n</header>\n<main>\n' +
     '  <div data-lang="en">\n    ' + langBlock(page, 'en', kind) + '\n  </div>\n' +
     '  <div data-lang="es" hidden>\n    ' + langBlock(page, 'es', kind) + '\n  </div>\n' +
-    '</main>\n<footer>\n  <div class="foot-tag">REPORTING FOR DUTY</div>\n  General Handyman Solutions · <a href="https://generalhandymans.app/">generalhandymans.app</a><br>\n  <a href="tel:+17078623773">(707) 862-3773</a>\n</footer>\n' +
+    '</main>\n<footer>\n  <div class="foot-tag">REPORTING FOR DUTY</div>\n  General Handyman Solutions · <a href="https://generalhandymans.app/">generalhandymans.app</a><br>\n  <a href="tel:+17078623773">(707) 862-3773</a><br>\n  <span class="since">Operating since 2020 · Fairfield · Suisun City · Vacaville · Vallejo · Benicia · Napa · Concord · Antioch</span>\n</footer>\n' +
     LANG_SCRIPT + '\n</body>\n</html>\n';
 }
 

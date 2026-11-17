@@ -475,6 +475,11 @@ table.cmp button{white-space:nowrap}
 #appFooter a:hover{color:#fff;text-decoration:underline}
 .foot-cities{display:block;font-size:13.5px;line-height:1.55}
 .foot-stripe{display:block;margin-top:10px;font-size:13.5px;color:#e8e4dd}
+.foot-since{display:block;margin-top:10px;font-size:13.5px;font-weight:700;color:#e8e4dd}
+.foot-doors{max-width:1080px;margin:18px auto 0}
+.foot-doors h4{margin:0 0 8px}
+.foot-doors nav{display:flex;flex-wrap:wrap;gap:7px 16px}
+#appFooter .foot-doors a{display:inline-block;padding:0;font-weight:600;font-size:14px}
 .foot-fine{max-width:1080px;margin:18px auto 0;font-size:12.5px;line-height:1.55;color:#8f8a81}
 .foot-social{max-width:1080px;margin:16px auto 0;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
 .foot-social .foot-social-label{font-size:13px;font-weight:700;color:#e8e4dd;text-transform:uppercase;letter-spacing:.04em}

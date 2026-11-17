@@ -1545,6 +1545,9 @@ async function ensureStripe(){
     try {
       const cfg = await api('/api/stripe/config');
       const pk = cfg.publishableKey || '';
+      // v111 SPEED: Stripe.js is no longer in <head> — load it on demand,
+      // through the same resilient injector the cart checkout uses.
+      if (pk && typeof Stripe === 'undefined') await loadStripeJs();
       if (!pk || typeof Stripe === 'undefined') {
         const host = document.getElementById('cardElement');
         if (host) host.innerHTML = '<p class="mut">Online signup is still being connected — create your account and text (707) 862-3773 and the Team will finish your membership.</p>';
@@ -1617,6 +1620,13 @@ function checkResetHash(){
   if (!m) { if (box) box.style.display = 'none'; pendingResetToken = ''; return; }
   pendingResetToken = m[1];
   if (box) { box.style.display = 'block'; box.scrollIntoView({ behavior: 'smooth' }); }
+}
+// v111: the landing doors' free-photo-estimate CTA deep-links to /#estimate —
+// open the SAME wizard the homepage's "Get my free estimate" button opens
+// (goFreeEstimate: photo type preselected, step 2), never a parallel flow.
+function checkEstimateHash(){
+  if ((location.hash || '') !== '#estimate') return;
+  try { goFreeEstimate(); } catch (e) {}
 }
 function resetErrMsg(t){ const e = document.getElementById('resetErr'); if (e) { e.textContent = t; e.classList.add('show'); } }
 async function submitReset(){
@@ -3618,7 +3628,13 @@ function hammerPinIcon(){
 }
 function techPinIcon(j){ return (j && j.technicianPhoto) ? photoIcon(j.technicianPhoto) : hammerPinIcon(); }
 function buildTrackMap(j, box){
-  if (!(window.L && L.map)) { box.innerHTML = trackFallbackHtml(j); return; }
+  if (!(window.L && L.map)) {
+    // v111 SPEED: Leaflet is lazy now — paint the fallback panel while it
+    // loads, then build the real map into the same box when it lands.
+    box.innerHTML = trackFallbackHtml(j);
+    ensureLeaflet().then(function (ok) { if (ok && !trackMaps[j.id] && document.contains(box)) buildTrackMap(j, box); });
+    return;
+  }
   try {
     const map = L.map(box);
     ghsTileLayer().addTo(map);
@@ -4582,24 +4598,32 @@ async function loadAdminBotStats(){
 // biggest deposit first, with the one-tap reminder that fires the SAME
 // email the app sends automatically at 48 hours. Every number comes
 // from GET /api/admin/cart-rescue — this renderer invents nothing.
+// v110: the TEXT channel — carts with a phone get a "Copy text"
+// button with the ready reminder (built server-side, in the payload);
+// Gabriel pastes it into Google Voice himself, the app sends nothing,
+// and the tap stamps the cart through POST …/remind-text.
 const ADM108 = {
-  en: { title: 'Cart rescue', openTpl: '{n} open carts', waitingTpl: '{amt} in deposits waiting', total: 'Total', depositDue: 'Deposit due', daysOldTpl: '{d} days old', today: 'created today', remind: 'Remind', reminded: 'Reminder sent', manualTpl: '{n} by hand', noEmail: 'No email on file', none: 'No open carts — every proposal already has its deposit. 🎉', confirmTpl: 'Send the deposit reminder for {id}?\n\nThe customer gets the same reminder email the app sends automatically at 48 hours, with the link to review and pay the deposit.', notSent: 'The reminder email did not go through. Reason: ', couldNot: 'Could not load.' },
-  es: { title: 'Rescate de carritos', openTpl: '{n} carritos abiertos', waitingTpl: '{amt} en depósitos esperando', total: 'Total', depositDue: 'Depósito pendiente', daysOldTpl: 'hace {d} días', today: 'creado hoy', remind: 'Recordar', reminded: 'Recordatorio enviado', manualTpl: '{n} a mano', noEmail: 'Sin correo registrado', none: 'No hay carritos abiertos — cada propuesta ya tiene su depósito. 🎉', confirmTpl: '¿Enviar el recordatorio de depósito de {id}?\n\nEl cliente recibe el mismo correo que la app manda automáticamente a las 48 horas, con el link para revisar y pagar el depósito.', notSent: 'El correo de recordatorio no salió. Motivo: ', couldNot: 'No se pudo cargar.' }
+  en: { title: 'Cart rescue', openTpl: '{n} open carts', waitingTpl: '{amt} in deposits waiting', total: 'Total', depositDue: 'Deposit due', daysOldTpl: '{d} days old', today: 'created today', remind: 'Remind', reminded: 'Reminder sent', manualTpl: '{n} by hand', noEmail: 'No email on file', copyText: 'Copy text', texted: 'Texted', noPhone: 'No phone on file', copied: 'Text copied — paste it into Google Voice and send it to the customer. The cart is now marked as texted.', copyFailed: 'Could not copy the text automatically — long-press the cart link instead.', none: 'No open carts — every proposal already has its deposit. 🎉', confirmTpl: 'Send the deposit reminder for {id}?\n\nThe customer gets the same reminder email the app sends automatically at 48 hours, with the link to review and pay the deposit.', notSent: 'The reminder email did not go through. Reason: ', couldNot: 'Could not load.' },
+  es: { title: 'Rescate de carritos', openTpl: '{n} carritos abiertos', waitingTpl: '{amt} en depósitos esperando', total: 'Total', depositDue: 'Depósito pendiente', daysOldTpl: 'hace {d} días', today: 'creado hoy', remind: 'Recordar', reminded: 'Recordatorio enviado', manualTpl: '{n} a mano', noEmail: 'Sin correo registrado', copyText: 'Copiar texto', texted: 'Texteado', noPhone: 'Sin teléfono registrado', copied: 'Texto copiado — pégalo en Google Voice y mándaselo al cliente. El carrito ya quedó marcado como texteado.', copyFailed: 'No se pudo copiar el texto automáticamente — mantén presionado el link del carrito.', none: 'No hay carritos abiertos — cada propuesta ya tiene su depósito. 🎉', confirmTpl: '¿Enviar el recordatorio de depósito de {id}?\n\nEl cliente recibe el mismo correo que la app manda automáticamente a las 48 horas, con el link para revisar y pagar el depósito.', notSent: 'El correo de recordatorio no salió. Motivo: ', couldNot: 'No se pudo cargar.' }
 };
+let cartRescueRowsCache = [];
 async function loadAdminCartRescue(){
   const host = document.getElementById('adminCartRescue'); if (!host || !me || me.role !== 'admin') return;
   const S = ADM108[menuLang()] || ADM108.en;
   try {
     const d = await api('/api/admin/cart-rescue');
     const rows = d.carts || [];
+    cartRescueRowsCache = rows;
     if (!rows.length) { host.innerHTML = '<div class="card"><b>' + S.title + ':</b> ' + S.none + '</div>'; return; }
     let h = '<div class="card"><b>' + S.title + ':</b> ' + S.openTpl.replace('{n}', d.count || rows.length) + ' · <b>' + S.waitingTpl.replace('{amt}', moneyFmt(d.totalDepositDue || 0)) + '</b></div>';
     h += rows.map(r => {
       const contact = [r.customerEmail, r.customerPhone].filter(Boolean).map(escHtml).join(' • ');
       const age = r.ageDays > 0 ? S.daysOldTpl.replace('{d}', r.ageDays) : S.today;
       const rem = r.remindedAt ? ' · <span class="mut">' + S.reminded + (r.manualReminders ? ' (' + S.manualTpl.replace('{n}', r.manualReminders) + ')' : '') + '</span>' : '';
+      const txt = r.textedAt ? ' · <span class="mut">' + S.texted + ' · ' + escHtml(String(r.textedAt).slice(0, 10)) + (r.manualTexts ? ' · ×' + r.manualTexts : '') + '</span>' : '';
       const btn = r.customerEmail ? '<button class="black" onclick="cartRescueRemind(\'' + r.id + '\')">' + S.remind + '</button>' : '<button class="ghost" disabled title="' + S.noEmail + '">' + S.remind + '</button>';
-      return '<div class="card"><b>' + escHtml(r.id) + '</b> — ' + escHtml(r.customerName || '') + '<br><span class="mut">' + contact + (contact ? ' · ' : '') + age + '</span>' + rem + '<div style="margin-top:6px">' + S.total + ': <b>' + moneyFmt(r.total || 0) + '</b> · ' + S.depositDue + ': <b class="st">' + moneyFmt(r.depositDue || 0) + '</b></div><div class="row" style="margin-top:8px">' + btn + '</div></div>';
+      const txtBtn = r.customerPhone ? '<button class="ghost" onclick="cartRescueText(\'' + r.id + '\')">' + S.copyText + '</button>' : '<button class="ghost" disabled title="' + S.noPhone + '">' + S.copyText + '</button>';
+      return '<div class="card"><b>' + escHtml(r.id) + '</b> — ' + escHtml(r.customerName || '') + '<br><span class="mut">' + contact + (contact ? ' · ' : '') + age + '</span>' + rem + txt + '<div style="margin-top:6px">' + S.total + ': <b>' + moneyFmt(r.total || 0) + '</b> · ' + S.depositDue + ': <b class="st">' + moneyFmt(r.depositDue || 0) + '</b></div><div class="row" style="margin-top:8px">' + btn + txtBtn + '</div></div>';
     }).join('');
     host.innerHTML = h;
   } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
@@ -4612,6 +4636,25 @@ async function cartRescueRemind(id){
     if (d.automation && !d.automation.sent) alert(S.notSent + (d.automation.reason || 'not configured'));
     loadAdminCartRescue();
   } catch (e) { alert(e.message); }
+}
+// v110: copy the ready text reminder for a phone-only cart. The text
+// itself was built server-side (cartReminderText) and rides in the
+// rescue payload — this function does NO math, it only copies, then
+// stamps the cart through the remind-text endpoint (which sends
+// nothing) so the panel shows the "Texted" stamp.
+async function cartRescueText(id){
+  const S = ADM108[menuLang()] || ADM108.en;
+  const r = cartRescueRowsCache.find(x => x.id === id);
+  if (!r || !r.textReminder) return;
+  let copied = false;
+  try { await navigator.clipboard.writeText(r.textReminder); copied = true; }
+  catch (e) {
+    try { const ta = document.createElement('textarea'); ta.value = r.textReminder; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); copied = document.execCommand('copy'); ta.remove(); } catch (e2) {}
+  }
+  try { await api('/api/admin/carts/' + id + '/remind-text', { method: 'POST', body: '{}' }); }
+  catch (e) { alert(e.message); return; }
+  alert(copied ? S.copied : S.copyFailed);
+  loadAdminCartRescue();
 }
 // ---------- v81: Sprint board (admin) ----------
 // Labels follow the ADM812 pattern (EN/ES by the app language). Every
@@ -4834,6 +4877,9 @@ function ensureLeaflet(){
     if (window.L && L.map) return res(true);
     if (!leafletTried) {
       leafletTried = true;
+      // v111 SPEED: Leaflet (JS + CSS) is no longer in <head> — both ride
+      // in here, the first time a map actually opens.
+      try { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'; document.head.appendChild(l); } catch(e) {}
       try { const s = document.createElement('script'); s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'; document.head.appendChild(s); } catch(e) {}
     }
     let n = 0;
@@ -6698,7 +6744,10 @@ const HOME_UI = {
     footCounty: 'Solano County',
     footStripe: '💳 Secure payment by Stripe — deposit books it, balance at completion',
     footFine: 'All prices from the confirmed master service list (Oct 22, 2026). Member pricing: 20% off every menu service — including junk removal, hauling and $85 services. Materials are customer-supplied unless noted.',
-    footFollow: 'Follow us', footGoogle: 'Find us on Google'
+    footFollow: 'Follow us', footGoogle: 'Find us on Google',
+    footReviews: 'See our reviews on Google', footExplore: 'Explore — plans, cities & trades', footSince: 'Operating since 2020',
+    footPlus2: 'HomeCare Plus · 2 visits', footJunk: 'Junk Removal', footCityPre: 'Handyman in ',
+    footTrades: ['Carpentry', 'Electrical', 'Plumbing', 'Yard Work', 'Mobile Mechanic']
   },
   es: {
     searchPh: '¿Qué necesitas hoy?', install: '📱 Instalar app',
@@ -6725,7 +6774,10 @@ const HOME_UI = {
     footCounty: 'Condado de Solano',
     footStripe: '💳 Pago seguro con Stripe — un anticipo lo agenda, el resto al terminar',
     footFine: 'Todos los precios salen de la lista maestra de servicios confirmada (22 de octubre de 2026). Precio de miembro: 20% menos en cada servicio del menú — incluyendo retiro de escombros, carga y servicios de $85. Los materiales los pone el cliente, salvo que se indique otra cosa.',
-    footFollow: 'Síguenos', footGoogle: 'Encuéntranos en Google'
+    footFollow: 'Síguenos', footGoogle: 'Encuéntranos en Google',
+    footReviews: 'Mira nuestras reseñas en Google', footExplore: 'Explora — planes, ciudades y oficios', footSince: 'Operando desde 2020',
+    footPlus2: 'HomeCare Plus · 2 visitas', footJunk: 'Retiro de basura', footCityPre: 'Handyman en ',
+    footTrades: ['Carpintería', 'Electricidad', 'Plomería', 'Jardinería', 'Mecánica móvil']
   }
 };
 // v80.19.1 IDIOMA VITRINA — the restored homepage (#oldhome, v80.10) was
@@ -6949,6 +7001,11 @@ const HOME_CITIES = [
   ['Suisun City', 'Yard routes', 'Rutas de yarda'], ['Dixon', 'Junk & hauling', 'Retiro y carga'], ['Benicia', 'Installs & repairs', 'Instalaciones y reparaciones']
 ];
 const PHOTO_EST_URL = 'https://wa.me/17078623773?text=Hi!%20I%27d%20like%20a%20free%20photo%20estimate%20%F0%9F%93%B8';
+// v111: the footer's Google-reviews link — the SAME built-in official link
+// the server falls back to (server.js DEFAULT_GOOGLE_REVIEW_URL, used by
+// the post-job review-invite emails). The landing doors get the fully
+// configured value (admin override included) substituted server-side.
+const GOOGLE_REVIEW_URL = 'https://g.page/r/Ce0oW03tmveIEBM/review';
 // --- v80.9 hero carousel (2 slides: offer hero + live-tracking promo) ---
 let heroIdx = 0, heroTimer = null;
 function heroGo(n) {
@@ -7047,13 +7104,25 @@ function paintHomeBlocks() {
     pc.innerHTML = h;
   }
   const ft = document.getElementById('appFooter');
-  if (ft) ft.innerHTML = '<div class="foot-grid">'
+  if (ft) {
+    // v111: the explore block — real links to every door (the 5 plan/junk
+    // doors + the 8 city pages + the 5 Fairfield trade pages), the Google
+    // reviews link and the since-2020 line. Additive only; the grid
+    // columns above it are untouched.
+    const footCityLinks = [['/handyman-fairfield', 'Fairfield'], ['/handyman-suisun-city', 'Suisun City'], ['/handyman-vacaville', 'Vacaville'], ['/handyman-vallejo', 'Vallejo'], ['/handyman-benicia', 'Benicia'], ['/handyman-napa', 'Napa'], ['/handyman-concord', 'Concord'], ['/handyman-antioch', 'Antioch']];
+    const footTradeLinks = ['/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'];
+    let footDoors = '<a href="/homecare">HomeCare</a><a href="/plus">HomeCare Plus</a><a href="/plus2">' + ui.footPlus2 + '</a><a href="/yard">Yard Care</a><a href="/junk-removal">' + ui.footJunk + '</a>';
+    footDoors += footCityLinks.map(function (c) { return '<a href="' + c[0] + '">' + ui.footCityPre + c[1] + '</a>'; }).join('');
+    footDoors += footTradeLinks.map(function (s, i) { return '<a href="' + s + '">' + ui.footTrades[i] + ' — Fairfield</a>'; }).join('');
+    ft.innerHTML = '<div class="foot-grid">'
     + '<div><h4>' + ui.footOrder + '</h4><a href="#" onclick="goMenu();return false;">' + ui.footMenu + '</a><a href="' + PHOTO_EST_URL + '" target="_blank" rel="noopener">' + ui.footPhoto + '</a></div>'
     + '<div><h4>' + ui.footCompany + '</h4><a href="#" onclick="scrollWizard();return false;">' + ui.footRequest + '</a><a href="#worker">' + ui.footWork + '</a><a href="#" onclick="showLogin();return false;">' + ui.footLogin + '</a><a href="#memberships">' + ui.footPlans + '</a></div>'
     + '<div><h4>' + ui.footSupport + '</h4><a href="#terms">' + ui.footTerms + '</a><a href="#how-it-works">' + ui.footHow + '</a><a href="#privacy">' + ui.footPrivacy + '</a><a href="tel:+17078623773">' + ui.footCall + '</a></div>'
-    + '<div><h4>' + ui.footCounty + '</h4><span class="foot-cities">' + HOME_CITIES.map(function (c) { return c[0]; }).join(' · ') + '</span><span class="foot-stripe">' + ui.footStripe + '</span></div></div>'
+    + '<div><h4>' + ui.footCounty + '</h4><span class="foot-cities">' + HOME_CITIES.map(function (c) { return c[0]; }).join(' · ') + '</span><span class="foot-since">' + ui.footSince + '</span><span class="foot-stripe">' + ui.footStripe + '</span></div></div>'
+    + '<div class="foot-doors"><h4>' + ui.footExplore + '</h4><nav>' + footDoors + '</nav></div>'
     + '<p class="foot-fine">' + ui.footFine + '</p>'
-    + '<div class="foot-social"><span class="foot-social-label">' + ui.footFollow + '</span><a href="https://www.instagram.com/generalhandymans" target="_blank" rel="noopener">Instagram</a><a href="https://www.facebook.com/generalhandymans" target="_blank" rel="noopener">Facebook</a><a href="https://www.google.com/maps/search/?api=1&query=General+Handyman+Solutions+Fairfield+CA" target="_blank" rel="noopener">' + ui.footGoogle + '</a></div>';
+    + '<div class="foot-social"><span class="foot-social-label">' + ui.footFollow + '</span><a href="https://www.instagram.com/generalhandymans" target="_blank" rel="noopener">Instagram</a><a href="https://www.facebook.com/generalhandymans" target="_blank" rel="noopener">Facebook</a><a href="https://www.google.com/maps/search/?api=1&query=General+Handyman+Solutions+Fairfield+CA" target="_blank" rel="noopener">' + ui.footGoogle + '</a><a href="' + GOOGLE_REVIEW_URL + '" target="_blank" rel="noopener">⭐ ' + ui.footReviews + '</a></div>';
+  }
 }
 // v80.19.1: paints the restored homepage (#oldhome) from OH_UI in the
 // active menu language. Text-level painting only — the fragment's own
@@ -7460,6 +7529,8 @@ WZ_CATS.forEach(function (c) { const img = document.getElementById('wzImg-' + c.
 if (location.hash === '#join-homecare') { joinPromo = { plan: 'homecare', kind: 'homecare' }; openMemberJoin(); }
 window.addEventListener('hashchange', checkResetHash);
 checkResetHash();
+window.addEventListener('hashchange', checkEstimateHash);
+checkEstimateHash();
 loadMe().then(function(){ try { routeNotifHash(); } catch (e) {} try { cartRecoverFromHash(); } catch (e) {} });
 loadPublicReviews(); // v81: published reviews (public endpoint; the section stays hidden until real ones exist)
 
