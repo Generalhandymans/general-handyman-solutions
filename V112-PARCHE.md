@@ -57,6 +57,20 @@
 - Files in this patch: `app/server.js`, `app/public/sw.js`,
   `tests/run.mjs`, `V112-PARCHE.md`. NOT `app/data.json`.
 
+## Nota de publicación (2026-11-17)
+
+- Gabriel approved in chat ("Publícala, hijo", 12:16 PM PT) after the
+  tested build was presented; the push approval card was also approved.
+- Pushed to GitHub main via push_files (only the 4 patch files):
+  **main `c830772f`** (was v111 state; main's sw.js verified at
+  `ghs-app-v111` immediately before the push).
+- **Verified LIVE in production:** `https://generalhandymans.app/sw.js`
+  serves `const CACHE = 'ghs-app-v112'`, and `GET /instalar` with an
+  iPhone Safari UA serves the guided sheet (`id="iosSheet"`, "Almost
+  there — follow these steps") with `id="myCard"` on the iOS card.
+- Local commit: `55c4831` (branch fusion-v80.9). `app/data.json` did
+  NOT travel.
+
 ## Honest limits
 
 - No code can make an iPhone install with one tap — Apple's rule, not
