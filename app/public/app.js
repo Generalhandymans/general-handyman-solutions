@@ -876,8 +876,8 @@ en: {
   cartHcSaveTpl: 'With HomeCare this job would cost you ${savings} less', cartJoinCta: 'Join HomeCare — first month FREE →',
   ccLinesTitle: 'Your services — tap to fix anything', ccMembersWord: ' · members $', ccInCart: 'In cart ×', ccAdd: '＋ Add',
   cartMemberPriceRow: 'HomeCare member price (−20%)', cartJoinRow: 'HomeCare membership — first month', cartFreeWord: 'FREE',
-  cartDepositDue: 'Deposit due today', cartBalanceRow: 'Balance at completion',
-  cartPayJoinTpl: 'Join HomeCare — then pay ${amt} deposit for your order', cartPayDepositTpl: 'Pay ${amt} deposit',
+  cartDepositDue: 'Deposit due today', cartFullDue: 'Due today — full payment', cartBalanceRow: 'Balance at completion',
+  cartPayJoinTpl: 'Join HomeCare — then pay ${amt} deposit for your order', cartPayDepositTpl: 'Pay ${amt} deposit', cartPayFullTpl: 'Pay ${amt} in full',
   cartValAddress: 'Enter the service address — where the technician will do the work.', cartValNameEmail: 'Add your name and a valid email — your account is created with this step.', cartValPassword: 'Create a password of 8+ characters (or enter your account password).',
   cartPayLoading: '⏳ Loading secure payment…', cartPayFailBody: '⚠️ The secure payment form could not load — check your connection.', cartPayHostedBtn: 'Pay on Stripe\'s secure page', cartPayRetryBtn: '↻ Try again',
   cartEmptyTxt: 'Your cart is empty — add services from the menu and they will wait for you right here.', cartBrowseBtn: 'Browse the menu', cartCheckoutBtnTxt: 'Checkout →', cartClearBtnTxt: 'Clear cart',
@@ -889,7 +889,7 @@ en: {
   ccOfferTitle: '⭐ Add HomeCare — first month FREE', ccOfferBody: 'Members save 20% on labor — the member price applies to THIS order right away. Then $29/mo, cancel anytime. Totally optional: your order works without it.',
   ccAddMore: '＋ Add more services', ccPayTitle: 'Payment',
   ccPayNote: 'You pay only the booking deposit today — $50 flat on totals up to $300, 40% on totals over $300 — and the balance when the work is done. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.',
-  ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…',
+  ccFullNote: 'Tree combos are paid in full today — the tree and the stand are included, so there is no balance later. Cancel before a technician is dispatched and you get a full refund; after dispatch, $75 is non-refundable.', ccFullFoot: 'One card, one tap · Secured by Stripe · Paid in full today', ccFootNote: 'One card, one tap · Secured by Stripe · Deposit today, balance at completion', mapTitle: 'Master map', mapLoading: 'Loading map…',
   crefTitle: '🎁 Refer & earn', crefIntro: 'Share your personal link. When a friend joins a membership and pays their first real charge, you earn a $10 credit for your next job or membership payment — one credit per friend, tracked automatically right here.',
   crefYourLink: 'Your referral link', crefCopy: 'Copy', crefBalance: 'Your credit balance', crefSignups: 'Friends you referred', crefNoSignups: 'No referrals yet — share your link to get started.',
   crefCreditWord: 'credit', crefCredited: 'credit earned', crefMember: 'member',
@@ -1010,8 +1010,8 @@ es: {
   cartHcSaveTpl: 'Con HomeCare este trabajo te salía ${savings} menos', cartJoinCta: 'Únete a HomeCare — primer mes GRATIS →',
   ccLinesTitle: 'Tus servicios — toca para corregir lo que sea', ccMembersWord: ' · miembros $', ccInCart: 'En el carrito ×', ccAdd: '＋ Agregar',
   cartMemberPriceRow: 'Precio de miembro HomeCare (−20%)', cartJoinRow: 'Membresía HomeCare — primer mes', cartFreeWord: 'GRATIS',
-  cartDepositDue: 'Depósito a pagar hoy', cartBalanceRow: 'Saldo al terminar',
-  cartPayJoinTpl: 'Únete a HomeCare — luego paga ${amt} de depósito por tu orden', cartPayDepositTpl: 'Paga ${amt} de depósito',
+  cartDepositDue: 'Depósito a pagar hoy', cartFullDue: 'Hoy — pago completo', cartBalanceRow: 'Saldo al terminar',
+  cartPayJoinTpl: 'Únete a HomeCare — luego paga ${amt} de depósito por tu orden', cartPayDepositTpl: 'Paga ${amt} de depósito', cartPayFullTpl: 'Paga ${amt} completo',
   cartValAddress: 'Escribe la dirección del servicio — donde el técnico hará el trabajo.', cartValNameEmail: 'Agrega tu nombre y un correo válido — tu cuenta se crea con este paso.', cartValPassword: 'Crea una contraseña de 8+ caracteres (o escribe la de tu cuenta).',
   cartPayLoading: '⏳ Cargando pago seguro…', cartPayFailBody: '⚠️ El formulario de pago seguro no cargó — revisa tu conexión.', cartPayHostedBtn: 'Pagar en la página segura de Stripe', cartPayRetryBtn: '↻ Reintentar',
   cartEmptyTxt: 'Tu carrito está vacío — agrega servicios del menú y te esperan aquí mismo.', cartBrowseBtn: 'Ver el menú', cartCheckoutBtnTxt: 'Ir a pagar →', cartClearBtnTxt: 'Vaciar carrito',
@@ -1023,7 +1023,7 @@ es: {
   ccOfferTitle: '⭐ Agregar HomeCare — primer mes GRATIS', ccOfferBody: 'Los miembros ahorran 20% en mano de obra — el precio de miembro aplica a ESTA orden de inmediato. Luego $29/mes, cancela cuando quieras. Totalmente opcional: tu orden funciona sin esto.',
   ccAddMore: '＋ Agregar más servicios', ccPayTitle: 'Pago',
   ccPayNote: 'Hoy pagas solo el depósito de apartado — $50 fijo en totales hasta $300, 40% en totales sobre $300 — y el saldo cuando el trabajo esté hecho. Cancela antes de que un técnico sea despachado y recibes reembolso completo; después del despacho, $75 no son reembolsables.',
-  ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…',
+  ccFullNote: 'Los combos de árbol se pagan completos hoy — el árbol y la base están incluidos, así que no queda saldo después. Cancela antes de que un técnico sea despachado y recibes reembolso completo; después del despacho, $75 no son reembolsables.', ccFullFoot: 'Una tarjeta, un toque · Protegido por Stripe · Pagado completo hoy', ccFootNote: 'Una tarjeta, un toque · Protegido por Stripe · Depósito hoy, saldo al terminar', mapTitle: 'Mapa maestro', mapLoading: 'Cargando mapa…',
   crefTitle: '🎁 Recomienda y gana', crefIntro: 'Comparte tu link personal. Cuando un amigo se une a una membresía y paga su primer cargo real, ganas un crédito de $10 para tu próximo trabajo o pago de membresía — un crédito por amigo, rastreado automáticamente aquí mismo.',
   crefYourLink: 'Tu link de referido', crefCopy: 'Copiar', crefBalance: 'Tu saldo de crédito', crefSignups: 'Amigos que referiste', crefNoSignups: 'Todavía no tienes referidos — comparte tu link para empezar.',
   crefCreditWord: 'crédito', crefCredited: 'crédito ganado', crefMember: 'miembro',
@@ -4732,7 +4732,7 @@ async function loadAdminCarts(){
     // v100: depFor90 takes the cart too — a payFull cart's amount due
     // is its FULL total (the same number its page shows), never the
     // deposit law's split.
-    const depFor90=function(total,cart){ const t=Number(total)||0; if(cart&&cart.payFull) return t; return t<=300?Math.min(50,t):Math.round(t*40)/100; };
+    const depFor90=function(total,cart){ const t=Number(total)||0; if(cart&&(cart.payFull||cart.payFullEffective)) return t; return t<=300?Math.min(50,t):Math.round(t*40)/100; };
     const open90=d.carts.filter(function(c){ return c.status==='open'; });
     let head90='';
     if(open90.length){
@@ -4748,7 +4748,7 @@ async function loadAdminCarts(){
       const badge=c.status==='paid'?'<span class="pill" style="background:#1a7f37">paid → '+(c.requestId||'')+'</span>':(c.status==='cancelled'?'<span class="pill" style="background:#6b6762">cancelled</span>':'<span class="pill" style="background:#b26a00">open</span>');
       const age90=c.status==='open'?ageDays90(c):0;
       const stalePill90=(c.status==='open'&&age90>=7)?' <span class="pill adm-stale">⏰ STALE · '+age90+'d waiting</span>':'';
-      const dormLine90=c.status==='open'?'<br><span class="adm-age">⏳ Waiting '+(age90===0?'since today':(age90===1?'1 day':age90+' days'))+' — '+(c.payFull?'full payment to book <b>':'deposit to book <b>')+moneyFmt(depFor90(c.listTotal,c))+'</b>'+(Math.abs(depFor90(c.memberTotal,c)-depFor90(c.listTotal,c))>=0.01?' · member '+moneyFmt(depFor90(c.memberTotal,c)):'')+'</span>':'';
+      const dormLine90=c.status==='open'?'<br><span class="adm-age">⏳ Waiting '+(age90===0?'since today':(age90===1?'1 day':age90+' days'))+' — '+((c.payFull||c.payFullEffective)?'full payment to book <b>':'deposit to book <b>')+moneyFmt(depFor90(c.listTotal,c))+'</b>'+(Math.abs(depFor90(c.memberTotal,c)-depFor90(c.listTotal,c))>=0.01?' · member '+moneyFmt(depFor90(c.memberTotal,c)):'')+'</span>':'';
       return '<div class="card"><b>'+c.id+'</b> '+badge+stalePill90+'<br><span class="mut">'+items+'</span><br>Total <b>'+moneyFmt(c.listTotal)+'</b> • member '+moneyFmt(c.memberTotal)+dormLine90+(c.customerName?' • for '+escHtml(c.customerName):'')+(c.payState?'<br><span class="mut">💰 Deposit '+moneyFmt(c.payState.deposit)+' in (40%) · balance '+moneyFmt(c.payState.balance)+(c.payState.balancePaid?' PAID ✓':' due at completion')+'</span>'+(c.payState.adjustments&&c.payState.adjustments.length?'<br><span class="mut">🧾 '+c.payState.adjustments.map(function(a){ return (a.delta<0?'-':'+')+moneyFmt(Math.abs(a.delta))+(a.note?' — '+escHtml(a.note):''); }).join(' · ')+'</span>':''):'')+'<div style="margin-top:8px"><button type="button" class="ghost" onclick="copyCartLink(\''+c.id+'\')">Copy link</button>'+(c.status==='open'?' <button type="button" class="ghost" onclick="editCart(\''+c.id+'\')">Edit</button>':'')+(c.payState&&!c.payState.balancePaid?' <button type="button" class="ghost" onclick="adjustCartBalance(\''+c.id+'\')">Adjust balance</button> <button type="button" class="ghost" onclick="addCartTravel(\''+c.id+'\')">+ Travel $25</button>':'')+' <a href="'+c.link+'" target="_blank" rel="noopener">Open</a>'+(c.status==='open'?' <button type="button" class="ghost" onclick="cancelCart(\''+c.id+'\')">Cancel cart</button>':'')+'</div></div>';
     }).join('');
   }catch(e){ box.innerHTML=''; }
@@ -5727,15 +5727,20 @@ function renderCartTotalsDue(){
   // mid-payment context never gets a join push. Display only.
   if (!member && !joinOn && !cartPayCtx && savings > 0) s += '<div class="cart-total-row" style="color:#2fbf71"><span>' + CU('cartHcSaveTpl').replace('{savings}', savings) + '</span></div>';
   const depOf79 = function (tot) { tot = Number(tot) || 0; return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100; };
-  const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : depOf79(due);
+  const full115 = cartHasPayFull() && !(cartPayCtx && cartPayCtx.phase === 'join'); // v115: a tree combo in the cart is due IN FULL today
+  const dep79 = cartPayCtx && cartPayCtx.phase !== 'join' ? cartPayCtx.deposit : (full115 ? due : depOf79(due));
   const bal79 = Math.max(0, Math.round((due - dep79) * 100) / 100);
   s += '<div class="cart-total-row" style="border-top:1px solid #d4d4d8;padding-top:6px;margin-top:4px"><span>' + CU('cartTotalWord') + '</span><span>$' + due + '</span></div>';
-  s += '<div class="cart-total-row cart-due-dep"><b>' + CU('cartDepositDue') + '</b><b>$' + dep79 + '</b></div>';
+  s += '<div class="cart-total-row cart-due-dep"><b>' + CU(full115 ? 'cartFullDue' : 'cartDepositDue') + '</b><b>$' + dep79 + '</b></div>';
   if (bal79 > 0) s += '<div class="cart-total-row"><span>' + CU('cartBalanceRow') + '</span><span>$' + bal79 + '</span></div>';
   // v86: the money summary wears the draft's featured card (dark panel,
   // red border, big deposit number — the .cart-due-card CSS). Wrapper and
   // the cart-due-dep class only: every row, word and number is unchanged.
   host.innerHTML = '<div class="cart-due-card">' + s + '</div>';
+  // v115: the checkout card's fine print follows the cart — a payFull
+  // cart never reads "deposit today, balance at completion".
+  const pn115 = document.getElementById('ccPayNoteEl'); if (pn115) pn115.textContent = CU(full115 ? 'ccFullNote' : 'ccPayNote');
+  const pf115 = document.getElementById('ccFootNoteEl'); if (pf115) pf115.textContent = CU(full115 ? 'ccFullFoot' : 'ccFootNote');
 }
 // ---------- v78 refine (Gabriel 2026-10-25 21:57): the cart is FULLY
 // editable AT the checkout itself — fix a mistake, drop a service, add
@@ -5892,6 +5897,12 @@ function cartJoinIntent(){
   const j = document.getElementById('ccJoin');
   return !!(j && j.checked);
 }
+// v115: services charged IN FULL at order time — the tree combos (the
+// tree + stand are materials GHS buys; Gabriel's rule: paid in full at
+// order, never a deposit). Mirrors PAYFULL_SERVICE_IDS in server.js;
+// the server is what charges — this only paints the same numbers.
+const PAYFULL_SERVICE_IDS = { 'tree-combo-small': 1, 'tree-combo-medium': 1, 'tree-combo-premium': 1 };
+function cartHasPayFull(){ return cartLoad().some(function(it){ return !!PAYFULL_SERVICE_IDS[it.id]; }); }
 function cartDepositEstimate(){
   // Same math renderCartTotalsDue paints: an armed context wins,
   // otherwise the deposit rule (v79 law: $50 flat to $300, 40% over)
@@ -5901,12 +5912,14 @@ function cartDepositEstimate(){
   const due = cartPayCtx ? cartPayCtx.due : ((member || cartJoinIntent()) ? t.member : t.list);
   if (cartPayCtx && cartPayCtx.phase !== 'join') return cartPayCtx.deposit;
   const tot = Number(due) || 0;
+  if (cartHasPayFull()) return tot; // v115: a tree combo in the cart is due in full
   return tot <= 300 ? Math.min(50, tot) : Math.round(tot * 40) / 100;
 }
 function cartPayLabel(){
   const dep = cartDepositEstimate();
   if (cartPayCtx && cartPayCtx.phase === 'join') return CU('cartPayJoinTpl').replace('{amt}', cartPayCtx.deposit);
   if (!cartPayCtx && cartJoinIntent()) return CU('cartPayJoinTpl').replace('{amt}', dep);
+  if (cartHasPayFull()) return CU('cartPayFullTpl').replace('{amt}', dep); // v115
   return CU('cartPayDepositTpl').replace('{amt}', dep);
 }
 function cartFormValid(){

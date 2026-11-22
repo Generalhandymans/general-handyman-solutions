@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+t('static: SW cache is ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v114)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v115)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v115'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6248,11 +6248,11 @@ t('static v80.15: payment_failed webhook emails the customer once per event, bes
 t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
 t('static v99: review ask carries the built-in OFFICIAL default link as fallback + the invoice-company exclusion guard wired into the ask', serverSrc.includes("const DEFAULT_GOOGLE_REVIEW_URL = 'https://g.page/r/Ce0oW03tmveIEBM/review'") && serverSrc.includes('return s || DEFAULT_GOOGLE_REVIEW_URL') && serverSrc.includes('function isInvoiceBilledRequest(') && serverSrc.includes('if (isInvoiceBilledRequest(r)) return false;'));
 t('static v99: admin System hint no longer claims empty = off — built-in default, override only (EN+ES)', htmlSrc.includes('The official GHS link is built in') && htmlSrc.includes('El link oficial de GHS ya viene integrado'));
-t('static v100: ONE cart split helper — cartSplit carries the payFull exception, depositSplit stays the law it delegates to', serverSrc.includes('function cartSplit(c, totalCents)') && serverSrc.includes('if (c && c.payFull) return { depositCents: t, balanceCents: 0 };') && serverSrc.includes('return depositSplit(t);'));
+t('static v100 (+v115): ONE cart split helper — cartSplit carries the payFull exception on the EFFECTIVE flag (toggle OR payFull service), depositSplit stays the law it delegates to', serverSrc.includes('function cartSplit(c, totalCents)') && serverSrc.includes('if (cartPayFull(c)) return { depositCents: t, balanceCents: 0 };') && serverSrc.includes('return depositSplit(t);'));
 t('static v100: the flag is stored at create, editable via PUT, and exposed on publicCart', serverSrc.includes('payFull: b.payFull === true') && serverSrc.includes('if (b.payFull !== undefined) c.payFull = b.payFull === true;') && serverSrc.includes('payFull: !!c.payFull'));
 t('static v100: cart page strings exist in BOTH languages — full-pay button, due-full label, honest refund line and join notes', serverSrc.includes("payFullBtn: 'Pay {amt}'") && serverSrc.includes("payFullBtn: 'Pagar {amt}'") && serverSrc.includes("dueFullLabel: 'Due today — full payment'") && serverSrc.includes("dueFullLabel: 'Hoy — pago completo'") && serverSrc.includes('refundLineFull:') && serverSrc.includes('joinOrderNoteFull:') && serverSrc.includes('joinOrderNoteFullFree:'));
 t('static v100: builder + edit carry the bilingual charge-in-full toggle end to end', htmlSrc.includes('id="cartPayFull"') && htmlSrc.includes('Charge in full upfront (no deposit) / Cobrar todo por adelantado (sin depósito)') && (appJsSrc.match(/payFull:!!\(document\.getElementById\('cartPayFull'\)/g) || []).length === 2 && appJsSrc.includes('pfSel.checked=!!c.payFull'));
-t('static v100: checkout stamps payStep full ONLY for flagged carts (deposit otherwise) through the same stamped-split settle', serverSrc.includes("payStep: c.payFull ? 'full' : 'deposit'") && serverSrc.includes('const split = cartSplit(c, totalCents);') && serverSrc.includes('const splitJ = cartSplit(c, totalCentsJ);'));
+t('static v100: checkout stamps payStep full ONLY for flagged carts (deposit otherwise) through the same stamped-split settle', serverSrc.includes("payStep: cartPayFull(c) ? 'full' : 'deposit'") && serverSrc.includes('const split = cartSplit(c, totalCents);') && serverSrc.includes('const splitJ = cartSplit(c, totalCentsJ);'));
 const BASE4 = 'http://127.0.0.1:8987';
 const DATA_FILE4 = '/tmp/ghs-v17-test/data-v80-15.json';
 try { fs.unlinkSync(DATA_FILE4); } catch (e) {}
@@ -8357,7 +8357,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v101 w9 H1: the public cart page keeps the name prefill but NEVER the phone (bearer-link exposure closed)', page9.includes('W9 Person') && !page9.includes('555-0176') && !page9.includes('(415) 555-0176'));
 
   // H4 static: both reminder builders branch on payFull with full-payment wording
-  t('v101 w9 H4 static: cart reminder says FULL PAYMENT (EN+ES, html+text) for payFull carts, deposit otherwise', (serverSrc.match(/const full = !!c\.payFull/g) || []).length >= 2 && serverSrc.includes("full ? 'Full payment due today: '") && serverSrc.includes("full ? 'Pago completo hoy: '") && serverSrc.includes('full payment yet'));
+  t('v101 w9 H4 static: cart reminder says FULL PAYMENT (EN+ES, html+text) for payFull carts, deposit otherwise', (serverSrc.match(/const full = cartPayFull\(c\)/g) || []).length >= 2 && serverSrc.includes("full ? 'Full payment due today: '") && serverSrc.includes("full ? 'Pago completo hoy: '") && serverSrc.includes('full payment yet'));
 
   // Money counters: a paid order + a paid invoice show up in collected
   const c9 = await req2('POST', '/api/signup', { body: { name: 'W9 Buyer', email: 'w9-buyer@t.local', phone: '(707) 555-0151', password: 'custpass42', role: 'customer' } });
@@ -8525,7 +8525,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8694,7 +8694,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8788,7 +8788,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8988,7 +8988,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v110 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9014,7 +9014,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v111 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9029,13 +9029,74 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
+  t('v112 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
   t('v112 http: /instalar?lang=es serves the guided sheet in Spanish', instEs112.includes('Ya casi — sigue estos pasos') && instEs112.includes('«Agregar a pantalla de inicio»'));
   const instAnd112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36' } })).text();
   t('v112 http: /instalar for an Android UA puts id=myCard on the FIRST card (the Android one)', instAnd112.indexOf('id="myCard"') > -1 && instAnd112.indexOf('id="myCard"') < instAnd112.indexOf('On iPhone'));
+}
+
+// ---------------- v115: SERVICE-LEVEL payFull (tree combos) ----------------
+// Gabriel 2026-11-22: a tree combo is paid IN FULL at order time — GHS
+// never fronts the tree + stand. The flag lives on the SERVICE
+// (PAYFULL_SERVICE_IDS), so ANY cart containing a combo charges the
+// WHOLE cart total today, on every rail: self-serve embedded,
+// self-serve hosted, and admin-built cart links (builder toggle OFF).
+// Every other service keeps the deposit law byte-identical.
+{
+  const A115 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const reqs115 = async () => (await req2('GET', '/api/requests', { token: A115 })).j.requests || [];
+  t('v115 statics: the service-level flag + helpers exist on the server (the 3 combos, items/cart/due-split helpers)', serverSrc.includes("const PAYFULL_SERVICE_IDS = new Set(['tree-combo-small', 'tree-combo-medium', 'tree-combo-premium']);") && serverSrc.includes('function itemsPayFull(items)') && serverSrc.includes('function cartPayFull(c)') && serverSrc.includes('function dueSplitForItems(items, totalCents)'));
+  t('v115 statics: publicCart exposes the EFFECTIVE flag next to the stored toggle; the SPA mirrors the set + the effective admin math', serverSrc.includes('payFullEffective: cartPayFull(c)') && htmlSrc.includes("const PAYFULL_SERVICE_IDS = { 'tree-combo-small': 1, 'tree-combo-medium': 1, 'tree-combo-premium': 1 };") && htmlSrc.includes('function cartHasPayFull()') && htmlSrc.includes('cart.payFullEffective'));
+  t('v115 statics: settle + confirm verify against the ITEMS split (never a bare depositSplit of the due)', serverSrc.includes('const _s0 = dueSplitForItems(pc.items,') && serverSrc.includes('const ccSplit = dueSplitForItems(pc.items,') && serverSrc.includes('cents !== dueSplitForItems(pc.items,'));
+  // --- self-serve embedded: combo + decorating add-on = FULL total ---
+  const co115a = await req2('POST', '/api/cart/checkout', { body: { name: 'Combo Carla', email: 'combo115@t.local', phone: '7075550115', password: 'combopass1', address: '5 Fir St', city: 'Fairfield', when: 'Saturday', items: [{ serviceId: 'tree-combo-small', name: 'Basic Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
+  t('v115 self-serve: Basic combo + decorating totals $274 due with deposit $274 / balance $0 (not the $109.60 deposit split)', co115a.status === 200 && co115a.j.step === 'pay' && co115a.j.totals.due === 274 && co115a.j.totals.deposit === 274 && co115a.j.totals.balance === 0);
+  const pi115a = stripeState.pis[co115a.j.paymentIntentId];
+  t('v115 self-serve: the PaymentIntent itself is for the FULL $274', !!pi115a && pi115a.amount === 27400);
+  const tok115 = (await req2('POST', '/api/login', { body: { email: 'combo115@t.local', password: 'combopass1' } })).j.token;
+  await mockPiStatus(co115a.j.paymentIntentId, 'succeeded');
+  const conf115a = await req2('POST', '/api/cart/checkout-confirm', { token: tok115, body: { checkoutId: co115a.j.checkoutId, paymentIntentId: co115a.j.paymentIntentId } });
+  const ord115a = (await reqs115()).find(r => r.id === (conf115a.j && conf115a.j.requestId));
+  t('v115 self-serve settle: the order is born PAID IN FULL ($274 in, $0 balance — never a deposit state)', conf115a.status === 200 && !!ord115a && ord115a.payment.status === 'paid' && ord115a.payment.amountCents === 27400 && (ord115a.payment.balanceCents || 0) === 0);
+  // --- the other combos, totals level ---
+  const co115b = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [] }] } });
+  t('v115 self-serve: Medium combo alone — $299 due, $299 today, $0 balance', co115b.status === 200 && co115b.j.totals.due === 299 && co115b.j.totals.deposit === 299 && co115b.j.totals.balance === 0);
+  const co115c = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-premium', name: 'Premium Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
+  t('v115 self-serve: Premium combo + decorating — $649 due, $649 today, $0 balance', co115c.status === 200 && co115c.j.totals.due === 649 && co115c.j.totals.deposit === 649 && co115c.j.totals.balance === 0);
+  // --- whole-cart semantics ---
+  const co115d = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-small', name: 'Basic Tree Combo', qty: 1, addons: [] }, { serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, addons: [] }] } });
+  t('v115 self-serve: combo + a normal service in ONE cart — the WHOLE $374 is due today (no split on the normal line)', co115d.status === 200 && co115d.j.totals.due === 374 && co115d.j.totals.deposit === 374 && co115d.j.totals.balance === 0);
+  // --- regression: a normal cart alone keeps the deposit law ---
+  const co115e = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, addons: [] }] } });
+  t('v115 regression: TV mounting alone still books on the $50 flat deposit ($175 total, $125 balance)', co115e.status === 200 && co115e.j.totals.due === 175 && co115e.j.totals.deposit === 50 && co115e.j.totals.balance === 125);
+  // --- hosted rail: the same full charge ---
+  const h115 = await req2('POST', '/api/cart/checkout-hosted', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
+  const hSess115 = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === (h115.j && h115.j.checkoutId));
+  t('v115 hosted: Medium + decorating — totals $399/$399/$0 and the session itself is $399.00', h115.status === 200 && h115.j.totals.due === 399 && h115.j.totals.deposit === 399 && h115.j.totals.balance === 0 && !!hSess115 && hSess115.amount_total === 39900);
+  await mockSessionPaid(hSess115.id);
+  const hConf115 = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: tok115, body: { sessionId: hSess115.id } });
+  const hOrd115 = (await reqs115()).find(r => r.id === (hConf115.j && hConf115.j.requestId));
+  t('v115 hosted settle: the order is born PAID IN FULL ($399, $0 balance)', hConf115.status === 200 && !!hOrd115 && hOrd115.payment.status === 'paid' && hOrd115.payment.amountCents === 39900 && (hOrd115.payment.balanceCents || 0) === 0);
+  // --- admin-built cart link: combo inside, builder toggle OFF ---
+  const admCart115 = await req2('POST', '/api/admin/carts', { token: A115, body: { items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, unitPrice: 299 }], customerName: 'Combo Link', customerEmail: 'combo115@t.local' } });
+  const admId115 = admCart115.j && admCart115.j.cart && admCart115.j.cart.id;
+  t('v115 admin cart: the stored toggle stays OFF but the EFFECTIVE flag is ON (payFullEffective) at $299', admCart115.status === 201 && !!admId115 && admCart115.j.cart.payFull === false && admCart115.j.cart.payFullEffective === true && admCart115.j.cart.listTotal === 299);
+  const page115 = await (await fetch(BASE2 + '/cart/' + admId115)).text();
+  t('v115 admin cart page: full-payment wording, Pay $299.00 button, NO balance row, PAY_FULL=true', page115.includes('Due today — full payment') && page115.includes('>Pay $299.00</button>') && !page115.includes('id="ctBalance"') && page115.includes('PAY_FULL=true'));
+  const props115 = (await req2('GET', '/api/me/proposals', { token: tok115 })).j.proposals || [];
+  const prop115 = props115.find(x => x.kind === 'cart' && x.id === admId115);
+  t('v115 proposals: the account view agrees — $299 due today / $0 balance for the combo cart', !!prop115 && prop115.depositDue === 299 && prop115.balanceDue === 0);
+  const coAdm115 = await req2('POST', '/api/carts/' + admId115 + '/checkout', { body: { name: 'Combo Link', phone: '7075550115', email: 'combo115@t.local', address: '5 Fir St', city: 'Fairfield', when: 'Saturday' } });
+  const sessAdm115 = sessionForCart(admId115, 'payment');
+  const sessAdmPi115 = sessAdm115 && stripeState.pis[sessAdm115.payment_intent];
+  t('v115 admin cart checkout: ONE full session — amount $299, balance $0, payStep full', coAdm115.status === 200 && coAdm115.j.amount === 299 && coAdm115.j.deposit === 299 && coAdm115.j.balance === 0 && !!sessAdm115 && sessAdm115.amount_total === 29900 && !!sessAdmPi115 && sessAdmPi115.metadata.payStep === 'full');
+  await mockSessionPaid(sessAdm115.id);
+  await fetch(BASE2 + '/cart/' + admId115 + '?paid=1&session_id=' + sessAdm115.id);
+  const conv115 = (await reqs115()).find(x => x.menuOrder && x.menuOrder.cartId === admId115);
+  t('v115 admin cart settle: converts PAID IN FULL ($299 — never a deposit state)', !!conv115 && conv115.payment.status === 'paid' && conv115.payment.amountCents === 29900);
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}

@@ -1173,7 +1173,7 @@ function estimateReminderEmailText(rq) {
 // same per-surface pattern the cart page itself uses.
 function cartReminderEmailHtml(c) {
   const es = c.lang === 'es';
-  const full = !!c.payFull; // v101 (H4): a payFull cart is owed in FULL — never call it a deposit
+  const full = cartPayFull(c); // v101 (H4) + v115: owed in FULL (toggle OR a payFull service inside) — never call it a deposit
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
   const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const items = (c.items || []).map(it => escMail(it.name || '') + ' ×' + (it.qty || 1)).join(' · ');
@@ -1194,7 +1194,7 @@ function cartReminderEmailHtml(c) {
 }
 function cartReminderEmailText(c) {
   const es = c.lang === 'es';
-  const full = !!c.payFull; // v101 (H4)
+  const full = cartPayFull(c); // v101 (H4) + v115
   const total = c.memberApplied ? (c.memberTotal || 0) : (c.listTotal || 0);
   const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const head = 'General Handyman Solutions — ';
@@ -1211,7 +1211,7 @@ function cartReminderEmailText(c) {
 // actually live on — they have a phone on file and no email).
 function cartReminderText(c) {
   const es = c.lang === 'es';
-  const full = !!c.payFull; // v101 (H4): a payFull cart is owed in FULL — never call it a deposit
+  const full = cartPayFull(c); // v101 (H4) + v115: owed in FULL (toggle OR a payFull service inside) — never call it a deposit
   const total = c.memberApplied ? (Number(c.memberTotal) || 0) : (Number(c.listTotal) || 0);
   const dep = cartSplit(c, Math.round(total * 100)).depositCents / 100;
   const first = String(c.customerName || '').trim().split(/\s+/)[0] || '';
@@ -3036,7 +3036,7 @@ function settleCartCheckout(pc, pi) {
   // deposit when a balance remains, the full total otherwise). The
   // session rail (settleHostedCartSession) already proved its amount
   // and hands over exactly this leg, so it passes by construction.
-  { const _s0 = depositSplit(Math.round(Number(pc.totals.due) * 100));
+  { const _s0 = dueSplitForItems(pc.items, Math.round(Number(pc.totals.due) * 100)); // v115: a checkout carrying a payFull service expects its FULL total
     const _got = Math.round(Number(pi && (pi.amount_received != null ? pi.amount_received : pi.amount)) || 0);
     const _exp = _s0.balanceCents > 0 ? _s0.depositCents : Math.round(Number(pc.totals.due) * 100);
     if (_got > 0 && _got !== _exp) { console.error('cart checkout settle: PI amount ' + _got + ' != expected ' + _exp + ' for ' + pc.id + ' — order NOT created'); notifyAdmins('payment', 'Cart checkout ' + pc.id + ': payment of ' + usd(_got / 100) + ' does not match the expected ' + usd(_exp / 100) + ' — no order was created. Review and refund/re-link.'); return null; } }
@@ -3050,7 +3050,7 @@ function settleCartCheckout(pc, pi) {
   pc.requestId = r.id;
   pc.settledAt = new Date().toISOString();
   consumeRecoverableCart(pc.customerEmail); // v80 A-7: the recovered cart became an order — it is no longer "left behind"
-  const ccSplit = depositSplit(Math.round(Number(pc.totals.due) * 100));
+  const ccSplit = dueSplitForItems(pc.items, Math.round(Number(pc.totals.due) * 100)); // v115: balance 0 -> the paid-in-full record below
   if (ccSplit.balanceCents > 0) recordRequestDeposit(r, { pi: pi.id, depositCents: ccSplit.depositCents, totalCents: ccSplit.depositCents + ccSplit.balanceCents, kind: 'cart-checkout' });
   else recordRequestPayment(r, { pi: pi.id, amountCents: Math.round(Number(pi.amount_received || pi.amount) || 0), kind: 'menu-order' });
   notifyAdmins('request', 'New cart order ' + r.id + ': ' + r.service + ' in ' + (r.city || '') + ' from ' + r.customerName + '.');
@@ -3100,7 +3100,7 @@ function settleHostedCartSession(pc, sess) {
     const u = db.users.find(x => x.id === pc.userId);
     if (u) activateMembershipFromCheckout(u, sess);
   }
-  const depC = depositSplit(Math.round(Number(pc.totals.due) * 100)).depositCents;
+  const depC = dueSplitForItems(pc.items, Math.round(Number(pc.totals.due) * 100)).depositCents; // v115
   return settleCartCheckout(pc, { id: sess.payment_intent || '', amount_received: depC, amount: depC });
 }
 // ---------- Admin carts (v44, DISENO-PAGO-COMPLETO) ----------
@@ -3255,7 +3255,7 @@ function workerBlockedPage(res, what) {
 }
 function cartLink(c) { return appBase() + '/cart/' + c.id; }
 function publicCart(c) {
-  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, payFull: !!c.payFull, requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
+  return { id: c.id, status: c.status, items: c.items || [], listTotal: c.listTotal || 0, memberTotal: c.memberTotal || 0, note: c.note || '', customerName: c.customerName || '', customerPhone: c.customerPhone || '', customerEmail: c.customerEmail || (c.customer && c.customer.email) || '', lang: c.lang === 'es' ? 'es' : 'en', memberApplied: !!c.memberApplied, payFull: !!c.payFull, payFullEffective: cartPayFull(c), requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null, payState: (c.payment && Number(c.payment.depositCents) > 0) ? { deposit: Number(c.payment.depositCents) / 100, balance: Number(c.payment.balanceCents) / 100, total: Number(c.payment.amountCents) / 100, balancePaid: !!c.payment.balanceAt, balanceVoid: !!(c.payment && c.payment.balanceVoid), balanceVia: (c.payment && c.payment.balanceVia) || '', adjustments: (c.payment.adjustments || []).map(a => ({ delta: a.deltaCents / 100, note: a.note || '', kind: a.kind || '', at: a.at || '' })) } : null };
 }
 // ---------- v108: CART RESCUE rows (admin) ----------
 // Gabriel's rescue list: every cart still OPEN with no deposit recorded
@@ -3583,8 +3583,28 @@ function depositSplit(totalCents) {
 // only, and a cart without it behaves exactly as before.
 function cartSplit(c, totalCents) {
   const t = Math.max(0, Math.round(Number(totalCents) || 0));
-  if (c && c.payFull) return { depositCents: t, balanceCents: 0 };
+  if (cartPayFull(c)) return { depositCents: t, balanceCents: 0 };
   return depositSplit(t);
+}
+// ---------- v115: SERVICE-LEVEL payFull (Gabriel, 2026-11-22) ----------
+// The tree combos include the tree + stand that GHS buys, and Gabriel's
+// rule for them is absolute: a combo is paid IN FULL at order time —
+// GHS never fronts materials. The flag therefore lives on the SERVICE,
+// not on the cart: ANY cart (admin-built or self-serve) containing at
+// least one flagged line charges the WHOLE cart total today — the
+// combo, its tree-decorating add-on and any other line in the same
+// cart ride the same single charge. Every other service keeps the
+// deposit law byte-identical, and the admin builder's cart-level
+// payFull toggle keeps working exactly as before (cartPayFull is the
+// OR of the two). dueSplitForItems is the self-serve twin of cartSplit:
+// the same law, keyed on the item list instead of a cart record.
+const PAYFULL_SERVICE_IDS = new Set(['tree-combo-small', 'tree-combo-medium', 'tree-combo-premium']);
+function servicePayFull(serviceId) { return PAYFULL_SERVICE_IDS.has(String(serviceId || '')); }
+function itemsPayFull(items) { return Array.isArray(items) && items.some(it => it && servicePayFull(it.serviceId)); }
+function cartPayFull(c) { return !!(c && (c.payFull || itemsPayFull(c.items))); }
+function dueSplitForItems(items, totalCents) {
+  const t = Math.max(0, Math.round(Number(totalCents) || 0));
+  return itemsPayFull(items) ? { depositCents: t, balanceCents: 0 } : depositSplit(t);
 }
 // ---------- v80 A-7: recoverable-cart store (plumbing only) ----------
 // Snapshots are stored in the SPA's own cart shape ({id, q, x}) so a
@@ -5528,6 +5548,7 @@ function cartPageHtml(c, user, langOverride, notice) {
   // rows, the Pay button and the client-side DEP_/BAL_ vars, so the
   // page can never disagree with what checkout will charge. A payFull
   // cart shows the WHOLE total as due today and no balance row at all.
+  const fullPay115 = cartPayFull(c); // v115: full-payment wording follows the EFFECTIVE flag (builder toggle OR a payFull service in the cart)
   const splitL100 = cartSplit(c, Math.round(c.listTotal * 100)), splitM100 = cartSplit(c, Math.round(c.memberTotal * 100)), splitStart100 = cartSplit(c, startCents);
   // v54 return banners: 'joined' renders only after the SERVER verified
   // the subscription with Stripe (the GET handler decides — page flags
@@ -5548,8 +5569,8 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<div style="display:flex;justify-content:space-between;font-size:15px"><span data-i18n="subtotalLabel">' + S.subtotalLabel + '</span><span id="ctSubtotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '">' + usd(c.listTotal) + '</span></div>'
     + (savings > 0 ? '<div id="ctSaveRow" style="display:' + (sessionMember ? 'flex' : 'none') + ';justify-content:space-between;font-size:15px;color:#2fbf71;font-weight:700;margin-top:2px"><span data-i18n="memberSavingsLabel">' + S.memberSavingsLabel + '</span><span>−' + usd(savings) + '</span></div>' : '')
     + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:4px"><span style="font-size:20px" data-i18n="totalLabel">' + S.totalLabel + '</span><b id="cartBigTotal" data-l="' + usd(c.listTotal) + '" data-m="' + usd(c.memberTotal) + '" style="font-size:20px">' + usd(sessionMember ? c.memberTotal : c.listTotal) + '</b></div>'
-    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="' + (c.payFull ? 'dueFullLabel' : 'depositDueLabel') + '">' + (c.payFull ? S.dueFullLabel : S.depositDueLabel) + '</span><b id="ctDeposit" style="font-size:21px" data-l="' + usd(splitL100.depositCents / 100) + '" data-m="' + usd(splitM100.depositCents / 100) + '">' + usd(splitStart100.depositCents / 100) + '</b></div>'
-    + (c.payFull ? '' : '<div style="display:flex;justify-content:space-between;font-size:15px;color:#a49d93"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(splitL100.balanceCents / 100) + '" data-m="' + usd(splitM100.balanceCents / 100) + '">' + usd(splitStart100.balanceCents / 100) + '</span></div>')
+    + '<div style="display:flex;justify-content:space-between;font-size:15px;margin-top:6px"><span data-i18n="' + (fullPay115 ? 'dueFullLabel' : 'depositDueLabel') + '">' + (fullPay115 ? S.dueFullLabel : S.depositDueLabel) + '</span><b id="ctDeposit" style="font-size:21px" data-l="' + usd(splitL100.depositCents / 100) + '" data-m="' + usd(splitM100.depositCents / 100) + '">' + usd(splitStart100.depositCents / 100) + '</b></div>'
+    + (fullPay115 ? '' : '<div style="display:flex;justify-content:space-between;font-size:15px;color:#a49d93"><span data-i18n="balanceDueLabel">' + S.balanceDueLabel + '</span><span id="ctBalance" data-l="' + usd(splitL100.balanceCents / 100) + '" data-m="' + usd(splitM100.balanceCents / 100) + '">' + usd(splitStart100.balanceCents / 100) + '</span></div>')
     + '</div>'
     + '<p style="color:#a49d93;font-size:13px">' + (cartHasMaterials ? '<span data-i18n="materialsNote">' + S.materialsNote + '</span>' : '<span data-i18n="laborNote">' + S.laborNote + '</span>') + '</p>'
     + '<div id="cartForm">'
@@ -5566,15 +5587,15 @@ function cartPageHtml(c, user, langOverride, notice) {
     + '<label style="' + lbl + '"><span data-i18n="whenExtra">' + S.whenExtra + '</span><input id="cWhenText" data-i18n-ph="whenPh" placeholder="' + S.whenPh + '" style="' + inp + '"></label>'
     + joinBlock
     + '<h3 style="margin-bottom:2px;font-size:18px;font-weight:800" data-i18n="paymentH">' + S.paymentH + '</h3>'
-    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:12px">' + fillS(c.payFull ? S.payFullBtn : S.payBtn, { amt: usd(splitStart100.depositCents / 100) }) + '</button>'
+    + '<button id="payBtn" style="background:#e42535;color:#fff;border:0;border-radius:14px;padding:14px 28px;font-weight:700;font-size:17px;cursor:pointer;width:100%;margin-top:12px">' + fillS(fullPay115 ? S.payFullBtn : S.payBtn, { amt: usd(splitStart100.depositCents / 100) }) + '</button>'
     + '<p id="payMsg" style="color:#a49d93"></p>'
     + '<p id="joinOrderNote" data-i18n="joinOrderNote" style="display:none;color:#a49d93;font-size:13.5px;margin:2px 0 0">' + S.joinOrderNote + '</p>'
-    + '<p style="color:#a49d93;font-size:13px" data-i18n="' + (c.payFull ? 'refundLineFull' : 'refundLine') + '">' + (c.payFull ? S.refundLineFull : S.refundLine) + '</p>'
+    + '<p style="color:#a49d93;font-size:13px" data-i18n="' + (fullPay115 ? 'refundLineFull' : 'refundLine') + '">' + (fullPay115 ? S.refundLineFull : S.refundLine) + '</p>'
     + '<p style="color:#a49d93;font-size:13px" data-i18n="matVarNote">' + S.matVarNote + '</p>'
     + '</div>'
     + '<div id="cartDone" style="display:none"></div>'
     + '<script>var CART_ID=' + jsonScript(c.id) + ', LIST_C=' + Math.round(c.listTotal * 100) + ', MEMBER_C=' + Math.round(c.memberTotal * 100) + ', LIST_S=' + jsonScript(usd(c.listTotal)) + ', MEMBER_S=' + jsonScript(usd(c.memberTotal)) + ', SAVE_S=' + jsonScript(usd(savings)) + ';'
-    + 'var DEP_L=' + splitL100.depositCents + ', DEP_M=' + splitM100.depositCents + ', BAL_L=' + splitL100.balanceCents + ', BAL_M=' + splitM100.balanceCents + ', PAY_FULL=' + (c.payFull ? 'true' : 'false') + ';'
+    + 'var DEP_L=' + splitL100.depositCents + ', DEP_M=' + splitM100.depositCents + ', BAL_L=' + splitL100.balanceCents + ', BAL_M=' + splitM100.balanceCents + ', PAY_FULL=' + (fullPay115 ? 'true' : 'false') + ';'
     + 'var memberApplied=' + (sessionMember ? 'true' : 'false') + ', joinPreview=false, loggedIn=' + (user ? 'true' : 'false') + ', FREE_MONTH=' + (hcFreeMonth ? 'true' : 'false') + ';'
     + 'function $(i){return document.getElementById(i);} function val(i){return $(i).value.trim();} function fmt(c){return "$"+(c/100).toFixed(2);}'
     + 'function fillT(s){ return String(s||"").replace("{list}",LIST_S).replace("{member}",MEMBER_S).replace("{save}",SAVE_S); }'
@@ -9149,7 +9170,8 @@ async function handleRequest(req, res) {
         try {
           const sub = await createInlineSubscription(u, MEMBERSHIP_PLANS.homecare);
           const mt = serverCartTotals(b.items, true);
-          return send(res, 200, { step: 'join', mode: sub.mode || 'payment', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member, deposit: depositSplit(Math.round(mt.member * 100)).depositCents / 100, balance: depositSplit(Math.round(mt.member * 100)).balanceCents / 100 } }, cookieHdr);
+          const splitJoin115 = dueSplitForItems(b.items, Math.round(mt.member * 100)); // v115: the join preview obeys the same full-charge law
+          return send(res, 200, { step: 'join', mode: sub.mode || 'payment', clientSecret: sub.clientSecret, subscriptionId: sub.subscriptionId, user: pubUser(u), totals: { list: mt.list, member: mt.member, due: mt.member, deposit: splitJoin115.depositCents / 100, balance: splitJoin115.balanceCents / 100 } }, cookieHdr);
         } catch (e) { console.error('cart checkout join failed', e.message); return send(res, 502, { error: 'payment service error — try again in a minute' }); }
       }
     }
@@ -9163,9 +9185,9 @@ async function handleRequest(req, res) {
       id: id('CCK'), userId: u.id, pi: '', requestId: '',
       customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
       address: cleanText(b.address, 300), city: cleanText(b.city, 80), when: cleanText(b.when, 200), notes: cleanText(b.notes, 600),
-      isMember: isMem, joinedMembership: (!!b.joinedMembership || memberByState802) && isMem, source: u.source || null,
+      isMember: isMem, payFull: itemsPayFull(b.items), joinedMembership: (!!b.joinedMembership || memberByState802) && isMem, source: u.source || null,
       items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
-      totals: { list: t.list, member: t.member, due: t.due, deposit: depositSplit(Math.round(t.due * 100)).depositCents / 100, balance: depositSplit(Math.round(t.due * 100)).balanceCents / 100 },
+      totals: { list: t.list, member: t.member, due: t.due, deposit: dueSplitForItems(b.items, Math.round(t.due * 100)).depositCents / 100, balance: dueSplitForItems(b.items, Math.round(t.due * 100)).balanceCents / 100 },
       createdAt: new Date().toISOString()
     };
     // v78 refine (Gabriel 21:57 — the cart is editable AT the checkout):
@@ -9187,9 +9209,9 @@ async function handleRequest(req, res) {
     save();
     try {
       const params = {
-        amount: String(depositSplit(Math.round(t.due * 100)).depositCents),
+        amount: String(dueSplitForItems(b.items, Math.round(t.due * 100)).depositCents),
         currency: 'usd',
-        description: 'Cart order — booking deposit — General Handyman Solutions',
+        description: itemsPayFull(b.items) ? 'Cart order — paid in full — General Handyman Solutions' : 'Cart order — booking deposit — General Handyman Solutions',
         'metadata[checkoutId]': pc.id, 'metadata[kind]': 'cart-checkout', 'metadata[userId]': u.id
       };
       if (u.stripeCustomerId) params.customer = u.stripeCustomerId;
@@ -9215,7 +9237,7 @@ async function handleRequest(req, res) {
       if (!pi || pi.status !== 'succeeded') return send(res, 400, { error: 'the payment has not completed yet' });
       if (!pi.metadata || pi.metadata.checkoutId !== pc.id || pi.metadata.kind !== 'cart-checkout') return send(res, 400, { error: 'payment does not match this checkout' });
       const cents = Math.round(Number(pi.amount_received || pi.amount) || 0);
-      if (cents !== depositSplit(Math.round(pc.totals.due * 100)).depositCents) return send(res, 400, { error: 'payment amount does not match the booking deposit' });
+      if (cents !== dueSplitForItems(pc.items, Math.round(pc.totals.due * 100)).depositCents) return send(res, 400, { error: 'payment amount does not match the booking deposit' });
       const r = settleCartCheckout(pc, pi);
       save();
       return send(res, 200, { ok: true, requestId: r.id });
@@ -9286,7 +9308,8 @@ async function handleRequest(req, res) {
     if (!t) return send(res, 400, { error: 'cart has an item we could not price' });
     const names = {};
     for (const raw of (Array.isArray(b.items) ? b.items : [])) { const sid = cleanText(raw && raw.serviceId, 60); if (sid) names[sid] = cleanText(raw && raw.name, 80); }
-    const splitH = depositSplit(Math.round(t.due * 100));
+    const splitH = dueSplitForItems(b.items, Math.round(t.due * 100)); // v115: the full split when a payFull service rides
+    const labelH115 = itemsPayFull(b.items) ? 'Cart order — paid in full — General Handyman Solutions' : 'Cart order — booking deposit — General Handyman Solutions';
     const pc = {
       id: id('CCK'), userId: u.id, pi: '', requestId: '',
       customerName: u.name, customerEmail: u.email, customerPhone: u.phone || cleanText(b.phone, 40),
@@ -9294,7 +9317,7 @@ async function handleRequest(req, res) {
       isMember: isMem, joinedMembership: joinOn ? true : ((!!b.joinedMembership || joinedByStateH) && isMem), source: u.source || null,
       items: t.lines.map(l => ({ serviceId: l.serviceId, name: names[l.serviceId] || l.serviceId, qty: l.qty, unitPrice: isMem ? l.unitMember : l.unitList, extras: l.extras })),
       totals: { list: t.list, member: t.member, due: t.due, deposit: splitH.depositCents / 100, balance: splitH.balanceCents / 100 },
-      hostedKind: joinOn ? 'join' : 'pay', hostedSessionId: '', hostedExpectCents: 0,
+      payFull: itemsPayFull(b.items), hostedKind: joinOn ? 'join' : 'pay', hostedSessionId: '', hostedExpectCents: 0,
       createdAt: new Date().toISOString()
     };
     // Supersede the user's earlier unsettled checkouts — the v78
@@ -9320,10 +9343,10 @@ async function handleRequest(req, res) {
         const plan = MEMBERSHIP_PLANS.homecare;
         const trial = homeCareTrialEligible(u); // v74: same eligibility gate as every other join rail
         pc.hostedExpectCents = splitH.depositCents + (trial ? 0 : plan.monthlyCents);
-        s = await createCheckoutSession('cart-checkout-join', u, { plan: plan.key, amountCents: splitH.depositCents, checkoutId: pc.id, trialDays: trial ? INVITE_TRIAL_DAYS : 0, lang: b.lang, label: 'Cart order — booking deposit — General Handyman Solutions', successUrl: retOk, cancelUrl: retCancel });
+        s = await createCheckoutSession('cart-checkout-join', u, { plan: plan.key, amountCents: splitH.depositCents, checkoutId: pc.id, trialDays: trial ? INVITE_TRIAL_DAYS : 0, lang: b.lang, label: labelH115, successUrl: retOk, cancelUrl: retCancel });
       } else {
         pc.hostedExpectCents = splitH.depositCents;
-        s = await createCheckoutSession('cart-checkout-hosted', u, { amountCents: splitH.depositCents, checkoutId: pc.id, lang: b.lang, label: 'Cart order — booking deposit — General Handyman Solutions', successUrl: retOk, cancelUrl: retCancel });
+        s = await createCheckoutSession('cart-checkout-hosted', u, { amountCents: splitH.depositCents, checkoutId: pc.id, lang: b.lang, label: labelH115, successUrl: retOk, cancelUrl: retCancel });
       }
       pc.hostedSessionId = s.id;
       save();
@@ -10058,7 +10081,7 @@ async function handleRequest(req, res) {
           cartId: c.id,
           lang: cartLang80,
           trialDays: hcTrial ? INVITE_TRIAL_DAYS : 0,
-          label: 'Cart ' + c.id + (c.payFull ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
+          label: 'Cart ' + c.id + (cartPayFull(c) ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
           successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
           cancelUrl: cartLink(c) + '?cancelled=1',
           metadata: { cartId: c.id, src: fmInvite ? 'cart-invite' : 'cart', ...(fmInvite ? { inviteId: fmInvite.id } : {}) },
@@ -10087,9 +10110,9 @@ async function handleRequest(req, res) {
       const s = await createCheckoutSession('cart-order', { id: (user && user.id) || '', email: cust.email }, {
         amountCents: split.depositCents,
         cartId: c.id,
-        payStep: c.payFull ? 'full' : 'deposit',
+        payStep: cartPayFull(c) ? 'full' : 'deposit',
         lang: cartLang80,
-        label: 'Cart ' + c.id + (c.payFull ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
+        label: 'Cart ' + c.id + (cartPayFull(c) ? ' — paid in full — ' : ' — booking deposit — ') + 'General Handyman Solutions',
         successUrl: cartLink(c) + '?paid=1&session_id={CHECKOUT_SESSION_ID}',
         cancelUrl: cartLink(c) + '?cancelled=1'
       });

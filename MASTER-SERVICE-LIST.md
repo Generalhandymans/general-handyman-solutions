@@ -228,9 +228,9 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 | Holiday lights install (two-story) | $295 | flat | ~3.5 h | CONFIRMADO |
 | Holiday light take-down & storage (single story) | $85 | flat | ~1 h | CONFIRMADO |
 | Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha | $225 | flat | ~3 h | CONFIRMADO |
-| Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed) | $199 | flat | ~1.5 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro — el precio es mayormente materiales) |
-| Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights) | $299 | flat | ~2 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) |
-| Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway) | $499 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) |
+| Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed) | $199 | flat | ~1.5 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro — el precio es mayormente materiales) · PAGO COMPLETO al ordenar (v115: el combo se cobra entero al ordenar, sin depósito — GHS nunca pone los materiales de su bolsa) |
+| Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights) | $299 | flat | ~2 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
+| Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway) | $499 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
 | Window AC unit install | $250 | flat | ~1.5 h | CONFIRMADO |
 
 ## 3. Plomería
