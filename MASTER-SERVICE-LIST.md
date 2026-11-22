@@ -229,8 +229,8 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 | Holiday light take-down & storage (single story) | $85 | flat | ~1 h | CONFIRMADO |
 | Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha | $225 | flat | ~3 h | CONFIRMADO |
 | Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed) | $199 | flat | ~1.5 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro — el precio es mayormente materiales) · PAGO COMPLETO al ordenar (v115: el combo se cobra entero al ordenar, sin depósito — GHS nunca pone los materiales de su bolsa) |
-| Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights) | $299 | flat | ~2 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
-| Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway) | $499 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
+| Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed) | $299 | flat | ~2 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
+| Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed) | $499 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) · PAGO COMPLETO al ordenar (v115) |
 | Window AC unit install | $250 | flat | ~1.5 h | CONFIRMADO |
 
 ## 3. Plomería
@@ -370,11 +370,14 @@ haul-away según la fila. Aprobados por Gabriel el 2026-10-22.*
 | Additional drain unclog — same visit | $75 | Drain unclog | each add-on | CONFIRMADO |
 | Trash bin cleaning (2 bins) — with a pressure washing job | $50 | Pressure washing | add-on | CONFIRMADO |
 | Air / cabin filter swap — with an oil change & fluid service | $50 | Oil change & fluid service | add-on | CONFIRMADO |
-| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Basic Tree Combo | $75 | Basic tree combo | add-on | CONFIRMADO |
-| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Medium Tree Combo | $100 | Medium tree combo | add-on | CONFIRMADO |
-| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Premium Tree Combo | $150 | Premium tree combo | add-on | CONFIRMADO |
+| Add lights installation — we hang your lights, $15 per strand (lights not included) — Basic Tree Combo | $15 | Basic tree combo | add-on | CONFIRMADO |
+| Add lights installation — we hang your lights, $15 per strand (lights not included) — Medium Tree Combo | $15 | Medium tree combo | add-on | CONFIRMADO |
+| Add lights installation — we hang your lights, $15 per strand (lights not included) — Premium Tree Combo | $15 | Premium tree combo | add-on | CONFIRMADO |
+| Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations) — Basic Tree Combo | $15 | Basic tree combo | add-on | CONFIRMADO |
+| Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations) — Medium Tree Combo | $15 | Medium tree combo | add-on | CONFIRMADO |
+| Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations) — Premium Tree Combo | $15 | Premium tree combo | add-on | CONFIRMADO |
 
-*Tree decorating add-ons: aprobados por Gabriel el 2026-11-22. Los adornos son SIEMPRE del cliente — GHS nunca surte adornos; el add-on es la mano de obra de decorar el árbol completo. Sin descuento de miembro (nodisc), igual que los combos.*
+*Tree add-ons (v116, Gabriel 2026-11-22): los DOS add-ons de los combos se cobran POR PAQUETE a $15 — la instalación de luces a $15 por tira/paquete de luces DEL CLIENTE, y la decoración completa a $15 por paquete de decoraciones DEL CLIENTE; la cantidad se elige en el carrito. Las luces y las decoraciones son SIEMPRE del cliente — GHS nunca las surte; el add-on es solo la mano de obra de instalarlas. Sin descuento de miembro (nodisc), igual que los combos. (La decoración plana de $75/$100/$150 por combo de v114 quedó reemplazada por la regla unificada de $15 por paquete.)*
 
 *TV add-ons: raceway es canal superficial (surface raceway), no es
 esconder cables dentro de la pared ni mover outlets. Soundbar add-on

@@ -3617,7 +3617,13 @@ function recoverableCartsOf() { if (!Array.isArray(db.recoverableCarts)) db.reco
 function recoverySnapshot(items) {
   const t = serverCartTotals(items, false);
   if (!t) return null;
-  return t.lines.map(l => ({ id: l.serviceId, q: l.qty, x: (l.extras || []).map(e => e.id) }));
+  return t.lines.map(l => {
+    const snap = { id: l.serviceId, q: l.qty, x: (l.extras || []).map(e => e.id) };
+    const xq = {};
+    for (const e of (l.extras || [])) if (e.qty && e.qty > 1) xq[e.id] = e.qty;
+    if (Object.keys(xq).length) snap.xq = xq;
+    return snap;
+  });
 }
 function upsertRecoverableCart(email, snap) {
   const em = String(email || '').toLowerCase();
@@ -5790,9 +5796,9 @@ const SERVER_MENU = {
   "holiday-lights-two-story":{p:295,m:236},
   "holiday-lights-takedown":{p:85,m:68},
   "holiday-lights-takedown-two-story":{p:225,m:180},
-  "tree-combo-small":{p:199,m:199,a:{"tree-decorating":[75,1,"Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper"]}},
-  "tree-combo-medium":{p:299,m:299,a:{"tree-decorating":[100,1,"Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper"]}},
-  "tree-combo-premium":{p:499,m:499,a:{"tree-decorating":[150,1,"Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper"]}},
+  "tree-combo-small":{p:199,m:199,a:{"tree-lights":[15,1,"Add lights installation — we hang your lights, $15 per strand (lights not included)"],"tree-decorating":[15,1,"Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)"]}},
+  "tree-combo-medium":{p:299,m:299,a:{"tree-lights":[15,1,"Add lights installation — we hang your lights, $15 per strand (lights not included)"],"tree-decorating":[15,1,"Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)"]}},
+  "tree-combo-premium":{p:499,m:499,a:{"tree-lights":[15,1,"Add lights installation — we hang your lights, $15 per strand (lights not included)"],"tree-decorating":[15,1,"Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)"]}},
   "window-ac-install":{p:250,m:200},
   "faucet-replacement":{p:135,m:108},
   "toilet-replacement":{p:215,m:172,a:{"haul-toilet":[50,1,"Remove & haul away the old toilet"]}},
@@ -5867,6 +5873,21 @@ function cleanMenuIdList(v, cap) {
   }
   return out;
 }
+// v116 (Gabriel, 2026-11-22): QUANTITY add-ons — priced PER PACKAGE,
+// the customer picks how many. Only the two tree-combo add-ons work
+// this way: tree-lights ($15 per strand of the customer's own lights,
+// installed) and tree-decorating ($15 per package of the customer's
+// own decorations, installed). The cap lives here, outside the
+// catalog (same pattern as PAYFULL_SERVICE_IDS); every other add-on
+// stays a plain checkbox counted exactly once — a qty sent for it is
+// ignored, never multiplied.
+const ADDON_QTY_MAX = { 'tree-lights': 20, 'tree-decorating': 20 };
+function addonQtyFor(aid, rawQty) {
+  const cap = ADDON_QTY_MAX[aid] || 0;
+  if (!cap) return 1;
+  const q = Math.round(Number(rawQty) || 1);
+  return Math.min(cap, Math.max(1, q));
+}
 function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   const svc = SERVER_MENU[serviceId];
   if (!svc) return null;
@@ -5874,12 +5895,17 @@ function serverMenuTotals(serviceId, addonIds, isMember, asap) {
   const addons = svc.a || {};
   let extrasSum = 0, discSum = 0, nodiscSum = 0;
   const extras = [];
-  for (const aid of (addonIds || [])) {
+  for (const entry of (addonIds || [])) {
+    const aid = typeof entry === 'string' ? entry : (entry && entry.id);
     const a = addons[aid];
     if (!a) return null;
-    extrasSum += a[0];
-    if (a[1]) nodiscSum += a[0]; else discSum += a[0];
-    extras.push({ id: aid, name: a[2], price: a[0], nodisc: !!a[1] });
+    // v116: a quantity add-on contributes unit price x packages; the
+    // extra carries its qty so every surface can show "x N" honestly.
+    const q = addonQtyFor(aid, (entry && typeof entry === 'object') ? entry.qty : 1);
+    const linePrice = a[0] * q;
+    extrasSum += linePrice;
+    if (a[1]) nodiscSum += linePrice; else discSum += linePrice;
+    extras.push({ id: aid, name: a[2], price: a[0], qty: q, nodisc: !!a[1] });
   }
   const list = svc.p + extrasSum;
   const member = svc.m + Math.round(discSum * 0.8) + nodiscSum;
@@ -5915,13 +5941,13 @@ function serverCartTotals(items, isMember) {
     if (!svc) return null;
     const qty = Math.round(Number(raw.qty) || 1);
     if (!(qty >= 1 && qty <= 10)) return null;
-    const addonIds = [];
+    const addonEntries = [];
     for (const x of (Array.isArray(raw.addons) ? raw.addons.slice(0, 8) : [])) {
       const aid = cleanText(typeof x === 'string' ? x : (x && x.id), 40);
       if (!aid || !svc.a || !svc.a[aid]) return null;
-      if (!addonIds.includes(aid)) addonIds.push(aid);
+      if (!addonEntries.some(e => e.id === aid)) addonEntries.push({ id: aid, qty: (x && typeof x === 'object') ? x.qty : 1 });
     }
-    const t = serverMenuTotals(serviceId, addonIds, isMember, false);
+    const t = serverMenuTotals(serviceId, addonEntries, isMember, false);
     if (!t) return null;
     const line = { serviceId, qty, extras: t.extras, unitList: t.list, unitMember: t.member, lineList: t.list * qty, lineMember: t.member * qty };
     line.lineDue = (isMember ? line.lineMember : line.lineList);
@@ -6099,14 +6125,14 @@ function assistantQuoteText(s, q) {
   const lines = [];
   if (s.lang === 'es') {
     lines.push('Ese tiene precio fijo en nuestro menú: ' + name + ' — $' + q.list + ', solo mano de obra.');
-    for (const e of q.extras) lines.push('Incluye: ' + e.name + ' — $' + e.price + '.');
+    for (const e of q.extras) lines.push('Incluye: ' + e.name + ' — $' + (e.price * (e.qty || 1)) + '.');
     if (q.asapFee) lines.push('Servicio ASAP: +$' + q.asapFee + ' (25% sobre la labor). Total: $' + q.due + '.');
     lines.push('Precio de miembro (HomeCare/Plus): $' + q.member + ' — el descuento de miembro es su propia línea: −$' + q.memberSavings + ' (−20% en labor).');
     lines.push('Depósito para apartar: $' + q.deposit + ' · Saldo al terminar: $' + q.balance + '.');
     lines.push('Si quieres, te genero tu link de apartado aquí mismo. ¿Me confirmas tu nombre, teléfono y dirección?');
   } else {
     lines.push('That one\'s a fixed price on our menu: ' + name + ' — $' + q.list + ', labor only.');
-    for (const e of q.extras) lines.push('Includes: ' + e.name + ' — $' + e.price + '.');
+    for (const e of q.extras) lines.push('Includes: ' + e.name + ' — $' + (e.price * (e.qty || 1)) + '.');
     if (q.asapFee) lines.push('ASAP service: +$' + q.asapFee + ' (25% on labor). Total: $' + q.due + '.');
     lines.push('Member price (HomeCare/Plus): $' + q.member + ' — the member discount is its own line: −$' + q.memberSavings + ' (−20% on labor).');
     lines.push('Deposit to book: $' + q.deposit + ' · Balance when the job is done: $' + q.balance + '.');
@@ -7620,14 +7646,14 @@ async function handleRequest(req, res) {
       const serviceId = cleanText(mo.serviceId, 60);
       const svcDef = SERVER_MENU[serviceId];
       if (!svcDef) return send(res, 400, { error: 'unknown menu service' });
-      const addonIds = [];
+      const addonEntries = [];
       for (const x of (Array.isArray(mo.extras) ? mo.extras.slice(0, 8) : [])) {
         const wantId = cleanText(x && x.id, 40);
         const wantName = cleanText(x && x.name, 80);
         let aid = (wantId && svcDef.a && svcDef.a[wantId]) ? wantId : '';
         if (!aid && wantName && svcDef.a) { for (const k of Object.keys(svcDef.a)) { if (svcDef.a[k][2] === wantName) { aid = k; break; } } }
         if (!aid) return send(res, 400, { error: 'unknown add-on for this service' });
-        if (!addonIds.includes(aid)) addonIds.push(aid);
+        if (!addonEntries.some(e => e.id === aid)) addonEntries.push({ id: aid, qty: (x && x.qty) });
       }
       // Member pricing = HomeCare/Plus active on the server record (the
       // client order page uses the same homeCareStatus flag). A join
@@ -7635,12 +7661,12 @@ async function handleRequest(req, res) {
       // created the subscription on the account (stripeSubscriptionId) —
       // the bare client flag alone never grants the discount.
       const isMem = hcActive || (!!mo.joinedMembership && !!user && !!user.stripeSubscriptionId);
-      const t = serverMenuTotals(serviceId, addonIds, isMem, !!mo.asap);
+      const t = serverMenuTotals(serviceId, addonEntries, isMem, !!mo.asap);
       if (!t) return send(res, 400, { error: 'could not price this order' });
       const clientDue = mo.totals && Number(mo.totals.due);
       menuOrder = {
         serviceId,
-        extras: t.extras.map(a => ({ id: a.id, name: a.name, price: a.price })),
+        extras: t.extras.map(a => ({ id: a.id, name: a.name, price: a.price, qty: a.qty })),
         asap: !!mo.asap,
         joinedMembership: !!mo.joinedMembership,
         totals: { list: t.list, member: t.member, due: t.due, asapFee: t.asapFee },

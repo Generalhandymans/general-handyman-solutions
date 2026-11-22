@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+t('static: SW cache is ghs-app-v116', swSrc.includes("const CACHE = 'ghs-app-v116'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -2471,7 +2471,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   // Master display name -> catalog id (the 98 orderable services).
   const NAME_TO_ID43 = {
     'Closet doors (pair)': 'closet-doors', 'Interior door slab swap': 'door-slab-swap', 'Door knob / lever install': 'door-knob-install', 'Deadbolt install — single': 'deadbolt-install', 'Deadbolt + knob combo install': 'deadbolt-knob-combo', 'Smart lock install & setup': 'smart-lock-install', "Door adjustment (sticks / won't latch)": 'door-adjustment', 'Weatherstripping': 'weatherstripping', 'Screen door install': 'screen-door-install', 'Sliding door roller / track service': 'sliding-door-service', 'Window screen rescreen / repair': 'window-screen-repair', 'Pet door install (in door)': 'pet-door-install', 'Furniture assembly, standard (1 piece)': 'furniture-assembly', 'Furniture assembly, large/complex (wardrobe, bunk bed)': 'furniture-assembly-large', 'Closet organizer system install': 'closet-organizer', 'Floating shelves (set of 2)': 'floating-shelves', 'Cabinet hardware install (up to 10 pulls)': 'cabinet-hardware-install', 'Baby gate install': 'baby-gate-install', 'Picture & mirror hanging (up to 3 pieces)': 'picture-mirror-hanging', 'Mirror / medicine cabinet install': 'mirror-cabinet-install', 'Curtain rod install': 'curtain-rod-install', 'Blinds install (1–3 windows)': 'blinds-install', 'Blinds install — deal (4+ windows)': 'blinds-install-deal', 'Baseboard install (1 room, up to ~40 linear ft)': 'baseboard-install', 'Baseboard repair / section replace': 'baseboard-repair', 'Laminate / LVP plank repair (a few planks)': 'laminate-floor-repair', 'Carpet repair (general)': 'carpet-repair', 'Transition strip / threshold install': 'transition-strip-install', 'Drywall patch, small (up to ~1 ft)': 'drywall-patch-small', 'Drywall patch, medium (up to 2×2 ft, texture match)': 'drywall-patch-medium', 'Small-holes patch set (up to 3: doorknob, anchors)': 'drywall-holes-set', 'Paint one room — standard (walls only, labor)': 'paint-room', 'Paint large room (walls only, labor)': 'paint-room-large', 'Paint large room with ceiling (labor)': 'paint-room-large-ceiling', 'Accent wall painting': 'accent-wall-painting', 'Interior door painting': 'interior-door-painting', 'Fence picket repair (up to 5 pickets)': 'fence-picket-repair', 'Fence post replacement (add-on to a fence repair visit)': 'fence-post-replacement', 'Deck board replacement (up to 5 boards)': 'deck-board-replacement', 'Gate repair / adjustment': 'gate-repair',
-    'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed)': 'tree-combo-small', 'Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights)': 'tree-combo-medium', 'Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway)': 'tree-combo-premium', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
+    'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed)': 'tree-combo-small', 'Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed)': 'tree-combo-medium', 'Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed)': 'tree-combo-premium', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
     'Faucet swap': 'faucet-replacement', 'Toilet replacement (full swap)': 'toilet-replacement', 'Toilet repair (fill valve / flapper)': 'toilet-repair', 'Garbage disposal swap': 'garbage-disposal-swap', 'Showerhead swap': 'showerhead-swap', 'Tub / shower re-caulk': 'tub-shower-recaulk', 'Grab bar install': 'grab-bar-install', 'P-trap / drain assembly swap': 'p-trap-swap', 'Bidet seat install': 'bidet-seat-install', 'Dryer vent cleaning': 'dryer-vent-cleaning', 'Washer & dryer hookup / install (existing connections)': 'washer-dryer-hookup', 'Drain unclog — basic (sink / shower, 1 drain)': 'drain-unclog', 'Dishwasher swap (existing hookups)': 'dishwasher-swap', 'Vanity swap': 'vanity-swap', 'Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces)': 'bathroom-accessories-install', 'Hose bibb / outdoor faucet swap': 'hose-bibb-swap', 'Water heater installation': 'water-heater',
     'Gutter cleaning (single story)': 'gutter-cleaning', 'Gutter cleaning (two-story house)': 'gutter-cleaning-two-story', 'Pressure washing — standard area (2-car driveway OR patio)': 'pressure-washing', 'Pressure washing — large area (long driveway, large patio or deck)': 'pressure-washing-large', 'Yard cleanup (general)': 'yard-cleanup', 'Sprinkler & drip irrigation basics (heads, timers, small leaks)': 'sprinkler-irrigation', 'Green waste hauling': 'green-waste', 'Junk removal — minimum load': 'junk-minimum', 'Junk removal — medium load': 'junk-medium', 'Junk removal — large load': 'junk-large', 'Junk removal — full load (truck + trailer)': 'junk-full', 'Single-item pickup': 'junk-single-item', 'Appliance removal': 'appliance-removal', 'Mattress removal': 'mattress-removal', 'Garage cleanout': 'garage-cleanout', 'Construction debris removal': 'debris-removal', 'Mailbox install': 'mailbox-install',
     'Fuel pump replacement': 'fuel-pump-replacement', 'Fuel pump replacement — tank-drop (sin panel de acceso)': 'fuel-pump-tank-drop', 'Battery replacement': 'battery-replacement', 'Check-engine diagnostics / scan': 'check-engine-diagnostics', 'Oil change & fluid service': 'oil-change', 'Brake pads': 'brake-pads', 'Alternator replacement — Easy': 'alternator-replacement', 'Alternator replacement — Difficult (enterrado)': 'alternator-difficult', 'Starter replacement': 'starter-replacement', 'Belt / hose replacement (basics)': 'belt-hose-replacement', 'Spark plug replacement (4-cylinder)': 'spark-plug-replacement', 'Spark plug replacement (V6 / V8)': 'spark-plug-v6v8', 'Turbo replacement': 'turbo-replacement', 'Headlight / bulb replacement': 'headlight-replacement',
@@ -2498,7 +2498,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   const memBad43 = Object.entries(cat43).filter(([id, c]) => !['tree-combo-small', 'tree-combo-medium', 'tree-combo-premium'].includes(id) && c.member !== Math.round(c.price * 0.8));
   t('v43 catalog: member == round(price x 0.8) for ALL 110 entries EXCEPT the 3 v114 tree combos (member == list, nodisc: the price is mostly materials — Gabriel 2026-11-22) — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 110 && memBad43.length === 0);
   t('v43 master: the $135 tier is gone from the service tables (v80.20 supersedes: $135 is BACK as exactly the approved 1.5h block — 17 table rows, Gabriel 2026-11-01)', (masterSrc43.match(/^\| [^|]*\| \$135 \|/gm) || []).length === 17);
-  const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]], 'tree-combo-small': [['tree-decorating', 75]], 'tree-combo-medium': [['tree-decorating', 100]], 'tree-combo-premium': [['tree-decorating', 150]] };
+  const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]], 'tree-combo-small': [['tree-lights', 15], ['tree-decorating', 15]], 'tree-combo-medium': [['tree-lights', 15], ['tree-decorating', 15]], 'tree-combo-premium': [['tree-lights', 15], ['tree-decorating', 15]] };
   const addonBad43 = [];
   for (const [sid, pairs] of Object.entries(ADDONS43)) {
     const i43 = catBlock43.indexOf("'" + sid + "':");
@@ -3049,7 +3049,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
       const member = +(/member: (\d+)/.exec(seg) || [])[1];
       const addons = {};
       const am = /addons: \[([\s\S]*?)\]/.exec(seg);
-      if (am) for (const a of am[1].matchAll(/\{ id: '([a-z0-9-]+)', name: '([^']*)', price: (\d+)(, nodisc: true)? \}/g)) addons[a[1]] = { price: +a[3], nodisc: !!a[4], name: a[2] };
+      if (am) for (const a of am[1].matchAll(/\{ id: '([a-z0-9-]+)', name: '([^']*)', price: (\d+)(, nodisc: true)?(, qty: true)? \}/g)) addons[a[1]] = { price: +a[3], nodisc: !!a[4], name: a[2] };
       catEntries[starts[i][1]] = { price, member, addons };
     }
   }
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v115)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v116)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v116'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -7464,9 +7464,12 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
     { row: /\| Trash bin cleaning[^|]*\| \$50 \| Pressure washing \|/, price: 50, map: { 'pressure-washing': ['trash-bin-cleaning'], 'pressure-washing-large': ['trash-bin-cleaning'] } },
     { row: /\| Air \/ cabin filter swap[^|]*\| \$50 \| Oil change & fluid service \|/, price: 50, map: { 'oil-change': ['filter-swap'] } },
     { row: /\| Old toilet removal \/ haul-away[^|]*\| \$50 \|/, price: 50, map: { 'toilet-replacement': ['haul-toilet'] } },
-    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$75 \|/, price: 75, map: { 'tree-combo-small': ['tree-decorating'] } },
-    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$100 \|/, price: 100, map: { 'tree-combo-medium': ['tree-decorating'] } },
-    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$150 \|/, price: 150, map: { 'tree-combo-premium': ['tree-decorating'] } }
+    { row: /\| Add lights installation — we hang your lights[^|]*— Basic Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-small': ['tree-lights'] } },
+    { row: /\| Add lights installation — we hang your lights[^|]*— Medium Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-medium': ['tree-lights'] } },
+    { row: /\| Add lights installation — we hang your lights[^|]*— Premium Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-premium': ['tree-lights'] } },
+    { row: /\| Add full decorating — we decorate your tree your way[^|]*— Basic Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-small': ['tree-decorating'] } },
+    { row: /\| Add full decorating — we decorate your tree your way[^|]*— Medium Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-medium': ['tree-decorating'] } },
+    { row: /\| Add full decorating — we decorate your tree your way[^|]*— Premium Tree Combo \| \$15 \|/, price: 15, map: { 'tree-combo-premium': ['tree-decorating'] } }
   ];
   t('v80.28 (4): every master-list add-on row is in the source AND its pairing lives in BOTH catalogs at the master price',
     PAIR_EXP28.every(e => e.row.test(masterSrc28) && Object.keys(e.map).every(sid => e.map[sid].every(aid => catAddons28(sid)[aid] === e.price && srvAddons28(sid)[aid] === e.price))));
@@ -7475,7 +7478,7 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   const allCatAddons28 = [];
   for (const lm of htmlSrc.matchAll(/'([a-z0-9-]+)': \{ name:/g)) { const o = catAddons28(lm[1]); Object.keys(o).forEach(aid => allCatAddons28.push(lm[1] + ':' + aid)); }
   t('v80.28 (4): NO catalog add-on exists outside the master relationships — pairings are never invented bundles',
-    allCatAddons28.length === 25 && allCatAddons28.every(k => covered28.has(k)));
+    allCatAddons28.length === 28 && allCatAddons28.every(k => covered28.has(k)));
   t('v80.28 (4): the one service->service pairing is the master list\'s own wording (fence post = add-on to a fence repair visit)',
     masterSrc28.includes('Fence post replacement (add-on to a fence repair visit)') && catLine28('fence-post-replacement').includes('price: 125'));
 
@@ -8525,7 +8528,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v116)', swSrc.includes("const CACHE = 'ghs-app-v116'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8694,7 +8697,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v116)', swSrc.includes("const CACHE = 'ghs-app-v116'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8788,7 +8791,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v115)', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v116)', swSrc.includes("const CACHE = 'ghs-app-v116'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8988,7 +8991,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v110 statics: SW cache bumped to ghs-app-v116', swSrc.includes("const CACHE = 'ghs-app-v116'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9014,7 +9017,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v111 statics: SW cache bumped to ghs-app-v116', swSrc.includes("const CACHE = 'ghs-app-v116'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9029,7 +9032,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v115', swSrc.includes("const CACHE = 'ghs-app-v115'"));
+  t('v112 statics: SW cache bumped to ghs-app-v116', swSrc.includes("const CACHE = 'ghs-app-v116'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
@@ -9053,19 +9056,19 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v115 statics: settle + confirm verify against the ITEMS split (never a bare depositSplit of the due)', serverSrc.includes('const _s0 = dueSplitForItems(pc.items,') && serverSrc.includes('const ccSplit = dueSplitForItems(pc.items,') && serverSrc.includes('cents !== dueSplitForItems(pc.items,'));
   // --- self-serve embedded: combo + decorating add-on = FULL total ---
   const co115a = await req2('POST', '/api/cart/checkout', { body: { name: 'Combo Carla', email: 'combo115@t.local', phone: '7075550115', password: 'combopass1', address: '5 Fir St', city: 'Fairfield', when: 'Saturday', items: [{ serviceId: 'tree-combo-small', name: 'Basic Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
-  t('v115 self-serve: Basic combo + decorating totals $274 due with deposit $274 / balance $0 (not the $109.60 deposit split)', co115a.status === 200 && co115a.j.step === 'pay' && co115a.j.totals.due === 274 && co115a.j.totals.deposit === 274 && co115a.j.totals.balance === 0);
+  t('v115 self-serve: Basic combo + decorating totals $214 due with deposit $214 / balance $0 (v116: decorating is $15 per package, 1 package here — the point stands: FULL total today, not a deposit split)', co115a.status === 200 && co115a.j.step === 'pay' && co115a.j.totals.due === 214 && co115a.j.totals.deposit === 214 && co115a.j.totals.balance === 0);
   const pi115a = stripeState.pis[co115a.j.paymentIntentId];
-  t('v115 self-serve: the PaymentIntent itself is for the FULL $274', !!pi115a && pi115a.amount === 27400);
+  t('v115 self-serve: the PaymentIntent itself is for the FULL $214', !!pi115a && pi115a.amount === 21400);
   const tok115 = (await req2('POST', '/api/login', { body: { email: 'combo115@t.local', password: 'combopass1' } })).j.token;
   await mockPiStatus(co115a.j.paymentIntentId, 'succeeded');
   const conf115a = await req2('POST', '/api/cart/checkout-confirm', { token: tok115, body: { checkoutId: co115a.j.checkoutId, paymentIntentId: co115a.j.paymentIntentId } });
   const ord115a = (await reqs115()).find(r => r.id === (conf115a.j && conf115a.j.requestId));
-  t('v115 self-serve settle: the order is born PAID IN FULL ($274 in, $0 balance — never a deposit state)', conf115a.status === 200 && !!ord115a && ord115a.payment.status === 'paid' && ord115a.payment.amountCents === 27400 && (ord115a.payment.balanceCents || 0) === 0);
+  t('v115 self-serve settle: the order is born PAID IN FULL ($214 in, $0 balance — never a deposit state)', conf115a.status === 200 && !!ord115a && ord115a.payment.status === 'paid' && ord115a.payment.amountCents === 21400 && (ord115a.payment.balanceCents || 0) === 0);
   // --- the other combos, totals level ---
   const co115b = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [] }] } });
   t('v115 self-serve: Medium combo alone — $299 due, $299 today, $0 balance', co115b.status === 200 && co115b.j.totals.due === 299 && co115b.j.totals.deposit === 299 && co115b.j.totals.balance === 0);
   const co115c = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-premium', name: 'Premium Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
-  t('v115 self-serve: Premium combo + decorating — $649 due, $649 today, $0 balance', co115c.status === 200 && co115c.j.totals.due === 649 && co115c.j.totals.deposit === 649 && co115c.j.totals.balance === 0);
+  t('v115 self-serve: Premium combo + decorating — $514 due, $514 today, $0 balance (v116: 1 decorating package at $15)', co115c.status === 200 && co115c.j.totals.due === 514 && co115c.j.totals.deposit === 514 && co115c.j.totals.balance === 0);
   // --- whole-cart semantics ---
   const co115d = await req2('POST', '/api/cart/checkout', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-small', name: 'Basic Tree Combo', qty: 1, addons: [] }, { serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, addons: [] }] } });
   t('v115 self-serve: combo + a normal service in ONE cart — the WHOLE $374 is due today (no split on the normal line)', co115d.status === 200 && co115d.j.totals.due === 374 && co115d.j.totals.deposit === 374 && co115d.j.totals.balance === 0);
@@ -9075,11 +9078,11 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- hosted rail: the same full charge ---
   const h115 = await req2('POST', '/api/cart/checkout-hosted', { token: tok115, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
   const hSess115 = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === (h115.j && h115.j.checkoutId));
-  t('v115 hosted: Medium + decorating — totals $399/$399/$0 and the session itself is $399.00', h115.status === 200 && h115.j.totals.due === 399 && h115.j.totals.deposit === 399 && h115.j.totals.balance === 0 && !!hSess115 && hSess115.amount_total === 39900);
+  t('v115 hosted: Medium + decorating — totals $314/$314/$0 and the session itself is $314.00 (v116: 1 decorating package at $15)', h115.status === 200 && h115.j.totals.due === 314 && h115.j.totals.deposit === 314 && h115.j.totals.balance === 0 && !!hSess115 && hSess115.amount_total === 31400);
   await mockSessionPaid(hSess115.id);
   const hConf115 = await req2('POST', '/api/cart/checkout-hosted-confirm', { token: tok115, body: { sessionId: hSess115.id } });
   const hOrd115 = (await reqs115()).find(r => r.id === (hConf115.j && hConf115.j.requestId));
-  t('v115 hosted settle: the order is born PAID IN FULL ($399, $0 balance)', hConf115.status === 200 && !!hOrd115 && hOrd115.payment.status === 'paid' && hOrd115.payment.amountCents === 39900 && (hOrd115.payment.balanceCents || 0) === 0);
+  t('v115 hosted settle: the order is born PAID IN FULL ($314, $0 balance)', hConf115.status === 200 && !!hOrd115 && hOrd115.payment.status === 'paid' && hOrd115.payment.amountCents === 31400 && (hOrd115.payment.balanceCents || 0) === 0);
   // --- admin-built cart link: combo inside, builder toggle OFF ---
   const admCart115 = await req2('POST', '/api/admin/carts', { token: A115, body: { items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, unitPrice: 299 }], customerName: 'Combo Link', customerEmail: 'combo115@t.local' } });
   const admId115 = admCart115.j && admCart115.j.cart && admCart115.j.cart.id;
@@ -9097,6 +9100,59 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   await fetch(BASE2 + '/cart/' + admId115 + '?paid=1&session_id=' + sessAdm115.id);
   const conv115 = (await reqs115()).find(x => x.menuOrder && x.menuOrder.cartId === admId115);
   t('v115 admin cart settle: converts PAID IN FULL ($299 — never a deposit state)', !!conv115 && conv115.payment.status === 'paid' && conv115.payment.amountCents === 29900);
+}
+
+
+// ---------------- v116: PER-PACKAGE add-ons — lights + decorating at $15 ----------------
+// Gabriel 2026-11-22: hanging the customer's lights is NO LONGER
+// included in any tree combo, and the $15-per-package rule applies to
+// EVERYTHING — tree-lights is $15 per strand and tree-decorating is
+// $15 per package (replacing the v114 flat $75/$100/$150). Both are
+// quantity add-ons (ADDON_QTY_MAX, cap 20): the count rides the item
+// as {id, qty}; the legacy string form still means exactly 1 package.
+// Combos keep v115 payFull, so every combo total below is due IN FULL.
+{
+  t('v116 statics: the qty mechanism + both $15 add-ons exist server-side (cap map, helper, catalog entries on all 3 combos)',
+    serverSrc.includes("const ADDON_QTY_MAX = { 'tree-lights': 20, 'tree-decorating': 20 };") && serverSrc.includes('function addonQtyFor(aid, rawQty)') &&
+    (serverSrc.match(/"tree-lights":\[15,1,/g) || []).length === 3 && (serverSrc.match(/"tree-decorating":\[15,1,/g) || []).length === 3);
+  t('v116 statics: the SPA mirrors it (qty cap map, payload builder, cart + checkout steppers)',
+    htmlSrc.includes("const ADDON_QTY_MAX = { 'tree-lights': 20, 'tree-decorating': 20 };") && htmlSrc.includes('function cartAddonsPayload(it)') && htmlSrc.includes('function cartAddonQty(') && htmlSrc.includes('function ccAddonQty(') &&
+    htmlSrc.includes("id: 'tree-lights', name: 'Add lights installation — we hang your lights, $15 per strand (lights not included)', price: 15, nodisc: true, qty: true"));
+  const treeDoor116 = fs.readFileSync(path.join(APP_DIR, 'public', 'landings', 'tree.html'), 'utf8');
+  t('v116 statics: NO surface still sells lights as combo content (catalog EN+ES metas and the /tree cards are clean)',
+    !appJsSrc.includes('We hang your lights on the tree') && !appJsSrc.includes('Your lights installed: tree + entryway') &&
+    !appJsSrc.includes('Colgamos TUS luces en el árbol') && !appJsSrc.includes('Instalación de tus luces: árbol y entrada') &&
+    !treeDoor116.includes('We hang YOUR lights on the tree') && !treeDoor116.includes('Your lights installed on the tree AND at the entryway'));
+  t('v116 door: /tree shows BOTH add-ons at $15 per package EN+ES and none of the old flat decorating prices',
+    treeDoor116.includes('+$15 per strand') && treeDoor116.includes('+$15 per package') && treeDoor116.includes('+$15 por tira') && treeDoor116.includes('+$15 por paquete') &&
+    !treeDoor116.includes('+$75') && !treeDoor116.includes('+$100') && !treeDoor116.includes('+$150'));
+  // --- self-serve embedded: the unified per-package math, all payFull ---
+  const co116a = await req2('POST', '/api/cart/checkout', { body: { name: 'Paquete Pablo', email: 'paquete116@t.local', phone: '7075550116', password: 'paquetepass1', address: '5 Fir St', city: 'Fairfield', when: 'Saturday', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [] }] } });
+  t('v116 self-serve: Medium alone — $299 due in full (no lights promised, none charged)', co116a.status === 200 && co116a.j.totals.due === 299 && co116a.j.totals.deposit === 299 && co116a.j.totals.balance === 0);
+  const tok116 = (await req2('POST', '/api/login', { body: { email: 'paquete116@t.local', password: 'paquetepass1' } })).j.token;
+  const co116b = await req2('POST', '/api/cart/checkout', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [{ id: 'tree-lights', qty: 4 }] }] } });
+  t('v116 self-serve: Medium + 4 strands of lights = $299 + $60 = $359 due in full', co116b.status === 200 && co116b.j.totals.due === 359 && co116b.j.totals.deposit === 359 && co116b.j.totals.balance === 0);
+  const pi116b = stripeState.pis[co116b.j.paymentIntentId];
+  t('v116 self-serve: the PaymentIntent itself is $359.00', !!pi116b && pi116b.amount === 35900);
+  const co116c = await req2('POST', '/api/cart/checkout', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [{ id: 'tree-lights', qty: 4 }, { id: 'tree-decorating', qty: 3 }] }] } });
+  t('v116 self-serve: Medium + 4 strands + 3 decoration packages = $299 + $60 + $45 = $404 due in full', co116c.status === 200 && co116c.j.totals.due === 404 && co116c.j.totals.deposit === 404 && co116c.j.totals.balance === 0);
+  await mockPiStatus(co116c.j.paymentIntentId, 'succeeded');
+  const conf116c = await req2('POST', '/api/cart/checkout-confirm', { token: tok116, body: { checkoutId: co116c.j.checkoutId, paymentIntentId: co116c.j.paymentIntentId } });
+  const A116 = (await req2('POST', '/api/login', { body: { email: 'admin2@t.local', password: 'adminpass1' } })).j.token;
+  const ord116c = ((await req2('GET', '/api/requests', { token: A116 })).j.requests || []).find(r => r.id === (conf116c.j && conf116c.j.requestId));
+  t('v116 self-serve settle: the $404 order is born PAID IN FULL', conf116c.status === 200 && !!ord116c && ord116c.payment.status === 'paid' && ord116c.payment.amountCents === 40400 && (ord116c.payment.balanceCents || 0) === 0);
+  // --- quantity behavior: legacy string form = 1 package; the cap clamps at 20 ---
+  const co116d = await req2('POST', '/api/cart/checkout', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-small', name: 'Basic Tree Combo', qty: 1, addons: ['tree-decorating'] }] } });
+  t('v116 quantity: the plain string add-on form still means exactly 1 package (Basic + decorating = $214)', co116d.status === 200 && co116d.j.totals.due === 214);
+  const co116e = await req2('POST', '/api/cart/checkout', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [{ id: 'tree-lights', qty: 99 }] }] } });
+  t('v116 quantity: an oversized count clamps to the 20-package cap (Medium + 20 strands = $599, never 99)', co116e.status === 200 && co116e.j.totals.due === 599);
+  // --- regression: a qty sent for a checkbox add-on is ignored, never multiplied ---
+  const co116f = await req2('POST', '/api/cart/checkout', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, addons: [{ id: 'raceway', qty: 5 }] }] } });
+  t('v116 regression: TV mounting + raceway with qty 5 still counts the add-on ONCE ($225 total, $50 deposit law intact)', co116f.status === 200 && co116f.j.totals.due === 225 && co116f.j.totals.deposit === 50 && co116f.j.totals.balance === 175);
+  // --- hosted rail: the same per-package math ---
+  const h116 = await req2('POST', '/api/cart/checkout-hosted', { token: tok116, body: { address: '5 Fir St', city: 'Fairfield', items: [{ serviceId: 'tree-combo-medium', name: 'Medium Tree Combo', qty: 1, addons: [{ id: 'tree-lights', qty: 4 }] }] } });
+  const hSess116 = Object.values(stripeState.sessions).find(s => s.metadata && s.metadata.checkoutId === (h116.j && h116.j.checkoutId));
+  t('v116 hosted: Medium + 4 strands — totals $359/$359/$0 and the session itself is $359.00', h116.status === 200 && h116.j.totals.due === 359 && h116.j.totals.deposit === 359 && h116.j.totals.balance === 0 && !!hSess116 && hSess116.amount_total === 35900);
 }
 
 try { child3b.kill('SIGTERM'); } catch (e) {}
@@ -9134,10 +9190,12 @@ try { resendMock.close(); } catch (e) {}
   t('v114 photos: one menu image per combo on disk (512x341 webp set)',
     TREE114.every(([id]) => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.webp'))));
   const elec114 = fs.readFileSync(path.join(APP_DIR, 'public', 'landings', 'electrical-fairfield.html'), 'utf8');
-  t('v114 tree combos: decorating add-on with the final approved wording (labor only — customer supplies ornaments, garland & topper), nodisc, $75/$100/$150 in BOTH catalogs + the ES sentence on the card',
-    [75, 100, 150].every(p => appJsSrc.includes("id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: " + p + ", nodisc: true")) &&
-    [75, 100, 150].every(p => serverSrc.includes('"tree-decorating":[' + p + ',1,"Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper"]')) &&
-    appJsSrc.includes('decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'));
+  t('v114 tree combos: the combo add-ons (v116 SUPERSEDES the v114 flat decorating prices: BOTH add-ons are $15 per package, qty-selectable, nodisc, in BOTH catalogs + the ES sentence on the card)',
+    appJsSrc.includes("id: 'tree-lights', name: 'Add lights installation — we hang your lights, $15 per strand (lights not included)', price: 15, nodisc: true, qty: true") &&
+    appJsSrc.includes("id: 'tree-decorating', name: 'Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)', price: 15, nodisc: true, qty: true") &&
+    serverSrc.includes('"tree-lights":[15,1,"Add lights installation — we hang your lights, $15 per strand (lights not included)"]') &&
+    serverSrc.includes('"tree-decorating":[15,1,"Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)"]') &&
+    appJsSrc.includes('add-ons de luces y decoración a $15 por paquete (tú pones las luces y las decoraciones)'));
   t('v114 landings: the electrical trade page carries the 3 combos EN+ES at the locked prices',
     TREE114.every(([id, pr]) => elec114.includes('href="https://generalhandymans.app/#order/' + id + '"') && elec114.includes('$' + pr)) &&
     elec114.includes('Combo Premium de Árbol') && elec114.includes('Members $499'));
@@ -9146,11 +9204,12 @@ try { resendMock.close(); } catch (e) {}
     serverSrc.includes("'/tree': { file: 'tree.html', join: '#order/tree-combo-small', join2: '#order/tree-combo-medium', join3: '#order/tree-combo-premium' }") &&
     serverSrc.includes("if (door.join3) body = body.split('%%JOIN3%%').join(href(door.join3));") &&
     serverSrc.includes("'/tree',"));
-  t('v114 door: the /tree page shows EVERY price EN+ES — combos $199/$299/$499 and the decorating add-on +$75/+$100/+$150, nothing price-on-request',
+  t('v114 door: the /tree page shows EVERY price EN+ES — combos $199/$299/$499 and BOTH add-ons at $15 per package (v116), nothing price-on-request',
     treeDoor114.includes('%%JOIN%%') && treeDoor114.includes('%%JOIN2%%') && treeDoor114.includes('%%JOIN3%%') &&
     treeDoor114.includes('Basic Tree Combo') && treeDoor114.includes('Combo Básico de Árbol') &&
     treeDoor114.includes('Premium Tree Combo') && treeDoor114.includes('Combo Premium de Árbol') &&
-    ['$199', '$299', '$499', '+$75', '+$100', '+$150'].every(x => treeDoor114.includes(x)) &&
+    ['$199', '$299', '$499', '+$15 per strand', '+$15 per package', '+$15 por tira', '+$15 por paquete'].every(x => treeDoor114.includes(x)) &&
+    !treeDoor114.includes('+$75') && !treeDoor114.includes('+$100') && !treeDoor114.includes('+$150') &&
     treeDoor114.includes('REPORTING FOR DUTY') && treeDoor114.includes('data-lang="es"') &&
     treeDoor114.includes('You buy and supply ALL the decorations (ornaments, garland and topper)') && treeDoor114.includes('Tú compras y pones TODAS las decoraciones (adornos, guirnalda y estrella)') && treeDoor114.includes('data:image/webp;base64,'));
 }

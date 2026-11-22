@@ -5375,9 +5375,9 @@ const MENU_CATALOG = {
   'holiday-lights-two-story': { name: 'Holiday Lights Install — Two-Story', meta: '~3.5 h · Book early', price: 295, member: 236 },
   'holiday-lights-takedown': { name: 'Holiday Light Take-Down & Storage', meta: '~1 h · Single story', price: 85, member: 68 },
   'holiday-lights-takedown-two-story': { name: 'Holiday Light Take-Down — Two-Story', meta: '~3 h · Two-story homes', price: 225, member: 180 },
-  'tree-combo-small': { name: 'Basic Tree Combo', meta: 'Douglas fir 6–7 ft + stand · Delivered & installed · Fri–Sun · + full decorating add-on', price: 199, member: 199, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 75, nodisc: true }] },
-  'tree-combo-medium': { name: 'Medium Tree Combo', meta: 'Noble fir 7–8 ft + stand · We hang your lights on the tree · + full decorating add-on', price: 299, member: 299, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 100, nodisc: true }] },
-  'tree-combo-premium': { name: 'Premium Tree Combo', meta: 'Noble fir 9–10 ft + steel stand · Your lights installed: tree + entryway · + full decorating add-on', price: 499, member: 499, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 150, nodisc: true }] },
+  'tree-combo-small': { name: 'Basic Tree Combo', meta: 'Douglas fir 6–7 ft + stand · Delivered & installed · Fri–Sun · + lights & decorating add-ons at $15 per package', price: 199, member: 199, addons: [{ id: 'tree-lights', name: 'Add lights installation — we hang your lights, $15 per strand (lights not included)', price: 15, nodisc: true, qty: true }, { id: 'tree-decorating', name: 'Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)', price: 15, nodisc: true, qty: true }] },
+  'tree-combo-medium': { name: 'Medium Tree Combo', meta: 'Noble fir 7–8 ft + stand · Delivered & installed · Fri–Sun · + lights & decorating add-ons at $15 per package', price: 299, member: 299, addons: [{ id: 'tree-lights', name: 'Add lights installation — we hang your lights, $15 per strand (lights not included)', price: 15, nodisc: true, qty: true }, { id: 'tree-decorating', name: 'Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)', price: 15, nodisc: true, qty: true }] },
+  'tree-combo-premium': { name: 'Premium Tree Combo', meta: 'Noble fir 9–10 ft + steel stand · Delivered & installed · Fri–Sun · + lights & decorating add-ons at $15 per package', price: 499, member: 499, addons: [{ id: 'tree-lights', name: 'Add lights installation — we hang your lights, $15 per strand (lights not included)', price: 15, nodisc: true, qty: true }, { id: 'tree-decorating', name: 'Add full decorating — we decorate your tree your way, $15 per package (you supply the decorations)', price: 15, nodisc: true, qty: true }] },
   'window-ac-install': { name: 'Window AC Unit Install', meta: '~1.5 h · Flat', price: 250, member: 200 },
   // ---------- Plomería (master list section 3) ----------
   'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
@@ -5465,7 +5465,7 @@ function cartAddWithAddons(id, extras){
   let line = null;
   items.forEach(function (i) { if (i.id === id && JSON.stringify(i.x || []) === key) line = i; });
   if (line) line.q = Math.min(99, (Number(line.q) || 1) + 1);
-  else items.push({ id: id, q: 1, x: extras || [] });
+  else { const nl = { id: id, q: 1, x: extras || [] }; (extras || []).forEach(function(aid){ const a = (svc.addons || []).find(function(x){ return x.id === aid; }); if (a && a.qty) { nl.xq = nl.xq || {}; nl.xq[aid] = 1; } }); items.push(nl); }
   cartSave(items);
   noteRecent(id);
   paintCartBtn();
@@ -5627,12 +5627,16 @@ function cartCalc(){
   for (const it of cartLoad()) {
     const s = MENU_CATALOG[it.id]; if (!s) continue;
     const q = Math.max(1, Math.round(Number(it.q) || 1));
-    const ads = (s.addons || []).filter(function(a){ return (it.x || []).indexOf(a.id) >= 0; });
-    const extrasSum = ads.reduce(function(sum, a){ return sum + a.price; }, 0);
-    const discSum = ads.filter(function(a){ return !a.nodisc; }).reduce(function(sum, a){ return sum + a.price; }, 0);
+    const ads = (s.addons || []).filter(function(a){ return (it.x || []).indexOf(a.id) >= 0; }).map(function(a){
+      const aq = addonQtyOf(it, a); // v116: per-package add-ons count unit x packages
+      return { id: a.id, name: a.name, price: a.price, nodisc: !!a.nodisc, qtyCap: !!a.qty, qty: aq, linePrice: a.price * aq };
+    });
+    const extrasSum = ads.reduce(function(sum, a){ return sum + a.linePrice; }, 0);
+    const discSum = ads.filter(function(a){ return !a.nodisc; }).reduce(function(sum, a){ return sum + a.linePrice; }, 0);
     const unitList = s.price + extrasSum;
     const unitMember = (s.member != null ? s.member : s.price) + Math.round(discSum * 0.8) + (extrasSum - discSum);
-    lines.push({ id: it.id, qty: q, name: svcName(it.id), meta: svcMeta(it.id), addons: ads, unitList: unitList, unitMember: unitMember, lineList: unitList * q, lineMember: unitMember * q });
+    const missingQty = (s.addons || []).filter(function(a){ return a.qty && (it.x || []).indexOf(a.id) < 0; });
+    lines.push({ id: it.id, qty: q, name: svcName(it.id), meta: svcMeta(it.id), addons: ads, missingQtyAddons: missingQty, unitList: unitList, unitMember: unitMember, lineList: unitList * q, lineMember: unitMember * q });
     list += unitList * q; member += unitMember * q;
   }
   return { lines: lines, list: list, member: member, savings: list - member };
@@ -5661,7 +5665,8 @@ function renderCart(){
     // MENU_CATALOG), so every line here is a catalog line; svcImgHtml
     // falls back to the category photo if a file ever goes missing.
     let s = '<div class="cart-line">' + svcImgHtml(l.id, (SVC_GROUP_OF[l.id] || {}).key || 'otro', 'cart-line-img') + '<div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
-    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
+    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.linePrice + '</span>'; if (a.qtyCap) s += ' <span class="cart-qty"><button type="button" onclick="cartAddonQty(' + i + ',\'' + a.id + '\',-1)">−</button><b>' + a.qty + '</b><button type="button" onclick="cartAddonQty(' + i + ',\'' + a.id + '\',1)">+</button></span>'; });
+    (l.missingQtyAddons || []).forEach(function(a){ s += '<br><button type="button" class="pair-chip" onclick="cartAddonQty(' + i + ',\'' + a.id + '\',1)">+ ' + escHtml(a.name) + '</button>'; });
     s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="cartQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="cartQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';
     if (member && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">' + CU('cartMembersSavePre') + (l.lineList - l.lineMember) + '</span>';
@@ -5756,7 +5761,7 @@ function renderCartTotalsDue(){
 // rebuilds, so they survive every edit. Edits are locked while a
 // payment is preparing or processing (cartBusy).
 function cartQuoteItems(){
-  return cartLoad().map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; });
+  return cartLoad().map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: cartAddonsPayload(it) }; });
 }
 async function cartQuoteRefresh(){
   try {
@@ -5790,7 +5795,8 @@ function renderCcLines(){
     const line = l.lineList;
     // v103: same per-service photo as the cart view above (svcImgHtml).
     let s = '<div class="cart-line">' + svcImgHtml(l.id, (SVC_GROUP_OF[l.id] || {}).key || 'otro', 'cart-line-img') + '<div class="cart-line-main"><b>' + escHtml(l.name) + '</b>' + (l.meta ? '<br><span class="mut">' + escHtml(l.meta) + '</span>' : '');
-    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.price + '</span>'; });
+    l.addons.forEach(function(a){ s += '<br><span class="mut">+ ' + escHtml(a.name) + ' · $' + a.linePrice + '</span>'; if (a.qtyCap) s += ' <span class="cart-qty"><button type="button" onclick="ccAddonQty(' + i + ',\'' + a.id + '\',-1)">−</button><b>' + a.qty + '</b><button type="button" onclick="ccAddonQty(' + i + ',\'' + a.id + '\',1)">+</button></span>'; });
+    (l.missingQtyAddons || []).forEach(function(a){ s += '<br><button type="button" class="pair-chip" onclick="ccAddonQty(' + i + ',\'' + a.id + '\',1)">+ ' + escHtml(a.name) + '</button>'; });
     s += '<br><span class="mut">$' + unit + CU('cartEach') + '</span> <span class="cart-qty"><button type="button" onclick="ccQty(' + i + ',-1)">−</button><b>' + l.qty + '</b><button type="button" onclick="ccQty(' + i + ',1)">+</button></span></div>';
     s += '<div style="text-align:right"><b>$' + line + '</b>';
     if (mem && l.lineMember < l.lineList) s += '<br><span class="cart-member-save">' + CU('cartMembersSavePre') + (l.lineList - l.lineMember) + '</span>';
@@ -5903,6 +5909,47 @@ function cartJoinIntent(){
 // the server is what charges — this only paints the same numbers.
 const PAYFULL_SERVICE_IDS = { 'tree-combo-small': 1, 'tree-combo-medium': 1, 'tree-combo-premium': 1 };
 function cartHasPayFull(){ return cartLoad().some(function(it){ return !!PAYFULL_SERVICE_IDS[it.id]; }); }
+// v116: QUANTITY add-ons mirror (ADDON_QTY_MAX in server.js) — the two
+// tree-combo add-ons are priced PER PACKAGE ($15): tree-lights per
+// strand of the customer's lights, tree-decorating per package of the
+// customer's decorations. The chosen count rides the cart item as
+// it.xq[addonId]; the server recomputes every charge from its own cap.
+const ADDON_QTY_MAX = { 'tree-lights': 20, 'tree-decorating': 20 };
+function addonQtyOf(it, a){
+  if (!a || !a.qty) return 1;
+  const cap = ADDON_QTY_MAX[a.id] || 1;
+  return Math.min(cap, Math.max(1, Math.round(Number((it.xq || {})[a.id]) || 1)));
+}
+function cartAddonsPayload(it){
+  return (it.x || []).map(function(aid){
+    const a = ((MENU_CATALOG[it.id] || {}).addons || []).find(function(x){ return x.id === aid; });
+    return (a && a.qty) ? { id: aid, qty: addonQtyOf(it, a) } : aid;
+  });
+}
+function applyAddonQty(it, addonId, d){
+  const a = ((MENU_CATALOG[it.id] || {}).addons || []).find(function(x){ return x.id === addonId; });
+  if (!a || !a.qty) return false;
+  it.x = Array.isArray(it.x) ? it.x : [];
+  it.xq = (it.xq && typeof it.xq === 'object') ? it.xq : {};
+  const has = it.x.indexOf(addonId) >= 0;
+  let q = (has ? Math.max(1, Math.round(Number(it.xq[addonId]) || 1)) : 0) + d;
+  q = Math.min(ADDON_QTY_MAX[addonId] || 1, Math.max(0, q));
+  if (q <= 0) { it.x = it.x.filter(function(x){ return x !== addonId; }); delete it.xq[addonId]; }
+  else { if (!has) it.x.push(addonId); it.xq[addonId] = q; }
+  return true;
+}
+function cartAddonQty(i, addonId, d){
+  const items = cartLoad(); if (!items[i]) return;
+  if (!applyAddonQty(items[i], addonId, d)) return;
+  cartSave(items); cartResetCheckout(); renderCart();
+}
+function ccAddonQty(i, addonId, d){
+  if (cartBusy) return;
+  const items = cartLoad(); if (!items[i]) return;
+  if (!applyAddonQty(items[i], addonId, d)) return;
+  cartSave(items);
+  return cartCheckoutEdited();
+}
 function cartDepositEstimate(){
   // Same math renderCartTotalsDue paints: an armed context wins,
   // otherwise the deposit rule (v79 law: $50 flat to $300, 40% over)
@@ -6155,7 +6202,11 @@ try {
 // v80 A-7 (plumbing only): normalize a server snapshot into the local
 // cart shape; unknown services are dropped (the menu may have changed).
 function cartNormalizeSnapshot(items){
-  return (items || []).filter(function(it){ return it && MENU_CATALOG[it.id]; }).map(function(it){ return { id: it.id, q: Math.max(1, Math.round(Number(it.q) || 1)), x: Array.isArray(it.x) ? it.x.slice() : [] }; });
+  return (items || []).filter(function(it){ return it && MENU_CATALOG[it.id]; }).map(function(it){
+    const o = { id: it.id, q: Math.max(1, Math.round(Number(it.q) || 1)), x: Array.isArray(it.x) ? it.x.slice() : [] };
+    if (it.xq && typeof it.xq === 'object') { const xq = {}; Object.keys(it.xq).forEach(function(k){ const a = ((MENU_CATALOG[it.id] || {}).addons || []).find(function(x){ return x.id === k; }); if (a && a.qty) xq[k] = addonQtyOf({ xq: it.xq }, a); }); if (Object.keys(xq).length) o.xq = xq; }
+    return o;
+  });
 }
 // A restore link (…#cart-recover=<token>) rehydrates the guest cart
 // from the server-side snapshot and lands on the cart. Expired/unknown
@@ -6184,7 +6235,7 @@ async function loadRecoveredCart(){
   try { d = await api('/api/me/recoverable-cart'); } catch (e) { host.innerHTML = ''; return; }
   const rec = d && d.cart;
   if (!rec || !Array.isArray(rec.items) || !rec.items.length) { host.innerHTML = ''; return; }
-  const sig = function(arr){ return JSON.stringify((arr || []).map(function(i){ return [i.id, i.q || 1, (i.x || []).join(',')]; })); };
+  const sig = function(arr){ return JSON.stringify((arr || []).map(function(i){ return [i.id, i.q || 1, (i.x || []).join(','), JSON.stringify(i.xq || {})]; })); };
   if (sig(cartLoad()) === sig(rec.items)) { host.innerHTML = ''; return; }
   const n = rec.items.reduce(function(s, i){ return s + Math.max(1, Math.round(Number(i.q) || 1)); }, 0);
   host._recItems = rec.items;
@@ -6203,7 +6254,7 @@ function applyRecoveredCart(){
 function cartBuildPayload(items){
   const payload = {
     lang: menuLang(),
-    items: (items || []).map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: (it.x || []).slice() }; }),
+    items: (items || []).map(function(it){ const s = MENU_CATALOG[it.id]; return { serviceId: it.id, name: s ? s.name : it.id, qty: Math.max(1, Math.round(Number(it.q) || 1)), addons: cartAddonsPayload(it) }; }),
     address: document.getElementById('ccAddress').value.trim(),
     city: document.getElementById('ccCity').value.trim(),
     when: cartWhenVal + (document.getElementById('ccWhenText').value.trim() ? ' · ' + document.getElementById('ccWhenText').value.trim() : ''),
@@ -6675,9 +6726,9 @@ const MENU_ES = {
   'holiday-lights-two-story': ['Instalación de luces navideñas — dos pisos', '~3.5 h · Reserva temprano'],
   'holiday-lights-takedown': ['Retiro y guardado de luces navideñas', '~1 h · Una planta'],
   'holiday-lights-takedown-two-story': ['Retiro de luces navideñas — dos pisos', '~3 h · Casas de dos pisos'],
-  'tree-combo-small': ['Combo Básico de Árbol', 'Abeto Douglas 6–7 ft + base · Entregado e instalado · vie–dom · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
-  'tree-combo-medium': ['Combo Mediano de Árbol', 'Abeto noble 7–8 ft + base reforzada · Colgamos tus luces en el árbol · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
-  'tree-combo-premium': ['Combo Premium de Árbol', 'Abeto noble 9–10 ft + base de acero · Instalación de tus luces: árbol y entrada · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
+  'tree-combo-small': ['Combo Básico de Árbol', 'Abeto Douglas 6–7 ft + base · Entregado e instalado · vie–dom · + add-ons de luces y decoración a $15 por paquete (tú pones las luces y las decoraciones)'],
+  'tree-combo-medium': ['Combo Mediano de Árbol', 'Abeto noble 7–8 ft + base reforzada · Entregado e instalado · vie–dom · + add-ons de luces y decoración a $15 por paquete (tú pones las luces y las decoraciones)'],
+  'tree-combo-premium': ['Combo Premium de Árbol', 'Abeto noble 9–10 ft + base de acero · Entregado e instalado · vie–dom · + add-ons de luces y decoración a $15 por paquete (tú pones las luces y las decoraciones)'],
   'window-ac-install': ['Instalación de aire acondicionado de ventana', '~1.5 h · Precio fijo'],
   'faucet-replacement': ['Cambio de mezcladora / llave', '~1.5 h · Cocina o baño'],
   'toilet-replacement': ['Cambio de inodoro (WC)', '~2.5 h · Cambio completo'],
@@ -7372,6 +7423,13 @@ function pairsHtml(id, ui) {
 function pairAdd(id, addonId) {
   const a = ((MENU_CATALOG[id] || {}).addons || []).find(function (x) { return x.id === addonId; });
   if (!a) return;
+  // v116: a per-package add-on already on a cart line steps its count
+  // up by one package — never a duplicate combo line.
+  if (a.qty) {
+    const items = cartLoad();
+    const li = items.findIndex(function (it) { return it.id === id && (it.x || []).indexOf(addonId) >= 0; });
+    if (li >= 0) { cartAddonQty(li, addonId, 1); cartToast(svcName(id) + ' + ' + a.name + ' added to your cart'); return; }
+  }
   if (cartAddWithAddons(id, [addonId])) cartToast(svcName(id) + ' + ' + a.name + ' added to your cart');
 }
 // ---------- sticky nav: search + category chips ----------
