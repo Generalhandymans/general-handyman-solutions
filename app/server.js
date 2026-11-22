@@ -5809,7 +5809,7 @@ const SERVER_MENU = {
   "battery-replacement":{p:125,m:100},
   "check-engine-diagnostics":{p:85,m:68},
   "oil-change":{p:85,m:68,a:{"filter-swap":[50,0,"Air / cabin filter swap"]}},
-  "brake-pads":{p:100,m:80,a:{"rotors":[85,0,"Add rotors (per pair)"]}},
+  "brake-pads":{p:125,m:100,a:{"rotors":[85,0,"Add rotors (per pair)"]}},
   "alternator-replacement":{p:175,m:140},
   "alternator-difficult":{p:250,m:200},
   "starter-replacement":{p:250,m:200},

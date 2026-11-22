@@ -322,7 +322,7 @@ transmisión, y todo trabajo de **$1,000 o más**, va por la ruta de estimado
 | Battery replacement | $125 | flat | ~1 h | CONFIRMADO |
 | Check-engine diagnostics / scan | $85 | flat | ~1 h | CONFIRMADO |
 | Oil change & fluid service | $85 | flat | ~1 h | CONFIRMADO |
-| Brake pads | $100 | per pair | ~1 h | CONFIRMADO |
+| Brake pads | $125 | per pair | ~1 h | CONFIRMADO |
 | Alternator replacement — Easy | $175 | flat | ~2 h | CONFIRMADO (bajado de $185 por Gabriel 2026-10-25; miembro $140) |
 | Alternator replacement — Difficult (enterrado) | $250 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-03; bloque 3 h de la constitución — el $175 plano regalaba los alternadores enterrados) |
 | Starter replacement | $250–$300 | range (from $225) | ~2–3 h | CONFIRMADO |
@@ -363,7 +363,7 @@ haul-away según la fila. Aprobados por Gabriel el 2026-10-22.*
 | Haul-away of old door or old garbage disposal | $50 | Door / plumbing swap | per item | CONFIRMADO |
 | Haul-away of old vanity | $50 | Vanity swap | per item | CONFIRMADO |
 | Additional window screen rescreen — same visit | $25 | Window screen rescreen | per extra screen | CONFIRMADO |
-| Rotor replacement — same visit | $85 | Brake pads | per pair (total con pastillas: $185 fijo) | CONFIRMADO |
+| Rotor replacement — same visit | $85 | Brake pads | per pair (total con pastillas: $210 fijo) | CONFIRMADO |
 | Additional drain unclog — same visit | $75 | Drain unclog | each add-on | CONFIRMADO |
 | Trash bin cleaning (2 bins) — with a pressure washing job | $50 | Pressure washing | add-on | CONFIRMADO |
 | Air / cabin filter swap — with an oil change & fluid service | $50 | Oil change & fluid service | add-on | CONFIRMADO |

@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v112', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+t('static: SW cache is ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v112: ghs-app-v112)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v112: ghs-app-v113)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v113'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8522,7 +8522,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v112: ghs-app-v112)', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8691,7 +8691,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v112: ghs-app-v112)', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8785,7 +8785,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v112: ghs-app-v112)', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8985,7 +8985,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v112', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v110 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9011,7 +9011,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 19 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v112', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v111 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9026,7 +9026,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v112', swSrc.includes("const CACHE = 'ghs-app-v112'"));
+  t('v112 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();

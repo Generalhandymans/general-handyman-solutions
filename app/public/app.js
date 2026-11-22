@@ -5418,7 +5418,7 @@ const MENU_CATALOG = {
   'battery-replacement': { name: 'Battery Replacement', meta: '~1 h · Tested on site', price: 125, member: 100 },
   'check-engine-diagnostics': { name: 'Check-Engine Diagnostics / Scan', meta: '~1 h · Flat', price: 85, member: 68 },
   'oil-change': { name: 'Oil Change & Fluids', meta: '~1 h · At your home', price: 85, member: 68, addons: [{ id: 'filter-swap', name: 'Air / cabin filter swap', price: 50 }] },
-  'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 100, member: 80, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
+  'brake-pads': { name: 'Brake Pads — Per Pair', meta: '~1 h · Front or rear', price: 125, member: 100, addons: [{ id: 'rotors', name: 'Add rotors (per pair)', price: 85 }] },
   'alternator-replacement': { name: 'Alternator Replacement — Easy', meta: '~2 h · Standard access', price: 175, member: 140 },
   'alternator-difficult': { name: 'Alternator Replacement — Difficult', meta: '~3 h · Buried — tight access', price: 250, member: 200 },
   'starter-replacement': { name: 'Starter Replacement', meta: 'By make & difficulty — final price $250–$300', price: 250, member: 200, from: true },
