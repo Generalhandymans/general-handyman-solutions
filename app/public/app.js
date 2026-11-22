@@ -5375,6 +5375,9 @@ const MENU_CATALOG = {
   'holiday-lights-two-story': { name: 'Holiday Lights Install — Two-Story', meta: '~3.5 h · Book early', price: 295, member: 236 },
   'holiday-lights-takedown': { name: 'Holiday Light Take-Down & Storage', meta: '~1 h · Single story', price: 85, member: 68 },
   'holiday-lights-takedown-two-story': { name: 'Holiday Light Take-Down — Two-Story', meta: '~3 h · Two-story homes', price: 225, member: 180 },
+  'tree-combo-small': { name: 'Basic Tree Combo', meta: 'Douglas fir 6–7 ft + stand · Delivered & installed · Fri–Sun · + full decorating add-on', price: 199, member: 199, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 75, nodisc: true }] },
+  'tree-combo-medium': { name: 'Medium Tree Combo', meta: 'Noble fir 7–8 ft + stand · We hang your lights on the tree · + full decorating add-on', price: 299, member: 299, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 100, nodisc: true }] },
+  'tree-combo-premium': { name: 'Premium Tree Combo', meta: 'Noble fir 9–10 ft + steel stand · Your lights installed: tree + entryway · + full decorating add-on', price: 499, member: 499, addons: [{ id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: 150, nodisc: true }] },
   'window-ac-install': { name: 'Window AC Unit Install', meta: '~1.5 h · Flat', price: 250, member: 200 },
   // ---------- Plomería (master list section 3) ----------
   'faucet-replacement': { name: 'Faucet Replacement', meta: '~1.5 h · Kitchen or bath', price: 135, member: 108 },
@@ -6432,7 +6435,7 @@ const WZ_CATS = [
 ];
 const MENU_GROUPS = [
   { key: 'carpentry', es: 'Carpintería', en: 'Carpentry & installs', services: ['tv-mounting', 'tv-mounting-large', 'furniture-assembly', 'door-slab-swap', 'closet-organizer', 'drywall-patch-medium', 'closet-doors', 'door-knob-install', 'deadbolt-install', 'deadbolt-knob-combo', 'smart-lock-install', 'door-adjustment', 'weatherstripping', 'screen-door-install', 'sliding-door-service', 'window-screen-repair', 'pet-door-install', 'furniture-assembly-large', 'floating-shelves', 'cabinet-hardware-install', 'baby-gate-install', 'picture-mirror-hanging', 'mirror-cabinet-install', 'curtain-rod-install', 'blinds-install', 'blinds-install-deal', 'baseboard-install', 'baseboard-repair', 'laminate-floor-repair', 'carpet-repair', 'transition-strip-install', 'drywall-patch-small', 'drywall-holes-set', 'paint-room', 'paint-room-large', 'paint-room-large-ceiling', 'accent-wall-painting', 'interior-door-painting', 'fence-picket-repair', 'fence-post-replacement', 'deck-board-replacement', 'gate-repair', 'heavy-furniture-move'] },
-  { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener', 'soundbar-mounting', 'chandelier-swap', 'light-fixture-swap', 'exhaust-fan-swap', 'dimmer-switch-swap', 'smoke-co-detector-install', 'smart-thermostat-install', 'security-camera-install', 'holiday-lights-two-story', 'holiday-lights-takedown', 'holiday-lights-takedown-two-story', 'window-ac-install'] },
+  { key: 'electrical', es: 'Electricidad', en: 'Electrical', services: ['ceiling-fan', 'ring-doorbell', 'holiday-lights', 'garage-opener', 'soundbar-mounting', 'chandelier-swap', 'light-fixture-swap', 'exhaust-fan-swap', 'dimmer-switch-swap', 'smoke-co-detector-install', 'smart-thermostat-install', 'security-camera-install', 'holiday-lights-two-story', 'holiday-lights-takedown', 'holiday-lights-takedown-two-story', 'tree-combo-small', 'tree-combo-medium', 'tree-combo-premium', 'window-ac-install'] },
   { key: 'plumbing', es: 'Plomería', en: 'Plumbing', services: ['toilet-replacement', 'water-heater', 'drain-unclog', 'faucet-replacement', 'dishwasher-swap', 'vanity-swap', 'toilet-repair', 'garbage-disposal-swap', 'showerhead-swap', 'tub-shower-recaulk', 'grab-bar-install', 'p-trap-swap', 'bidet-seat-install', 'dryer-vent-cleaning', 'washer-dryer-hookup', 'bathroom-accessories-install', 'hose-bibb-swap'] },
   { key: 'gardening', es: 'Jardinería', en: 'Yard, junk & hauling', services: ['yard-cleanup', 'gutter-cleaning', 'junk-minimum', 'junk-medium', 'junk-large', 'junk-full', 'junk-single-item', 'appliance-removal', 'mattress-removal', 'garage-cleanout', 'debris-removal', 'green-waste', 'gutter-cleaning-two-story', 'pressure-washing', 'pressure-washing-large', 'sprinkler-irrigation', 'mailbox-install'] },
   { key: 'mechanic', es: 'Mecánica', en: 'Mobile mechanic', services: ['oil-change', 'brake-pads', 'battery-replacement', 'alternator-replacement', 'alternator-difficult', 'starter-replacement', 'fuel-pump-replacement', 'fuel-pump-tank-drop', 'check-engine-diagnostics', 'belt-hose-replacement', 'spark-plug-replacement', 'spark-plug-v6v8', 'turbo-replacement', 'headlight-replacement'] }
@@ -6659,6 +6662,9 @@ const MENU_ES = {
   'holiday-lights-two-story': ['Instalación de luces navideñas — dos pisos', '~3.5 h · Reserva temprano'],
   'holiday-lights-takedown': ['Retiro y guardado de luces navideñas', '~1 h · Una planta'],
   'holiday-lights-takedown-two-story': ['Retiro de luces navideñas — dos pisos', '~3 h · Casas de dos pisos'],
+  'tree-combo-small': ['Combo Básico de Árbol', 'Abeto Douglas 6–7 ft + base · Entregado e instalado · vie–dom · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
+  'tree-combo-medium': ['Combo Mediano de Árbol', 'Abeto noble 7–8 ft + base reforzada · Colgamos tus luces en el árbol · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
+  'tree-combo-premium': ['Combo Premium de Árbol', 'Abeto noble 9–10 ft + base de acero · Instalación de tus luces: árbol y entrada · + decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'],
   'window-ac-install': ['Instalación de aire acondicionado de ventana', '~1.5 h · Precio fijo'],
   'faucet-replacement': ['Cambio de mezcladora / llave', '~1.5 h · Cocina o baño'],
   'toilet-replacement': ['Cambio de inodoro (WC)', '~2.5 h · Cambio completo'],
@@ -6746,7 +6752,7 @@ const HOME_UI = {
     footFine: 'All prices from the confirmed master service list (Oct 22, 2026). Member pricing: 20% off every menu service — including junk removal, hauling and $85 services. Materials are customer-supplied unless noted.',
     footFollow: 'Follow us', footGoogle: 'Find us on Google',
     footReviews: 'See our reviews on Google', footExplore: 'Explore — plans, cities & trades', footSince: 'Operating since 2020',
-    footPlus2: 'HomeCare Plus · 2 visits', footJunk: 'Junk Removal', footCityPre: 'Handyman in ',
+    footPlus2: 'HomeCare Plus · 2 visits', footJunk: 'Junk Removal', footTree: 'Christmas Trees', footCityPre: 'Handyman in ',
     footTrades: ['Carpentry', 'Electrical', 'Plumbing', 'Yard Work', 'Mobile Mechanic']
   },
   es: {
@@ -6776,7 +6782,7 @@ const HOME_UI = {
     footFine: 'Todos los precios salen de la lista maestra de servicios confirmada (22 de octubre de 2026). Precio de miembro: 20% menos en cada servicio del menú — incluyendo retiro de escombros, carga y servicios de $85. Los materiales los pone el cliente, salvo que se indique otra cosa.',
     footFollow: 'Síguenos', footGoogle: 'Encuéntranos en Google',
     footReviews: 'Mira nuestras reseñas en Google', footExplore: 'Explora — planes, ciudades y oficios', footSince: 'Operando desde 2020',
-    footPlus2: 'HomeCare Plus · 2 visitas', footJunk: 'Retiro de basura', footCityPre: 'Handyman en ',
+    footPlus2: 'HomeCare Plus · 2 visitas', footJunk: 'Retiro de basura', footTree: 'Árboles de Navidad', footCityPre: 'Handyman en ',
     footTrades: ['Carpintería', 'Electricidad', 'Plomería', 'Jardinería', 'Mecánica móvil']
   }
 };
@@ -7111,7 +7117,7 @@ function paintHomeBlocks() {
     // columns above it are untouched.
     const footCityLinks = [['/handyman-fairfield', 'Fairfield'], ['/handyman-suisun-city', 'Suisun City'], ['/handyman-vacaville', 'Vacaville'], ['/handyman-vallejo', 'Vallejo'], ['/handyman-benicia', 'Benicia'], ['/handyman-napa', 'Napa'], ['/handyman-concord', 'Concord'], ['/handyman-antioch', 'Antioch']];
     const footTradeLinks = ['/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'];
-    let footDoors = '<a href="/homecare">HomeCare</a><a href="/plus">HomeCare Plus</a><a href="/plus2">' + ui.footPlus2 + '</a><a href="/yard">Yard Care</a><a href="/junk-removal">' + ui.footJunk + '</a>';
+    let footDoors = '<a href="/homecare">HomeCare</a><a href="/plus">HomeCare Plus</a><a href="/plus2">' + ui.footPlus2 + '</a><a href="/yard">Yard Care</a><a href="/junk-removal">' + ui.footJunk + '</a><a href="/tree">' + ui.footTree + '</a>';
     footDoors += footCityLinks.map(function (c) { return '<a href="' + c[0] + '">' + ui.footCityPre + c[1] + '</a>'; }).join('');
     footDoors += footTradeLinks.map(function (s, i) { return '<a href="' + s + '">' + ui.footTrades[i] + ' — Fairfield</a>'; }).join('');
     ft.innerHTML = '<div class="foot-grid">'

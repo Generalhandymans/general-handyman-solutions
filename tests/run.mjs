@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+t('static: SW cache is ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -163,7 +163,7 @@ const catBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_CATALOG = {'), htmlSr
 const catalogIds42 = [...catBlock.matchAll(/'([a-z0-9-]+)': \{ name:/g)].map(m => m[1]);
 const grpBlock = htmlSrc.slice(htmlSrc.indexOf('const MENU_GROUPS = ['), htmlSrc.indexOf('const wzState'));
 const groupIds42 = [...grpBlock.matchAll(/services: \[([^\]]*)\]/g)].flatMap(m => [...m[1].matchAll(/'([a-z0-9-]+)'/g)].map(x => x[1]));
-t('static v42: MENU_GROUPS covers the whole catalog exactly once (107 services since v105, no dupes, no extras)', catalogIds42.length === 107 && groupIds42.length === 107 && new Set(groupIds42).size === 107 && catalogIds42.every(id => groupIds42.includes(id)));
+t('static v42: MENU_GROUPS covers the whole catalog exactly once (110 services since v114, no dupes, no extras)', catalogIds42.length === 110 && groupIds42.length === 110 && new Set(groupIds42).size === 110 && catalogIds42.every(id => groupIds42.includes(id)));
 const wzBlock = htmlSrc.slice(htmlSrc.indexOf('id="wizardCard"'), htmlSrc.indexOf('id="menuBox"'));
 t('static v42: wizard customer copy says technician, never worker', !/worker/i.test(wzBlock) && htmlSrc.includes('we schedule your technician'));
 t('static v42: stale "50% deposit" copy is gone from the request flow', !htmlSrc.includes('50% deposit locks approved work'));
@@ -1325,10 +1325,10 @@ run("setMenuLang('en');"); // v80.19: the EN|ES toggle is ONE switch now — the
 t('v42 home: a guest lands on the wizard (Solicitud first, not a login wall)', elById.get('customerBox').style.display === 'block' && elById.get('wzStep1').style.display === 'block');
 run('renderMenu();');
 const menuHtml42 = elById.get('menuGroups').innerHTML;
-t('v42 menu: renders all 107 catalog services as cards (full master list since v43; +4 mechanic lines in v82; +5 junk lines in v105) + the 6 pinned Popular cards since v80.9 = 113', (menuHtml42.match(/class="menu-card"/g) || []).length === 113);
+t('v42 menu: renders all 110 catalog services as cards (full master list since v43; +4 mechanic lines in v82; +5 junk lines in v105; +3 tree combos in v114) + the 6 pinned Popular cards since v80.9 = 116', (menuHtml42.match(/class="menu-card"/g) || []).length === 116);
 t('v42 menu: cards order into the CART (v79: orderNow → #cart; the #order page is retired)', ['tv-mounting', 'tv-mounting-large', 'faucet-replacement', 'junk-full', 'green-waste', 'oil-change', 'starter-replacement'].every(id => menuHtml42.includes("orderNow('" + id + "')")));
 t('v42 menu: prices are the catalog\u2019s own (TV $125 / member $100 since the v43 cut, water heater $700 / $560)', menuHtml42.includes('$125') && menuHtml42.includes('Members $100') && menuHtml42.includes('$700') && menuHtml42.includes('Members $560'));
-t('v42 menu: EVERY card shows a member price — the discount is universal (113 of 113 since the v105 junk lines; the v82 turbo card shows its member FROM price like every other card)', (menuHtml42.match(/Members \$/g) || []).length === 113);
+t('v42 menu: EVERY card shows a member price — the discount is universal (116 of 116 since the v114 tree lines; the v82 turbo card shows its member FROM price like every other card; the v114 tree combos show member == list — nodisc, price is mostly materials)', (menuHtml42.match(/Members \$/g) || []).length === 116);
 // wizard navigation + progress
 run('wzGo(2);');
 t('v42 wizard: step 2 shows, step 1 hides, bar at 50%, label shows step 2 of 4 (v80.19: single-language label — EN here; was the bilingual composite)', elById.get('wzStep2').style.display === 'block' && elById.get('wzStep1').style.display === 'none' && elById.get('wzBarFill').style.width === '50%' && elById.get('wzStepLabel').textContent.includes('Step 2 of 4'));
@@ -2471,7 +2471,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   // Master display name -> catalog id (the 98 orderable services).
   const NAME_TO_ID43 = {
     'Closet doors (pair)': 'closet-doors', 'Interior door slab swap': 'door-slab-swap', 'Door knob / lever install': 'door-knob-install', 'Deadbolt install — single': 'deadbolt-install', 'Deadbolt + knob combo install': 'deadbolt-knob-combo', 'Smart lock install & setup': 'smart-lock-install', "Door adjustment (sticks / won't latch)": 'door-adjustment', 'Weatherstripping': 'weatherstripping', 'Screen door install': 'screen-door-install', 'Sliding door roller / track service': 'sliding-door-service', 'Window screen rescreen / repair': 'window-screen-repair', 'Pet door install (in door)': 'pet-door-install', 'Furniture assembly, standard (1 piece)': 'furniture-assembly', 'Furniture assembly, large/complex (wardrobe, bunk bed)': 'furniture-assembly-large', 'Closet organizer system install': 'closet-organizer', 'Floating shelves (set of 2)': 'floating-shelves', 'Cabinet hardware install (up to 10 pulls)': 'cabinet-hardware-install', 'Baby gate install': 'baby-gate-install', 'Picture & mirror hanging (up to 3 pieces)': 'picture-mirror-hanging', 'Mirror / medicine cabinet install': 'mirror-cabinet-install', 'Curtain rod install': 'curtain-rod-install', 'Blinds install (1–3 windows)': 'blinds-install', 'Blinds install — deal (4+ windows)': 'blinds-install-deal', 'Baseboard install (1 room, up to ~40 linear ft)': 'baseboard-install', 'Baseboard repair / section replace': 'baseboard-repair', 'Laminate / LVP plank repair (a few planks)': 'laminate-floor-repair', 'Carpet repair (general)': 'carpet-repair', 'Transition strip / threshold install': 'transition-strip-install', 'Drywall patch, small (up to ~1 ft)': 'drywall-patch-small', 'Drywall patch, medium (up to 2×2 ft, texture match)': 'drywall-patch-medium', 'Small-holes patch set (up to 3: doorknob, anchors)': 'drywall-holes-set', 'Paint one room — standard (walls only, labor)': 'paint-room', 'Paint large room (walls only, labor)': 'paint-room-large', 'Paint large room with ceiling (labor)': 'paint-room-large-ceiling', 'Accent wall painting': 'accent-wall-painting', 'Interior door painting': 'interior-door-painting', 'Fence picket repair (up to 5 pickets)': 'fence-picket-repair', 'Fence post replacement (add-on to a fence repair visit)': 'fence-post-replacement', 'Deck board replacement (up to 5 boards)': 'deck-board-replacement', 'Gate repair / adjustment': 'gate-repair',
-    'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
+    'TV mounting (up to 65")': 'tv-mounting', 'TV mounting, large (over 65")': 'tv-mounting-large', 'Soundbar mounting': 'soundbar-mounting', 'Ceiling fan install or swap': 'ceiling-fan', 'Chandelier / light fixture swap': 'chandelier-swap', 'Light fixture swap, simple (flush-mount, porch, vanity)': 'light-fixture-swap', 'Bathroom exhaust fan swap': 'exhaust-fan-swap', 'Dimmer / switch swap': 'dimmer-switch-swap', 'Smoke / CO detector install (up to 3, battery)': 'smoke-co-detector-install', 'Ring / video doorbell install': 'ring-doorbell', 'Smart thermostat install': 'smart-thermostat-install', 'Security camera install (wireless)': 'security-camera-install', 'Garage door opener swap': 'garage-opener', 'Holiday lights install (single story)': 'holiday-lights', 'Holiday lights install (two-story)': 'holiday-lights-two-story', 'Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed)': 'tree-combo-small', 'Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights)': 'tree-combo-medium', 'Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway)': 'tree-combo-premium', 'Holiday light take-down & storage (single story)': 'holiday-lights-takedown', 'Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha': 'holiday-lights-takedown-two-story', 'Window AC unit install': 'window-ac-install',
     'Faucet swap': 'faucet-replacement', 'Toilet replacement (full swap)': 'toilet-replacement', 'Toilet repair (fill valve / flapper)': 'toilet-repair', 'Garbage disposal swap': 'garbage-disposal-swap', 'Showerhead swap': 'showerhead-swap', 'Tub / shower re-caulk': 'tub-shower-recaulk', 'Grab bar install': 'grab-bar-install', 'P-trap / drain assembly swap': 'p-trap-swap', 'Bidet seat install': 'bidet-seat-install', 'Dryer vent cleaning': 'dryer-vent-cleaning', 'Washer & dryer hookup / install (existing connections)': 'washer-dryer-hookup', 'Drain unclog — basic (sink / shower, 1 drain)': 'drain-unclog', 'Dishwasher swap (existing hookups)': 'dishwasher-swap', 'Vanity swap': 'vanity-swap', 'Bathroom accessories set install (towel bars, paper holder, hooks — up to 4 pieces)': 'bathroom-accessories-install', 'Hose bibb / outdoor faucet swap': 'hose-bibb-swap', 'Water heater installation': 'water-heater',
     'Gutter cleaning (single story)': 'gutter-cleaning', 'Gutter cleaning (two-story house)': 'gutter-cleaning-two-story', 'Pressure washing — standard area (2-car driveway OR patio)': 'pressure-washing', 'Pressure washing — large area (long driveway, large patio or deck)': 'pressure-washing-large', 'Yard cleanup (general)': 'yard-cleanup', 'Sprinkler & drip irrigation basics (heads, timers, small leaks)': 'sprinkler-irrigation', 'Green waste hauling': 'green-waste', 'Junk removal — minimum load': 'junk-minimum', 'Junk removal — medium load': 'junk-medium', 'Junk removal — large load': 'junk-large', 'Junk removal — full load (truck + trailer)': 'junk-full', 'Single-item pickup': 'junk-single-item', 'Appliance removal': 'appliance-removal', 'Mattress removal': 'mattress-removal', 'Garage cleanout': 'garage-cleanout', 'Construction debris removal': 'debris-removal', 'Mailbox install': 'mailbox-install',
     'Fuel pump replacement': 'fuel-pump-replacement', 'Fuel pump replacement — tank-drop (sin panel de acceso)': 'fuel-pump-tank-drop', 'Battery replacement': 'battery-replacement', 'Check-engine diagnostics / scan': 'check-engine-diagnostics', 'Oil change & fluid service': 'oil-change', 'Brake pads': 'brake-pads', 'Alternator replacement — Easy': 'alternator-replacement', 'Alternator replacement — Difficult (enterrado)': 'alternator-difficult', 'Starter replacement': 'starter-replacement', 'Belt / hose replacement (basics)': 'belt-hose-replacement', 'Spark plug replacement (4-cylinder)': 'spark-plug-replacement', 'Spark plug replacement (V6 / V8)': 'spark-plug-v6v8', 'Turbo replacement': 'turbo-replacement', 'Headlight / bulb replacement': 'headlight-replacement',
@@ -2494,11 +2494,11 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v43 master: every orderable master row maps to a catalog id (plan rows live outside the service sections; estimate + hourly labor excluded by design)', unmapped43.length === 0);
   if (unmapped43.length) console.log('  unmapped master rows:', unmapped43.map(r => r.name).join(' | '));
   const priceBad43 = rows43.filter(r => { const c = cat43[NAME_TO_ID43[r.name]]; return !c || c.price !== r.price; });
-  t('v43 master<->catalog: all 107 service prices identical to the master list, post-cut (v82: +4 mechanic rows; v105: +5 junk rows PROPUESTA)', rows43.length === 107 && priceBad43.length === 0);
-  const memBad43 = Object.entries(cat43).filter(([id, c]) => c.member !== Math.round(c.price * 0.8));
-  t('v43 catalog: member == round(price x 0.8) for ALL 107 entries — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 107 && memBad43.length === 0);
+  t('v43 master<->catalog: all 110 service prices identical to the master list, post-cut (v82: +4 mechanic rows; v105: +5 junk rows PROPUESTA; v114: +3 tree combo rows CONFIRMADO)', rows43.length === 110 && priceBad43.length === 0);
+  const memBad43 = Object.entries(cat43).filter(([id, c]) => !['tree-combo-small', 'tree-combo-medium', 'tree-combo-premium'].includes(id) && c.member !== Math.round(c.price * 0.8));
+  t('v43 catalog: member == round(price x 0.8) for ALL 110 entries EXCEPT the 3 v114 tree combos (member == list, nodisc: the price is mostly materials — Gabriel 2026-11-22) — oil/junk/green included, zero member:null left (v82: the turbo carries member 360 = its FROM price x 0.8; it is still never sold at a menu price)', Object.keys(cat43).length === 110 && memBad43.length === 0);
   t('v43 master: the $135 tier is gone from the service tables (v80.20 supersedes: $135 is BACK as exactly the approved 1.5h block — 17 table rows, Gabriel 2026-11-01)', (masterSrc43.match(/^\| [^|]*\| \$135 \|/gm) || []).length === 17);
-  const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]] };
+  const ADDONS43 = { 'door-slab-swap': [['knob', 75], ['deadbolt', 75], ['haul-door', 50]], 'window-screen-repair': [['extra-screen', 25]], 'drywall-patch-small': [['paint-touchup', 75]], 'drywall-patch-medium': [['paint-touchup', 75]], 'drywall-holes-set': [['paint-touchup', 75]], 'tv-mounting': [['raceway', 50], ['soundbar', 75]], 'tv-mounting-large': [['raceway', 50], ['soundbar', 75]], 'dimmer-switch-swap': [['extra-dimmer', 75]], 'security-camera-install': [['extra-camera', 75]], 'toilet-replacement': [['haul-toilet', 50]], 'garbage-disposal-swap': [['haul-disposal', 50]], 'grab-bar-install': [['extra-grab-bar', 75]], 'drain-unclog': [['extra-drain', 75]], 'vanity-swap': [['haul-vanity', 50]], 'pressure-washing': [['trash-bin-cleaning', 50]], 'pressure-washing-large': [['trash-bin-cleaning', 50]], 'oil-change': [['filter-swap', 50]], 'brake-pads': [['rotors', 85]], 'tree-combo-small': [['tree-decorating', 75]], 'tree-combo-medium': [['tree-decorating', 100]], 'tree-combo-premium': [['tree-decorating', 150]] };
   const addonBad43 = [];
   for (const [sid, pairs] of Object.entries(ADDONS43)) {
     const i43 = catBlock43.indexOf("'" + sid + "':");
@@ -3063,7 +3063,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
     }
   }
   const catIds = Object.keys(catEntries);
-  t('v46 audit: catalog parsed — 107 services on both sides (v82: +4 mechanic; v105: +5 junk)', catIds.length === 107 && Object.keys(srvEntries).length === 107);
+  t('v46 audit: catalog parsed — 110 services on both sides (v82: +4 mechanic; v105: +5 junk; v114: +3 tree combos)', catIds.length === 110 && Object.keys(srvEntries).length === 110);
   let drift = [];
   for (const id of catIds) {
     const c = catEntries[id], s = srvEntries[id];
@@ -3074,7 +3074,7 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   }
   t('v46 audit: SERVER_MENU is an exact mirror of MENU_CATALOG (price/member/add-ons/nodisc)', drift.length === 0);
   if (drift.length) console.log('  drift:', drift.join(' '));
-  t('v46 audit: every member price is exactly round(price x 0.8)', catIds.every(id => catEntries[id].member === Math.round(catEntries[id].price * 0.8)));
+  t('v46 audit: every member price is exactly round(price x 0.8) — except the 3 v114 tree combos (member == list, nodisc)', catIds.every(id => ['tree-combo-small', 'tree-combo-medium', 'tree-combo-premium'].includes(id) ? catEntries[id].member === catEntries[id].price : catEntries[id].member === Math.round(catEntries[id].price * 0.8)));
 
   // --- client totals matrix in the VM: all 98 x guest/member x ASAP x all add-ons ---
   const expect = (id, member, asap, withExtras) => {
@@ -3137,9 +3137,9 @@ t('v75 availability: an old payload (no availability object) defaults cleanly', 
   t('v46 menu: cards + wizard rows load /menu-img/<id>.webp with the category photo as fallback (v80.18)', htmlSrc.includes('function svcImgHtml(') && htmlSrc.includes('src="/menu-img/') && htmlSrc.includes('this.src=CAT_IMGS[') && serverSrc.includes("p.startsWith('/menu-img/')"));
   run("location.hash = ''; render(); setMenuLang('en');");
   const menuEn = elById.get('menuGroups').innerHTML;
-  t('v46 menu EN: per-service photos on the cards (107 catalog + 6 Popular = 113 imgs since v105)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 113 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
+  t('v46 menu EN: per-service photos on the cards (110 catalog + 6 Popular = 116 imgs since v114)', (menuEn.match(/\/menu-img\/[a-z0-9-]+\.webp/g) || []).length === 116 && menuEn.includes('Faucet Replacement') && menuEn.includes('Members $100'));
   // --- menu EN|ES: one language at a time, persisted ---
-  t('v46 i18n: MENU_ES covers all 107 services', run('Object.keys(MENU_ES).length') === 107 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
+  t('v46 i18n: MENU_ES covers all 110 services', run('Object.keys(MENU_ES).length') === 110 && run('Object.keys(MENU_CATALOG).every(function(k){ return !!MENU_ES[k]; })') === true);
   run("setMenuLang('es');");
   const menuEs = elById.get('menuGroups').innerHTML;
   t('v46 menu ES: names + group titles + buttons switch fully to Spanish', menuEs.includes('Cambio de mezcladora / llave') && menuEs.includes('Plomería') && !menuEs.includes('Plomería · Plumbing') && menuEs.includes('Miembros $100') && menuEs.includes('>Ordenar<') && !menuEs.includes('Faucet Replacement'));
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v112: ghs-app-v113)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v114)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v114'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6529,12 +6529,12 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     robotsTxt818.includes('Sitemap: https://generalhandymans.app/sitemap.xml'));
   const sitemap818 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt818 = await sitemap818.text();
-  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing the public customer doors (v109: nineteen — the six + 8 city + 5 trade doors)',
+  t('v80.18 sitemap: GET /sitemap.xml answers 200 XML listing the public customer doors (v109: nineteen; v114: twenty with /tree)',
     sitemap818.status === 200 && String(sitemap818.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt818.includes('<urlset') &&
     ['<loc>https://generalhandymans.app/</loc>', '<loc>https://generalhandymans.app/plus</loc>',
      '<loc>https://generalhandymans.app/plus2</loc>', '<loc>https://generalhandymans.app/homecare</loc>',
-     '<loc>https://generalhandymans.app/yard</loc>', '<loc>https://generalhandymans.app/junk-removal</loc>',
+     '<loc>https://generalhandymans.app/yard</loc>', '<loc>https://generalhandymans.app/junk-removal</loc>', '<loc>https://generalhandymans.app/tree</loc>',
      '<loc>https://generalhandymans.app/handyman-fairfield</loc>', '<loc>https://generalhandymans.app/handyman-suisun-city</loc>',
      '<loc>https://generalhandymans.app/handyman-vacaville</loc>', '<loc>https://generalhandymans.app/handyman-vallejo</loc>',
      '<loc>https://generalhandymans.app/handyman-benicia</loc>', '<loc>https://generalhandymans.app/handyman-napa</loc>',
@@ -6550,22 +6550,22 @@ t('static v80.18: the server routes WebP for menu/old/ba, the og image, robots.t
     bingTxt93.includes('<user>CA95D6E2EB6DDA53B4F4B72A8D883928</user>'));
   const sitemap97 = await fetch(BASE + '/sitemap.xml');
   const sitemapTxt97 = await sitemap97.text();
-  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all nineteen apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs (v109: + the 13 city/trade doors)',
+  t('v97 sitemap: GET /sitemap.xml serves the BYTE-IDENTICAL canonical body — all twenty apex <loc>s on the canonical host only (never the fetched host), no /tecnico, no www locs (v109: + the 13 city/trade doors; v114: + /tree)',
     sitemap97.status === 200 && String(sitemap97.headers.get('content-type') || '').includes('xml') &&
     sitemapTxt97 === '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-      ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal',
+      ['/', '/plus', '/plus2', '/homecare', '/yard', '/junk-removal', '/tree',
        '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo',
        '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch',
        '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield',
        '/mobile-mechanic-fairfield'].map(d => '  <url><loc>https://generalhandymans.app' + d + '</loc></url>').join('\n') + '\n</urlset>\n');
   const sitemapWww97 = await fetch(BASE + '/sitemap-www.xml');
   const sitemapWwwTxt97 = await sitemapWww97.text();
-  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same nineteen doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
+  t('v97 www sitemap: GET /sitemap-www.xml answers 200 XML listing the same twenty doors on the www host (the second Bingbot door — www is a CNAME onto this same service)',
     sitemapWww97.status === 200 && String(sitemapWww97.headers.get('content-type') || '').includes('xml') &&
     sitemapWwwTxt97.includes('<urlset') &&
     ['<loc>https://www.generalhandymans.app/</loc>', '<loc>https://www.generalhandymans.app/plus</loc>',
      '<loc>https://www.generalhandymans.app/plus2</loc>', '<loc>https://www.generalhandymans.app/homecare</loc>',
-     '<loc>https://www.generalhandymans.app/yard</loc>', '<loc>https://www.generalhandymans.app/junk-removal</loc>',
+     '<loc>https://www.generalhandymans.app/yard</loc>', '<loc>https://www.generalhandymans.app/junk-removal</loc>', '<loc>https://www.generalhandymans.app/tree</loc>',
      '<loc>https://www.generalhandymans.app/handyman-fairfield</loc>', '<loc>https://www.generalhandymans.app/handyman-suisun-city</loc>',
      '<loc>https://www.generalhandymans.app/handyman-vacaville</loc>', '<loc>https://www.generalhandymans.app/handyman-vallejo</loc>',
      '<loc>https://www.generalhandymans.app/handyman-benicia</loc>', '<loc>https://www.generalhandymans.app/handyman-napa</loc>',
@@ -7463,7 +7463,10 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
     { row: /\| Additional drain unclog[^|]*\| \$75 \| Drain unclog \|/, price: 75, map: { 'drain-unclog': ['extra-drain'] } },
     { row: /\| Trash bin cleaning[^|]*\| \$50 \| Pressure washing \|/, price: 50, map: { 'pressure-washing': ['trash-bin-cleaning'], 'pressure-washing-large': ['trash-bin-cleaning'] } },
     { row: /\| Air \/ cabin filter swap[^|]*\| \$50 \| Oil change & fluid service \|/, price: 50, map: { 'oil-change': ['filter-swap'] } },
-    { row: /\| Old toilet removal \/ haul-away[^|]*\| \$50 \|/, price: 50, map: { 'toilet-replacement': ['haul-toilet'] } }
+    { row: /\| Old toilet removal \/ haul-away[^|]*\| \$50 \|/, price: 50, map: { 'toilet-replacement': ['haul-toilet'] } },
+    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$75 \|/, price: 75, map: { 'tree-combo-small': ['tree-decorating'] } },
+    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$100 \|/, price: 100, map: { 'tree-combo-medium': ['tree-decorating'] } },
+    { row: /\| Add full decorating: we decorate your tree your way[^|]*\| \$150 \|/, price: 150, map: { 'tree-combo-premium': ['tree-decorating'] } }
   ];
   t('v80.28 (4): every master-list add-on row is in the source AND its pairing lives in BOTH catalogs at the master price',
     PAIR_EXP28.every(e => e.row.test(masterSrc28) && Object.keys(e.map).every(sid => e.map[sid].every(aid => catAddons28(sid)[aid] === e.price && srvAddons28(sid)[aid] === e.price))));
@@ -7472,7 +7475,7 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   const allCatAddons28 = [];
   for (const lm of htmlSrc.matchAll(/'([a-z0-9-]+)': \{ name:/g)) { const o = catAddons28(lm[1]); Object.keys(o).forEach(aid => allCatAddons28.push(lm[1] + ':' + aid)); }
   t('v80.28 (4): NO catalog add-on exists outside the master relationships — pairings are never invented bundles',
-    allCatAddons28.length === 22 && allCatAddons28.every(k => covered28.has(k)));
+    allCatAddons28.length === 25 && allCatAddons28.every(k => covered28.has(k)));
   t('v80.28 (4): the one service->service pairing is the master list\'s own wording (fence post = add-on to a fence repair visit)',
     masterSrc28.includes('Fence post replacement (add-on to a fence repair visit)') && catLine28('fence-post-replacement').includes('price: 125'));
 
@@ -7538,14 +7541,14 @@ t('v80.19 trial email: the es trial member gets the Spanish trial-ending email o
   t('v80.28 VM (2): category + search combine — plumbing keeps the toilets, carpentry loses them, nothing else moves',
     run("menuVisibleIds('toilet', 'plumbing').includes('toilet-replacement')") === true && run("menuVisibleIds('toilet', 'plumbing').includes('toilet-repair')") === true
     && run("menuVisibleIds('toilet', 'carpentry').length") === 0 && run("menuVisibleIds('toilet', 'all').includes('faucet-replacement')") === false);
-  t('v80.28 VM (2): clearing the filters restores the whole catalog (107 ids since v105; per-trade counts intact — mechanic 14 with the v82 lines, prices untouched)',
-    run("menuVisibleIds('', 'all').length") === 107 && run("menuVisibleIds('', 'mechanic').length") === 14 && run("menuVisibleIds('', 'plumbing').length") === 17
+  t('v80.28 VM (2): clearing the filters restores the whole catalog (110 ids since v114; per-trade counts intact — mechanic 14 with the v82 lines, prices untouched)',
+    run("menuVisibleIds('', 'all').length") === 110 && run("menuVisibleIds('', 'mechanic').length") === 14 && run("menuVisibleIds('', 'plumbing').length") === 17
     && run("MENU_CATALOG['water-heater'].price") === 700 && run("MENU_CATALOG['toilet-replacement'].price") === 215);
   run("toggleFav('oil-change');");
-  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (113 since v105)',
+  t('v80.28 VM (3): starring a service persists it (localStorage) and the favorites strip renders WITHOUT touching the card count (116 since v114)',
     run("favsLoad().join(',')") === 'oil-change' && (run("localStorage.getItem('ghsMenuFavs')") || '').includes('oil-change')
     && elById.get('menuGroups').innerHTML.includes('data-group="favorites"') && elById.get('menuGroups').innerHTML.includes('My favorites')
-    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 113);
+    && (elById.get('menuGroups').innerHTML.match(/class="menu-card"/g) || []).length === 116);
   run("noteRecent('gutter-cleaning'); renderMenu();");
   t('v80.28 VM (3): a noted recent renders its strip (EN), newest first',
     run("recentsLoad()[0]") === 'gutter-cleaning' && elById.get('menuGroups').innerHTML.includes('data-group="recents"') && elById.get('menuGroups').innerHTML.includes('Gutter Cleaning'));
@@ -8522,7 +8525,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8609,8 +8612,8 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     !junkBad.includes('<script>alert(1)</script>') && junkBad.includes('href="/#menu"'));
   const smRes = await fetch(BASE2 + '/sitemap.xml');
   const smTxt = await smRes.text();
-  t('v105 sitemap: exactly 6 URLs then (v109: exactly 19 now — the 6 + 13 city/trade doors), /junk-removal included',
-    smRes.status === 200 && (smTxt.match(/<loc>/g) || []).length === 19 && smTxt.includes('<loc>https://generalhandymans.app/junk-removal</loc>'));
+  t('v105 sitemap: exactly 6 URLs then (v109: exactly 19; v114: exactly 20 now — the 6 + 13 city/trade doors + /tree), /junk-removal included',
+    smRes.status === 200 && (smTxt.match(/<loc>/g) || []).length === 20 && smTxt.includes('<loc>https://generalhandymans.app/junk-removal</loc>'));
   const keyRes = await fetch(BASE2 + '/08228ae9460ae3105f0709c73a626eec.txt');
   const keyTxt = await keyRes.text();
   t('v105 indexnow: the key file serves at /<key>.txt with the key as its content',
@@ -8691,7 +8694,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8785,7 +8788,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v112: ghs-app-v113)', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v114)', swSrc.includes("const CACHE = 'ghs-app-v114'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8816,9 +8819,9 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v109 statics: the 13 city/trade doors are LANDING_DOORS in server.js with the #menu join + the generator is committed',
     DOORS109.every(([route, file]) => serverSrc.includes("'" + route + "': { file: '" + file + "', join: '#menu' }")) &&
     fs.existsSync(path.join(APP_DIR, '..', 'tools', 'gen-landings-v109.mjs')));
-  t('v109 statics: SITEMAP_DOORS lists exactly the 19 doors (the 6 + the 13 new)',
+  t('v109 statics: SITEMAP_DOORS lists exactly the 20 doors (the 6 + the 13 new + /tree since v114)',
     DOORS109.every(([route]) => serverSrc.includes("'" + route + "'")) &&
-    ((serverSrc.match(/const SITEMAP_DOORS = \[([\s\S]*?)\];/) || ['', ''])[1].match(/'\/[a-z0-9-]*'/g) || []).length === 19);
+    ((serverSrc.match(/const SITEMAP_DOORS = \[([\s\S]*?)\];/) || ['', ''])[1].match(/'\/[a-z0-9-]*'/g) || []).length === 20);
   const files109 = {};
   let filesOk109 = true;
   for (const [route, file] of DOORS109) {
@@ -8860,8 +8863,8 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   };
   const halves109 = route => { const s = files109[route] || ''; const cut = s.indexOf('<div data-lang="es"'); return [s.slice(0, cut), s.slice(cut)]; };
   const allIds109 = Object.keys(prices109);
-  t('v109 fidelity setup: sources parse completely (107 priced services, EN+ES names, trade map)',
-    allIds109.length === 107 && Object.keys(nameEn109).length === 107 && Object.keys(nameEs109).length === 107 && Object.keys(tradeOf109).length === 107);
+  t('v109 fidelity setup: sources parse completely (110 priced services, EN+ES names, trade map)',
+    allIds109.length === 110 && Object.keys(nameEn109).length === 110 && Object.keys(nameEs109).length === 110 && Object.keys(tradeOf109).length === 110);
   for (const [route] of DOORS109) {
     const isCity = !TRADE109[route];
     const want = isCity ? allIds109 : allIds109.filter(id => tradeOf109[id] === TRADE109[route]);
@@ -8886,8 +8889,8 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const bad109 = await (await fetch(BASE + '/handyman-napa?src=' + encodeURIComponent('"><script>alert(1)</script>'))).text();
   t('v109 doors: hostile src is dropped, never reflected', !bad109.includes('<script>alert(1)</script>') && bad109.includes('href="/#menu"'));
   const sm109 = await (await fetch(BASE + '/sitemap.xml')).text();
-  t('v109 live sitemap: exactly 19 URLs, all 13 new doors included',
-    (sm109.match(/<loc>/g) || []).length === 19 && DOORS109.every(([route]) => sm109.includes('<loc>https://generalhandymans.app' + route + '</loc>')));
+  t('v109 live sitemap: exactly 20 URLs, all 13 new doors + /tree (v114) included',
+    (sm109.match(/<loc>/g) || []).length === 20 && DOORS109.every(([route]) => sm109.includes('<loc>https://generalhandymans.app' + route + '</loc>')));
 }
 
 // ---------------- v110: CART RESCUE — TEXT CHANNEL ----------------
@@ -8985,7 +8988,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v110 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9010,8 +9013,8 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const door111b = await (await fetch(BASE + '/homecare')).text();
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
-  t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 19 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
+  t('v111 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9026,7 +9029,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v113', swSrc.includes("const CACHE = 'ghs-app-v113'"));
+  t('v112 statics: SW cache bumped to ghs-app-v114', swSrc.includes("const CACHE = 'ghs-app-v114'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
@@ -9044,6 +9047,52 @@ try { child2.kill('SIGTERM'); } catch (e) {}
 try { stripeMock.close(); } catch (e) {}
 try { resendMock.close(); } catch (e) {}
 
+
+// ---------------- v114: CHRISTMAS TREE COMBOS (Gabriel 2026-11-22) ----------------
+{
+  // Three product-delivery combos next to the holiday-lights family
+  // (electrical trade/group, same placement). Prices LOCKED by Gabriel:
+  // $199 / $299 / $499, member == list (nodisc — the price is mostly
+  // materials: tree + stand; materials never discount). NO service-level
+  // payFull exists in the codebase (payFull is a cart-level flag set by
+  // the builder), so the combos ride the standard deposit split.
+  const TREE114 = [['tree-combo-small', 199], ['tree-combo-medium', 299], ['tree-combo-premium', 499]];
+  t('v114 server menu: the 3 tree combos priced exactly as Gabriel locked them (member == list, nodisc)',
+    TREE114.every(([id, pr]) => serverSrc.includes('"' + id + '":{p:' + pr + ',m:' + pr + ',')));
+  t('v114 catalog: EN names + prices mirror the server menu',
+    appJsSrc.includes("'tree-combo-small': { name: 'Basic Tree Combo'") && appJsSrc.includes('price: 199, member: 199') &&
+    appJsSrc.includes("'tree-combo-medium': { name: 'Medium Tree Combo'") && appJsSrc.includes('price: 299, member: 299') &&
+    appJsSrc.includes("'tree-combo-premium': { name: 'Premium Tree Combo'") && appJsSrc.includes('price: 499, member: 499'));
+  t('v114 i18n: MENU_ES carries the 3 combos (names Gabriel approved)',
+    appJsSrc.includes("'tree-combo-small': ['Combo Básico de Árbol'") &&
+    appJsSrc.includes("'tree-combo-medium': ['Combo Mediano de Árbol'") &&
+    appJsSrc.includes("'tree-combo-premium': ['Combo Premium de Árbol'"));
+  t('v114 placement: electrical group + trade, right after the holiday-lights family',
+    appJsSrc.includes("'tree-combo-small', 'tree-combo-medium', 'tree-combo-premium', 'window-ac-install'") &&
+    TREE114.every(([id]) => serverSrc.includes("'" + id + "': 'electrical'")));
+  t('v114 photos: one menu image per combo on disk (512x341 webp set)',
+    TREE114.every(([id]) => fs.existsSync(path.join(APP_DIR, 'public', 'menu-img', id + '.webp'))));
+  const elec114 = fs.readFileSync(path.join(APP_DIR, 'public', 'landings', 'electrical-fairfield.html'), 'utf8');
+  t('v114 tree combos: decorating add-on with the final approved wording (labor only — customer supplies ornaments, garland & topper), nodisc, $75/$100/$150 in BOTH catalogs + the ES sentence on the card',
+    [75, 100, 150].every(p => appJsSrc.includes("id: 'tree-decorating', name: 'Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper', price: " + p + ", nodisc: true")) &&
+    [75, 100, 150].every(p => serverSrc.includes('"tree-decorating":[' + p + ',1,"Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper"]')) &&
+    appJsSrc.includes('decoración completa a tu gusto (add-on: solo mano de obra — tú pones los adornos, la guirnalda y la estrella)'));
+  t('v114 landings: the electrical trade page carries the 3 combos EN+ES at the locked prices',
+    TREE114.every(([id, pr]) => elec114.includes('href="https://generalhandymans.app/#order/' + id + '"') && elec114.includes('$' + pr)) &&
+    elec114.includes('Combo Premium de Árbol') && elec114.includes('Members $499'));
+  const treeDoor114 = fs.readFileSync(path.join(APP_DIR, 'public', 'landings', 'tree.html'), 'utf8');
+  t('v114 door: /tree is a LANDING_DOORS page whose join/join2/join3 are the three combo order deep-links (src stamp rides all three)',
+    serverSrc.includes("'/tree': { file: 'tree.html', join: '#order/tree-combo-small', join2: '#order/tree-combo-medium', join3: '#order/tree-combo-premium' }") &&
+    serverSrc.includes("if (door.join3) body = body.split('%%JOIN3%%').join(href(door.join3));") &&
+    serverSrc.includes("'/tree',"));
+  t('v114 door: the /tree page shows EVERY price EN+ES — combos $199/$299/$499 and the decorating add-on +$75/+$100/+$150, nothing price-on-request',
+    treeDoor114.includes('%%JOIN%%') && treeDoor114.includes('%%JOIN2%%') && treeDoor114.includes('%%JOIN3%%') &&
+    treeDoor114.includes('Basic Tree Combo') && treeDoor114.includes('Combo Básico de Árbol') &&
+    treeDoor114.includes('Premium Tree Combo') && treeDoor114.includes('Combo Premium de Árbol') &&
+    ['$199', '$299', '$499', '+$75', '+$100', '+$150'].every(x => treeDoor114.includes(x)) &&
+    treeDoor114.includes('REPORTING FOR DUTY') && treeDoor114.includes('data-lang="es"') &&
+    treeDoor114.includes('You buy and supply ALL the decorations (ornaments, garland and topper)') && treeDoor114.includes('Tú compras y pones TODAS las decoraciones (adornos, guirnalda y estrella)') && treeDoor114.includes('data:image/webp;base64,'));
+}
 
 // ---------------- summary ----------------
 console.log('');

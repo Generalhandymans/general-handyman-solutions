@@ -228,6 +228,9 @@ eléctrico, nada de circuitos nuevos — guardrail de licencia.*
 | Holiday lights install (two-story) | $295 | flat | ~3.5 h | CONFIRMADO |
 | Holiday light take-down & storage (single story) | $85 | flat | ~1 h | CONFIRMADO |
 | Holiday light take-down & storage (two-story) — SOLO GABRIEL, no se despacha | $225 | flat | ~3 h | CONFIRMADO |
+| Basic tree combo (Douglas fir 6–7 ft + stand, delivered & installed) | $199 | flat | ~1.5 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro — el precio es mayormente materiales) |
+| Medium tree combo (Noble fir 7–8 ft + stand, delivered & installed, we hang your lights) | $299 | flat | ~2 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) |
+| Premium tree combo (Noble fir 9–10 ft + steel stand, delivered & installed, we install your lights on the tree + entryway) | $499 | flat | ~3 h | CONFIRMADO (Gabriel 2026-11-22; sin descuento de miembro) |
 | Window AC unit install | $250 | flat | ~1.5 h | CONFIRMADO |
 
 ## 3. Plomería
@@ -367,6 +370,11 @@ haul-away según la fila. Aprobados por Gabriel el 2026-10-22.*
 | Additional drain unclog — same visit | $75 | Drain unclog | each add-on | CONFIRMADO |
 | Trash bin cleaning (2 bins) — with a pressure washing job | $50 | Pressure washing | add-on | CONFIRMADO |
 | Air / cabin filter swap — with an oil change & fluid service | $50 | Oil change & fluid service | add-on | CONFIRMADO |
+| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Basic Tree Combo | $75 | Basic tree combo | add-on | CONFIRMADO |
+| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Medium Tree Combo | $100 | Medium tree combo | add-on | CONFIRMADO |
+| Add full decorating: we decorate your tree your way — labor only, you supply the ornaments, garland and topper — Premium Tree Combo | $150 | Premium tree combo | add-on | CONFIRMADO |
+
+*Tree decorating add-ons: aprobados por Gabriel el 2026-11-22. Los adornos son SIEMPRE del cliente — GHS nunca surte adornos; el add-on es la mano de obra de decorar el árbol completo. Sin descuento de miembro (nodisc), igual que los combos.*
 
 *TV add-ons: raceway es canal superficial (surface raceway), no es
 esconder cables dentro de la pared ni mover outlets. Soundbar add-on
