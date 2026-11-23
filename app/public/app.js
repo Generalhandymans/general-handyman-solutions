@@ -4671,6 +4671,17 @@ const ADM118 = {
 };
 const CRM_STAGE_KEYS118 = ['nuevo', 'cotizado', 'deposito_pendiente', 'agendado', 'hecho', 'review_repetir'];
 const CRM_ZONE_KEYS118 = ['Fairfield', 'Suisun City', 'Vacaville', 'Vallejo', 'Benicia', 'Napa', 'Concord', 'Antioch', 'Otra / sin zona'];
+// ---------- v119: manual leads in the CRM (admin) ----------
+// Gabriel registers by hand the leads who arrive by Messenger,
+// Instagram, Google Voice or Marketplace (POST /api/admin/crm/leads);
+// they merge into the same list with a Manual badge, their ficha edits
+// the contact fields too, and only they can be deleted. Shared labels
+// (zone/stage/source/notes/save/stageNames) come from ADM118.
+const ADM119 = {
+  en: { addLead: '+ Add lead', manual: 'Manual', name: 'Name', phone: 'Phone', email: 'Email', create: 'Add lead', cancel: 'Cancel', deleteLead: 'Delete lead', confirmDelete: 'Delete this manual lead? This cannot be undone.', nameRequired: 'The name is required.' },
+  es: { addLead: '+ Agregar lead', manual: 'Manual', name: 'Nombre', phone: 'Teléfono', email: 'Correo', create: 'Agregar lead', cancel: 'Cancelar', deleteLead: 'Borrar lead', confirmDelete: '¿Borrar este lead manual? No se puede deshacer.', nameRequired: 'El nombre es obligatorio.' }
+};
+const CRM_SOURCE_KEYS119 = ['Google', 'Instagram', 'Facebook', 'Marketplace', 'Google Voice', 'Referido', 'Otro'];
 let crmRowsCache118 = [], crmZoneFilter118 = '', crmSearch118 = '', crmStages118 = {}, crmZones118 = {};
 async function loadAdminCrm(){
   const host = document.getElementById('adminCrm'); if (!host || !me || me.role !== 'admin') return;
@@ -4689,17 +4700,63 @@ function renderAdminCrmList(){
     + CRM_STAGE_KEYS118.map(k => '<span class="chip" style="display:inline-block;border:1px solid #3f3f46;border-radius:999px;padding:2px 10px;margin:0 4px 4px 0;font-size:12px">' + S.stageNames[k] + ': <b>' + (crmStages118[k] || 0) + '</b></span>').join('') + '</div>'
     + '<div class="row" style="margin-top:6px"><select id="crmZoneSel" onchange="crmZoneFilter118=this.value;renderAdminCrmList()"><option value="">' + S.allZones + '</option>'
     + CRM_ZONE_KEYS118.map(z => '<option value="' + escHtml(z) + '"' + (crmZoneFilter118 === z ? ' selected' : '') + '>' + escHtml(z) + (crmZones118[z] ? ' (' + crmZones118[z] + ')' : '') + '</option>').join('') + '</select>'
-    + '<input id="crmSearchInp" type="search" placeholder="' + S.searchPh + '" value="' + escHtml(crmSearch118) + '" oninput="crmSearch118=this.value.toLowerCase();renderAdminCrmRowsOnly()"></div></div>';
+    + '<input id="crmSearchInp" type="search" placeholder="' + S.searchPh + '" value="' + escHtml(crmSearch118) + '" oninput="crmSearch118=this.value.toLowerCase();renderAdminCrmRowsOnly()"></div>'
+    + '<div style="margin-top:8px"><button class="black" onclick="toggleCrmLeadForm()">' + (ADM119[menuLang()] || ADM119.en).addLead + '</button></div><div id="crmLeadFormHost"></div></div>';
   h += '<div id="crmRowsHost">' + crmRowsHtml118(rows, S) + '</div>';
   host.innerHTML = h;
 }
+// v119: the "+ Add lead" form — name is the only required field; zone
+// and stage are selects over the same CRM sets the server validates.
+let crmLeadFormOpen119 = false;
+function toggleCrmLeadForm(){
+  crmLeadFormOpen119 = !crmLeadFormOpen119;
+  const host = document.getElementById('crmLeadFormHost'); if (!host) return;
+  if (!crmLeadFormOpen119) { host.innerHTML = ''; return; }
+  const S = ADM118[menuLang()] || ADM118.en, S9 = ADM119[menuLang()] || ADM119.en;
+  host.innerHTML = '<div style="margin-top:10px;border-top:1px solid #3f3f46;padding-top:10px">'
+    + '<div class="est-grid"><label>' + S9.name + ' *<input id="crmLeadName"></label>'
+    + '<label>' + S9.phone + '<input id="crmLeadPhone"></label>'
+    + '<label>' + S9.email + '<input id="crmLeadEmail"></label></div>'
+    + '<label style="display:block;margin-top:8px">' + S.address + '<input id="crmLeadAddress" style="width:100%"></label>'
+    + '<div class="est-grid" style="margin-top:8px"><label>' + S.zone + '<select id="crmLeadZone">' + CRM_ZONE_KEYS118.map(z => '<option value="' + escHtml(z) + '">' + escHtml(z) + '</option>').join('') + '</select></label>'
+    + '<label>' + S.source + '<select id="crmLeadSource"><option value=""></option>' + CRM_SOURCE_KEYS119.map(s => '<option value="' + escHtml(s) + '">' + escHtml(s) + '</option>').join('') + '</select></label>'
+    + '<label>' + S.stage + '<select id="crmLeadStage">' + CRM_STAGE_KEYS118.map(k => '<option value="' + k + '"' + (k === 'nuevo' ? ' selected' : '') + '>' + S.stageNames[k] + '</option>').join('') + '</select></label></div>'
+    + '<label style="display:block;margin-top:8px">' + S.notes + '<textarea id="crmLeadNotes" rows="2" style="width:100%"></textarea></label>'
+    + '<div class="row" style="margin-top:8px"><button class="black" onclick="createCrmLead()">' + S9.create + '</button><button class="ghost" onclick="toggleCrmLeadForm()">' + S9.cancel + '</button></div></div>';
+  const n = document.getElementById('crmLeadName'); if (n) n.focus();
+}
+async function createCrmLead(){
+  const S9 = ADM119[menuLang()] || ADM119.en;
+  const val = id => ((document.getElementById(id) || {}).value || '').trim();
+  const body = { name: val('crmLeadName'), phone: val('crmLeadPhone'), email: val('crmLeadEmail'), address: val('crmLeadAddress'), zone: val('crmLeadZone'), source: val('crmLeadSource'), stage: val('crmLeadStage'), notes: val('crmLeadNotes') };
+  if (!body.name) { alert(S9.nameRequired); return; }
+  try {
+    const d = await api('/api/admin/crm/leads', { method: 'POST', body: JSON.stringify(body) });
+    crmLeadFormOpen119 = false;
+    await loadAdminCrm();
+    const idx = crmRowsCache118.findIndex(r => r.key === d.customer.key);
+    if (idx >= 0) openCrmFicha(idx);
+  } catch (e) { alert(e.message); }
+}
+async function deleteCrmLead(){
+  const S9 = ADM119[menuLang()] || ADM119.en;
+  if (!confirm(S9.confirmDelete)) return;
+  try {
+    await api('/api/admin/crm/leads/' + encodeURIComponent(crmFichaKey118), { method: 'DELETE' });
+    crmFichaKey118 = '';
+    const fh = document.getElementById('adminCrmFicha'); if (fh) fh.innerHTML = '';
+    loadAdminCrm();
+  } catch (e) { alert(e.message); }
+}
 function crmRowsHtml118(rows, S){
   if (!rows.length) return '<div class="card">' + S.none + '</div>';
+  const S9 = ADM119[menuLang()] || ADM119.en;
   return rows.map(r => {
     const idx = crmRowsCache118.indexOf(r);
     const fu = r.followUps ? ' · <b class="st">' + S.followUps + ': ' + r.followUps + '</b>' : '';
     const dep = r.openDepositDue > 0 ? ' · ' + S.depositDue + ': <b class="st">' + moneyFmt(r.openDepositDue) + '</b>' : '';
-    return '<div class="card" style="cursor:pointer" onclick="openCrmFicha(' + idx + ')"><b>' + escHtml(r.name || '') + '</b> — ' + escHtml(r.zone || '') + '<br><span class="mut">' + S.stageNames[r.stage] + ' · ' + r.carts + ' ' + S.carts + ' · ' + r.orders + ' ' + S.orders + '</span>' + fu + '<div style="margin-top:6px">' + S.lifetime + ': <b>' + moneyFmt(r.lifetimePaid || 0) + '</b>' + dep + '</div></div>';
+    const badge = r.manual ? ' <span style="display:inline-block;border:1px solid #e42535;color:#e42535;border-radius:999px;padding:0 8px;font-size:11px;font-weight:700">' + S9.manual + '</span>' : '';
+    return '<div class="card" style="cursor:pointer" onclick="openCrmFicha(' + idx + ')"><b>' + escHtml(r.name || '') + '</b>' + badge + ' — ' + escHtml(r.zone || '') + '<br><span class="mut">' + S.stageNames[r.stage] + ' · ' + r.carts + ' ' + S.carts + ' · ' + r.orders + ' ' + S.orders + '</span>' + fu + '<div style="margin-top:6px">' + S.lifetime + ': <b>' + moneyFmt(r.lifetimePaid || 0) + '</b>' + dep + '</div></div>';
   }).join('');
 }
 function renderAdminCrmRowsOnly(){
@@ -4737,8 +4794,13 @@ function renderCrmFicha(c, S){
     + '<div class="est-grid" style="margin-top:10px"><label>' + S.zone + '<select id="crmZoneInp">' + zoneOpts.map(z => '<option value="' + escHtml(z) + '"' + (c.zone === z ? ' selected' : '') + '>' + escHtml(z) + '</option>').join('') + '</select></label>'
     + '<label>' + S.stage + '<select id="crmStageInp"><option value="">' + S.auto + ' (' + S.stageNames[c.stageAuto] + ')</option>' + CRM_STAGE_KEYS118.map(k => '<option value="' + k + '"' + (c.stageManual && c.stage === k ? ' selected' : '') + '>' + S.stageNames[k] + '</option>').join('') + '</select></label>'
     + '<label>' + S.source + '<input id="crmSourceInp" value="' + escHtml(c.source || '') + '"></label></div>'
+    + (c.manual ? '<div class="est-grid" style="margin-top:8px"><label>' + (ADM119[menuLang()] || ADM119.en).name + '<input id="crmNameInp" value="' + escHtml(c.name || '') + '"></label>'
+      + '<label>' + (ADM119[menuLang()] || ADM119.en).phone + '<input id="crmPhoneInp" value="' + escHtml(c.phone || '') + '"></label>'
+      + '<label>' + (ADM119[menuLang()] || ADM119.en).email + '<input id="crmEmailInp" value="' + escHtml(c.email || '') + '"></label></div>'
+      + '<label style="display:block;margin-top:8px">' + S.address + '<input id="crmAddressInp" style="width:100%" value="' + escHtml(c.address || '') + '"></label>' : '')
     + '<label style="display:block;margin-top:8px">' + S.notes + '<textarea id="crmNotesInp" rows="2" style="width:100%">' + escHtml(c.notes || '') + '</textarea></label>'
-    + '<div class="row" style="margin-top:8px"><button class="black" onclick="saveCrmFicha()">' + S.save + '</button><span id="crmSaveMsg" class="mut"></span></div>'
+    + '<div class="row" style="margin-top:8px"><button class="black" onclick="saveCrmFicha()">' + S.save + '</button><span id="crmSaveMsg" class="mut"></span>'
+    + (c.manual ? '<button class="ghost" style="color:#e42535;border-color:#e42535" onclick="deleteCrmLead()">' + (ADM119[menuLang()] || ADM119.en).deleteLead + '</button>' : '') + '</div>'
     + (fu ? '<div style="margin-top:12px"><b>' + S.followUps + '</b>' + fu + '</div>' : '')
     + '<div style="margin-top:12px"><b>' + S.history + '</b>' + (hist || '<div class="mut">' + S.noHistory + '</div>') + '</div></div>';
 }
@@ -4750,6 +4812,15 @@ async function saveCrmFicha(){
     source: (document.getElementById('crmSourceInp') || {}).value || '',
     notes: (document.getElementById('crmNotesInp') || {}).value || ''
   };
+  // v119: manual leads also carry their contact fields in the ficha —
+  // the inputs only exist for them; the server ignores them otherwise.
+  const nameInp = document.getElementById('crmNameInp');
+  if (nameInp) {
+    body.name = nameInp.value || '';
+    body.phone = (document.getElementById('crmPhoneInp') || {}).value || '';
+    body.email = (document.getElementById('crmEmailInp') || {}).value || '';
+    body.address = (document.getElementById('crmAddressInp') || {}).value || '';
+  }
   try {
     const d = await api('/api/admin/crm/' + encodeURIComponent(crmFichaKey118), { method: 'POST', body: JSON.stringify(body) });
     renderCrmFicha(d.customer, S);

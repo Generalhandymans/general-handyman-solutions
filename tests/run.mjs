@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+t('static: SW cache is ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v118)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v119)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v119'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8528,7 +8528,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8697,7 +8697,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8791,7 +8791,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8991,7 +8991,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v110 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9017,7 +9017,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v111 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9032,7 +9032,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v112 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
@@ -9315,8 +9315,88 @@ try { resendMock.close(); } catch (e) {}
   // --- statics ---
   t('v118 statics: server CRM block + endpoints + stages wired', serverSrc.includes("p === '/api/admin/crm'") && serverSrc.includes('function crmFicha(') && serverSrc.includes('function crmCustomers(') && serverSrc.includes("'deposito_pendiente'") && serverSrc.includes("audit(user, 'crm.update'"));
   t('v118 statics: admin Clientes/CRM panel + ficha wired in the client (EN/ES labels, loadAdmin hook)', appJsSrc.includes('function loadAdminCrm(') && appJsSrc.includes('function openCrmFicha(') && appJsSrc.includes('loadAdminCrm();') && appJsSrc.includes('Depósito pendiente') && shellSrc.includes('id="adminCrm"') && shellSrc.includes('id="admSecCrm"'));
-  t('v118 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  t('v118 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
   try { child18.kill('SIGTERM'); } catch (e) {}
+}
+
+// ---------------- v119: CRM manual leads ----------------
+{
+  // Gabriel's follow-up to v118 (2026-11-22): the CRM only derived
+  // customers from the app — leads from Messenger / Instagram / Google
+  // Voice / Marketplace must be registrable BY HAND, name + zone first.
+  // Dedicated instance; fixtures through the real API only.
+  const DATA_FILE19 = '/tmp/ghs-v17-test/data-v119.json';
+  const BASE19 = 'http://127.0.0.1:8997';
+  const env119 = { PORT: '8997', DATA_FILE: DATA_FILE19, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+  try { fs.mkdirSync('/tmp/ghs-v17-test', { recursive: true }); } catch (e) {}
+  try { fs.unlinkSync(DATA_FILE19); } catch (e) {}
+  const child19 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env119), stdio: ['ignore', 'pipe', 'pipe'] });
+  child19.stderr.on('data', d => process.stderr.write('[app19] ' + d));
+  async function req19(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE19 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp19() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE19 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v119 app19: the manual-leads instance boots', await waitUp19());
+  await req19('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin19@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+  const A19 = (await req19('POST', '/api/login', { body: { email: 'admin19@t.local', password: 'adminpass1' } })).j.token;
+  // --- a DERIVED customer through the real API (v118 behavior anchor) ---
+  await req19('POST', '/api/signup', { body: { name: 'Dora Derivada', email: 'crm-dora@t.local', password: 'dorapass1', phone: '(707) 555-0140', serviceAddress: '44 Oak Ave, Fairfield, CA 94533', role: 'customer' } });
+  const D19TOK = (await req19('POST', '/api/login', { body: { email: 'crm-dora@t.local', password: 'dorapass1' } })).j.token;
+  const DORA19 = (await req19('GET', '/api/me', { token: D19TOK })).j.user.id;
+  const DKEY19 = 'u:' + DORA19;
+  t('v119 fixtures: derived account created through the real API', !!DORA19);
+  // --- auth: create + delete are admin-only ---
+  const noCreate19 = await req19('POST', '/api/admin/crm/leads', { body: { name: 'Sin Auth' } });
+  const noDel19 = await req19('DELETE', '/api/admin/crm/leads/' + encodeURIComponent('m:LD-XXXXXX'), {});
+  t('v119 auth: lead create and delete answer 401 unauthenticated', noCreate19.status === 401 && noDel19.status === 401);
+  // --- validation: name required, stage must be a pipeline stage ---
+  const noName19 = await req19('POST', '/api/admin/crm/leads', { token: A19, body: { phone: '(707) 555-9999' } });
+  const badStage19 = await req19('POST', '/api/admin/crm/leads', { token: A19, body: { name: 'Sin Etapa Valida', stage: 'enojado' } });
+  t('v119 create: a missing name is a 400 and an unknown stage is a 400', noName19.status === 400 && badStage19.status === 400);
+  // --- create: full lead (lowercase zone normalizes) + bare lead (defaults) ---
+  const luis19 = await req19('POST', '/api/admin/crm/leads', { token: A19, body: { name: 'Luis Lead', phone: '(707) 555-0130', email: 'lead-luis@t.local', address: '9 Elm St, Vacaville, CA 94533', zone: 'vacaville', source: 'Facebook', stage: 'cotizado', notes: 'Quiere frenos — Sprinter' } });
+  const LKEY19 = (luis19.j.customer || {}).key || '';
+  t('v119 create: the lead lands under an m: key flagged manual, zone normalized to Vacaville, stage + source + notes stored, lifetime 0', luis19.status === 200 && LKEY19.startsWith('m:') && luis19.j.customer.manual === true && luis19.j.customer.name === 'Luis Lead' && luis19.j.customer.zone === 'Vacaville' && luis19.j.customer.stage === 'cotizado' && luis19.j.customer.source === 'Facebook' && luis19.j.customer.notes === 'Quiere frenos — Sprinter' && luis19.j.customer.lifetimePaid === 0);
+  const maria19 = await req19('POST', '/api/admin/crm/leads', { token: A19, body: { name: 'Maria Lead' } });
+  const MKEY19 = (maria19.j.customer || {}).key || '';
+  t('v119 create: a bare lead defaults to stage nuevo and the zone fallback', maria19.status === 200 && !!MKEY19 && maria19.j.customer.stage === 'nuevo' && maria19.j.customer.zone === 'Otra / sin zona');
+  // --- the list merges manual + derived, counts include the leads ---
+  const list19 = (await req19('GET', '/api/admin/crm', { token: A19 })).j;
+  const rows19 = list19.customers || [];
+  const rLuis19 = rows19.find(r => r.key === LKEY19), rMaria19 = rows19.find(r => r.key === MKEY19), rDora19 = rows19.find(r => r.key === DKEY19);
+  t('v119 list: manual leads merge with the derived customer (manual flag on leads only) and feed the stage/zone counts', list19.count === 3 && !!rLuis19 && rLuis19.manual === true && !!rMaria19 && rMaria19.manual === true && !!rDora19 && !rDora19.manual && rDora19.name === 'Dora Derivada' && list19.stages.cotizado === 1 && list19.stages.nuevo === 2 && list19.zones.Vacaville === 1 && list19.zones.Fairfield === 1 && list19.zones['Otra / sin zona'] === 1);
+  // --- the ficha of a manual lead: the record, empty history ---
+  const ficha19 = (await req19('GET', '/api/admin/crm/' + encodeURIComponent(LKEY19), { token: A19 })).j.customer || {};
+  t('v119 ficha: returns the lead record with empty carts/orders, no membership and no follow-ups', ficha19.name === 'Luis Lead' && ficha19.phone === '(707) 555-0130' && ficha19.email === 'lead-luis@t.local' && ficha19.address.includes('Vacaville') && (ficha19.carts || []).length === 0 && (ficha19.orders || []).length === 0 && !ficha19.membership && (ficha19.followUpsList || []).length === 0);
+  // --- edit: contact fields persist on a manual lead ---
+  const edit19 = await req19('POST', '/api/admin/crm/' + encodeURIComponent(LKEY19), { token: A19, body: { name: 'Luis Lead Editado', phone: '(707) 555-0131', email: 'luis2@t.local', address: '10 Elm St, Vacaville, CA', stage: 'agendado' } });
+  const disk19 = JSON.parse(fs.readFileSync(DATA_FILE19, 'utf8'));
+  t('v119 edit: name/phone/email/address/stage update on the manual record and persist in db.crm', edit19.status === 200 && edit19.j.customer.name === 'Luis Lead Editado' && edit19.j.customer.phone === '(707) 555-0131' && edit19.j.customer.email === 'luis2@t.local' && edit19.j.customer.address.includes('10 Elm St') && edit19.j.customer.stage === 'agendado' && !!disk19.crm[LKEY19] && disk19.crm[LKEY19].manual === true && disk19.crm[LKEY19].name === 'Luis Lead Editado');
+  const emptyName19 = await req19('POST', '/api/admin/crm/' + encodeURIComponent(LKEY19), { token: A19, body: { name: '   ' } });
+  t('v119 edit: clearing a manual lead name is a 400 (name stays required)', emptyName19.status === 400);
+  // --- derived customers keep v118 behavior: contact fields are ignored ---
+  const hack19 = await req19('POST', '/api/admin/crm/' + encodeURIComponent(DKEY19), { token: A19, body: { name: 'Nombre Hackeado', phone: '(000) 000-0000' } });
+  t('v119 derived: contact edits on a derived customer are ignored (name + phone stay the account’s)', hack19.status === 200 && hack19.j.customer.name === 'Dora Derivada' && hack19.j.customer.phone === '(707) 555-0140');
+  // --- delete: derived keys are refused, unknown keys 404 ---
+  const delDerived19 = await req19('DELETE', '/api/admin/crm/leads/' + encodeURIComponent(DKEY19), { token: A19 });
+  const delGhost19 = await req19('DELETE', '/api/admin/crm/leads/' + encodeURIComponent('m:LD-NOPE99'), { token: A19 });
+  const list19b = (await req19('GET', '/api/admin/crm', { token: A19 })).j;
+  t('v119 delete: a derived key is refused (400), an unknown manual key is a 404, and the derived customer is untouched', delDerived19.status === 400 && delGhost19.status === 404 && (list19b.customers || []).some(r => r.key === DKEY19));
+  // --- delete: a manual lead goes away everywhere ---
+  const del19 = await req19('DELETE', '/api/admin/crm/leads/' + encodeURIComponent(MKEY19), { token: A19 });
+  const list19c = (await req19('GET', '/api/admin/crm', { token: A19 })).j;
+  const fichaGone19 = await req19('GET', '/api/admin/crm/' + encodeURIComponent(MKEY19), { token: A19 });
+  const disk19b = JSON.parse(fs.readFileSync(DATA_FILE19, 'utf8'));
+  t('v119 delete: the manual lead leaves the list, its ficha 404s and the db.crm record is gone', del19.status === 200 && del19.j.deleted === MKEY19 && !(list19c.customers || []).some(r => r.key === MKEY19) && fichaGone19.status === 404 && !disk19b.crm[MKEY19]);
+  // --- statics ---
+  t('v119 statics: server lead endpoints + manual merge wired', serverSrc.includes("p === '/api/admin/crm/leads'") && serverSrc.includes('function crmManualEntry(') && serverSrc.includes('function crmAllCustomers(') && serverSrc.includes("audit(user, 'crm.lead.create'") && serverSrc.includes("audit(user, 'crm.lead.delete'"));
+  t('v119 statics: admin add-lead form + manual badge + delete wired in the client (ADM119 EN/ES)', appJsSrc.includes('function toggleCrmLeadForm(') && appJsSrc.includes('function createCrmLead(') && appJsSrc.includes('function deleteCrmLead(') && appJsSrc.includes('ADM119') && appJsSrc.includes('Agregar lead') && appJsSrc.includes('/api/admin/crm/leads'));
+  t('v119 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  try { child19.kill('SIGTERM'); } catch (e) {}
 }
 
 // ---------------- summary ----------------

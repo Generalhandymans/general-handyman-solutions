@@ -3432,7 +3432,7 @@ function crmRow(e) {
   const autoZone = crmAutoZone(e);
   const fu = crmFollowUps(e);
   return {
-    key: e.key, userId: e.userId, name: e.name || e.email || e.phone || '(sin nombre)',
+    key: e.key, userId: e.userId, manual: !!e.manual, name: e.name || e.email || e.phone || '(sin nombre)',
     email: e.email, phone: e.phone, address: e.address, city: e.city,
     zone: rec.zone || autoZone, zoneAuto: autoZone, zoneManual: !!rec.zone,
     source: rec.source !== undefined && rec.source !== '' ? rec.source : (e.source || ''), sourceManual: !!(rec.source),
@@ -3459,6 +3459,29 @@ function crmFicha(e) {
     messages: (r.messages || []).map(m => ({ from: m.from || '', name: m.name || '', text: m.text || '', at: m.at || '' }))
   }));
   return Object.assign(row, { carts, orders, followUpsList: crmFollowUps(e) });
+}
+// ---------- v119: CRM manual leads (Gabriel, 2026-11-22) ----------
+// v118's list is DERIVED from app records — but leads who arrive by
+// Messenger, Instagram, Google Voice or Marketplace never touch the app
+// until they buy, so Gabriel registers them BY HAND: name + zone first,
+// like the rest of the bench. A manual lead is a standalone record in
+// the same db.crm section, keyed 'm:<id>' with manual:true, holding its
+// OWN contact fields (name/phone/email/address live on the record, not
+// derived). It merges into the same list/ficha shapes (lifetime 0, no
+// carts/orders, no membership, no computed follow-ups) and can be
+// deleted — derived customers can NEVER be deleted through the CRM.
+const CRM_LEAD_SOURCES = ['Google', 'Instagram', 'Facebook', 'Marketplace', 'Google Voice', 'Referido', 'Otro'];
+function crmIsManualKey(key) { return typeof key === 'string' && key.startsWith('m:'); }
+function crmManualEntry(key) {
+  const rec = crmOf()[key];
+  if (!rec || rec.manual !== true) return null;
+  return { key, userId: '', manual: true, name: rec.name || '', email: rec.email || '', phone: rec.phone || '', address: rec.address || '', city: '', source: rec.source || '', carts: [], orders: [], createdAt: rec.createdAt || '', lastActivity: rec.updatedAt || rec.createdAt || '' };
+}
+// Derived customers (v118) + every manual lead, one merged list.
+function crmAllCustomers() {
+  const out = crmCustomers();
+  for (const key of Object.keys(crmOf())) if (crmIsManualKey(key)) { const e = crmManualEntry(key); if (e) out.push(e); }
+  return out;
 }
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
@@ -7087,7 +7110,7 @@ async function handleRequest(req, res) {
   // one; an empty stage clears back to auto). Admin only, like rescue.
   if (p === '/api/admin/crm' && req.method === 'GET') {
     if (!requireRole(user, ['admin'], res)) return;
-    const entries = crmCustomers();
+    const entries = crmAllCustomers();
     const rows = entries.map(crmRow).sort((a, b) => (b.lifetimePaid - a.lifetimePaid) || String(a.name).localeCompare(String(b.name)));
     const stages = {}; for (const s of CRM_STAGES) stages[s] = 0;
     const zones = {};
@@ -7100,15 +7123,59 @@ async function handleRequest(req, res) {
     for (const e of entries) for (const f of crmFollowUps(e)) if (f.type === 'review') reviewCount++;
     return send(res, 200, { ok: true, count: rows.length, stages, zones, followUps: { depositCustomers: depositCount, depositDue: Math.round(depositDue * 100) / 100, reviewPending: reviewCount }, customers: rows });
   }
+  // v119: manual lead registration — Gabriel adds leads who arrived by
+  // Messenger / Instagram / Google Voice / Marketplace before they ever
+  // touch the app. Name is the only required field; zone normalizes to
+  // the 8 service cities (fallback "Otra / sin zona"); the stage must be
+  // a pipeline stage (default nuevo). Stored in db.crm under an 'm:' key.
+  if (p === '/api/admin/crm/leads' && req.method === 'POST') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const b = await readBody(req);
+    const name = cleanText(b.name, 120);
+    if (!name) return send(res, 400, { error: 'name is required' });
+    const stage = cleanText(b.stage, 40) || 'nuevo';
+    if (!CRM_STAGES.includes(stage)) return send(res, 400, { error: 'unknown stage — use one of: ' + CRM_STAGES.join(', ') });
+    const now = new Date().toISOString();
+    const key = 'm:' + id('LD');
+    const zone = crmZoneFromCity(cleanText(b.zone, 60)) || CRM_ZONE_FALLBACK;
+    crmOf()[key] = { manual: true, name, phone: cleanText(b.phone, 40), email: crmNormEmail(b.email).slice(0, 120), address: cleanText(b.address, 300), zone, source: cleanText(b.source, 80), stage, notes: cleanText(b.notes, 2000), createdAt: now, updatedAt: now };
+    audit(user, 'crm.lead.create', key, 'name=' + name + ' · zone=' + zone + ' · stage=' + stage + ' · source=' + (crmOf()[key].source || '—'));
+    save();
+    return send(res, 200, { ok: true, customer: crmFicha(crmManualEntry(key)) });
+  }
+  // v119: delete — MANUAL leads only. A derived key is refused (400):
+  // real customer data is never deleted through the CRM.
+  const crmLeadDelMatch = p.match(/^\/api\/admin\/crm\/leads\/(.+)$/);
+  if (crmLeadDelMatch && req.method === 'DELETE') {
+    if (!requireRole(user, ['admin'], res)) return;
+    let key = crmLeadDelMatch[1]; try { key = decodeURIComponent(key); } catch (e) {}
+    const rec = crmOf()[key];
+    if (crmIsManualKey(key) && rec && rec.manual === true) {
+      delete crmOf()[key];
+      audit(user, 'crm.lead.delete', key, 'name=' + (rec.name || ''));
+      save();
+      return send(res, 200, { ok: true, deleted: key });
+    }
+    if (rec || crmCustomers().some(e => e.key === key)) return send(res, 400, { error: 'only manual leads can be deleted' });
+    return send(res, 404, { error: 'manual lead not found' });
+  }
   const crmKeyMatch = p.match(/^\/api\/admin\/crm\/(.+)$/);
   if (crmKeyMatch && (req.method === 'GET' || req.method === 'POST' || req.method === 'PUT')) {
     if (!requireRole(user, ['admin'], res)) return;
     let key = crmKeyMatch[1]; try { key = decodeURIComponent(key); } catch (e) {}
-    const entry = crmCustomers().find(e => e.key === key);
+    const entry = crmAllCustomers().find(e => e.key === key);
     if (!entry) return send(res, 404, { error: 'customer not found' });
     if (req.method === 'GET') return send(res, 200, { ok: true, customer: crmFicha(entry) });
     const b = await readBody(req);
     const rec = Object.assign({}, crmOf()[key] || {});
+    // v119: a MANUAL lead's contact fields live on its own record and are
+    // editable here; for derived customers they stay read-only (ignored).
+    if (crmIsManualKey(key) && rec.manual === true) {
+      if (b.name !== undefined) { const n = cleanText(b.name, 120); if (!n) return send(res, 400, { error: 'name is required' }); rec.name = n; }
+      if (b.phone !== undefined) rec.phone = cleanText(b.phone, 40);
+      if (b.email !== undefined) rec.email = crmNormEmail(b.email).slice(0, 120);
+      if (b.address !== undefined) rec.address = cleanText(b.address, 300);
+    }
     if (b.zone !== undefined) { const z = cleanText(b.zone, 60); if (z) rec.zone = z; else delete rec.zone; }
     if (b.source !== undefined) { const s = cleanText(b.source, 80); if (s) rec.source = s; else delete rec.source; }
     if (b.stage !== undefined) {
@@ -7121,7 +7188,7 @@ async function handleRequest(req, res) {
     crmOf()[key] = rec;
     audit(user, 'crm.update', key, 'zone=' + (rec.zone || 'auto') + ' · stage=' + (rec.stage || 'auto') + ' · source=' + (rec.source || 'auto'));
     save();
-    return send(res, 200, { ok: true, customer: crmFicha(crmCustomers().find(e => e.key === key) || entry) });
+    return send(res, 200, { ok: true, customer: crmFicha(crmAllCustomers().find(e => e.key === key) || entry) });
   }
 
   // ---------- auth ----------
