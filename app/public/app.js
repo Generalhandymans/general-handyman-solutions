@@ -4335,6 +4335,7 @@ async function loadAdmin(){
   loadAdminMoney();
   loadAdminBotStats();
   loadAdminCartRescue();
+  loadAdminCrm();
   loadAdminSprint();
   loadAdminSystem();
   loadAdminCarts();
@@ -4655,6 +4656,106 @@ async function cartRescueText(id){
   catch (e) { alert(e.message); return; }
   alert(copied ? S.copied : S.copyFailed);
   loadAdminCartRescue();
+}
+// ---------- v118: Clientes / CRM (admin) ----------
+// The permanent customer layer (Gabriel, 2026-11-22): every customer by
+// NAME + ZONE, mirroring the worker bench. The list comes from
+// GET /api/admin/crm (derived server-side from accounts + carts +
+// orders — this renderer invents nothing); the ficha shows the full
+// history and computed follow-ups, and zone/source/stage/notes are
+// edited through POST /api/admin/crm/:key (a manual stage beats the
+// auto-suggested one; "Auto" in the stage select clears the override).
+const ADM118 = {
+  en: { title: 'Customers', customers: 'customers', stageNames: { nuevo: 'New', cotizado: 'Quoted', deposito_pendiente: 'Deposit pending', agendado: 'Booked', hecho: 'Done', review_repetir: 'Review / repeat' }, allZones: 'All zones', searchPh: 'Search by name…', zone: 'Zone', stage: 'Stage', auto: 'Auto', source: 'Source', notes: 'Notes', save: 'Save', saved: 'Saved.', lifetime: 'Lifetime', depositDue: 'Deposit due', carts: 'carts', orders: 'orders', followUps: 'Follow-ups', fuDeposit: 'Collect the deposit', fuReview: 'Ask for the Google review', history: 'History', noHistory: 'No carts or orders yet.', member: 'Member', noMember: 'No membership', contact: 'Contact', address: 'Address', none: 'No customers yet — the CRM fills itself as accounts, carts and orders come in.', couldNot: 'Could not load.', back: 'Back to list' },
+  es: { title: 'Clientes', customers: 'clientes', stageNames: { nuevo: 'Nuevo', cotizado: 'Cotizado', deposito_pendiente: 'Depósito pendiente', agendado: 'Agendado', hecho: 'Hecho', review_repetir: 'Review / repetir' }, allZones: 'Todas las zonas', searchPh: 'Buscar por nombre…', zone: 'Zona', stage: 'Etapa', auto: 'Auto', source: 'Fuente', notes: 'Notas', save: 'Guardar', saved: 'Guardado.', lifetime: 'Total histórico', depositDue: 'Depósito pendiente', carts: 'carritos', orders: 'órdenes', followUps: 'Seguimientos', fuDeposit: 'Cobrar el depósito', fuReview: 'Pedir el review de Google', history: 'Historial', noHistory: 'Sin carritos ni órdenes todavía.', member: 'Miembro', noMember: 'Sin membresía', contact: 'Contacto', address: 'Dirección', none: 'Sin clientes todavía — el CRM se llena solo con cuentas, carritos y órdenes.', couldNot: 'No se pudo cargar.', back: 'Volver a la lista' }
+};
+const CRM_STAGE_KEYS118 = ['nuevo', 'cotizado', 'deposito_pendiente', 'agendado', 'hecho', 'review_repetir'];
+const CRM_ZONE_KEYS118 = ['Fairfield', 'Suisun City', 'Vacaville', 'Vallejo', 'Benicia', 'Napa', 'Concord', 'Antioch', 'Otra / sin zona'];
+let crmRowsCache118 = [], crmZoneFilter118 = '', crmSearch118 = '', crmStages118 = {}, crmZones118 = {};
+async function loadAdminCrm(){
+  const host = document.getElementById('adminCrm'); if (!host || !me || me.role !== 'admin') return;
+  const S = ADM118[menuLang()] || ADM118.en;
+  try {
+    const d = await api('/api/admin/crm');
+    crmRowsCache118 = d.customers || []; crmStages118 = d.stages || {}; crmZones118 = d.zones || {};
+    renderAdminCrmList();
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+function renderAdminCrmList(){
+  const host = document.getElementById('adminCrm'); if (!host) return;
+  const S = ADM118[menuLang()] || ADM118.en;
+  const rows = crmRowsCache118.filter(r => (!crmZoneFilter118 || r.zone === crmZoneFilter118) && (!crmSearch118 || (r.name || '').toLowerCase().includes(crmSearch118)));
+  let h = '<div class="card"><b>' + S.title + ':</b> ' + crmRowsCache118.length + ' ' + S.customers + '<div style="margin-top:8px">'
+    + CRM_STAGE_KEYS118.map(k => '<span class="chip" style="display:inline-block;border:1px solid #3f3f46;border-radius:999px;padding:2px 10px;margin:0 4px 4px 0;font-size:12px">' + S.stageNames[k] + ': <b>' + (crmStages118[k] || 0) + '</b></span>').join('') + '</div>'
+    + '<div class="row" style="margin-top:6px"><select id="crmZoneSel" onchange="crmZoneFilter118=this.value;renderAdminCrmList()"><option value="">' + S.allZones + '</option>'
+    + CRM_ZONE_KEYS118.map(z => '<option value="' + escHtml(z) + '"' + (crmZoneFilter118 === z ? ' selected' : '') + '>' + escHtml(z) + (crmZones118[z] ? ' (' + crmZones118[z] + ')' : '') + '</option>').join('') + '</select>'
+    + '<input id="crmSearchInp" type="search" placeholder="' + S.searchPh + '" value="' + escHtml(crmSearch118) + '" oninput="crmSearch118=this.value.toLowerCase();renderAdminCrmRowsOnly()"></div></div>';
+  h += '<div id="crmRowsHost">' + crmRowsHtml118(rows, S) + '</div>';
+  host.innerHTML = h;
+}
+function crmRowsHtml118(rows, S){
+  if (!rows.length) return '<div class="card">' + S.none + '</div>';
+  return rows.map(r => {
+    const idx = crmRowsCache118.indexOf(r);
+    const fu = r.followUps ? ' · <b class="st">' + S.followUps + ': ' + r.followUps + '</b>' : '';
+    const dep = r.openDepositDue > 0 ? ' · ' + S.depositDue + ': <b class="st">' + moneyFmt(r.openDepositDue) + '</b>' : '';
+    return '<div class="card" style="cursor:pointer" onclick="openCrmFicha(' + idx + ')"><b>' + escHtml(r.name || '') + '</b> — ' + escHtml(r.zone || '') + '<br><span class="mut">' + S.stageNames[r.stage] + ' · ' + r.carts + ' ' + S.carts + ' · ' + r.orders + ' ' + S.orders + '</span>' + fu + '<div style="margin-top:6px">' + S.lifetime + ': <b>' + moneyFmt(r.lifetimePaid || 0) + '</b>' + dep + '</div></div>';
+  }).join('');
+}
+function renderAdminCrmRowsOnly(){
+  const host = document.getElementById('crmRowsHost'); if (!host) return;
+  const S = ADM118[menuLang()] || ADM118.en;
+  const rows = crmRowsCache118.filter(r => (!crmZoneFilter118 || r.zone === crmZoneFilter118) && (!crmSearch118 || (r.name || '').toLowerCase().includes(crmSearch118)));
+  host.innerHTML = crmRowsHtml118(rows, S);
+}
+let crmFichaKey118 = '';
+async function openCrmFicha(idx){
+  const r = crmRowsCache118[idx]; if (!r) return;
+  const host = document.getElementById('adminCrmFicha'); if (!host) return;
+  const S = ADM118[menuLang()] || ADM118.en;
+  crmFichaKey118 = r.key;
+  try {
+    const d = await api('/api/admin/crm/' + encodeURIComponent(r.key));
+    renderCrmFicha(d.customer, S);
+    host.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { host.innerHTML = '<p class="mut">' + S.couldNot + '</p>'; }
+}
+function renderCrmFicha(c, S){
+  const host = document.getElementById('adminCrmFicha'); if (!host || !c) return;
+  const zoneOpts = CRM_ZONE_KEYS118.slice(); if (c.zone && !zoneOpts.includes(c.zone)) zoneOpts.unshift(c.zone);
+  const fu = (c.followUpsList || []).map(f => f.type === 'deposit'
+    ? '<div>• <b>' + S.fuDeposit + ':</b> ' + escHtml(f.cartId) + ' — <b class="st">' + moneyFmt(f.depositDue) + '</b> <span class="mut">(' + S.carts + ' ' + moneyFmt(f.total) + ')</span></div>'
+    : '<div>• <b>' + S.fuReview + ':</b> ' + escHtml(f.requestId) + ' — ' + escHtml(f.service || '') + '</div>').join('');
+  const hist = []
+    .concat((c.carts || []).map(x => ({ at: x.createdAt, html: '<div>🛒 <b>' + escHtml(x.id) + '</b> — ' + escHtml(x.status) + ' · ' + moneyFmt(x.total) + (x.depositDue > 0 ? ' · ' + S.depositDue + ': <b class="st">' + moneyFmt(x.depositDue) + '</b>' : '') + ' <span class="mut">' + escHtml(String(x.createdAt || '').slice(0, 10)) + '</span></div>' })))
+    .concat((c.orders || []).map(x => ({ at: x.createdAt, html: '<div>📋 <b>' + escHtml(x.id) + '</b> — ' + escHtml(x.service || '') + ' · ' + escHtml(x.status) + ' · ' + moneyFmt(x.total) + (x.paid ? ' · ✅' : '') + ' <span class="mut">' + escHtml(String(x.createdAt || '').slice(0, 10)) + '</span>' + (x.messages || []).map(m => '<div class="mut" style="margin-left:14px">' + escHtml(m.from || '') + ': ' + escHtml(String(m.text || '').slice(0, 200)) + '</div>').join('') + '</div>' })))
+    .sort((a, b) => String(b.at || '').localeCompare(String(a.at || ''))).map(x => x.html).join('');
+  host.innerHTML = '<div class="card" style="border:1px solid #e42535"><b style="font-size:17px">' + escHtml(c.name || '') + '</b> — ' + escHtml(c.zone || '')
+    + '<br><span class="mut">' + S.contact + ': ' + [c.email, c.phone].filter(Boolean).map(escHtml).join(' • ') + '</span>'
+    + (c.address ? '<br><span class="mut">' + S.address + ': ' + escHtml(c.address) + '</span>' : '')
+    + '<br><span class="mut">' + (c.membership && c.membership.status && c.membership.status !== 'none' ? S.member + ': ' + escHtml(c.membership.name || c.membership.planKey || '') + ' (' + escHtml(c.membership.status) + ')' : S.noMember) + ' · ' + S.lifetime + ': <b>' + moneyFmt(c.lifetimePaid || 0) + '</b></span>'
+    + '<div class="est-grid" style="margin-top:10px"><label>' + S.zone + '<select id="crmZoneInp">' + zoneOpts.map(z => '<option value="' + escHtml(z) + '"' + (c.zone === z ? ' selected' : '') + '>' + escHtml(z) + '</option>').join('') + '</select></label>'
+    + '<label>' + S.stage + '<select id="crmStageInp"><option value="">' + S.auto + ' (' + S.stageNames[c.stageAuto] + ')</option>' + CRM_STAGE_KEYS118.map(k => '<option value="' + k + '"' + (c.stageManual && c.stage === k ? ' selected' : '') + '>' + S.stageNames[k] + '</option>').join('') + '</select></label>'
+    + '<label>' + S.source + '<input id="crmSourceInp" value="' + escHtml(c.source || '') + '"></label></div>'
+    + '<label style="display:block;margin-top:8px">' + S.notes + '<textarea id="crmNotesInp" rows="2" style="width:100%">' + escHtml(c.notes || '') + '</textarea></label>'
+    + '<div class="row" style="margin-top:8px"><button class="black" onclick="saveCrmFicha()">' + S.save + '</button><span id="crmSaveMsg" class="mut"></span></div>'
+    + (fu ? '<div style="margin-top:12px"><b>' + S.followUps + '</b>' + fu + '</div>' : '')
+    + '<div style="margin-top:12px"><b>' + S.history + '</b>' + (hist || '<div class="mut">' + S.noHistory + '</div>') + '</div></div>';
+}
+async function saveCrmFicha(){
+  const S = ADM118[menuLang()] || ADM118.en;
+  const body = {
+    zone: (document.getElementById('crmZoneInp') || {}).value || '',
+    stage: (document.getElementById('crmStageInp') || {}).value || '',
+    source: (document.getElementById('crmSourceInp') || {}).value || '',
+    notes: (document.getElementById('crmNotesInp') || {}).value || ''
+  };
+  try {
+    const d = await api('/api/admin/crm/' + encodeURIComponent(crmFichaKey118), { method: 'POST', body: JSON.stringify(body) });
+    renderCrmFicha(d.customer, S);
+    const msg = document.getElementById('crmSaveMsg'); if (msg) msg.textContent = S.saved;
+    loadAdminCrm();
+  } catch (e) { alert(e.message); }
 }
 // ---------- v81: Sprint board (admin) ----------
 // Labels follow the ADM812 pattern (EN/ES by the app language). Every

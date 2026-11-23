@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v117', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+t('static: SW cache is ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v117)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v118)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v118'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -8528,7 +8528,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v117)', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8697,7 +8697,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v117)', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8791,7 +8791,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v117)', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v118)', swSrc.includes("const CACHE = 'ghs-app-v118'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8991,7 +8991,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v117', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v110 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9017,7 +9017,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v117', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v111 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9032,7 +9032,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v117', swSrc.includes("const CACHE = 'ghs-app-v117'"));
+  t('v112 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
@@ -9237,6 +9237,86 @@ try { resendMock.close(); } catch (e) {}
     !treeDoor117.includes('step-badge') && !treeDoor117.includes('plan-img') &&
     !treeDoor117.includes('Your Tree, Delivered') && !treeDoor117.includes('Tu Árbol, Entregado') &&
     !treeDoor117.includes('%%ESTIMATE%%') && !treeDoor117.includes('%%REVIEW%%') && !treeDoor117.includes('holiday-lights'));
+}
+
+// ---------------- v118: CRM — permanent customer layer ----------------
+{
+  // Gabriel's order (2026-11-22): "nuestro sistema incluye CRM, para
+  // siempre" — every customer by NAME + ZONE, mirroring the worker
+  // bench. Dedicated instance; fixtures through the real API plus a
+  // seeded paid order / account-less customer (two phases, like v108).
+  const DATA_FILE18 = '/tmp/ghs-v17-test/data-v118.json';
+  const BASE18 = 'http://127.0.0.1:8994';
+  const env118 = { PORT: '8994', DATA_FILE: DATA_FILE18, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+  try { fs.unlinkSync(DATA_FILE18); } catch (e) {}
+  let child18 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env118), stdio: ['ignore', 'pipe', 'pipe'] });
+  child18.stderr.on('data', d => process.stderr.write('[app18] ' + d));
+  async function req18(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE18 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp18() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE18 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v118 app18: the CRM instance boots', await waitUp18());
+  await req18('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin18@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+  const A18 = (await req18('POST', '/api/login', { body: { email: 'admin18@t.local', password: 'adminpass1' } })).j.token;
+  // --- phase 1 fixtures through the real API: an account + her open cart ---
+  await req18('POST', '/api/signup', { body: { name: 'Carmen Cliente', email: 'crm-carmen@t.local', password: 'carmenpass1', phone: '(707) 555-0120', serviceAddress: '123 Main St, Fairfield, CA 94533', role: 'customer' } });
+  const C18TOK = (await req18('POST', '/api/login', { body: { email: 'crm-carmen@t.local', password: 'carmenpass1' } })).j.token;
+  const CARMEN18 = (await req18('GET', '/api/me', { token: C18TOK })).j.user.id;
+  const cartCarmen18 = (await req18('POST', '/api/admin/carts', { token: A18, body: { customerName: 'Carmen Cliente', customerEmail: 'crm-carmen@t.local', customerPhone: '(707) 555-0120', items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 250 }] } })).j.cart;
+  t('v118 fixtures: account + open cart built through the real API ($250 -> $50 deposit)', !!CARMEN18 && !!cartCarmen18.id && cartCarmen18.listTotal === 250);
+  // --- kill, seed the paid order + the account-less customer, respawn ---
+  try { child18.kill('SIGTERM'); } catch (e) {}
+  await sleep(600);
+  const seed18 = JSON.parse(fs.readFileSync(DATA_FILE18, 'utf8'));
+  seed18.requests.push({ id: 'GHS-118A', customerId: CARMEN18, customerName: 'Carmen Cliente', customerEmail: 'crm-carmen@t.local', customerPhone: '(707) 555-0120', service: 'Faucet Replacement', description: 'Seeded paid order', city: 'Fairfield', address: '123 Main St, Fairfield, CA 94533', when: '', estimateType: 'menu', membership: 'none', estimateDue: 0, status: 'Closed', quote: 135, quoteNote: '', estimate: null, menuOrder: null, photos: [], messages: [{ from: 'customer', name: 'Carmen Cliente', text: 'Thanks, looks great!', at: new Date().toISOString() }], source: 'google', payment: { status: 'paid', kind: 'menu-order', pi: 'pi_118', amountCents: 13500, at: new Date().toISOString() }, reviewAskedAt: null, createdAt: new Date().toISOString() });
+  seed18.carts.push({ id: 'CRT-118S', items: [{ serviceId: 'water-heater-install', name: 'Water Heater Install', qty: 1, unitPrice: 1000, lineTotal: 1000, memberUnit: 800 }], listTotal: 1000, memberTotal: 800, note: '', customerName: 'Solo Sin Cuenta', customerPhone: '(707) 555-0121', customerEmail: 'crm-solo@t.local', lang: 'en', payFull: false, status: 'open', customer: null, memberApplied: false, payPi: '', payment: null, requestId: '', paidAt: null, createdBy: 'admin', createdAt: new Date().toISOString() });
+  seed18.requests.push({ id: 'GHS-118B', customerId: null, customerName: 'Solo Sin Cuenta', customerEmail: 'crm-solo@t.local', customerPhone: '(707) 555-0121', service: 'Estimate visit', description: 'Seeded open request', city: 'Vallejo', address: '5 Pine St, Vallejo, CA', when: '', estimateType: 'photo', membership: 'none', estimateDue: 0, status: 'New', quote: null, quoteNote: '', estimate: null, menuOrder: null, photos: [], messages: [], createdAt: new Date().toISOString() });
+  fs.writeFileSync(DATA_FILE18, JSON.stringify(seed18));
+  child18 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env118), stdio: ['ignore', 'pipe', 'pipe'] });
+  child18.stderr.on('data', d => process.stderr.write('[app18] ' + d));
+  t('v118 app18: respawned on the seeded file', await waitUp18());
+  const A18B = (await req18('POST', '/api/login', { body: { email: 'admin18@t.local', password: 'adminpass1' } })).j.token;
+  const CKEY18 = 'u:' + CARMEN18, SKEY18 = 'e:crm-solo@t.local';
+  // --- auth: every CRM endpoint is admin-only ---
+  const noList18 = await req18('GET', '/api/admin/crm', {});
+  const noFicha18 = await req18('GET', '/api/admin/crm/' + encodeURIComponent(CKEY18), {});
+  const noUpd18 = await req18('POST', '/api/admin/crm/' + encodeURIComponent(CKEY18), { body: { stage: 'hecho' } });
+  t('v118 auth: list, ficha and update all answer 401 unauthenticated', noList18.status === 401 && noFicha18.status === 401 && noUpd18.status === 401);
+  // --- the list: name + zone on every row, counts computed live ---
+  const list18 = (await req18('GET', '/api/admin/crm', { token: A18B })).j;
+  const rows18 = list18.customers || [];
+  const carmen18 = rows18.find(r => r.key === CKEY18), solo18 = rows18.find(r => r.key === SKEY18);
+  t('v118 list: both fixture customers present by name + zone (account key and email key)', !!carmen18 && carmen18.name === 'Carmen Cliente' && carmen18.zone === 'Fairfield' && !!solo18 && solo18.name === 'Solo Sin Cuenta' && solo18.zone === 'Vallejo');
+  t('v118 list: stage auto-suggestion — paid order -> hecho (beats the open cart), open cart without deposit -> deposito_pendiente', !!carmen18 && carmen18.stage === 'hecho' && carmen18.stageAuto === 'hecho' && !!solo18 && solo18.stage === 'deposito_pendiente');
+  t('v118 list: totals — Carmen lifetime paid $135 from the paid order, open deposit $50 on her $250 cart; Solo deposit $400 on $1,000', !!carmen18 && carmen18.lifetimePaid === 135 && carmen18.openDepositDue === 50 && !!solo18 && solo18.openDepositDue === 400 && solo18.lifetimePaid === 0);
+  t('v118 list: stage + zone counts computed (hecho 1, deposito_pendiente 1, Fairfield 1, Vallejo 1) and the follow-up header counts the pending review', list18.count === 2 && list18.stages.hecho === 1 && list18.stages.deposito_pendiente === 1 && list18.stages.nuevo === 0 && list18.zones.Fairfield === 1 && list18.zones.Vallejo === 1 && list18.followUps.reviewPending === 1 && list18.followUps.depositDue === 450);
+  // --- the ficha: full history + computed follow-ups ---
+  const ficha18 = (await req18('GET', '/api/admin/crm/' + encodeURIComponent(CKEY18), { token: A18B })).j.customer || {};
+  t('v118 ficha: aggregates the right cart + order for the fixture customer, messages included, membership block present', (ficha18.carts || []).some(c => c.id === cartCarmen18.id) && (ficha18.orders || []).some(o => o.id === 'GHS-118A' && (o.messages || []).length === 1) && !!ficha18.membership && ficha18.membership.status === 'none' && ficha18.address.includes('Fairfield'));
+  t('v118 ficha: follow-ups computed — the open-cart deposit ($50, biggest first) and the paid order pending its review ask', (ficha18.followUpsList || []).length === 2 && ficha18.followUpsList[0].type === 'deposit' && ficha18.followUpsList[0].cartId === cartCarmen18.id && ficha18.followUpsList[0].depositDue === 50 && ficha18.followUpsList.some(f => f.type === 'review' && f.requestId === 'GHS-118A'));
+  // --- the update: manual stage overrides auto, zone/source/notes persist ---
+  const upd18 = await req18('POST', '/api/admin/crm/' + encodeURIComponent(CKEY18), { token: A18B, body: { zone: 'Napa', stage: 'review_repetir', source: 'referral', notes: 'VIP — gate code 1234' } });
+  t('v118 update: manual stage OVERRIDES the auto-suggestion (review_repetir over hecho) and zone/source/notes land', upd18.status === 200 && upd18.j.customer.stage === 'review_repetir' && upd18.j.customer.stageAuto === 'hecho' && upd18.j.customer.stageManual === true && upd18.j.customer.zone === 'Napa' && upd18.j.customer.source === 'referral' && upd18.j.customer.notes === 'VIP — gate code 1234');
+  const ficha18b = (await req18('GET', '/api/admin/crm/' + encodeURIComponent(CKEY18), { token: A18B })).j.customer || {};
+  const disk18 = JSON.parse(fs.readFileSync(DATA_FILE18, 'utf8'));
+  t('v118 update: persists across reads and lives in the db.crm section keyed by the customer key', ficha18b.stage === 'review_repetir' && ficha18b.zone === 'Napa' && !!disk18.crm && !!disk18.crm[CKEY18] && disk18.crm[CKEY18].stage === 'review_repetir' && disk18.crm[CKEY18].zone === 'Napa');
+  const clear18 = await req18('PUT', '/api/admin/crm/' + encodeURIComponent(CKEY18), { token: A18B, body: { stage: '' } });
+  t('v118 update: PUT works too and clearing the stage returns the customer to the auto-suggested stage', clear18.status === 200 && clear18.j.customer.stage === 'hecho' && clear18.j.customer.stageManual === false);
+  const bad18 = await req18('POST', '/api/admin/crm/' + encodeURIComponent(CKEY18), { token: A18B, body: { stage: 'enojado' } });
+  const ghost18 = await req18('GET', '/api/admin/crm/' + encodeURIComponent('e:nobody@t.local'), { token: A18B });
+  t('v118 guards: an unknown stage is a 400 and an unknown customer key is a 404', bad18.status === 400 && ghost18.status === 404);
+  // --- zone edit on the account-less customer persists too ---
+  const updSolo18 = await req18('POST', '/api/admin/crm/' + encodeURIComponent(SKEY18), { token: A18B, body: { zone: 'Benicia' } });
+  t('v118 update: a zone edit persists on an account-less (email-keyed) customer', updSolo18.status === 200 && updSolo18.j.customer.zone === 'Benicia' && updSolo18.j.customer.zoneAuto === 'Vallejo');
+  // --- statics ---
+  t('v118 statics: server CRM block + endpoints + stages wired', serverSrc.includes("p === '/api/admin/crm'") && serverSrc.includes('function crmFicha(') && serverSrc.includes('function crmCustomers(') && serverSrc.includes("'deposito_pendiente'") && serverSrc.includes("audit(user, 'crm.update'"));
+  t('v118 statics: admin Clientes/CRM panel + ficha wired in the client (EN/ES labels, loadAdmin hook)', appJsSrc.includes('function loadAdminCrm(') && appJsSrc.includes('function openCrmFicha(') && appJsSrc.includes('loadAdminCrm();') && appJsSrc.includes('Depósito pendiente') && shellSrc.includes('id="adminCrm"') && shellSrc.includes('id="admSecCrm"'));
+  t('v118 statics: SW cache bumped to ghs-app-v118', swSrc.includes("const CACHE = 'ghs-app-v118'"));
+  try { child18.kill('SIGTERM'); } catch (e) {}
 }
 
 // ---------------- summary ----------------

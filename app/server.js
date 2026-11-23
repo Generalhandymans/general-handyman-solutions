@@ -3281,6 +3281,185 @@ function cartRescueRows() {
     })
     .sort((a, b) => b.depositDue - a.depositDue);
 }
+// ---------- v118: CRM — permanent customer layer (Gabriel, 2026-11-22) ----------
+// "Nuestro sistema incluye CRM, para siempre": every customer saved by
+// NAME + ZONE, mirroring the worker bench — contact, address, source,
+// full history (carts, orders, messages), a pipeline stage and computed
+// follow-ups, all in admin. The customer LIST is DERIVED live from the
+// records the app already keeps (customer accounts merged with their
+// carts and orders, matched by account id, then email, then phone), so
+// it can never drift from the real data and grows by itself as the
+// business grows. CRM-only fields (zone/source/stage/notes overrides)
+// live in their own data section, db.crm, keyed by the same stable
+// customer key — absent fields default safely, nothing else is touched.
+const CRM_STAGES = ['nuevo', 'cotizado', 'deposito_pendiente', 'agendado', 'hecho', 'review_repetir'];
+const CRM_ZONES = ['Fairfield', 'Suisun City', 'Vacaville', 'Vallejo', 'Benicia', 'Napa', 'Concord', 'Antioch'];
+const CRM_ZONE_FALLBACK = 'Otra / sin zona';
+function crmOf() { if (!db.crm || typeof db.crm !== 'object' || Array.isArray(db.crm)) db.crm = {}; return db.crm; }
+function crmNormEmail(e) { return String(e || '').trim().toLowerCase(); }
+function crmNormPhone(p) { const d = String(p || '').replace(/\D/g, ''); return d.length > 10 ? d.slice(-10) : d; }
+function crmZoneFromCity(city) {
+  const s = String(city || '').trim().toLowerCase();
+  if (!s) return '';
+  for (const z of CRM_ZONES) if (s === z.toLowerCase()) return z;
+  if (s.startsWith('suisun')) return 'Suisun City';
+  for (const z of CRM_ZONES) if (s.includes(z.toLowerCase())) return z;
+  return '';
+}
+function crmZoneFromAddress(addr) {
+  const s = String(addr || '').toLowerCase();
+  if (!s) return '';
+  if (s.includes('suisun')) return 'Suisun City';
+  for (const z of CRM_ZONES) if (s.includes(z.toLowerCase())) return z;
+  return '';
+}
+// One merged entry per customer. Key: 'u:<userId>' for account holders,
+// else 'e:<email>', else 'p:<phone10>', else 'n:<name>'.
+function crmCustomers() {
+  const byKey = new Map();
+  const custUsers = (db.users || []).filter(u => u && u.role === 'customer');
+  const byId = new Map(custUsers.map(u => [u.id, u]));
+  const byEmail = new Map(), byPhone = new Map();
+  for (const u of custUsers) {
+    const em = crmNormEmail(u.email); if (em) byEmail.set(em, u);
+    const ph = crmNormPhone(u.phone); if (ph) byPhone.set(ph, u);
+  }
+  function entryFor(key) {
+    if (!byKey.has(key)) byKey.set(key, { key, userId: '', name: '', email: '', phone: '', address: '', city: '', source: '', carts: [], orders: [], createdAt: '', lastActivity: '' });
+    return byKey.get(key);
+  }
+  function keyFor(email, phone, name, userId) {
+    if (userId && byId.has(userId)) return 'u:' + userId;
+    const em = crmNormEmail(email); if (em && byEmail.has(em)) return 'u:' + byEmail.get(em).id;
+    const ph = crmNormPhone(phone); if (ph && byPhone.has(ph)) return 'u:' + byPhone.get(ph).id;
+    if (em) return 'e:' + em;
+    if (ph) return 'p:' + ph;
+    const nm = String(name || '').trim().toLowerCase(); if (nm) return 'n:' + nm;
+    return '';
+  }
+  function touch(e, at) { if (at && (!e.createdAt || at < e.createdAt)) e.createdAt = at; if (at && at > e.lastActivity) e.lastActivity = at; }
+  for (const u of custUsers) {
+    const e = entryFor('u:' + u.id);
+    e.userId = u.id; e.name = u.name || e.name; e.email = u.email || e.email; e.phone = u.phone || e.phone;
+    e.address = u.serviceAddress || e.address; if (u.source) e.source = String(u.source);
+    touch(e, u.createdAt || '');
+  }
+  for (const c of cartsOf()) {
+    if (!c) continue;
+    const cust = c.customer || {};
+    const key = keyFor(c.customerEmail || cust.email, c.customerPhone || cust.phone, c.customerName || cust.name, '');
+    if (!key) continue;
+    const e = entryFor(key);
+    if (!e.name) e.name = c.customerName || cust.name || '';
+    if (!e.email) e.email = crmNormEmail(c.customerEmail || cust.email);
+    if (!e.phone) e.phone = c.customerPhone || cust.phone || '';
+    if (!e.address && cust.address) e.address = cust.address;
+    if (!e.city && cust.city) e.city = cust.city;
+    if (!e.source && c.source) e.source = String(c.source);
+    e.carts.push(c); touch(e, c.createdAt || '');
+  }
+  for (const r of (db.requests || [])) {
+    if (!r) continue;
+    const key = keyFor(r.customerEmail, r.customerPhone, r.customerName, r.customerId || '');
+    if (!key) continue;
+    const e = entryFor(key);
+    if (!e.name) e.name = r.customerName || '';
+    if (!e.email) e.email = crmNormEmail(r.customerEmail);
+    if (!e.phone) e.phone = r.customerPhone || '';
+    if (r.address) e.address = r.address;
+    if (r.city) e.city = r.city;
+    if (!e.source && r.source) e.source = String(r.source);
+    e.orders.push(r); touch(e, r.createdAt || '');
+  }
+  return [...byKey.values()];
+}
+function crmCartTotal(c) { return c.memberApplied ? (Number(c.memberTotal) || 0) : (Number(c.listTotal) || 0); }
+function crmCartDepositDue(c) {
+  if (!c || c.status !== 'open' || (c.payment && Number(c.payment.depositCents) > 0)) return 0;
+  return cartSplit(c, Math.round(crmCartTotal(c) * 100)).depositCents / 100;
+}
+function crmOrderTotal(r) {
+  if (r.payment && r.payment.status === 'paid' && Number(r.payment.amountCents) > 0) return Number(r.payment.amountCents) / 100;
+  if (Number(r.quote) > 0) return Number(r.quote);
+  if (r.estimate && Number(r.estimate.total) > 0) return Number(r.estimate.total);
+  const t = r.menuOrder && r.menuOrder.totals;
+  if (t) return Number(t.listTotal || t.total || 0) || 0;
+  return 0;
+}
+function crmOrderBooked(r) {
+  if (['Approved', 'Job posted', 'Scheduled'].includes(r.status)) return true;
+  return (db.jobs || []).some(j => j && j.requestId === r.id && j.status !== 'Cancelled');
+}
+function crmOrderDone(r) {
+  if (r.payment && r.payment.status === 'paid') return true;
+  return (db.jobs || []).some(j => j && j.requestId === r.id && j.status === 'Done — photos sent');
+}
+// Auto-suggested stage from live state; a stored manual stage wins.
+function crmAutoStage(e) {
+  if (e.orders.some(crmOrderDone)) return 'hecho';
+  if (e.orders.some(crmOrderBooked)) return 'agendado';
+  if (e.carts.some(c => crmCartDepositDue(c) > 0)) return 'deposito_pendiente';
+  if (e.carts.length || e.orders.length) return 'cotizado';
+  return 'nuevo';
+}
+function crmAutoZone(e) {
+  const orders = e.orders.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  for (const r of orders) { const z = crmZoneFromCity(r.city); if (z) return z; }
+  return crmZoneFromCity(e.city) || crmZoneFromAddress(e.address) || CRM_ZONE_FALLBACK;
+}
+function crmFollowUps(e) {
+  const out = [];
+  for (const c of e.carts) {
+    const due = crmCartDepositDue(c);
+    if (due > 0) out.push({ type: 'deposit', cartId: c.id, depositDue: due, total: crmCartTotal(c), createdAt: c.createdAt || '', link: cartLink(c) });
+  }
+  out.sort((a, b) => b.depositDue - a.depositDue);
+  const reviews = [];
+  for (const r of e.orders) {
+    if (r.payment && r.payment.status === 'paid' && !r.reviewAskedAt) reviews.push({ type: 'review', requestId: r.id, service: r.service || '', total: crmOrderTotal(r), createdAt: r.createdAt || '' });
+  }
+  return out.concat(reviews);
+}
+function crmRow(e) {
+  const rec = crmOf()[e.key] || {};
+  const user = e.userId ? (db.users || []).find(u => u.id === e.userId) : null;
+  const mp = user ? membershipPlanOf(user) : null;
+  const orderIds = new Set(e.orders.map(r => r.id));
+  let lifetimePaid = 0;
+  for (const r of e.orders) if (r.payment && r.payment.status === 'paid') lifetimePaid += (Number(r.payment.amountCents) || 0) / 100;
+  for (const c of e.carts) if (c.status === 'paid' && c.payment && !(c.requestId && orderIds.has(c.requestId))) lifetimePaid += (Number(c.payment.amountCents) || 0) / 100;
+  const autoStage = crmAutoStage(e);
+  const autoZone = crmAutoZone(e);
+  const fu = crmFollowUps(e);
+  return {
+    key: e.key, userId: e.userId, name: e.name || e.email || e.phone || '(sin nombre)',
+    email: e.email, phone: e.phone, address: e.address, city: e.city,
+    zone: rec.zone || autoZone, zoneAuto: autoZone, zoneManual: !!rec.zone,
+    source: rec.source !== undefined && rec.source !== '' ? rec.source : (e.source || ''), sourceManual: !!(rec.source),
+    stage: (rec.stage && CRM_STAGES.includes(rec.stage)) ? rec.stage : autoStage, stageAuto: autoStage, stageManual: !!(rec.stage && CRM_STAGES.includes(rec.stage)),
+    notes: rec.notes || '',
+    membership: mp ? { planKey: mp.planKey, name: mp.name, status: mp.status, since: mp.since } : null,
+    lifetimePaid: Math.round(lifetimePaid * 100) / 100,
+    openDepositDue: Math.round(fu.filter(f => f.type === 'deposit').reduce((s, f) => s + f.depositDue, 0) * 100) / 100,
+    carts: e.carts.length, orders: e.orders.length, followUps: fu.length,
+    createdAt: e.createdAt, lastActivity: e.lastActivity
+  };
+}
+function crmFicha(e) {
+  const row = crmRow(e);
+  const carts = e.carts.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).map(c => ({
+    id: c.id, status: c.status, total: crmCartTotal(c), listTotal: Number(c.listTotal) || 0, memberTotal: Number(c.memberTotal) || 0,
+    depositDue: crmCartDepositDue(c), requestId: c.requestId || '', link: cartLink(c), createdAt: c.createdAt || '', paidAt: c.paidAt || null,
+    items: (c.items || []).map(it => ({ name: it.name || it.serviceId || '', qty: it.qty || 1 }))
+  }));
+  const orders = e.orders.slice().sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''))).map(r => ({
+    id: r.id, service: r.service || '', status: r.status || '', total: crmOrderTotal(r),
+    paid: !!(r.payment && r.payment.status === 'paid'), city: r.city || '', address: r.address || '',
+    createdAt: r.createdAt || '', reviewAskedAt: r.reviewAskedAt || null,
+    messages: (r.messages || []).map(m => ({ from: m.from || '', name: m.name || '', text: m.text || '', at: m.at || '' }))
+  }));
+  return Object.assign(row, { carts, orders, followUpsList: crmFollowUps(e) });
+}
 // ---------- Membership invites (v60, Gabriel 2026-10-24) ----------
 // Gabriel adds members by PERSONAL INVITATION from his admin: an invite
 // is a single-use link (/join/INV-…) whose holder joins HomeCare with
@@ -6900,6 +7079,49 @@ async function handleRequest(req, res) {
     if (!requireRole(user, ['admin'], res)) return;
     const rows = cartRescueRows();
     return send(res, 200, { ok: true, count: rows.length, totalDepositDue: Math.round(rows.reduce((s, r) => s + r.depositDue, 0) * 100) / 100, carts: rows });
+  }
+  // v118: CRM — the permanent customer layer. List: every customer by
+  // name + zone with stage counts and zone counts computed live. Ficha:
+  // one customer's full record. Update: zone/source/stage/notes
+  // overrides stored in db.crm (a manual stage beats the auto-suggested
+  // one; an empty stage clears back to auto). Admin only, like rescue.
+  if (p === '/api/admin/crm' && req.method === 'GET') {
+    if (!requireRole(user, ['admin'], res)) return;
+    const entries = crmCustomers();
+    const rows = entries.map(crmRow).sort((a, b) => (b.lifetimePaid - a.lifetimePaid) || String(a.name).localeCompare(String(b.name)));
+    const stages = {}; for (const s of CRM_STAGES) stages[s] = 0;
+    const zones = {};
+    let depositCount = 0, depositDue = 0, reviewCount = 0;
+    for (const r of rows) {
+      stages[r.stage] = (stages[r.stage] || 0) + 1;
+      zones[r.zone] = (zones[r.zone] || 0) + 1;
+      if (r.openDepositDue > 0) { depositCount++; depositDue += r.openDepositDue; }
+    }
+    for (const e of entries) for (const f of crmFollowUps(e)) if (f.type === 'review') reviewCount++;
+    return send(res, 200, { ok: true, count: rows.length, stages, zones, followUps: { depositCustomers: depositCount, depositDue: Math.round(depositDue * 100) / 100, reviewPending: reviewCount }, customers: rows });
+  }
+  const crmKeyMatch = p.match(/^\/api\/admin\/crm\/(.+)$/);
+  if (crmKeyMatch && (req.method === 'GET' || req.method === 'POST' || req.method === 'PUT')) {
+    if (!requireRole(user, ['admin'], res)) return;
+    let key = crmKeyMatch[1]; try { key = decodeURIComponent(key); } catch (e) {}
+    const entry = crmCustomers().find(e => e.key === key);
+    if (!entry) return send(res, 404, { error: 'customer not found' });
+    if (req.method === 'GET') return send(res, 200, { ok: true, customer: crmFicha(entry) });
+    const b = await readBody(req);
+    const rec = Object.assign({}, crmOf()[key] || {});
+    if (b.zone !== undefined) { const z = cleanText(b.zone, 60); if (z) rec.zone = z; else delete rec.zone; }
+    if (b.source !== undefined) { const s = cleanText(b.source, 80); if (s) rec.source = s; else delete rec.source; }
+    if (b.stage !== undefined) {
+      const s = cleanText(b.stage, 40);
+      if (s && !CRM_STAGES.includes(s)) return send(res, 400, { error: 'unknown stage — use one of: ' + CRM_STAGES.join(', ') });
+      if (s) rec.stage = s; else delete rec.stage;
+    }
+    if (b.notes !== undefined) { const n = cleanText(b.notes, 2000); if (n) rec.notes = n; else delete rec.notes; }
+    rec.updatedAt = new Date().toISOString();
+    crmOf()[key] = rec;
+    audit(user, 'crm.update', key, 'zone=' + (rec.zone || 'auto') + ' · stage=' + (rec.stage || 'auto') + ' · source=' + (rec.source || 'auto'));
+    save();
+    return send(res, 200, { ok: true, customer: crmFicha(crmCustomers().find(e => e.key === key) || entry) });
   }
 
   // ---------- auth ----------
