@@ -1218,21 +1218,16 @@ function cartReminderText(c) {
   if (es) return 'Hola' + (first ? ' ' + first : '') + ', te escribimos de General Handyman Solutions. Tu propuesta sigue esperando y tu trabajo aún no está apartado. Total: ' + usd(total) + ' · ' + (full ? 'Pago completo hoy: ' : 'Para apartar hoy: ') + usd(dep) + '. Revisa y paga aquí (sin cuenta): ' + cartLink(c) + ' ¿Ya lo resolviste? Ignora este mensaje. ¿Preguntas? Texto/llamada (707) 862-3773.';
   return 'Hi' + (first ? ' ' + first : '') + ', this is General Handyman Solutions. Your proposal is still waiting and your job is not booked yet. Total: ' + usd(total) + ' · ' + (full ? 'Full payment due today: ' : 'Due to book today: ') + usd(dep) + '. Review & pay here (no account needed): ' + cartLink(c) + ' Already taken care of? Just ignore this message. Questions? Text/call (707) 862-3773.';
 }
-// Trial-ending + payment-failed + review-ask emails: the builders
+// Payment-failed + review-ask emails: the builders
 // return BOTH language blocks; the dispatcher sends ONE language when
 // the account carries a saved preference (v80.19: u.lang / the request
 // snapshot's lang) and falls back to the bilingual single email when
 // there is no signal — never the wrong language, never two sends.
-function trialEndingEmailParts(p) {
-  const usr = p.user || {};
-  const first = String(usr.name || '').trim().split(/\s+/)[0] || '';
-  const endD = p.trialEnd ? new Date(p.trialEnd) : null;
-  const dateEn = endD ? endD.toLocaleDateString('en-US') : '';
-  const dateEs = endD ? endD.toLocaleDateString('es-US') : '';
-  const en = 'Hi ' + (first || 'there') + ' — your free HomeCare month is almost over. Your first $29 charge lands on ' + dateEn + ', and your member benefits (20% off labor, $50 estimates, priority scheduling) continue without a gap. Nothing to do if you are happy — just keep enjoying them. To manage your plan or cancel anytime, open the app → Memberships → Manage billing. No penalties, ever.';
-  const es = 'Hola' + (first ? ' ' + first : '') + ' — tu mes gratis de HomeCare está por terminar. Tu primer cargo de $29 cae el ' + dateEs + ' y tus beneficios de miembro (20% de descuento en mano de obra, estimados a $50, prioridad de agenda) siguen sin interrupción. Si estás contento, no tienes que hacer nada. Para manejar tu plan o cancelar cuando quieras: abre la app → Membresías → Manejar facturación. Sin penalidades, nunca.';
-  return { en, es };
-}
+// v121: the trial-ending builder that used to live here is GONE.
+// Gabriel's standing rule (2026-11-22): NO trial-ending / renewal
+// reminder emails of any kind — a member cancelled BECAUSE of that
+// email ("this produces us less money"). The first $29 charge lands
+// per the terms the member accepted at signup, with no warning email.
 function paymentFailedEmailParts(p) {
   const usr = p.user || {};
   const first = String(usr.name || '').trim().split(/\s+/)[0] || '';
@@ -1332,17 +1327,6 @@ async function resendAutomation(type, payload) {
     if (!c.customerEmail) return { attempted: true, sent: false, reason: 'cart has no customer email' };
     const es = c.lang === 'es';
     return sendMail({ to: [c.customerEmail], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: es ? ('Recordatorio: tu propuesta (' + c.id + ') sigue esperando — General Handyman Solutions') : ('Reminder: your proposal (' + c.id + ') is still waiting — General Handyman Solutions'), html: cartReminderEmailHtml(c), text: cartReminderEmailText(c) });
-  }
-  if (type === 'trial_ending') {
-    const usr = p.user || {};
-    if (!usr.email) return { attempted: true, sent: false, reason: 'customer has no email' };
-    const parts = trialEndingEmailParts(p);
-    const lang = cleanLang(usr.lang);
-    // v80.19: a saved preference gets ONE language; no preference keeps
-    // the bilingual single email (never the wrong language, never two).
-    if (lang === 'es') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Tu mes gratis de HomeCare termina pronto', html: eventEmail('Tu mes gratis está por terminar', [parts.es, '— The Team'], undefined, 'es'), text: parts.es + '\n\n— The Team · (707) 862-3773' });
-    if (lang === 'en') return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your free HomeCare month ends soon', html: eventEmail('Your free month is almost over', [parts.en, '— The Team']), text: parts.en + '\n\n— The Team · (707) 862-3773' });
-    return sendMail({ to: [usr.email], bcc: [OWNER_EMAIL], replyTo: OWNER_EMAIL, subject: 'Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto', html: eventEmail('Your free month is almost over · Tu mes gratis está por terminar', [parts.en, parts.es, '— The Team']), text: parts.en + '\n\n' + parts.es + '\n\n— The Team · (707) 862-3773' });
   }
   if (type === 'payment_failed') {
     const usr = p.user || {};
@@ -2110,22 +2094,13 @@ function sweepEstimateReminders() {
 // follow-up — excluded by creator role). (2) Sent invoices still
 // unpaid ~48h after sending — the stamp is SHARED with the Team's
 // manual remind button, so an invoice gets one reminder, period.
-// (3) HomeCare free-month members ~3 days before the trial ends and
-// the first real $29 charge lands (trial end = activation + the same
-// INVITE_TRIAL_DAYS the trial was created with; a member who already
-// converted, cancelled, or scheduled a cancellation is excluded).
+// (3) REMOVED in v121: the trial-ending reminder that used to ride
+// this sweep (~3 days before the free month ended). Gabriel's
+// standing rule (2026-11-22): NO trial-ending / renewal reminder
+// emails of any kind — the charge lands per the terms accepted at
+// signup, with no reminders. The sweep keeps (1) and (2) only.
 let lastFollowupSweep = 0;
 const FOLLOWUP_REMIND_AFTER_MS = 48 * 3600 * 1000;
-const TRIAL_ENDING_WINDOW_MS = 3 * 24 * 3600 * 1000;
-function trialEndMsFor(u) {
-  if (!u || !u.inviteFreeMonthUsed || u.firstRealChargeAt) return 0;
-  const mp = membershipPlanOf(u);
-  if (mp.planKey !== 'homecare' || mp.status !== 'active' || mp.cancelAt) return 0;
-  const since = mp.since || u.homeCareSince;
-  if (!since) return 0;
-  const t = new Date(since).getTime();
-  return isNaN(t) ? 0 : t + INVITE_TRIAL_DAYS * 24 * 3600 * 1000;
-}
 function sweepFollowups() {
   const throttle = Number(process.env.FOLLOWUP_THROTTLE_MS) || 5 * 60 * 1000;
   const now = Date.now();
@@ -2161,19 +2136,6 @@ function sweepFollowups() {
         const res = await sendAutomation('invoice_reminder', { invoice: publicInvoice(inv) });
         if (res && res.sent) { inv.remindedAt = new Date().toISOString(); inv.reminderCount = (inv.reminderCount || 0) + 1; audit(null, 'invoice.reminder', inv.id, 'automatic one-shot 48h reminder emailed to ' + inv.customerEmail); dirty = true; }
       } catch (err) { console.error('invoice reminder failed', inv.id, err.message); }
-    }
-    const dueTrial = (db.users || []).filter(u => {
-      if (!u || u.role !== 'customer' || u.trialEndRemindedAt) return false;
-      if (!(u.email || '').includes('@')) return false;
-      const end = trialEndMsFor(u);
-      if (!end) return false;
-      return now >= end - TRIAL_ENDING_WINDOW_MS && now < end;
-    }).slice(0, 10);
-    for (const u of dueTrial) {
-      try {
-        const res = await sendAutomation('trial_ending', { user: { name: u.name, email: u.email, lang: userLangOf(u) }, trialEnd: new Date(trialEndMsFor(u)).toISOString(), appUrl: APP_URL });
-        if (res && res.sent) { u.trialEndRemindedAt = new Date().toISOString(); audit(null, 'trial.reminder', u.id, 'trial-ending email sent; first $29 charge lands ' + new Date(trialEndMsFor(u)).toISOString().slice(0, 10)); dirty = true; }
-      } catch (err) { console.error('trial reminder failed', u.id, err.message); }
     }
     if (dirty) save();
   })().catch(e => console.error('followup sweep failed', e.message));
@@ -3458,7 +3420,57 @@ function crmFicha(e) {
     createdAt: r.createdAt || '', reviewAskedAt: r.reviewAskedAt || null,
     messages: (r.messages || []).map(m => ({ from: m.from || '', name: m.name || '', text: m.text || '', at: m.at || '' }))
   }));
-  return Object.assign(row, { carts, orders, followUpsList: crmFollowUps(e) });
+  return Object.assign(row, { carts, orders, followUpsList: crmFollowUps(e), followUpTexts: crmFollowUpTexts(e) });
+}
+// ---------- v120: CRM follow-up TEXTS (Gabriel, 2026-11-22) ----------
+// The ficha's "Seguimiento" block: ready-to-copy follow-up texts,
+// built SERVER-SIDE and handed to Gabriel in the ficha payload — the
+// app sends NOTHING (the v110 rescue precedent: he copies and sends
+// through his own channel). Only the texts that fit the customer's
+// state are present:
+// - deposit: an open cart without its deposit. The text is v110's
+//   cartReminderText VERBATIM — same cartSplit math, same cart link,
+//   the cart's own language — never a forked copy of the numbers. When
+//   several carts qualify, the one with the BIGGEST deposit due wins
+//   (the same cart crmFollowUps puts first).
+// - review: a fully paid order whose Google review was never asked
+//   (no reviewAskedAt). Modeled on reviewAskEmailParts, sized for a
+//   text message, with the CONFIGURED review link (googleReviewUrl —
+//   the same URL the landing pages carry since v111).
+// - reactivation: always present — a short check-in pointing at the
+//   app. Manual leads (v119) get this one only: they have no carts or
+//   orders to hang the other two on.
+// Language: the deposit text inherits the cart's language from v110;
+// review/reactivation use the account's saved preference when there is
+// one (u.lang, v80.19) and default to EN — the rescue texts' customer
+// base is EN-first and there is no per-lead language signal.
+function crmTextLang(e) {
+  const user = e.userId ? (db.users || []).find(u => u.id === e.userId) : null;
+  return (user && user.lang === 'es') ? 'es' : 'en';
+}
+function crmReviewText(e, r) {
+  const es = crmTextLang(e) === 'es';
+  const first = String(e.name || '').trim().split(/\s+/)[0] || '';
+  const svc = r.service || '';
+  const url = googleReviewUrl();
+  if (es) return 'Hola' + (first ? ' ' + first : '') + ', te escribimos de General Handyman Solutions. Tu trabajo' + (svc ? ' (' + svc + ')' : '') + ' quedó pagado por completo — ¡gracias por confiar en nuestro equipo! Si nos lo ganamos, una reseña rápida en Google nos ayuda muchísimo y ayuda a que tus vecinos nos encuentren: ' + url;
+  return 'Hi' + (first ? ' ' + first : '') + ', this is General Handyman Solutions. Your job' + (svc ? ' (' + svc + ')' : '') + ' is paid in full — thank you for trusting our team! If we earned it, a quick Google review means the world to us and helps neighbors find us: ' + url;
+}
+function crmReactivationText(e) {
+  const es = crmTextLang(e) === 'es';
+  const first = String(e.name || '').trim().split(/\s+/)[0] || '';
+  if (es) return 'Hola' + (first ? ' ' + first : '') + ', te escribimos de General Handyman Solutions. Solo pasábamos a saludar — si necesitas ayuda con algo en tu casa (plomería, electricidad, carpintería, jardín o mecánica móvil), aquí estamos. Ve servicios y precios y aparta en minutos: ' + appBase() + ' ¿Preguntas? Texto/llamada (707) 862-3773.';
+  return 'Hi' + (first ? ' ' + first : '') + ', this is General Handyman Solutions. Just checking in — if you need a hand with anything at home (plumbing, electrical, carpentry, yard work or mobile mechanic), we are here. Browse services & prices and book in minutes: ' + appBase() + ' Questions? Text/call (707) 862-3773.';
+}
+function crmFollowUpTexts(e) {
+  const out = {};
+  let best = null, bestDue = 0;
+  for (const c of e.carts) { const due = crmCartDepositDue(c); if (due > bestDue) { bestDue = due; best = c; } }
+  if (best) out.deposit = cartReminderText(best);
+  const rev = crmFollowUps(e).find(f => f.type === 'review');
+  if (rev) { const r = e.orders.find(o => o.id === rev.requestId); if (r) out.review = crmReviewText(e, r); }
+  out.reactivation = crmReactivationText(e);
+  return out;
 }
 // ---------- v119: CRM manual leads (Gabriel, 2026-11-22) ----------
 // v118's list is DERIVED from app records — but leads who arrive by

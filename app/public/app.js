@@ -4682,6 +4682,37 @@ const ADM119 = {
   es: { addLead: '+ Agregar lead', manual: 'Manual', name: 'Nombre', phone: 'Teléfono', email: 'Correo', create: 'Agregar lead', cancel: 'Cancelar', deleteLead: 'Borrar lead', confirmDelete: '¿Borrar este lead manual? No se puede deshacer.', nameRequired: 'El nombre es obligatorio.' }
 };
 const CRM_SOURCE_KEYS119 = ['Google', 'Instagram', 'Facebook', 'Marketplace', 'Google Voice', 'Referido', 'Otro'];
+// ---------- v120: CRM follow-up texts (admin) ----------
+// The ficha's "Seguimiento" block: the server builds the ready texts
+// (followUpTexts in the ficha payload — deposit = v110's reminder
+// verbatim, review with the Google link, reactivation always) and
+// this renderer only shows + copies them. The app sends NOTHING:
+// Gabriel pastes the text into his own channel, like cart rescue.
+const ADM120 = {
+  en: { fuTitle: 'Follow-up texts', fuDeposit: 'Deposit', fuReview: 'Review', fuReactivation: 'Reactivation', copy: 'Copy', copied: 'Copied — paste it where you message the customer. The app sent nothing.', copyFailed: 'Could not copy automatically — select the text and copy it by hand.' },
+  es: { fuTitle: 'Textos de seguimiento', fuDeposit: 'Depósito', fuReview: 'Review', fuReactivation: 'Reactivación', copy: 'Copiar', copied: 'Copiado — pégalo donde le escribes al cliente. La app no envió nada.', copyFailed: 'No se pudo copiar automáticamente — selecciona el texto y cópialo a mano.' }
+};
+let crmFichaTexts120 = {};
+function crmFuTextsHtml120(c){
+  const S0 = ADM120[menuLang()] || ADM120.en;
+  const tx = c.followUpTexts || {};
+  crmFichaTexts120 = tx;
+  const kinds = [['deposit', S0.fuDeposit], ['review', S0.fuReview], ['reactivation', S0.fuReactivation]].filter(([k]) => !!tx[k]);
+  if (!kinds.length) return '';
+  return '<div style="margin-top:12px"><b>' + S0.fuTitle + '</b>' + kinds.map(([k, label]) =>
+    '<div style="margin-top:8px"><span class="mut">' + label + '</span><textarea readonly rows="4" style="width:100%;margin-top:4px">' + escHtml(tx[k]) + '</textarea><div class="row" style="margin-top:4px"><button class="ghost" onclick="copyCrmFuText(\'' + k + '\')">' + S0.copy + '</button><span class="mut" id="crmFuMsg-' + k + '"></span></div></div>').join('') + '</div>';
+}
+async function copyCrmFuText(kind){
+  const S0 = ADM120[menuLang()] || ADM120.en;
+  const txt = crmFichaTexts120[kind] || '';
+  if (!txt) return;
+  let copied = false;
+  try { await navigator.clipboard.writeText(txt); copied = true; }
+  catch (e) {
+    try { const ta = document.createElement('textarea'); ta.value = txt; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); copied = document.execCommand('copy'); ta.remove(); } catch (e2) {}
+  }
+  const msg = document.getElementById('crmFuMsg-' + kind); if (msg) msg.textContent = copied ? S0.copied : S0.copyFailed;
+}
 let crmRowsCache118 = [], crmZoneFilter118 = '', crmSearch118 = '', crmStages118 = {}, crmZones118 = {};
 async function loadAdminCrm(){
   const host = document.getElementById('adminCrm'); if (!host || !me || me.role !== 'admin') return;
@@ -4802,6 +4833,7 @@ function renderCrmFicha(c, S){
     + '<div class="row" style="margin-top:8px"><button class="black" onclick="saveCrmFicha()">' + S.save + '</button><span id="crmSaveMsg" class="mut"></span>'
     + (c.manual ? '<button class="ghost" style="color:#e42535;border-color:#e42535" onclick="deleteCrmLead()">' + (ADM119[menuLang()] || ADM119.en).deleteLead + '</button>' : '') + '</div>'
     + (fu ? '<div style="margin-top:12px"><b>' + S.followUps + '</b>' + fu + '</div>' : '')
+    + crmFuTextsHtml120(c)
     + '<div style="margin-top:12px"><b>' + S.history + '</b>' + (hist || '<div class="mut">' + S.noHistory + '</div>') + '</div></div>';
 }
 async function saveCrmFicha(){

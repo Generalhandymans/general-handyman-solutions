@@ -38,7 +38,7 @@ const scriptBlocks = [appJsSrc, ...[...shellSrc.matchAll(/<script>([\s\S]*?)<\/s
 let allParse = true;
 for (const b of scriptBlocks) { try { new vm.Script(b); } catch (e) { allParse = false; console.log('script parse error:', e.message); } }
 t('static: all index.html script blocks parse', allParse && scriptBlocks.length >= 2);
-t('static: SW cache is ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+t('static: SW cache is ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
 t('static v92: Bing Webmaster Tools verification meta (msvalidate.01) present in index.html head — repo-carried, no DNS change, survives deploys', htmlSrc.includes('<meta name="msvalidate.01" content="CA95D6E2EB6DDA53B4F4B72A8D883928" />'));
 t('static v93: BingSiteAuth.xml lives in app/public carrying the exact verification key (XML file method; the v92 meta tag stays as belt-and-suspenders)',
   fs.existsSync(path.join(APP_DIR, 'public', 'BingSiteAuth.xml')) &&
@@ -4634,7 +4634,7 @@ t('static v80-7B: the cart loads Stripe.js through the resilient injector and re
     return fetch(BASE2 + '/api/stripe/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json', 'stripe-signature': 't=' + ts + ',v1=' + sig }, body: raw });
   };
   // --- statics ---
-  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v119)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('static v80.1 SW: cross-origin requests are NEVER intercepted (early return) + cache bumped (v114: ghs-app-v120)', swSrc.includes('url.origin !== location.origin') && swSrc.includes("const CACHE = 'ghs-app-v120'"));
   t('static v80.1 server: hosted endpoints + both session kinds + the shared hosted settle exist', serverSrc.includes("p === '/api/cart/checkout-hosted'") && serverSrc.includes("p === '/api/cart/checkout-hosted-confirm'") && serverSrc.includes("kind === 'cart-checkout-hosted'") && serverSrc.includes("kind === 'cart-checkout-join'") && serverSrc.includes('function settleHostedCartSession('));
   t('static v80.1 SPA: the failure box carries the hosted door + the stage ref (CFG/JS/INIT) and the config fetch has a hard timeout', htmlSrc.includes("api('/api/cart/checkout-hosted'") && htmlSrc.includes('Pagar en la página segura de Stripe') && htmlSrc.includes('cartStripeFailStage') && htmlSrc.includes('ref: ') && htmlSrc.includes('function cartConfigFetch(') && htmlSrc.includes('config timeout'));
   // --- hosted PAY: session for the deposit, NO order before verify, settle via hosted-confirm, exactly once ---
@@ -6240,9 +6240,12 @@ t('v80.14 health: after the restart the health line reports today as the last sn
 // ---------------- v80.15 SEGUIMIENTO (app4) ----------------
 // One-shot follow-ups on the approved in-server sweep pattern: proposal
 // cart reminder, invoice reminder (stamp shared with the manual
-// remind), trial-ending email, payment-failed customer email, and the
+// remind), payment-failed customer email, and the
 // Google review ask at Paid in full (settings-driven, never hardcoded).
-t('static v80.15: follow-up sweeps exist — one-shot, stamped, audited, on the approved hubs', serverSrc.includes('function sweepFollowups(') && serverSrc.includes('FOLLOWUP_THROTTLE_MS') && serverSrc.includes("sendAutomation('cart_reminder'") && serverSrc.includes("'cart.reminder'") && serverSrc.includes("'invoice.reminder'") && serverSrc.includes('function trialEndMsFor(') && serverSrc.includes("'trial.reminder'") && serverSrc.includes('sweepFollowups(); sweepDailySnapshot();'));
+// v121: the trial-ending email that used to be pinned here is REMOVED —
+// this section now pins its ABSENCE (no send, no stamp, no audit).
+t('static v80.15: follow-up sweeps exist — one-shot, stamped, audited, on the approved hubs', serverSrc.includes('function sweepFollowups(') && serverSrc.includes('FOLLOWUP_THROTTLE_MS') && serverSrc.includes("sendAutomation('cart_reminder'") && serverSrc.includes("'cart.reminder'") && serverSrc.includes("'invoice.reminder'") && serverSrc.includes('sweepFollowups(); sweepDailySnapshot();'));
+t('static v121: NO trial-ending reminder exists anywhere — builder, dispatcher branch, sweep helper, stamp and subjects all REMOVED (Gabriel 2026-11-22: that email costs members)', !serverSrc.includes('trialEndingEmailParts') && !serverSrc.includes("type === 'trial_ending'") && !serverSrc.includes("sendAutomation('trial_ending'") && !serverSrc.includes('function trialEndMsFor(') && !serverSrc.includes('trialEndRemindedAt') && !serverSrc.includes("'trial.reminder'") && !serverSrc.includes('Your free month is almost over') && !serverSrc.includes('Tu mes gratis está por terminar') && !serverSrc.includes('Your free HomeCare month ends soon'));
 t('static v80.15: review ask is settings-driven and hooked ONLY at the two paid-in-full recorders (2 call sites)', serverSrc.includes('function maybeAskGoogleReview(') && serverSrc.includes('db.settings.googleReviewUrl') && (serverSrc.match(/maybeAskGoogleReview\(r\);/g) || []).length === 2 && serverSrc.includes("p === '/api/admin/settings'") && serverSrc.includes('r.reviewAskedAt'));
 t('static v80.15: payment_failed webhook emails the customer once per event, beside the v80.12 failure record', serverSrc.includes("fireAutomation('payment_failed'") && serverSrc.includes("type === 'payment_failed'"));
 t('static v80.15: admin System section carries the review-link field + save (ADM814)', htmlSrc.includes('id="sysReviewUrl"') && htmlSrc.includes('saveReviewUrl') && htmlSrc.includes('/api/admin/settings'));
@@ -6351,15 +6354,15 @@ const invMail815 = await bySubj815('Payment reminder: invoice ' + invDue815.id +
 t('v80.15 invoice reminder: the 49h-old sent invoice gets exactly ONE automatic reminder with the amount due', invMail815.length === 1 && JSON.stringify(invMail815[0].to) === JSON.stringify(['v815-invdue@t.local']));
 t('v80.15 invoice reminder: manual-reminded / paid / draft / no-email invoices get NO automatic reminder', (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invRem815.id + ' ($200.00) is still unpaid').length === invRemMailBefore815 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invPaid815.id + ' ($200.00) is still unpaid').length === 0 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice ' + invDraft815.id + ' ($200.00) is still unpaid').length === 0 && (await mockEmails()).filter(e => (e.subject || '') === 'Payment reminder: invoice INV-815NM ($100.00) is still unpaid').length === 0);
 const trialMail815 = await bySubj815('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto');
-t('v80.15 trial email: the member inside the 3-day window gets exactly ONE trial-ending email naming the first $29 charge', trialMail815.length === 1 && JSON.stringify(trialMail815[0].to) === JSON.stringify(['v815-trial@t.local']) && (trialMail815[0].text || '').includes('$29'));
-t('v80.15 trial email: too-early / converted / cancelled / cancel-scheduled members get NOTHING', (await byTo815('v815-trialearly@t.local')).length === 0 && (await byTo815('v815-trialconv@t.local')).length === 0 && (await byTo815('v815-trialcancel@t.local')).length === 0 && (await byTo815('v815-trialend@t.local')).length === 0);
+t('v121 trial email REMOVED: the member inside the old 3-day window gets NO trial-ending email — none under the bilingual subject, none under either single-language subject, nothing at all', trialMail815.length === 0 && (await bySubj815('Your free HomeCare month ends soon')).length === 0 && (await bySubj815('Tu mes gratis de HomeCare termina pronto')).length === 0 && (await byTo815('v815-trial@t.local')).length === 0);
+t('v121 trial email REMOVED: too-early / converted / cancelled / cancel-scheduled members also get NOTHING', (await byTo815('v815-trialearly@t.local')).length === 0 && (await byTo815('v815-trialconv@t.local')).length === 0 && (await byTo815('v815-trialcancel@t.local')).length === 0 && (await byTo815('v815-trialend@t.local')).length === 0);
 const disk815a = JSON.parse(fs.readFileSync(DATA_FILE4, 'utf8'));
-t('v80.15 stamps: cart remindedAt, invoice remindedAt + count, and trialEndRemindedAt all landed in the db', !!disk815a.carts.find(c => c.id === cartDue815.id).remindedAt && !!disk815a.invoices.find(i => i.id === invDue815.id).remindedAt && disk815a.invoices.find(i => i.id === invDue815.id).reminderCount === 1 && !!disk815a.users.find(u => u.id === 'USR-815T1').trialEndRemindedAt);
+t('v80.15 stamps: cart remindedAt and invoice remindedAt + count landed in the db (v121: NO trialEndRemindedAt stamp exists — the reminder is gone)', !!disk815a.carts.find(c => c.id === cartDue815.id).remindedAt && !!disk815a.invoices.find(i => i.id === invDue815.id).remindedAt && disk815a.invoices.find(i => i.id === invDue815.id).reminderCount === 1 && !disk815a.users.find(u => u.id === 'USR-815T1').trialEndRemindedAt);
 const aud815a = await req4('GET', '/api/admin/audit', { token: A4B });
-t('v80.15 audit: cart.reminder, invoice.reminder and trial.reminder are all in the log', ['cart.reminder', 'invoice.reminder', 'trial.reminder'].every(a => (aud815a.j.entries || []).some(en => en.action === a)));
+t('v80.15 audit: cart.reminder and invoice.reminder are in the log (v121: trial.reminder is NOT — it can never fire again)', ['cart.reminder', 'invoice.reminder'].every(a => (aud815a.j.entries || []).some(en => en.action === a)) && !(aud815a.j.entries || []).some(en => en.action === 'trial.reminder'));
 await req4('GET', '/api/jobs', { token: A4B });
 await sleep(1400);
-t('v80.15 one-shot: a second sweep sends NOTHING again (carts, invoices, trials)', (await bySubj815('Reminder: your proposal (' + cartDue815.id + ') is still waiting — General Handyman Solutions')).length === 1 && (await bySubj815('Payment reminder: invoice ' + invDue815.id + ' ($200.00) is still unpaid')).length === 1 && (await bySubj815('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).length === 1);
+t('v80.15 one-shot: a second sweep sends NOTHING again (carts, invoices; v121: trial emails stay at ZERO)', (await bySubj815('Reminder: your proposal (' + cartDue815.id + ') is still waiting — General Handyman Solutions')).length === 1 && (await bySubj815('Payment reminder: invoice ' + invDue815.id + ' ($200.00) is still unpaid')).length === 1 && (await bySubj815('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).length === 0);
 // --- payment-failed customer email (one per webhook event) ---
 await wh4('invoice.payment_failed', { id: 'in_815pf', customer: 'cus_815pf', subscription: 'sub_815pf', amount_due: 2900 });
 let pfMail815 = [];
@@ -6717,7 +6720,7 @@ await req5('PATCH', '/api/requests/' + RQ819ID, { token: A5, body: { estimate: {
 let estMail819 = [];
 for (let i = 0; i < 30 && !estMail819.length; i++) { estMail819 = await bySubj819('Tu estimado de General Handyman Solutions (' + RQ819ID + ')'); if (!estMail819.length) await sleep(200); }
 t('v80.19 estimate email: a request stamped lang=es gets the Spanish estimate (subject + labels), never the English one', estMail819.length === 1 && (estMail819[0].text || '').includes('Servicio') && (estMail819[0].text || '').includes('Para apartar') && (estMail819[0].html || '').includes('Revisar y aprobar en línea') && (await bySubj819('Your estimate from General Handyman Solutions (' + RQ819ID + ')')).length === 0);
-// --- payment_failed + trial emails: seed stripe ids + a trial user, respawn ---
+// --- payment_failed email + (v121) trial-email ABSENCE: seed stripe ids + a trial user, respawn ---
 try { child5.kill('SIGTERM'); } catch (e) {}
 await sleep(600);
 const agoD819 = (d) => new Date(Date.now() - d * 24 * 3600 * 1000).toISOString();
@@ -6743,9 +6746,9 @@ for (let i = 0; i < 60 && !pfBi819.length; i++) { pfBi819 = (await bySubj819('Pa
 t('v80.19 payment failed: a customer with NO saved preference keeps the bilingual single email exactly as before', pfBi819.length === 1);
 await req5('GET', '/api/jobs', { token: A5B }); // ordinary activity triggers the follow-up sweep
 let trEs819 = [];
-for (let i = 0; i < 30 && !trEs819.length; i++) { trEs819 = await bySubj819('Tu mes gratis de HomeCare termina pronto'); if (!trEs819.length) await sleep(200); }
+for (let i = 0; i < 30 && !trEs819.length; i++) { trEs819 = (await mockEmails()).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-trial@t.local'])); if (!trEs819.length) await sleep(200); }
 await sleep(400);
-t('v80.19 trial email: the es trial member gets the Spanish trial-ending email only (no bilingual twin)', trEs819.length === 1 && JSON.stringify(trEs819[0].to) === JSON.stringify(['v819-trial@t.local']) && (await bySubj819('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).filter(e => JSON.stringify(e.to || []) === JSON.stringify(['v819-trial@t.local'])).length === 0);
+t('v121 trial email REMOVED: the es trial member inside the old window gets NOTHING — no Spanish trial-ending email, no bilingual twin, no email at all (the v80.19 language pin retires with the email itself)', trEs819.length === 0 && (await bySubj819('Tu mes gratis de HomeCare termina pronto')).length === 0 && (await bySubj819('Your free HomeCare month ends soon · Tu mes gratis de HomeCare termina pronto')).length === 0);
 // ---------------- v80.20 PRECIOS Y VIAJE: the admin travel line + no repricing ----------------
 {
   const tCart = await req2('POST', '/api/admin/carts', { token: A2, body: { items: [{ serviceId: 'faucet-replacement', name: 'Faucet Replacement', qty: 1, unitPrice: 135 }], customerName: 'Travel Tess', customerEmail: 'travel@t.local' } });
@@ -8528,7 +8531,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v102 statics: the chat widget ships in the shell (fab + panel) and the client posts to the assistant endpoints', shellSrc.includes('id="assistantPanel"') && shellSrc.includes('id="assistantFab"') && appJsSrc.includes('/api/assistant/message') && appJsSrc.includes('/api/assistant/photo') && appJsSrc.includes('ghsMenuLang'));
   t('v102 statics: the assistant panel is dark brand (never white) with the brand red', appCssSrc.includes('#assistantPanel') && appCssSrc.includes('background:#101013') && appCssSrc.includes('#e42535'));
   t('v102 statics: server assistant prices ONLY from SERVER_MENU via serverMenuTotals + depositSplit (no hardcode)', serverSrc.includes('function assistantQuoteFor') && serverSrc.includes('serverMenuTotals(serviceId') && serverSrc.includes('depositSplit(Math.round(due * 100))'));
-  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v106 statics: SW cache bumped to ghs-app-v106 (v114: ghs-app-v120)', swSrc.includes("const CACHE = 'ghs-app-v120'"));
 }
 
 // ---------------- v105: JUNK PACKAGE (5 new services + /junk-removal + bot routes + IndexNow) ----------------
@@ -8697,7 +8700,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   const sitemapWww107 = await fetch(BASE + '/sitemap-www.xml');
   t('v107 robots: /sitemap-www.xml route still serves 200 (door kept, just not advertised in robots.txt)',
     sitemapWww107.status === 200);
-  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v107 statics: SW cache bumped to ghs-app-v107 (v114: ghs-app-v120)', swSrc.includes("const CACHE = 'ghs-app-v120'"));
 }
 
 // ---------------- v108: CART RESCUE PANEL ----------------
@@ -8791,7 +8794,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   // --- statics ---
   t('v108 statics: server rescue rows + listing endpoint + manual remind route wired to the existing cart_reminder mechanism', serverSrc.includes('function cartRescueRows()') && serverSrc.includes("p === '/api/admin/cart-rescue'") && serverSrc.includes('cartRemindMatch') && (serverSrc.match(/sendAutomation\('cart_reminder', \{ cart: publicCart\(c\) \}\)/g) || []).length >= 2);
   t('v108 statics: admin rescue section + loader + remind action wired in the client (EN+ES labels)', htmlSrc.includes('id="adminCartRescue"') && appJsSrc.includes('function loadAdminCartRescue(') && appJsSrc.includes('function cartRescueRemind(') && appJsSrc.includes('Cart rescue') && appJsSrc.includes('Rescate de carritos') && appJsSrc.includes('loadAdminCartRescue();'));
-  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v119)', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v108 statics: SW cache bumped to ghs-app-v108 (v114: ghs-app-v120)', swSrc.includes("const CACHE = 'ghs-app-v120'"));
   try { child9.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -8991,7 +8994,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
     serverSrc.includes('function cartReminderText(') && serverSrc.includes('textReminder: cartReminderText(c)') && serverSrc.includes('cartRemindTextMatch') && serverSrc.includes("audit(user, 'cart.reminder_text'"));
   t('v110 statics: client Copy-text action + cache + EN/ES labels wired in the rescue panel',
     appJsSrc.includes('function cartRescueText(') && appJsSrc.includes('cartRescueRowsCache') && appJsSrc.includes('Copy text') && appJsSrc.includes('Copiar texto') && appJsSrc.includes('remind-text'));
-  t('v110 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v110 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
   try { child10.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9017,7 +9020,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v111 doors: served pages carry the CONFIGURED review link + the photo-estimate deep link (placeholders fully substituted, EN+ES) + the since-2020 footer line', door111.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111.includes('/#estimate') && !door111.includes('%%REVIEW%%') && !door111.includes('%%ESTIMATE%%') && door111.includes('Free photo estimate') && door111.includes('Estimado gratis por foto') && door111.includes('Operating since 2020') && door111b.includes('https://g.page/r/Ce0oW03tmveIEBM/review') && door111b.includes('/#estimate'));
   t('v111 statics: the shell head no longer loads Stripe.js or Leaflet synchronously, and the lazy injectors own them (Stripe at the payment step, Leaflet JS+CSS at the first map)', !shellSrc.includes('js.stripe.com') && !shellSrc.includes('leaflet') && appJsSrc.includes("if (pk && typeof Stripe === 'undefined') await loadStripeJs();") && appJsSrc.includes('leaflet@1.9.4/dist/leaflet.css') && appJsSrc.includes('ensureLeaflet().then(function (ok)'));
   t('v111 statics: the #estimate deep link is wired (hash consumer -> goFreeEstimate) and the homepage footer explore block links all 20 doors + the reviews link + since-2020', appJsSrc.includes('function checkEstimateHash(') && appJsSrc.includes("location.hash || '') !== '#estimate'") && appJsSrc.includes('checkEstimateHash();') && ['/homecare', '/plus', '/plus2', '/yard', '/junk-removal', '/tree', '/handyman-fairfield', '/handyman-suisun-city', '/handyman-vacaville', '/handyman-vallejo', '/handyman-benicia', '/handyman-napa', '/handyman-concord', '/handyman-antioch', '/carpentry-fairfield', '/electrical-fairfield', '/plumbing-fairfield', '/yard-work-fairfield', '/mobile-mechanic-fairfield'].every(u => appJsSrc.includes('href="' + u + '"') || appJsSrc.includes("'" + u + "'")) && appJsSrc.includes('GOOGLE_REVIEW_URL') && appJsSrc.includes("footSince: 'Operating since 2020'") && appJsSrc.includes("footSince: 'Operando desde 2020'"));
-  t('v111 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v111 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
 }
 
 // ---------------- v112: INSTALL PAGE — iOS GUIDED SHEET ----------------
@@ -9032,7 +9035,7 @@ t('v100 regression settle: the work cart still converts as a DEPOSIT (status dep
   t('v112 statics: the dead scroll-to-bottom fallback is GONE; a promptless tap opens the sheet on iOS and scroll+flashes the visitor own card elsewhere', !instFn112.includes('document.body.scrollHeight') && instFn112.includes('sheet.style.display="block"') && instFn112.includes('getElementById("myCard")') && instFn112.includes('classList.add("flash")'));
   t('v112 statics: non-Safari iOS browsers are detected (CriOS/FxiOS/Edge/in-app) so the sheet can demand Safari first', instFn112.includes('var notSafari=/crios|fxios|edgios|opios|fbav|fban|instagram|micromessenger/i'));
   t('v112 statics: platformCards tags the visitor own (first) card id=myCard in both orders', serverSrc.includes("card(T.iosH, T.iosSteps, 'myCard')") && serverSrc.includes("card(T.androidH, T.androidSteps, 'myCard')"));
-  t('v112 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v112 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
   const instIos112 = await (await fetch(BASE + '/instalar', { headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1' } })).text();
   t('v112 http: /instalar for an iPhone UA serves the sheet and puts id=myCard on the FIRST card (the iOS one)', instIos112.includes('id="iosSheet"') && instIos112.indexOf('id="myCard"') > -1 && instIos112.indexOf('id="myCard"') < instIos112.indexOf('On Android') && instIos112.includes('On iPhone / iPad (Safari)'));
   const instEs112 = await (await fetch(BASE + '/instalar?lang=es')).text();
@@ -9315,7 +9318,7 @@ try { resendMock.close(); } catch (e) {}
   // --- statics ---
   t('v118 statics: server CRM block + endpoints + stages wired', serverSrc.includes("p === '/api/admin/crm'") && serverSrc.includes('function crmFicha(') && serverSrc.includes('function crmCustomers(') && serverSrc.includes("'deposito_pendiente'") && serverSrc.includes("audit(user, 'crm.update'"));
   t('v118 statics: admin Clientes/CRM panel + ficha wired in the client (EN/ES labels, loadAdmin hook)', appJsSrc.includes('function loadAdminCrm(') && appJsSrc.includes('function openCrmFicha(') && appJsSrc.includes('loadAdminCrm();') && appJsSrc.includes('Depósito pendiente') && shellSrc.includes('id="adminCrm"') && shellSrc.includes('id="admSecCrm"'));
-  t('v118 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v118 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
   try { child18.kill('SIGTERM'); } catch (e) {}
 }
 
@@ -9395,8 +9398,79 @@ try { resendMock.close(); } catch (e) {}
   // --- statics ---
   t('v119 statics: server lead endpoints + manual merge wired', serverSrc.includes("p === '/api/admin/crm/leads'") && serverSrc.includes('function crmManualEntry(') && serverSrc.includes('function crmAllCustomers(') && serverSrc.includes("audit(user, 'crm.lead.create'") && serverSrc.includes("audit(user, 'crm.lead.delete'"));
   t('v119 statics: admin add-lead form + manual badge + delete wired in the client (ADM119 EN/ES)', appJsSrc.includes('function toggleCrmLeadForm(') && appJsSrc.includes('function createCrmLead(') && appJsSrc.includes('function deleteCrmLead(') && appJsSrc.includes('ADM119') && appJsSrc.includes('Agregar lead') && appJsSrc.includes('/api/admin/crm/leads'));
-  t('v119 statics: SW cache bumped to ghs-app-v119', swSrc.includes("const CACHE = 'ghs-app-v119'"));
+  t('v119 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
   try { child19.kill('SIGTERM'); } catch (e) {}
+}
+
+// ---------------- v120: CRM follow-up texts in the ficha ----------------
+{
+  // Gabriel's pick from the improvement list (2026-11-22): one-tap
+  // follow-up texts in the CRM ficha — deposit (v110's reminder
+  // verbatim), review (with the configured Google link) and a
+  // reactivation check-in, all server-built, copied by hand; the app
+  // sends nothing. Dedicated instance; fixtures like v118 (API phase
+  // + seeded paid orders, two boots).
+  const DATA_FILE20 = '/tmp/ghs-v17-test/data-v120.json';
+  const BASE20 = 'http://127.0.0.1:8998';
+  const env120 = { PORT: '8998', DATA_FILE: DATA_FILE20, NOMINATIM_BASE: 'http://127.0.0.1:8986', SSE_HEARTBEAT_MS: '300', SUPABASE_URL: '', SUPABASE_SERVICE_KEY: '', STRIPE_SECRET_KEY: 'sk_test_mock', STRIPE_API_BASE: 'http://127.0.0.1:8980/v1', STRIPE_PRICE_HOMECARE: 'price_hc_mock', STRIPE_WEBHOOK_SECRET: 'whsec_mock_test', RESEND_API_KEY: 're_mock', RESEND_API_BASE: 'http://127.0.0.1:8981', FOLLOWUP_THROTTLE_MS: '300', EST_REMIND_THROTTLE_MS: '300' };
+  try { fs.mkdirSync('/tmp/ghs-v17-test', { recursive: true }); } catch (e) {}
+  try { fs.unlinkSync(DATA_FILE20); } catch (e) {}
+  let child20 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env120), stdio: ['ignore', 'pipe', 'pipe'] });
+  child20.stderr.on('data', d => process.stderr.write('[app20] ' + d));
+  async function req20(method, p, opts = {}) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (opts.token) headers.Authorization = 'Bearer ' + opts.token;
+    const r = await fetch(BASE20 + p, { method, headers, body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    return { status: r.status, j };
+  }
+  async function waitUp20() { for (let i = 0; i < 60; i++) { try { const r = await fetch(BASE20 + '/api/health'); if (r.ok) return true; } catch (e) {} await sleep(250); } return false; }
+  t('v120 app20: the follow-up-texts instance boots', await waitUp20());
+  await req20('POST', '/api/setup-admin', { body: { name: 'Team Admin', email: 'admin20@t.local', phone: '(707) 555-0000', password: 'adminpass1' } });
+  const A20 = (await req20('POST', '/api/login', { body: { email: 'admin20@t.local', password: 'adminpass1' } })).j.token;
+  // --- phase 1 fixtures through the real API: an account + her open cart ---
+  await req20('POST', '/api/signup', { body: { name: 'Rosa Textos', email: 'crm-rosa@t.local', password: 'rosapass1', phone: '(707) 555-0160', serviceAddress: '77 Rose St, Fairfield, CA 94533', role: 'customer' } });
+  const R20TOK = (await req20('POST', '/api/login', { body: { email: 'crm-rosa@t.local', password: 'rosapass1' } })).j.token;
+  const ROSA20 = (await req20('GET', '/api/me', { token: R20TOK })).j.user.id;
+  const cartRosa20 = (await req20('POST', '/api/admin/carts', { token: A20, body: { customerName: 'Rosa Textos', customerEmail: 'crm-rosa@t.local', customerPhone: '(707) 555-0160', items: [{ serviceId: 'tv-mounting', name: 'TV Mounting', qty: 1, unitPrice: 250 }] } })).j.cart;
+  t('v120 fixtures: account + open cart built through the real API ($250 -> $50 deposit)', !!ROSA20 && !!cartRosa20.id && cartRosa20.listTotal === 250);
+  // --- kill, seed two paid orders (Rosa: review never asked; Pablo: already asked), respawn ---
+  try { child20.kill('SIGTERM'); } catch (e) {}
+  await sleep(600);
+  const seed20 = JSON.parse(fs.readFileSync(DATA_FILE20, 'utf8'));
+  seed20.requests.push({ id: 'GHS-120A', customerId: ROSA20, customerName: 'Rosa Textos', customerEmail: 'crm-rosa@t.local', customerPhone: '(707) 555-0160', service: 'Faucet Replacement', description: 'Seeded paid order', city: 'Fairfield', address: '77 Rose St, Fairfield, CA 94533', when: '', estimateType: 'menu', membership: 'none', estimateDue: 0, status: 'Closed', quote: 135, quoteNote: '', estimate: null, menuOrder: null, photos: [], messages: [], source: 'google', payment: { status: 'paid', kind: 'menu-order', pi: 'pi_120', amountCents: 13500, at: new Date().toISOString() }, reviewAskedAt: null, createdAt: new Date().toISOString() });
+  seed20.requests.push({ id: 'GHS-120B', customerId: null, customerName: 'Pablo Pagado', customerEmail: 'crm-pablo@t.local', customerPhone: '(707) 555-0161', service: 'Water Heater Install', description: 'Seeded paid order, review already asked', city: 'Vacaville', address: '3 Palm Ct, Vacaville, CA', when: '', estimateType: 'menu', membership: 'none', estimateDue: 0, status: 'Closed', quote: 700, quoteNote: '', estimate: null, menuOrder: null, photos: [], messages: [], source: 'google', payment: { status: 'paid', kind: 'menu-order', pi: 'pi_120b', amountCents: 70000, at: new Date().toISOString() }, reviewAskedAt: new Date().toISOString(), createdAt: new Date().toISOString() });
+  fs.writeFileSync(DATA_FILE20, JSON.stringify(seed20));
+  child20 = spawn('node', ['server.js'], { cwd: APP_DIR, env: Object.assign({}, process.env, env120), stdio: ['ignore', 'pipe', 'pipe'] });
+  child20.stderr.on('data', d => process.stderr.write('[app20] ' + d));
+  t('v120 app20: respawned on the seeded file', await waitUp20());
+  const A20B = (await req20('POST', '/api/login', { body: { email: 'admin20@t.local', password: 'adminpass1' } })).j.token;
+  const RKEY20 = 'u:' + ROSA20, PKEY20 = 'e:crm-pablo@t.local';
+  // --- auth: the ficha (and its texts) stay admin-only ---
+  const noFicha20 = await req20('GET', '/api/admin/crm/' + encodeURIComponent(RKEY20), {});
+  t('v120 auth: the ficha with the follow-up texts answers 401 unauthenticated', noFicha20.status === 401);
+  // --- Rosa: all three texts, deposit = the v110 reminder verbatim ---
+  const ficha20 = (await req20('GET', '/api/admin/crm/' + encodeURIComponent(RKEY20), { token: A20B })).j.customer || {};
+  const tx20 = ficha20.followUpTexts || {};
+  const cartRow20 = (ficha20.carts || []).find(c => c.id === cartRosa20.id) || {};
+  const rescue20 = (await req20('GET', '/api/admin/cart-rescue', { token: A20B })).j;
+  const rescueRow20 = (rescue20.carts || []).find(r => r.id === cartRosa20.id) || {};
+  t('v120 ficha: the deposit text carries the exact $50 deposit and the cart link — and IS the rescue panel textReminder verbatim (no forked numbers)', typeof tx20.deposit === 'string' && tx20.deposit.includes('$50') && !!cartRow20.link && tx20.deposit.includes(cartRow20.link) && !!rescueRow20.textReminder && tx20.deposit === rescueRow20.textReminder);
+  t('v120 ficha: the review text names the customer + the paid job and carries the configured Google review link', typeof tx20.review === 'string' && tx20.review.includes('Rosa') && tx20.review.includes('Faucet Replacement') && tx20.review.includes('https://g.page/r/Ce0oW03tmveIEBM/review'));
+  t('v120 ficha: the reactivation text is always there, with the app link', typeof tx20.reactivation === 'string' && tx20.reactivation.includes('Rosa') && tx20.reactivation.includes('https://generalhandymans.app'));
+  // --- Pablo: review already asked -> no review text, no cart -> no deposit text ---
+  const fichaP20 = (await req20('GET', '/api/admin/crm/' + encodeURIComponent(PKEY20), { token: A20B })).j.customer || {};
+  const txP20 = fichaP20.followUpTexts || {};
+  t('v120 ficha: a customer whose review was already asked gets NO review text and NO deposit text — reactivation only', !!fichaP20.key && txP20.review === undefined && txP20.deposit === undefined && typeof txP20.reactivation === 'string');
+  // --- manual lead (v119): reactivation only ---
+  const lead20 = await req20('POST', '/api/admin/crm/leads', { token: A20B, body: { name: 'Lalo Lead', phone: '(707) 555-0162', zone: 'Vallejo', source: 'Marketplace' } });
+  const txL20 = (lead20.j.customer || {}).followUpTexts || {};
+  t('v120 lead: a manual lead ficha exposes the reactivation text only (no deposit, no review)', lead20.status === 200 && typeof txL20.reactivation === 'string' && txL20.reactivation.includes('Lalo') && txL20.deposit === undefined && txL20.review === undefined);
+  // --- statics ---
+  t('v120 statics: server follow-up text builders wired (v110 reuse + review URL helper)', serverSrc.includes('function crmFollowUpTexts(') && serverSrc.includes('cartReminderText(best)') && serverSrc.includes('function crmReviewText(') && serverSrc.includes('followUpTexts: crmFollowUpTexts(e)'));
+  t('v120 statics: admin Seguimiento block + copy wired in the client (ADM120 EN/ES)', appJsSrc.includes('ADM120') && appJsSrc.includes('function copyCrmFuText(') && appJsSrc.includes('function crmFuTextsHtml120(') && appJsSrc.includes('Textos de seguimiento') && appJsSrc.includes('followUpTexts'));
+  t('v120 statics: SW cache bumped to ghs-app-v120', swSrc.includes("const CACHE = 'ghs-app-v120'"));
+  try { child20.kill('SIGTERM'); } catch (e) {}
 }
 
 // ---------------- summary ----------------
